@@ -1,0 +1,173 @@
+# Proje Yol Haritası — Mücevher Ürün Fotoğrafı AI Platformu
+
+**Ekip:** 2 kurucu (görev bölüşümü aşağıda)
+**Hedef platform sırası:** Önce web uygulaması (MVP) → Mobil uygulama (asıl uzun vadeli hedef)
+
+> **Bu, projenin ikinci iterasyonudur.** Aynı iki kişi (Serhan, Kaan), aynı roller ve aynı ürün
+> vizyonuyla kod tabanı sıfırdan yeniden yazılıyor. Aşağıdaki teknik kararlar ve gerçek ölçüm
+> bulguları **önceki iterasyonda doğrulandı ve tekrar tartışılmayacak** — kod yeniden yazılsa
+> bile bu kararlar geçerliliğini koruyor (aksi belirtilmedikçe). Faz durumları bu doküman için
+> sıfırdan başlıyor; "önceki iterasyonda doğrulandı" notu olan bulgular referans olarak
+> kullanılır, ama kodun kendisi henüz yazılmamıştır.
+
+> **Güvenlik notu:** Güvenlik, Faz 7'ye ertelenen ayrı bir konu değildir — her fazın kendi
+> güvenlik gereksinimleri o fazın açıklamasının altında listelenir. Kapsamlı katman katman
+> güvenlik standartları (sunucu, ağ, veritabanı, dosya yükleme, ödeme/PCI, KVKK) için bkz.
+> `SECURITY.md`.
+
+## 1. Proje özeti
+
+Kuyumcular için AI destekli bir araç. Bir ürün fotoğrafı (yüzük, kolye vb.) yüklenir, AI çok yüksek hassasiyetle ürün sınırlarını tespit eder ve arka planı kaldırır, geriye şeffaf arka plan üzerinde yalnızca ürün kalır. Kullanıcı ardından kesilmiş ürünü bize ait birçok özel arka plan tasarımından birinin üzerine yerleştirir ve serbestçe ölçeklendirebilir, döndürebilir, yeniden konumlandırabilir. Konsepti doğrulamak için önce web uygulaması inşa edilir; mobil uygulama asıl nihai hedeftir.
+
+## 2. Kritik karar: Arka plan kaldırma için AI modeli
+
+**Seçilen model: BiRefNet (ZhengPeng7'nin orijinal ağırlıkları) — kilitli karar, tekrar tartışılmayacak**
+
+| Gereksinim | BiRefNet bunu nasıl karşılıyor |
+| --- | --- |
+| Ücretsiz | Evet — açık ağırlıklar, kendi sunucunda barındırırken görüntü başına API maliyeti yok |
+| Ticari kullanıma izinli | Evet — kod ve orijinal ağırlıklar MIT lisanslı |
+| İnce/yansıtıcı kenarlarda yüksek doğruluk | Evet — dikotom (iki değerli) görüntü segmentasyonu için tasarlanmış; saç, cam, ince zincirler ve diğer ince yapılarda güçlü, bu da mücevher fotoğrafçılığıyla örtüşüyor |
+| Kendi sunucunda barındırılabilir | Evet — PyTorch modeli, daha hızlı inference için ONNX'e aktarılabilir |
+
+**Kaçınılması gereken önemli lisans tuzağı:** BRIA tarafından yayınlanan "RMBG" ağırlıklarını KULLANMAYIN (BiRefNet mimarisini paylaşsalar bile) — bu spesifik ağırlıklar özel veriyle eğitilmiştir ve yalnızca ticari olmayan kullanım için lisanslıdır. Her zaman açık MIT lisanslı DIS5K veri setiyle eğitilmiş ve ticari kullanım için güvenli olan orijinal `ZhengPeng7/BiRefNet` ağırlıklarını yükleyin.
+
+**Uygulama planı (bu iterasyonda tekrar edilecek adımlar):**
+1. `rembg` Python kütüphanesiyle hızlıca prototip oluştur (BiRefNet'i backend olarak destekliyor).
+2. `POST /api/remove-background` endpoint'ini yaz, gerçek mücevher fotoğraflarıyla (WhatsApp gibi sıkıştırmadan geçmemiş, doğrudan telefon çıkışı) doğrula.
+3. `birefnet-general`'ı üretim modeli olarak kullan (aşağıdaki önceki iterasyon bulgularına göre zaten en iyi tercih olduğu doğrulanmış durumda — `birefnet-general-lite` ve `u2net` yeniden test edilmesine gerek yok, elenmiş durumdalar).
+4. Tamamen otomatik segmentasyonun aşırı yansıtıcı/şeffaf taşlarda %100 mükemmel olmayabileceğini kabul et — manuel rötuş aracını MVP'yi bloklayan bir şey değil, daha sonraki bir optimizasyon kalemi olarak planla.
+
+### Önceki iterasyondan taşınan bulgular (referans — kod yeniden yazılacak, ama bu ölçümleri tekrar keşfetmeye gerek yok)
+
+**Bellek ve hız (üç ayrı ölçümle doğrulandı):**
+- `birefnet-general-lite` (daha hafif varyant bile), tek bir CPU inference çağrısında 3.4 GB'ın üzerinde RAM kullandı ve 4 GB/1 çekirdekli bir makineyi OOM ile öldürdü. `u2net` 200 MB altında çalıştı ama kalitesi gerçek ürün kullanımı için yetersiz — ikisi de elendi.
+- `birefnet-general` (üretim modeli), 16 GB RAM'li bir makinede 32 gerçek fotoğrafla test edildi: ortalama ~15sn/görüntü (10.7–21sn aralığı), ilk çağrıda ~6.9 GB, art arda çok sayıda görüntü işlendiğinde ~8.7 GB'a kadar tepe RAM.
+- **Üçüncü ve en güncel ölçüm, çalışan servisin kendisi üzerinde yapıldı** (32 GB RAM'li makine, i7-12700KF): uvicorn süreci tek bir HEIC fotoğrafla **12.0 GB tepe RSS**'e çıktı; ilk istek (model belleğe yüklenirken) 34.3sn, sonraki istekler ~8.4sn sürdü.
+- **Sonuç — deployment kararı için esas alınacak rakam: CPU inference için en az 12–14 GB RAM bütçelenmeli. 8 GB'lık bir sunucu bu modeli kaldırmaz.** Trafik arttıkça GPU serverless'a (Modal/RunPod) geçiş değerlendirilmeli.
+
+**Kalite:**
+- Gerçek mücevher fotoğraflarıyla (hem WhatsApp sıkıştırmalı düşük çözünürlük hem doğrudan iPhone HEIC tam çözünürlük — 3024x4032) test edildi: ince zincir halkaları, küçük taşlar, yansıtıcı yüzeyler temiz kenarlarla korunuyor. Yüksek çözünürlükte kenar bulanıklığı yok.
+- Önceki iterasyonda "kalite düşük" algısı, modelin kendisinden değil, WhatsApp'ın uyguladığı agresif sıkıştırmadan kaynaklanıyordu — pipeline giriş/çıkış çözünürlüğünü birebir koruyor.
+
+**Bilinen sınırlamalar (ürün kararı gerektirir, model hatası değil):**
+- **Elde tutulan ürünlerde tutarsız davranış:** model bazen eli ürünle birlikte ön plan sayıp koruyor, bazen sadece ürünü bırakıp eli tamamen kaldırıyor — davranış öngörülemez. Kullanıcıya ürünü masa/kadife üzerinde, elsiz çekmesi önerilebilir; ya da ileride ayrı bir el tespiti + tutarlı maskeden çıkarma adımı eklenebilir.
+- **Örtülme (occlusion):** parmak veya başka bir nesne tarafından fiziksel olarak kapatılan ürün kısımları çıktıda da eksik kalır — temel bir 2D segmentasyon kısıtı, kaynak fotoğrafta hiç görünmeyen piksel üretilemez. Çözüm modelde değil, çekim rehberliğinde.
+
+Bu bulgular Faz 1'de tekrar doğrulanabilir (yeniden yazılan koda karşı hızlı bir sağlık kontrolü olarak faydalı olur) ama sıfırdan bir araştırma/karar süreci olarak ele alınmamalı — hedef zaten belli.
+
+## 3. Teknoloji yığını
+
+Aşağıdaki tüm satırlar önceki iterasyonda karara bağlandı ve doğrulandı; bu iterasyonda yeniden tartışılmayacak.
+
+| Katman | Seçim | Gerekçe |
+| --- | --- | --- |
+| AI model sunumu | BiRefNet (`rembg` üzerinden, ONNX) | Bkz. bölüm 2 |
+| Backend | Python + FastAPI | AI + backend'i tek dilde tutar, MVP için ayrı bir inference mikroservisinden kaçınır |
+| Asenkron iş kuyruğu | Celery veya RQ + Redis | Görüntü işleme birkaç saniye sürebilir; istek thread'ini bloklamamalı |
+| Veritabanı | PostgreSQL (production'da Supabase) | İlişkisel veri: kullanıcılar, krediler, arka plan meta verisi, işlemler. Supabase seçilince ayrı bir DB sağlayıcısına gerek kalmadı |
+| Nesne depolama | Cloudflare R2 (S3 uyumlu) | Ürün fotoğrafları ve arka plan tasarımları; S3'e göre daha düşük çıkış (egress) maliyeti. Önceki iterasyonda gerçek hesaba karşı uçtan uca doğrulandı (yükleme → imzalı URL → indirme) |
+| Frontend (web) | Next.js + TypeScript + Tailwind + shadcn/ui | Hızlı iterasyon, modern geliştirici deneyimi, admin paneli aynı uygulamada yaşayabilir |
+| Canvas / kompozisyon editörü | Konva.js (react-konva) | React'te sürükle/ölçeklendir/döndür manipülasyonu için olgun kütüphane |
+| Kimlik doğrulama | **Supabase Auth** | Sıfırdan auth inşa etmekten kaçınır; DB ile aynı sağlayıcıda toplanır. Clerk önceki iterasyonda değerlendirilip elendi. Oturum `@supabase/ssr` ile çerezde tutulur; **RLS zorunlu** (bkz. Faz 4 ve `SECURITY.md` 3.2) |
+| Ödemeler / kredi sistemi | iyzico (birincil) | Türk pazarına güçlü uyum, iyi dokümantasyon, PayPal'a ait |
+| CI/CD ve barındırma (MVP) | GitHub Actions + Railway/Fly.io | 2 kişilik ekip için düşük operasyonel yük |
+| GPU inference (MVP sonrası ölçekleme) | Modal veya RunPod Serverless | Kullandıkça öde, boşta GPU maliyeti yok; MVP trafiği için CPU yeterli |
+| Test | pytest (backend), Vitest (frontend), Playwright (E2E) | Standart, iyi desteklenen araçlar |
+| Mobil (sonraki faz) | React Native + Expo | Web uygulamasıyla çoğu iş mantığını/API çağrısını paylaşır |
+
+## 4. Yol haritası fazları
+
+Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçek testler bir kısıt veya kapsamı değiştiren bir karar ortaya çıkardığında, ilgili fazı olduğu yerde güncelleyin, orijinal metni değişmez kabul etmek yerine. Bu, önceki iterasyonda birebir yaşandı (bellek bulgusu, el sınırlaması, Supabase kararı) ve doküman her seferinde güncellendi.
+
+### Faz 0 — Kurulum ve planlama (ortak) — ⏳ Planlanan
+
+- Repository, dallanma (branching) stratejisi, `.env` yönetimi, yerel geliştirme için Docker Compose
+- `CLAUDE.md` oluştur ve her adımda güncel tut
+- Kodlama standardı: kod İngilizce, yorumlar sadece Türkçe (bkz. `CLAUDE.md`)
+- Tüm push'lar gerçekleşmeden önce onay gerektirir; PR'lar birleştirilmeden önce incelenir
+
+### Faz 1 — Temel AI motoru (Serhan liderliğinde) — ⏳ Planlanan
+
+- `POST /api/remove-background` endpoint'i: görüntü girer → segmentasyon → şeffaf PNG çıkar
+- Content-type + dosya boyutu + **magic-byte doğrulaması** baştan itibaren eklenir (önceki iterasyonda sonradan yama olarak eklenmişti — bu sefer Faz 1'in bir parçası, bkz. `SECURITY.md` bölüm 4)
+- Model olarak doğrudan `birefnet-general` kullan — `-lite` ve `u2net` önceki iterasyonda elendi, yeniden karşılaştırmaya gerek yok (bkz. bölüm 2)
+- Gerçek mücevher fotoğraflarıyla (WhatsApp sıkıştırmasından geçmemiş, doğrudan telefon çıkışı) hızlı bir doğrulama yap — tam 32-fotoğraflık benchmark'ı tekrarlamaya gerek yok, önceki bulgular geçerli, ama yeniden yazılan kodun aynı sonucu verdiğini teyit et
+- HEIC desteği baştan eklenir (`pillow-heif` + `register_heif_opener()`) — hedef kitle iPhone'dan çekiyor, önceki iterasyonda bu sonradan eklenmişti
+- Docker'a al, root olmayan kullanıcıyla çalıştır (`SECURITY.md` bölüm 1.2), `.dockerignore` ekle
+- **Çıktı:** CLI/Postman üzerinden test edilebilir çalışan bir segmentasyon API'si, gerçek fotoğraflarla doğrulanmış
+
+### Faz 2 — Web frontend MVP (Kaan liderliğinde, Faz 1 ile paralel yürür) — ⏳ Planlanan
+
+- Next.js iskeleti, sürükle-bırak yükleme, istemci tarafı dosya doğrulaması (backend kısıtlarının aynısı), yüklenme durumu, önce/sonra karşılaştırması (dama deseni üzerinde, şeffaflığın görünmesi için), PNG indirme
+- **Sunucu tarafı vekil kullan** (`/api/remove-background/route.ts` gibi) — tarayıcı FastAPI'ye doğrudan gitmesin; backend'de CORS yok ve ileride secret'ların tarayıcıya sızmaması gerekiyor
+- **Demo (mock) modu ekle** (`USE_MOCK_BACKEND=true`) — BiRefNet 12-14 GB RAM istediği için frontend geliştirmesi backend'i ayakta tutmaya bağımlı olmamalı; sonuç ekranında açıkça "Demo modu" işaretlenir
+- **Kilometre taşı 1:** Faz 1 + Faz 2 birlikte = ilk çalışan demo ("fotoğraf yükle → arka plan kaldırılsın")
+
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ⏳ Planlanan
+
+- Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
+- Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
+- Bu en karmaşık frontend parçası — zamanı buna göre bütçelendir
+- Depolama anahtarı sunucuda üretilen UUID'den gelmeli, orijinal dosya adından değil (path traversal koruması, `SECURITY.md` bölüm 4)
+- Backend boş liste dönerse (henüz gerçek zemin yoksa) editör yer tutucu (placeholder) zeminlere sessizce düşmeli, hiç kırılmamalı
+- Zemin görsellerinin R2'den gelen imzalı URL'leri süreli (örn. 1 saat) — editör uzun süre açık kalırsa yeniden fetch/refresh mekanizması gerekir (önceki iterasyonda bu atlanıp sessiz bir hata haline gelmişti, bu sefer baştan tasarlanmalı)
+
+### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
+
+- Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
+- Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (bu sefer baştan sunucuda — önceki iterasyonda geçici olarak IndexedDB'de tutulup sonra taşınması planlanmıştı, bu ihtiyaç ortadan kalkıyor çünkü DB şeması aynı anda kuruluyor)
+- Oturum çerezde tutulur (`@supabase/ssr`), localStorage'da değil
+- Middleware yetkilendirme sayılmaz — sadece yönlendirme kolaylığı; gerçek denetim RLS'te ve sunucu bileşenlerinde ikinci kez kontrol edilir
+- Parola sıfırlamada kullanıcı numaralandırması engellenir, callback'te açık yönlendirme kapatılır
+
+**Güvenlik gereksinimleri (bkz. `SECURITY.md` bölüm 3) — bu fazda ertelenemez, şema yanlış tasarlanırsa sonradan düzeltmek pahalıdır:**
+- Şifreler asla plaintext saklanmaz — Supabase Auth kullanıldığı için hash'leme onların sorumluluğunda
+- **RLS her tabloda açık olmalı** — `anon` anahtarı herkese açık, tabloyu koruyan tek şey RLS
+- Her endpoint'te IDOR koruması: kaynağın gerçekten `current_user`'a ait olduğu DB seviyesinde doğrulanır
+- Session/JWT tasarımı kısa ömürlü access + refresh token deseniyle yapılır
+- CORS middleware'i bu fazda mutlaka eklenir
+
+### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
+
+- Serhan: kredi modeli mantığı, iyzico entegrasyonu, webhook'lar, kullanım bazlı düşüm
+- Kaan: satın alma akışı arayüzü, kredi bakiyesi gösterimi, fatura/geçmiş sayfası
+
+**Güvenlik gereksinimleri (bkz. `SECURITY.md` bölüm 5):**
+- Kredi kartı bilgisi hiçbir zaman kendi backend'imize dokunmaz; iyzico'nun hosted checkout/tokenization akışı kullanılır (PCI-DSS SAQ-A seviyesinde kalmak için)
+- Webhook'lar HMAC imza doğrulamasından geçmeden işlenmez
+- Webhook endpoint'i idempotent olmalı
+- Kart bilgisi hiçbir log'a yazılmaz
+
+### Faz 6 — Admin paneli — ⏳ Planlanan
+
+- Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
+- Kaan: rol tabanlı `/admin` arayüzü, arka plan yükleme/yönetim paneli
+- **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
+
+### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
+
+- Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
+- Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
+- Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
+- Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+
+### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
+
+- React Native + Expo'ya geçiş, web iş mantığını yeniden kullan
+- Kamera entegrasyonu: telefondan doğrudan çekim, canlı önizleme
+- Büyük bir faz — muhtemelen tek kişiye ait olmak yerine iki kişi arasında bölünecek
+
+## 5. Görev bölüşümü gerekçesi
+
+**Serhan — Backend, AI/ML, altyapı:** model seçimi/entegrasyonu, API geliştirme, veritabanı, ödemeler backend'i, admin API'leri, DevOps.
+
+**Kaan — Frontend, ürün deneyimi:** web arayüzü, canvas editörü (en kritik UX parçası), kullanıcı akışları, admin arayüzü, sonrasında mobil arayüz.
+
+Gerekçe: AI sunumu doğası gereği backend ağırlıklı, bu yüzden backend işiyle birlikte tutmak bağlam değiştirmeyi azaltır. Görsel manipülasyon ve kullanıcı deneyimi, uçtan uca tek kişi tarafından sahiplenildiğinde tutarlı kalır.
+
+## 6. Sonraki adımlar
+
+1. Yeni depoyu oluştur, `CLAUDE.md` + `ROADMAP.md` + `SECURITY.md` dosyalarını kök dizine koy
+2. Faz 0'ı başlat: repo/branch stratejisi, `.env` yönetimi, Docker Compose
+3. Faz 1 ve Faz 2'yi paralel yürüt (bölüm 4)

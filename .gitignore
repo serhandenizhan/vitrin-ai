@@ -1,0 +1,39 @@
+# Secrets — asla commit edilmez
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Docker
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Model ağırlıkları / büyük dosyalar (Faz 1'de indirilecek, repoya commit edilmez)
+*.onnx
+*.pth
+*.ckpt
