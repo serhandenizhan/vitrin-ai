@@ -12,8 +12,10 @@ koruyor.
 
 ## Durum
 
-**Faz 0 — Kurulum** tamamlandı. Faz 1 (backend/AI motoru) ve Faz 2 (frontend MVP)
-sırada.
+**Faz 0 — Kurulum** ve **Faz 1 — backend/AI motoru** tamamlandı:
+`POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
+gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
+Faz 2 (frontend MVP) sırada.
 
 ## Ekip
 
@@ -36,7 +38,7 @@ Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları içi
 ## Depo yapısı
 
 ```
-/backend    FastAPI uygulaması, AI inference servisi (Faz 1'de kurulacak)
+/backend    FastAPI uygulaması, AI inference servisi (Faz 1 tamamlandı — bkz. backend/README.md)
 /frontend   Next.js web uygulaması (Faz 2'de kurulacak)
 /mobile     React Native uygulaması (Faz 8'de eklenecek)
 ```
