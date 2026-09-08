@@ -3,10 +3,15 @@
 /**
  * Sol panel: gecmis calismalar ve ayarlar.
  *
- * Kayan bir cekmece olarak duruyor, sabit bir sutun degil — sayfanin
- * govdesi tam genislikte donusumlu bolumlerden olusuyor (bkz. tasarim dili)
- * ve kalici bir sutun o ritmi bozardi. Cekmece `fixed` konumlandirildigi
- * icin acilip kapanirken ana icerik hic kaymiyor.
+ * Kayan bir cekmece olarak duruyor, sabit bir sutun degil — sayfanin govdesi
+ * tam genislikte donusumlu bolumlerden olusuyor (bkz. tasarim dili) ve kalici
+ * bir sutun o ritmi bozardi. `fixed` konumlandirildigi icin acilip kapanirken
+ * ana icerik hic kaymiyor.
+ *
+ * Duzen: ustte marka, ortada calismalar (ya da ayarlar), ALTTA ikon serit —
+ * ayarlar ve onun altinda cikis. Ayarlar onceden ustte bir sekmeydi; alta
+ * alinmasi paneli tek isli yapiyor (govde = calismalar) ve ayari uygulamalarda
+ * beklenen yere koyuyor.
  *
  * Gecmisin GECICI oldugu panelde acikca yaziyor — sessizce tarayiciya
  * kaydedip kullaniciya "calismalarim" demek yaniltici olurdu
@@ -14,14 +19,13 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Settings2, Trash2, X } from "lucide-react";
+import { LogOut, Settings2, Trash2, X } from "lucide-react";
 
+import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WorkRecord } from "@/lib/work-history";
-
-type Tab = "works" | "settings";
 
 export function WorkSidebar() {
   const {
@@ -34,9 +38,10 @@ export function WorkSidebar() {
     openWork,
     settings,
     updateSettings,
+    openSignIn,
   } = useWorkspace();
 
-  const [tab, setTab] = useState<Tab>("works");
+  const [showSettings, setShowSettings] = useState(false);
 
   // Cekmece acikken Esc kapatsin.
   useEffect(() => {
@@ -50,7 +55,6 @@ export function WorkSidebar() {
 
   return (
     <>
-      {/* Karartma — disariya tiklayinca kapanir */}
       {isSidebarOpen ? (
         <button
           type="button"
@@ -72,9 +76,12 @@ export function WorkSidebar() {
           isSidebarOpen && "drawer-open",
         )}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 px-4">
-          <span className="text-[0.9375rem] font-semibold tracking-[-0.01em]">
-            Vitrin <span className="text-gold">AI</span>
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+          <span className="flex items-center gap-2 text-[1.0625rem]">
+            <BrandMark className="text-gold size-[1.4rem]" />
+            <span className="font-semibold tracking-[-0.01em]">
+              Vitrin <span className="text-gold">AI</span>
+            </span>
           </span>
           <button
             type="button"
@@ -86,25 +93,15 @@ export function WorkSidebar() {
           </button>
         </div>
 
-        {/* Sekmeler */}
-        <div className="flex shrink-0 gap-1 border-b border-white/10 p-2">
-          <TabButton
-            isActive={tab === "works"}
-            onClick={() => setTab("works")}
-            Icon={Clock}
-            label="Çalışmalarım"
-            badge={works.length > 0 ? works.length : undefined}
-          />
-          <TabButton
-            isActive={tab === "settings"}
-            onClick={() => setTab("settings")}
-            Icon={Settings2}
-            label="Ayarlar"
-          />
-        </div>
-
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {tab === "works" ? (
+          {showSettings ? (
+            <SettingsPanel
+              settings={settings}
+              onChange={updateSettings}
+              workCount={works.length}
+              onClearAll={removeAllWorks}
+            />
+          ) : (
             <WorksPanel
               works={works}
               isLoaded={isHistoryLoaded}
@@ -112,48 +109,75 @@ export function WorkSidebar() {
               onOpen={openWork}
               onDelete={removeWork}
             />
-          ) : (
-            <SettingsPanel
-              settings={settings}
-              onChange={updateSettings}
-              workCount={works.length}
-              onClearAll={removeAllWorks}
-            />
           )}
+        </div>
+
+        {/* Alt serit: ayarlar, altinda cikis */}
+        <div className="flex shrink-0 flex-col gap-1 border-t border-white/10 p-2">
+          <RailButton
+            Icon={Settings2}
+            label={showSettings ? "Çalışmalarıma dön" : "Ayarlar"}
+            isActive={showSettings}
+            onClick={() => setShowSettings((current) => !current)}
+          />
+          {/*
+           * Cikis, hesap sistemi gelene kadar devre disi. Calisan bir cikis
+           * dugmesi koymak, olmayan bir oturumu varmis gibi gostermek olurdu;
+           * tamamen gizlemek ise tasarimi eksik birakiyordu. Tiklayinca
+           * "Giris yap" penceresi aciliyor, orada durum aciklaniyor.
+           */}
+          <RailButton
+            Icon={LogOut}
+            label="Çıkış yap"
+            hint="Hesap sistemi yakında"
+            isMuted
+            onClick={openSignIn}
+          />
         </div>
       </aside>
     </>
   );
 }
 
-type TabButtonProps = {
-  isActive: boolean;
-  onClick: () => void;
-  Icon: typeof Clock;
+type RailButtonProps = {
+  Icon: typeof Settings2;
   label: string;
-  badge?: number;
+  hint?: string;
+  isActive?: boolean;
+  isMuted?: boolean;
+  onClick: () => void;
 };
 
-function TabButton({ isActive, onClick, Icon, label, badge }: TabButtonProps) {
+function RailButton({
+  Icon,
+  label,
+  hint,
+  isActive,
+  isMuted,
+  onClick,
+}: RailButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={isActive}
+      title={hint}
       className={cn(
-        "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-[0.8125rem] font-medium transition-colors",
+        "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[0.875rem] transition-colors",
         isActive
           ? "bg-white/12 text-[#f5f5f7]"
-          : "text-[#f5f5f7]/60 hover:text-[#f5f5f7]",
+          : isMuted
+            ? "text-[#f5f5f7]/45 hover:bg-white/8 hover:text-[#f5f5f7]/70"
+            : "text-[#f5f5f7]/75 hover:bg-white/8 hover:text-[#f5f5f7]",
       )}
     >
-      <Icon className="size-3.5" strokeWidth={1.75} aria-hidden />
-      {label}
-      {badge !== undefined ? (
-        <span className="bg-gold ml-0.5 rounded-full px-1.5 text-[0.625rem] font-semibold text-black tabular-nums">
-          {badge}
-        </span>
-      ) : null}
+      <Icon className="size-[1.05rem] shrink-0" strokeWidth={1.75} aria-hidden />
+      <span className="flex min-w-0 flex-col items-start">
+        <span className="font-medium">{label}</span>
+        {hint ? (
+          <span className="text-[0.6875rem] text-[#f5f5f7]/40">{hint}</span>
+        ) : null}
+      </span>
     </button>
   );
 }
@@ -171,52 +195,48 @@ function WorksPanel({
   onOpen: (work: WorkRecord) => void;
   onDelete: (id: string) => void;
 }) {
-  if (!historyEnabled) {
-    return (
-      <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
-        Geçmiş kaydı kapalı. Ayarlar sekmesinden açabilirsiniz.
-      </p>
-    );
-  }
-
-  if (!isLoaded) {
-    return (
-      <p className="text-[0.8125rem] text-[#f5f5f7]/50">Yükleniyor…</p>
-    );
-  }
-
-  if (works.length === 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        <p className="text-[0.8125rem] font-medium">Henüz çalışma yok</p>
-        <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
-          Bir fotoğrafın arka planını kaldırdığınızda sonuç burada birikir ve
-          tek tıkla geri açılır.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-1.5">
-        {works.map((work) => (
-          <WorkRow
-            key={work.id}
-            work={work}
-            onOpen={() => onOpen(work)}
-            onDelete={() => onDelete(work.id)}
-          />
-        ))}
-      </ul>
+      <h2 className="text-[0.6875rem] font-semibold tracking-[0.08em] text-[#f5f5f7]/45 uppercase">
+        Çalışmalarım
+      </h2>
 
-      {/* Geciciligin acikca yazildigi yer — bkz. lib/work-history.ts */}
-      <p className="mt-2 border-t border-white/10 pt-3 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-        Çalışmalar yalnızca <strong className="font-medium">bu cihazda</strong>{" "}
-        ve bu tarayıcıda saklanıyor; başka bir cihazdan görünmez. Hesap sistemi
-        geldiğinde geçmiş hesabınıza taşınacak. En son {works.length} çalışma
-        tutulur.
-      </p>
+      {!historyEnabled ? (
+        <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
+          Geçmiş kaydı kapalı. Alttaki ayarlardan açabilirsiniz.
+        </p>
+      ) : !isLoaded ? (
+        <p className="text-[0.8125rem] text-[#f5f5f7]/50">Yükleniyor…</p>
+      ) : works.length === 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[0.8125rem] font-medium">Henüz çalışma yok</p>
+          <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
+            Bir fotoğrafın arka planını kaldırdığınızda sonuç burada birikir ve
+            tek tıkla geri açılır.
+          </p>
+        </div>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-1.5">
+            {works.map((work) => (
+              <WorkRow
+                key={work.id}
+                work={work}
+                onOpen={() => onOpen(work)}
+                onDelete={() => onDelete(work.id)}
+              />
+            ))}
+          </ul>
+
+          {/* Geciciligin acikca yazildigi yer — bkz. lib/work-history.ts */}
+          <p className="mt-2 border-t border-white/10 pt-3 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
+            Çalışmalar yalnızca{" "}
+            <strong className="font-medium">bu cihazda</strong> ve bu tarayıcıda
+            saklanıyor; başka bir cihazdan görünmez. Hesap sistemi geldiğinde
+            geçmiş hesabınıza taşınacak. En son 20 çalışma tutulur.
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -239,7 +259,7 @@ function WorkRow({
   useEffect(() => () => URL.revokeObjectURL(thumbUrl), [thumbUrl]);
 
   return (
-    <li className="group flex items-center gap-3 rounded-lg p-1.5 transition-colors hover:bg-white/8">
+    <li className="flex items-center gap-3 rounded-lg p-1.5 transition-colors hover:bg-white/8">
       <button
         type="button"
         onClick={onOpen}
@@ -281,12 +301,18 @@ function SettingsPanel({
   onClearAll,
 }: {
   settings: { historyEnabled: boolean; reduceMotion: boolean };
-  onChange: (patch: Partial<{ historyEnabled: boolean; reduceMotion: boolean }>) => void;
+  onChange: (
+    patch: Partial<{ historyEnabled: boolean; reduceMotion: boolean }>,
+  ) => void;
   workCount: number;
   onClearAll: () => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
+      <h2 className="text-[0.6875rem] font-semibold tracking-[0.08em] text-[#f5f5f7]/45 uppercase">
+        Ayarlar
+      </h2>
+
       <Toggle
         label="Çalışmaları bu cihazda sakla"
         description="Kapatırsanız yeni sonuçlar kaydedilmez. Mevcut kayıtlar silinmez."
@@ -321,8 +347,8 @@ function SettingsPanel({
       </div>
 
       <p className="border-t border-white/10 pt-5 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-        Hesap, kredi ve ekip ayarları hesap sistemiyle birlikte gelecek. Şu
-        anda kayıt gerekmiyor ve fotoğraflarınız sunucuda saklanmıyor.
+        Hesap, kredi ve ekip ayarları hesap sistemiyle birlikte gelecek. Şu anda
+        kayıt gerekmiyor ve fotoğraflarınız sunucuda saklanmıyor.
       </p>
     </div>
   );

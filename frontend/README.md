@@ -156,14 +156,50 @@ Footer (açık gri)       → model sınırlamaları, dipnotlar
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
+## Üst çubuk
+
+Marka **en solda**, hemen yanında panel düğmesi; bağlantılar markanın
+devamında; "Giriş yap" ve "Hemen deneyin" en sağda. Çubuk 56 px, bağlantılar
+14 px.
+
+İlk sürümde gövde `max-w-5xl` ile ortalanıyordu ve 1877 px'lik bir ekranda
+logo sayfanın ortasına yakın duruyor, solda kocaman bir boşluk kalıyordu;
+bağlantılar da 12 px'ti ve çevresindeki 64 px'lik başlıkların yanında
+okunmuyordu. İkisi de ekran görüntüsü üzerinden ölçülerek düzeltildi.
+
+Dar ekranda sırayla: bağlantılar (< 1024 px), "Giriş yap" yazısı (< 640 px,
+ikon kalır), marka yazısı (< 380 px, işaret kalır) gizleniyor. 320 px'te
+çubuk içeriği 305 px — taşma yok.
+
+## Logo
+
+`brand-mark.tsx`: yuvarlatılmış bir kare çerçeve (vitrin camı) ve içinde
+briyan kesim bir taş. İkisi birlikte hem sektörü hem ürünü anlatıyor —
+"bir şeyi çerçeveleyip öne çıkarmak". Tek renk SVG, `currentColor` ile
+geliyor; 20 px'te de 200 px'te de aynı netlikte.
+
 ## Sol panel: çalışmalarım ve ayarlar
 
-Üst çubuktaki panel düğmesi soldan kayan bir çekmece açıyor. İki sekmesi var:
+Üst çubuktaki panel düğmesi soldan kayan bir çekmece açıyor.
 
-- **Çalışmalarım** — geçmiş sonuçlar; küçük önizleme, dosya adı, ne kadar önce
-  yapıldığı. Tıklayınca sonuç ekranda geri açılır, çöp kutusuyla tek tek
-  silinir.
-- **Ayarlar** — geçmiş kaydını aç/kapat, hareketi azalt, tümünü sil.
+- **Gövde: çalışmalarım** — geçmiş sonuçlar; küçük önizleme, dosya adı, ne
+  kadar önce yapıldığı. Tıklayınca sonuç ekranda geri açılır, çöp kutusuyla
+  tek tek silinir.
+- **Alt şerit: ayarlar, altında çıkış** — ayarlar geçmiş kaydını aç/kapat,
+  hareketi azalt ve tümünü sil içeriyor; çıkış hesap sistemi gelene kadar
+  soluk duruyor ve tıklanınca durumu açıklayan pencereyi açıyor.
+
+Ayarlar önceden üstte bir sekmeydi; alta alınması paneli tek işli yapıyor
+(gövde = çalışmalar) ve ayarı uygulamalarda beklenen yere koyuyor.
+
+## "Giriş yap" — hesap sistemi henüz yok
+
+Menüde giriş yeri **var** ama tıklayınca `sign-in-notice.tsx` açılıyor: hesap
+sisteminin bir sonraki aşamada geldiğini ve şu anda kayıt gerekmediğini
+söylüyor. Çalışmayan bir düğme koymak ya da sahte bir form açmak kullanıcıya
+yalan söylemek olurdu; tamamen gizlemek ise tasarımı eksik bırakıyordu. Faz
+4'te bu bileşen gerçek giriş/kayıt formuyla değişecek, çağrı noktası aynen
+kalacak.
 
 ### Geçmiş şu anda tarayıcıda — bu geçici
 
@@ -225,6 +261,8 @@ src/components/upload-dropzone.tsx          sürükle-bırak yükleme
 src/components/processing-state.tsx         bekleme ekranı (geçen süre sayacı)
 src/components/comparison-view.tsx          önce/sonra + PNG indirme
 src/components/reveal.tsx                   kaydırınca ortaya çıkma sarmalayıcısı
+src/components/brand-mark.tsx               logo (SVG)
+src/components/sign-in-notice.tsx           "hesap sistemi yakında" penceresi
 src/components/workspace-provider.tsx       panel/geçmiş/ayarlar context'i
 src/components/work-sidebar.tsx             sol çekmece (çalışmalarım + ayarlar)
 src/components/site-header.tsx              yapışkan üst çubuk
@@ -241,6 +279,33 @@ public/mock/sample-cutout.png               örnek kesim ("sonra")
 public/mock/sample-photo.png                aynı ürün kadife zeminde ("önce")
 scripts/generate-mock-cutout.py             ikisini de üreten betik (ek bağımlılık yok)
 ```
+
+## Örnek görseller nasıl üretiliyor
+
+`scripts/generate-mock-cutout.py` iki dosya çıkarıyor: şeffaf kesim ("sonra")
+ve aynı ürünün kadife zemin üzerindeki hâli ("önce"). Ek bağımlılık yok, PNG
+yazıcı betiğin içinde.
+
+Görselin kalitesi neden bu kadar önemsendi: ilk sürüm düz diffuse+specular
+kullanıyordu ve sonuç plastik oyuncak gibi duruyordu. **Metali metal yapan şey
+ışık değil yansıma.** Şu anki sürüm bir stüdyo ortamı (softbox + karanlık
+çevre + zemin sıçraması) tanımlayıp yansıma vektörüyle örnekliyor, Fresnel
+ekliyor ve 2× süperörnekleme ile kenarları yumuşatıyor.
+
+Yol boyunca üç hata yapıldı ve üçü de betikte yazılı:
+
+1. **Pozlama yoktu** → altının düşük mavi kanalı ton eşlemesinden sonra
+   eziliyor, sarı altın zeytin yeşiline kaçıyordu.
+2. **Ortam neredeyse düzdü** → her yönde benzer değer; metalin okunması için
+   gereken parlak/koyu kontrastı yoktu, sonuç bej plastikti.
+3. **Ton eşleme kanal başına yapılıyordu** → yüksek değerlerde tüm kanallar
+   1'e sıkışıyor, kanallar arası oran bozuluyor ve renk doygunluğunu
+   kaybediyordu. Şimdi **parlaklık** üzerinden ton eşleniyor, renk oranı
+   korunuyor.
+
+**Bunlar gerçek ürün fotoğrafı değildir.** Yer tutucudur; gerçek bir fotoğraf
+her zaman daha iyi olur. Gerçek bir ürün fotoğrafı eklenirse bu betik
+tamamen kaldırılabilir.
 
 ## Demo modunun örnek kesimi
 

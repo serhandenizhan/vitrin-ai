@@ -19,6 +19,7 @@ import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
+import { SignInNotice } from "@/components/sign-in-notice";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { WorkSidebar } from "@/components/work-sidebar";
@@ -30,6 +31,7 @@ export default function HomePage() {
        bolumleri sunucu bileseni olarak kalmaya devam ediyor. */
     <WorkspaceProvider>
       <WorkSidebar />
+      <SignInNotice />
       <SiteHeader />
 
       <main className="flex-1">

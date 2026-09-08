@@ -62,6 +62,17 @@ type WorkspaceValue = {
   openWork: (work: WorkRecord) => void;
   subscribeToOpenWork: (listener: (work: WorkRecord) => void) => () => void;
 
+  /**
+   * "Giris yap" penceresi.
+   *
+   * Hesap sistemi Faz 4'te geliyor. Calismayan bir dugme koymak yerine
+   * dugme gorunuyor ama ne oldugunu acikca soyleyen bir pencere aciyor —
+   * tasarim tamamlanmis gorunuyor, kullaniciya yalan soylenmiyor.
+   */
+  isSignInOpen: boolean;
+  openSignIn: () => void;
+  closeSignIn: () => void;
+
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
 };
@@ -78,6 +89,7 @@ export function useWorkspace(): WorkspaceValue {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isSignInOpen, setSignInOpen] = useState(false);
   const [works, setWorks] = useState<WorkRecord[]>([]);
   const [isHistoryLoaded, setHistoryLoaded] = useState(false);
 
@@ -167,6 +179,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeAllWorks,
       openWork,
       subscribeToOpenWork,
+      isSignInOpen,
+      openSignIn: () => {
+        setSignInOpen(true);
+        setSidebarOpen(false);
+      },
+      closeSignIn: () => setSignInOpen(false),
       settings,
       updateSettings,
     }),
@@ -179,6 +197,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       removeAllWorks,
       openWork,
       subscribeToOpenWork,
+      isSignInOpen,
       settings,
       updateSettings,
     ],
