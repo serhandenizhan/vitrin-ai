@@ -304,3 +304,57 @@
     transform: none;
   }
 }
+
+/*
+ * "Hareketi azalt" ayari (sol panel -> Ayarlar).
+ *
+ * `prefers-reduced-motion` isletim sistemi ayarini zaten dinliyoruz; bu sinif
+ * ONA EK olarak, isletim sisteminde ayari acmak istemeyen ama bu sitede
+ * hareket istemeyen kullanici icin. Saglayici sinifi <html> uzerine yaziyor.
+ */
+.reduce-motion .reveal {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/*
+ * Sol cekmecenin konumu.
+ *
+ * Uc kez olculerek varilan sonuc: cekmecenin ACIK/KAPALI konumu hicbir
+ * harekete bagli DEGIL. Sadece iki duz kural, bilesik secici ile.
+ *
+ * Yol boyunca elenen iki yaklasim ve NEDEN elendikleri:
+ *
+ * 1) Tailwind'in `translate-x-0` / `-translate-x-full` ikilisi + `transition`.
+ *    Sinif dogru degisiyor, `--tw-translate-x` dogru degeri aliyor, ama
+ *    hesaplanan `translate` eski degerde takili kaliyordu.
+ *
+ * 2) Ayni ozgullukte iki `@utility` + acilista `@keyframes` animasyonu.
+ *    Iki sorun birden: (a) ayni ozgullukte olduklari icin kazanani uretilen
+ *    dosyadaki SIRA belirliyordu, (b) animasyon `from` degerini tuttugu icin,
+ *    animasyon ilerlemedigi anda panel acik isaretlendigi halde ekran disinda
+ *    kaliyordu — tarayici kare uretmediginde (arka plan sekmesi, cok yavas
+ *    cihaz) kullanici paneli hic acamiyor.
+ *
+ * Ders: hareket suslemedir, ERISILEBILIRLIK DEGIL. Bir ogenin gorunur olup
+ * olmamasi hicbir zaman bir gecisin ya da animasyonun tamamlanmasina
+ * birakilmamali. Cekmece bu yuzden aninda aciliyor; karartmanin yumusak
+ * gecisi zaten hareket hissini veriyor ve o donsa bile panel kullanilabilir
+ * kaliyor.
+ */
+.drawer {
+  transform: translateX(-100%);
+}
+
+.drawer.drawer-open {
+  transform: translateX(0);
+}

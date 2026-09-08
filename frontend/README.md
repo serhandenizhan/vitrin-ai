@@ -156,6 +156,64 @@ Footer (açık gri)       → model sınırlamaları, dipnotlar
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
+## Sol panel: çalışmalarım ve ayarlar
+
+Üst çubuktaki panel düğmesi soldan kayan bir çekmece açıyor. İki sekmesi var:
+
+- **Çalışmalarım** — geçmiş sonuçlar; küçük önizleme, dosya adı, ne kadar önce
+  yapıldığı. Tıklayınca sonuç ekranda geri açılır, çöp kutusuyla tek tek
+  silinir.
+- **Ayarlar** — geçmiş kaydını aç/kapat, hareketi azalt, tümünü sil.
+
+### Geçmiş şu anda tarayıcıda — bu geçici
+
+`ROADMAP.md` proje geçmişini **Faz 4'e ve sunucuya** koyuyor. Kullanıcı Faz
+2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için
+geçmiş şimdilik **IndexedDB**'de tutuluyor. Riski sınırlayan dört karar:
+
+1. Depo bir arayüzün arkasında (`src/lib/work-history.ts`). Faz 4'te yalnızca
+   o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç
+   hiç değişmeyecek.
+2. Panelde kullanıcıya açıkça yazıyor: *"yalnızca bu cihazda saklanıyor, hesap
+   sistemi geldiğinde hesabınıza taşınacak."* Sessizce yapılmıyor.
+3. Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a
+   kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı
+   kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra
+   karşılaştırması değil yalnızca sonuç gösterilir.
+4. En fazla 20 kayıt; ayarlardan kapatılabilir ve silinebilir.
+
+Depolama açılamazsa (gizli pencere, kota dolu, eski tarayıcı) geçmiş sessizce
+devre dışı kalır — kesim ve indirme akışı bundan etkilenmez.
+
+### Durum nerede tutuluyor
+
+`workspace-provider.tsx` bir context sağlıyor: panel açık/kapalı, geçmiş
+listesi, ayarlar. Sağlayıcı çocuklarını **prop olarak** aldığı için tanıtım
+bölümleri sunucu bileşeni olarak kalmaya devam ediyor.
+
+İki nokta React Compiler kurallarının (`react-hooks/set-state-in-effect`)
+yönlendirmesiyle şöyle kuruldu:
+
+- **Ayarlar `useSyncExternalStore` ile okunuyor** (`src/lib/settings-store.ts`),
+  `useState` + efekt ile değil. Ayarlar localStorage'da, yani React dışı bir
+  kaynakta; efekt gövdesinde setState çağırmak hem zincirleme render hem
+  hidrasyon uyuşmazlığı riskiydi.
+- **"Çalışma açıldı" bir olay, kalıcı bir durum değil.** Context'te state
+  olarak tutulup efektte okunsaydı yine efekt gövdesinde setState olurdu;
+  bunun yerine abonelik deseni var — efekt yalnızca abone oluyor, setState
+  olayın geri çağrısında çalışıyor.
+
+### Çekmecenin konumu neden animasyonsuz
+
+Açık/kapalı konum hiçbir harekete bağlı **değil** — iki düz CSS kuralı ve
+bileşik seçici (`.drawer.drawer-open`). Önce `transition`, sonra `@keyframes`
+ile denendi; ikisinde de tarayıcıda ölçülen sonuç aynıydı: sınıf doğru
+değişiyor ama hesaplanan `transform` eski değerde takılı kalıyor ve panel
+"açık" işaretlendiği hâlde ekran dışında kalıyordu. Hareket ilerlemek için
+kare üretilmesini gerektiriyor; kare üretilmediği anda (arka plan sekmesi, çok
+yavaş cihaz) kullanıcı paneli hiç açamıyor. Ayrıntılı gerekçe
+`globals.css` içinde yazılı.
+
 ## Klasör yapısı
 
 ```
@@ -167,15 +225,21 @@ src/components/upload-dropzone.tsx          sürükle-bırak yükleme
 src/components/processing-state.tsx         bekleme ekranı (geçen süre sayacı)
 src/components/comparison-view.tsx          önce/sonra + PNG indirme
 src/components/reveal.tsx                   kaydırınca ortaya çıkma sarmalayıcısı
+src/components/workspace-provider.tsx       panel/geçmiş/ayarlar context'i
+src/components/work-sidebar.tsx             sol çekmece (çalışmalarım + ayarlar)
 src/components/site-header.tsx              yapışkan üst çubuk
 src/components/site-footer.tsx              dipnotlar
 src/components/marketing/hero.tsx           açılış bölümü
 src/components/marketing/highlights.tsx     öne çıkanlar
 src/components/marketing/how-it-works.tsx   üç adım + çekim önerileri
 src/components/marketing/specs.tsx          teknik bilgiler
+src/components/marketing/hero-visual.tsx    açılıştaki önce/sonra görseli
 src/lib/upload-constraints.ts               backend ile senkron yükleme kısıtları
-public/mock/sample-cutout.png               demo modunun örnek kesimi
-scripts/generate-mock-cutout.py             o kesimi üreten betik (ek bağımlılık yok)
+src/lib/work-history.ts                     geçmiş deposu (GEÇİCİ — IndexedDB)
+src/lib/settings-store.ts                   ayarlar (useSyncExternalStore kaynağı)
+public/mock/sample-cutout.png               örnek kesim ("sonra")
+public/mock/sample-photo.png                aynı ürün kadife zeminde ("önce")
+scripts/generate-mock-cutout.py             ikisini de üreten betik (ek bağımlılık yok)
 ```
 
 ## Demo modunun örnek kesimi

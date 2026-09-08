@@ -21,10 +21,15 @@ import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { WorkSidebar } from "@/components/work-sidebar";
+import { WorkspaceProvider } from "@/components/workspace-provider";
 
 export default function HomePage() {
   return (
-    <>
+    /* Saglayici cocuklarini prop olarak aldigi icin asagidaki tanitim
+       bolumleri sunucu bileseni olarak kalmaya devam ediyor. */
+    <WorkspaceProvider>
+      <WorkSidebar />
       <SiteHeader />
 
       <main className="flex-1">
@@ -56,6 +61,6 @@ export default function HomePage() {
       </main>
 
       <SiteFooter />
-    </>
+    </WorkspaceProvider>
   );
 }

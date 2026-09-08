@@ -15,6 +15,9 @@
  * degismiyor, yalnizca tiklama alani buyuyor.
  */
 
+import { PanelLeft } from "lucide-react";
+
+import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -25,6 +28,8 @@ const LINKS = [
 ];
 
 export function SiteHeader() {
+  const { openSidebar, works } = useWorkspace();
+
   return (
     <header
       className={cn(
@@ -38,12 +43,31 @@ export function SiteHeader() {
         aria-label="Ana gezinme"
         className="mx-auto flex h-full w-full max-w-5xl items-center justify-between gap-4 px-5"
       >
-        <a
-          href="#top"
-          className="flex h-full items-center text-[0.9375rem] font-semibold tracking-[-0.01em] whitespace-nowrap"
-        >
-          Vitrin <span className="text-gold">&nbsp;AI</span>
-        </a>
+        <div className="flex h-full items-center gap-1">
+          <button
+            type="button"
+            onClick={openSidebar}
+            aria-label="Çalışmalarım ve ayarlar panelini aç"
+            className="-ml-2 flex size-9 items-center justify-center rounded-full text-[#f5f5f7]/80 transition-colors hover:bg-white/10 hover:text-[#f5f5f7]"
+          >
+            <PanelLeft className="size-4" strokeWidth={1.75} aria-hidden />
+            {/* Gecmiste calisma varsa kucuk bir isaret — panelin bos
+                olmadigini acmadan once belli ediyor. */}
+            {works.length > 0 ? (
+              <span
+                aria-hidden
+                className="bg-gold absolute mt-5 ml-5 size-1.5 rounded-full"
+              />
+            ) : null}
+          </button>
+
+          <a
+            href="#top"
+            className="flex h-full items-center text-[0.9375rem] font-semibold tracking-[-0.01em] whitespace-nowrap"
+          >
+            Vitrin <span className="text-gold">&nbsp;AI</span>
+          </a>
+        </div>
 
         {/* Dar ekranda baglantilar gizleniyor: Apple da mobilde hamburger'a
             aliyor. Faz 2 icin sayfa zaten tek sutun akiyor, bolumler

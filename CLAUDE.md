@@ -24,7 +24,8 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 10. **Ders — `USE_MOCK_BACKEND` gibi geçici test bayrakları unutulabiliyor.** Önceki iterasyonda gerçek backend tekrar çalışır hale geldiğinde bu bayrağın kapatılmayı unutulması, "neden sonuç hep aynı örnek görsel" şeklinde bir kafa karışıklığına yol açmıştı. Bu tür bayraklar açıldığında bir hatırlatma notu bırakılmalı.
 11. **Ders — dosya/klasör path'lerini kod içine hard-code etmeyin.** Önceki iterasyonda bir benchmark script'i geliştiricinin kendi makinesindeki mutlak path'i (`/Users/...`) içeriyordu; bu hem başka bir geliştiricide hem CI'da çalışmayı kırdı. Path'ler her zaman repo köküne göre türetilmeli ve env değişkeniyle override edilebilmeli.
 12. **Ders — araçların ürettiği `.gitignore` ve yardımcı dosyaları da denetleyin.** Faz 2'de `create-next-app`'in ürettiği `frontend/.gitignore` içindeki `.env*` deseni, negasyon olmadığı için `.env.example`'ı da yutuyordu — fark edilmeseydi yeni bir geliştirici hangi ortam değişkenlerine ihtiyaç olduğunu göremezdi (`!.env.example` eklendi). Aynı araç ayrıca `frontend/` altına kendi `AGENTS.md` ve `CLAUDE.md` dosyalarını üretiyor; kök `CLAUDE.md` tek doğru kaynak olduğu için bu `next.config.ts` içinde `agentRules: false` ile kapatıldı. **Genel kural: bir iskelet üreticisi (scaffolder) çalıştırdıktan sonra ürettiği dosyaları tek tek gözden geçirin — sessizce yanlış davranan bir yapılandırma bırakabiliyor.**
-13. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
+13. **Ders — hareket süslemedir, erişilebilirlik değil.** Faz 2'de sol çekmecenin açık/kapalı konumu önce bir `transition`'a, sonra bir `@keyframes` animasyonuna bağlanmıştı. İkisinde de tarayıcıda ölçülen sonuç aynıydı: sınıf doğru değişiyor ama hesaplanan `transform` eski değerde takılı kalıyor ve **panel "açık" işaretlendiği hâlde ekran dışında kalıyordu**. Sebep, hareketin ilerlemesi için kare üretilmesi gerekmesi (arka plan sekmesi, çok yavaş cihaz, bazı gömülü tarayıcılar). Animasyonun `from` değeri de aynı tuzağı kuruyor: animasyon 0. karede donarsa o değeri tutuyor. **Kural: bir öğenin görünür/erişilebilir olması hiçbir zaman bir geçişin ya da animasyonun tamamlanmasına bırakılmaz.** Konum/görünürlük doğrudan sınıfla kesinleşmeli, hareket yalnızca üstüne eklenmeli. Ayrıca aynı özgüllükteki iki `@utility` arasında kazananı üretilen dosyadaki sıra belirler — durum değiştiren çiftlerde bileşik seçici (`.drawer.drawer-open`) kullanın. Bkz. `frontend/src/app/globals.css`.
+14. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
 
 ## Proje genel bakış
 
@@ -126,6 +127,18 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 **Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
 
 **Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı.
+
+## Geçici çözüm kaydı — geçmiş çalışmalar tarayıcıda (Faz 2)
+
+Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADMAP.md` proje geçmişini Faz 4'e ve **sunucuya** koyuyor; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor. Ders 8'in gereği olarak bu sessizce yapılmadı:
+
+- Depo bir arayüzün arkasında: `frontend/src/lib/work-history.ts`. Faz 4'te yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç hiç değişmeyecek.
+- Panelde kullanıcıya açıkça yazıyor: "yalnızca bu cihazda saklanıyor, hesap sistemi geldiğinde hesabınıza taşınacak."
+- Ayarlardan kapatılabiliyor ve tümü silinebiliyor.
+- Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra karşılaştırması değil yalnızca sonuç gösterilir.
+- En fazla 20 kayıt.
+
+**Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
 
 ## Açık takip maddesi
 
