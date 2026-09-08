@@ -80,14 +80,14 @@ Aşağıdaki tüm satırlar önceki iterasyonda karara bağlandı ve doğruland�
 
 Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçek testler bir kısıt veya kapsamı değiştiren bir karar ortaya çıkardığında, ilgili fazı olduğu yerde güncelleyin, orijinal metni değişmez kabul etmek yerine. Bu, önceki iterasyonda birebir yaşandı (bellek bulgusu, el sınırlaması, Supabase kararı) ve doküman her seferinde güncellendi.
 
-### Faz 0 — Kurulum ve planlama (ortak) — ⏳ Planlanan
+### Faz 0 — Kurulum ve planlama (ortak) — ✅ Tamamlandı
 
 - Repository, dallanma (branching) stratejisi, `.env` yönetimi, yerel geliştirme için Docker Compose
 - `CLAUDE.md` oluştur ve her adımda güncel tut
 - Kodlama standardı: kod İngilizce, yorumlar sadece Türkçe (bkz. `CLAUDE.md`)
 - Tüm push'lar gerçekleşmeden önce onay gerektirir; PR'lar birleştirilmeden önce incelenir
 
-### Faz 1 — Temel AI motoru (Serhan liderliğinde) — ⏳ Planlanan
+### Faz 1 — Temel AI motoru (Serhan liderliğinde) — ✅ Tamamlandı
 
 - `POST /api/remove-background` endpoint'i: görüntü girer → segmentasyon → şeffaf PNG çıkar
 - Content-type + dosya boyutu + **magic-byte doğrulaması** baştan itibaren eklenir (önceki iterasyonda sonradan yama olarak eklenmişti — bu sefer Faz 1'in bir parçası, bkz. `SECURITY.md` bölüm 4)
