@@ -170,6 +170,10 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 
 - **Faz 0:** `.env`/secrets yönetimi, `.gitignore`, Docker temel sertleştirme
 - **Faz 1:** Dosya yükleme validasyonu (madde 4), dosya boyutu limiti
+- **Faz 2:** Sunucu tarafı vekil — tarayıcı FastAPI'ye doğrudan bağlanmaz; yükleme
+  kısıtları (tür + boyut) vekilde de tekrar uygulanır. Bu, güvenlik sınırının kendisi
+  değildir (asıl sınır backend'dir), ama Faz 4/5'te auth ve ödeme anahtarları
+  devreye girdiğinde bunların tarayıcıya sızmasını engelleyecek katmanı şimdiden kurar.
 - **Faz 3:** R2 presigned URL, path traversal koruması
 - **Faz 4:** Şifre hash'leme, JWT/session tasarımı, IDOR koruması (bu fazda en kritik —
   şema yanlış tasarlanırsa sonradan düzeltmek pahalı)

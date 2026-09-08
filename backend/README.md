@@ -60,7 +60,9 @@ sunucu/instance seçin.
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
-değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`).
+değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`). Karşılığı Faz 2'de
+`frontend/src/lib/upload-constraints.ts` içinde yazıldı — buradaki bir değer
+değişirse o dosya da güncellenmeli.
 
 Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
 
