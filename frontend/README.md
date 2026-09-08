@@ -171,12 +171,55 @@ Dar ekranda sırayla: bağlantılar (< 1024 px), "Giriş yap" yazısı (< 640 px
 ikon kalır), marka yazısı (< 380 px, işaret kalır) gizleniyor. 320 px'te
 çubuk içeriği 305 px — taşma yok.
 
+Panel düğmesi **aç/kapat**: açıkken tekrar basılınca kapanıyor ve
+`aria-expanded` ile durumu bildiriyor. İlk sürümde yalnızca açıyordu.
+
+Menü bağlantıları **yumuşak kaydırıyor** (`scroll-behavior: smooth`).
+`scroll-padding-top: 3.5rem` yapışkan çubuğun yüksekliği kadar — olmadan
+hedef bölümün başlığı çubuğun altında kalıyor. "Hareketi azalt" ayarı ve
+işletim sistemi tercihi bunu kapatıyor; uzun sayfalarda yumuşak kaydırma bazı
+kullanıcılarda baş dönmesi yapıyor.
+
 ## Logo
 
 `brand-mark.tsx`: yuvarlatılmış bir kare çerçeve (vitrin camı) ve içinde
 briyan kesim bir taş. İkisi birlikte hem sektörü hem ürünü anlatıyor —
 "bir şeyi çerçeveleyip öne çıkarmak". Tek renk SVG, `currentColor` ile
 geliyor; 20 px'te de 200 px'te de aynı netlikte.
+
+## Testler
+
+```bash
+npm test          # tek sefer
+npm run test:watch
+```
+
+Vitest. Kapsam bilinçli olarak **saf mantık ve sunucu kodu**: yükleme
+kısıtları (`upload-constraints`) ve arka plan kaldırma vekili (`route.ts`).
+İkisi de projenin en kolay sessizce bozulabilecek yerleri — biri backend ile
+elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
+çevrildiği yer.
+
+27 test var. Özellikle korunanlar:
+
+- **HEIC yolu.** Windows'ta tarayıcı `.heic` için boş content-type bildiriyor
+  ve backend beyan edilen türü şart koşuyor; bu düzeltme sessizce bozulursa
+  iPhone'dan gelen her fotoğraf reddedilir.
+- **503'ün ayrı mesajı.** 503 bir hata değil geçici bir durum; genel hata
+  metnine düşerse kullanıcı ne yapacağını bilemez.
+- **Zaman aşımı ile bağlantı hatasının ayrılması.** Birinde beklemek,
+  diğerinde birini uyarmak gerekiyor.
+- **Demo modunda backend'in hiç çağrılmaması** ve `X-Mock-Response` başlığı —
+  bu başlık olmadan arayüz sahte sonucu gerçek sanar.
+- **Sınır üstü dosyanın backend'e hiç gönderilmemesi.**
+
+Bileşen testleri (React Testing Library) ve E2E (Playwright) bilinçli olarak
+ertelendi; yol haritası ikisini de Faz 7'ye koyuyor ve arayüz hâlâ hızla
+değişirken şimdi eklemek bakım yükü üretirdi.
+
+**Bir tuzak:** testte dosya boyutunu `Object.defineProperty` ile sahtelemek
+işe yaramıyor — dosya `FormData` + `Request` üzerinden geçerken yeniden
+oluşturuluyor ve sahte `size` kayboluyor. Boyut gerçekten üretilmeli.
 
 ## Sol panel: çalışmalarım ve ayarlar
 

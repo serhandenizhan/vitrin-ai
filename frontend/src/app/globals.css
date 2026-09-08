@@ -358,3 +358,32 @@
 .drawer.drawer-open {
   transform: translateX(0);
 }
+
+/*
+ * Menu baglantilari yumusak kaydirsin.
+ *
+ * Varsayilan davranis sayfayi aniden hedefe "firlatiyor" ve kullanici nereye
+ * gittigini takip edemiyor. `scroll-behavior: smooth` bunu tarayicinin kendi
+ * yumusatmasina birakiyor — JS gerekmiyor, klavye ve adres cubugundaki
+ * bagla (#dene gibi) da ayni sekilde calisiyor.
+ *
+ * `scroll-padding-top` ust cubugun yuksekligi kadar (56px): olmadan hedef
+ * bolumun basligi yapiskan cubugun ALTINDA kaliyor.
+ *
+ * Hareketi azalt ayari ve isletim sistemi tercihi bunu kapatiyor — uzun
+ * sayfalarda yumusak kaydirma bazi kullanicilarda bas donmesi yapiyor.
+ */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 3.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+html.reduce-motion {
+  scroll-behavior: auto;
+}

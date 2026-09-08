@@ -35,7 +35,7 @@ const LINKS = [
 ];
 
 export function SiteHeader() {
-  const { openSidebar, works, openSignIn } = useWorkspace();
+  const { isSidebarOpen, toggleSidebar, works, openSignIn } = useWorkspace();
 
   return (
     <header
@@ -52,9 +52,19 @@ export function SiteHeader() {
             calismalar ve ayarlar oraya bagli. */}
         <button
           type="button"
-          onClick={openSidebar}
-          aria-label="Çalışmalarım ve ayarlar panelini aç"
-          className="relative flex size-10 shrink-0 items-center justify-center rounded-lg text-[#f5f5f7]/85 transition-colors hover:bg-white/10 hover:text-[#f5f5f7]"
+          onClick={toggleSidebar}
+          aria-expanded={isSidebarOpen}
+          aria-label={
+            isSidebarOpen
+              ? "Çalışmalarım ve ayarlar panelini kapat"
+              : "Çalışmalarım ve ayarlar panelini aç"
+          }
+          className={cn(
+            "relative flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+            isSidebarOpen
+              ? "bg-white/15 text-[#f5f5f7]"
+              : "text-[#f5f5f7]/85 hover:bg-white/10 hover:text-[#f5f5f7]",
+          )}
         >
           <PanelLeft className="size-[1.15rem]" strokeWidth={1.75} aria-hidden />
           {/* Gecmiste calisma varsa kucuk bir isaret — panelin bos olmadigini

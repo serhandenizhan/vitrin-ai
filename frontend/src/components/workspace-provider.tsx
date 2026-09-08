@@ -41,6 +41,8 @@ type WorkspaceValue = {
   isSidebarOpen: boolean;
   openSidebar: () => void;
   closeSidebar: () => void;
+  /** Ust cubuktaki dugme icin: acikken tekrar basilinca kapansin. */
+  toggleSidebar: () => void;
 
   works: WorkRecord[];
   isHistoryLoaded: boolean;
@@ -172,6 +174,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isSidebarOpen,
       openSidebar: () => setSidebarOpen(true),
       closeSidebar: () => setSidebarOpen(false),
+      toggleSidebar: () => setSidebarOpen((current) => !current),
       works,
       isHistoryLoaded,
       recordWork,

@@ -108,6 +108,13 @@ Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçe
 sürükle-bırak yükleme, istemci tarafı doğrulama, bekleme ekranı, önce/sonra karşılaştırması ve
 PNG indirme tamamlandı. Ayrıntılı gerekçeler `frontend/README.md` dosyasında.
 
+**Frontend testleri eklendi (Vitest, 27 test).** Yığın tablosu Vitest'i listeliyordu ama Faz 2'nin
+ilk turunda frontend'de hiç test yoktu — backend'de Faz 1'den altı test dosyası varken. Kapsam
+bilinçli olarak saf mantık ve sunucu kodu: yükleme kısıtları ve arka plan kaldırma vekili.
+Bileşen testleri ve Playwright E2E, yol haritasının koyduğu yerde (Faz 7) bırakıldı — arayüz hâlâ
+hızla değişirken şimdi eklemek bakım yükü üretirdi. `@types/node` bu sırada 20'den 24'e çekildi;
+makinede zaten Node 24 çalışıyordu ve Vitest 5 bunu şart koşuyor.
+
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
 - **Backend'de `/health` endpoint'i yok.** Arayüzde "backend ayakta mı" göstergesi bu yüzden
