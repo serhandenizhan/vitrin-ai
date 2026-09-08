@@ -161,6 +161,7 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 | XSS | Kullanıcı girdisi (proje isimleri vb.) | React'in default escape'i + `dangerouslySetInnerHTML` yasak |
 | Insecure Dependencies | npm/pip paketleri | `npm audit`, `pip-audit` CI'da otomatik çalışmalı |
 | Insufficient Logging | Şüpheli aktivite | Başarısız login denemeleri, admin işlemleri loglanmalı |
+| Unintended File Exposure | `frontend/public/` altındaki **her dosya** internete açıktır ve dağıtıma dahil edilir | Yalnızca yayınlanması *istenen* dosyalar `public/` altında durur. Ham/kaynak/ara dosyalar (yüksek çözünürlüklü orijinaller, notlar, yedekler) `public/` dışında tutulur — Faz 2'de 3,6 MB'lik bir kaynak fotoğraf yanlışlıkla oraya konmuş ve fark edilip taşınmıştı |
 
 ---
 
