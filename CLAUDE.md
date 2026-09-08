@@ -106,6 +106,14 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 - **`frontend/public/` altındaki her dosya internete açıktır** ve dağıtıma dahil edilir. Oraya yalnızca yayınlanması *istenen* dosyalar konur; ham/kaynak/ara dosyalar (yüksek çözünürlüklü orijinaller, notlar, yedekler) `public/` dışında tutulur. Faz 2'de 3,6 MB'lik bir kaynak fotoğraf yanlışlıkla oraya konmuş, fark edilip `frontend/photo-source/` altına taşınmıştı (bkz. `SECURITY.md` bölüm 7).
 - Bu kurallardan biriyle çelişen bir kısayol gerekiyorsa (örn. hız kaygısıyla), bunu sessizce yapmak yerine kullanıcıya açıkça belirtin ve onay isteyin.
 
+## Sistemi çalıştırma
+
+VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.vscode/tasks.json`). Görev dosyası bilinçli olarak commit ediliyor — "sistemi nasıl ayağa kaldıracağım" bilgisi kişisel bir tercih değil, projenin parçası. Kişisel VS Code ayarları (`settings.json` vb.) yok sayılmaya devam ediyor.
+
+**Tuzak:** `.gitignore`'da dizinin kendisi (`.vscode/`) değil **içeriği** (`.vscode/*`) dışlanmalı — git, dışlanmış bir dizinin içine hiç bakmadığı için `!.vscode/tasks.json` negasyonu aksi hâlde çalışmaz.
+
+**İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
+
 ## Frontend çalıştırma (Faz 2'de kuruldu)
 
 ```bash

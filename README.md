@@ -76,6 +76,17 @@ cp .env.example .env   # değerleri düzenleyin
 docker compose up -d   # yerel PostgreSQL'i başlatır
 ```
 
+### VS Code ile tek tıkla
+
+Projeyi VS Code'da açıp **`Ctrl+Shift+B`** — backend ve frontend birlikte kalkar,
+her biri kendi terminalinde. Durdurmak için ilgili terminalde `Ctrl+C`.
+Tanımlar: `.vscode/tasks.json`.
+
+Diğer görevler `Ctrl+Shift+P` → "Tasks: Run Task" altında: yalnızca frontend
+(demo modu, backend gerekmez) ve "Kontrol: lint + test + build".
+
+### Elle
+
 Frontend'i başlatmak için:
 
 ```bash
