@@ -53,10 +53,46 @@ sunucu/instance seçin.
 
 | Değişken | Varsayılan | Açıklama |
 | --- | --- | --- |
-| `MAX_FILE_SIZE_MB` | `20` | Yükleme boyutu sınırı |
+| `MAX_FILE_SIZE_MB` | `20` | Yükleme boyutu sınırı (dosya içeriği) |
+| `MAX_CONCURRENT_INFERENCES` | `1` | Aynı anda çalışabilecek BiRefNet inference sayısı (sürece/worker'a özgü) |
+| `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
+| `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
 değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`).
 
 Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
+
+## Kaynak tüketimi korumaları
+
+`POST /api/remove-background` şu anda auth/kota kontrolü olmadan herkese açık
+(kimlik doğrulama Faz 4'te Supabase Auth ile gelecek — bkz. kök `ROADMAP.md`).
+Bu ara dönemde kaynak tüketimini sınırlayan üç bağımsız katman var:
+
+1. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf
+   ASGI middleware, `receive()` akışını sararak toplam istek gövdesi
+   `MAX_REQUEST_BODY_BYTES` sınırını aşarsa Starlette'in multipart parser'ı
+   gövdeyi tamamlamadan `413` döner. Bu sınır ayrı, açıkça yapılandırılabilir
+   bir ayardır (`max_request_body_bytes`, env `MAX_REQUEST_BODY_BYTES`);
+   verilmezse `max_file_size_mb + 64KB` (multipart zarf overhead payı) olarak
+   otomatik hesaplanır. Bu, uygulama-seviyesi bir yedektir — en erken/ucuz red
+   reverse proxy'de (`SECURITY.md` 2.3) olmalı.
+2. **Piksel sınırı** (`app/validation/upload.py`) — `MAX_IMAGE_PIXELS`, küçük
+   byte boyutlu ama devasa çözünürlüklü ("decompression bomb") görselleri
+   reddeder; PIL'in kendi `Image.MAX_IMAGE_PIXELS` global'ine güvenilmiyor.
+   Görsel decode/verify aşamasında PIL'in fırlatabileceği tüm istisnalar
+   (`SyntaxError`, `struct.error` vb. dahil — sadece `OSError`/
+   `UnidentifiedImageError` değil) yakalanıp `UploadValidationError`'a çevrilir;
+   bozuk/kasıtlı olarak bozulmuş dosyalar 500 yerine her zaman 400 üretir.
+3. **`EndpointAdmissionLimiterMiddleware`** (`app/middleware/admission_limiter.py`)
+   — saf ASGI middleware, yalnızca `POST /api/remove-background`'a özgü.
+   `InferenceCapacityLimiter`'ı (`app/services/concurrency.py`,
+   `anyio.CapacityLimiter` tabanlı, gerçek non-blocking sözleşme) **multipart
+   parser çağrılmadan önce**, en dış middleware katmanında uygular; kapasite
+   doluysa istek parser'a/route'a hiç ulaşmadan beklemeden anında `429` alır.
+   İzin, downstream işlem (parse + validation + inference) tamamen bitene
+   kadar — başarı, hata veya iptal fark etmeksizin — tutulur. **Sürece/worker'a
+   özgüdür** — çoklu worker dağıtımında toplam kapasite `worker_sayısı ×
+   MAX_CONCURRENT_INFERENCES` olur; kalıcı, süreçler-arası bir sınır için
+   Celery/RQ + Redis kuyruğuna geçmek gerekir (bu PR'ın kapsamı dışında).
