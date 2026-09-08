@@ -41,7 +41,12 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 3. **Dil kuralı:** kaynak kod (değişken adları, API alanları vb.) İngilizcedir; kod içindeki yorumlar sadece Türkçe yazılır. Üst seviye dokümantasyon dosyaları (`CLAUDE.md`, `ROADMAP.md`) kullanıcı talebi üzerine Türkçe tutulabilir. Sohbet Türkçe devam eder.
 4. **`README.md`'yi de her adımda güncel tutun.** Kök dizindeki `README.md`, projenin GitHub'daki dış yüzüdür — yeni bir özellik, mimari değişiklik veya proje durumu güncellemesi olduğunda bunu da güncelleyin. Değişiklik hangi ekip üyesi (Serhan veya Kaan) tarafından yapılıyor olursa olsun aynı kural geçerlidir: iş bitmeden önce Claude Code, `README.md`'nin güncellenmesi gerekip gerekmediğini kullanıcıya otomatik olarak sormalı.
 5. **Her PR'dan önce ilgili dokümanların tamamı kontrol edilir:** kök `README.md`, `ROADMAP.md`, `CLAUDE.md`, `SECURITY.md` ve ilgili alt `README` (`frontend/README.md` / `backend/README.md`). Bu bir "gerekirse" maddesi değil — PR açmadan önce tek tek gözden geçirilir ve güncellenmesi gerekmeyenler için kullanıcıya "şu dosyada değişiklik gerekmedi" diye **açıkça** söylenir. Sessizce atlamak yasak. Bir sayı (RAM, süre, limit) birden fazla dokümanda geçiyorsa **hepsi birden** güncellenir.
-6. **Güvenlik, Faz 7'ye ertelenen ayrı bir görev değildir.** `SECURITY.md` dosyasındaki standartlar ilgili faz içinde uygulanır (hangi maddenin hangi fazda olduğu hem `SECURITY.md` bölüm 8'de hem `ROADMAP.md`'deki ilgili faz altında listelenir). Yeni bir endpoint, DB tablosu, dosya yükleme akışı veya ödeme entegrasyonu yazılırken `SECURITY.md`'deki ilgili bölüm önce kontrol edilir.
+6. **Faz dışına çıkılmaz — çıkılacaksa ÖNCE uyarılır.** (Kaan'ın kararı, 08.09.2026.) Bir istek, o an üzerinde çalışılan fazın `ROADMAP.md`'deki kapsamının dışındaysa: **iş yapılmadan önce** kullanıcıya bunun hangi faza ait olduğu ve neden şimdi yapılmaması gerektiği söylenir, onayı beklenir. Sessizce yapmak da, "nasılsa faydalı" diye eklemek de yasak.
+   - Bu kural Faz 2'de fiilen yaşandığı için kondu: çalışma geçmişi (Faz 4, sunucuda) tarayıcıda yapıldı ve "giriş yap" arayüz öğesi (Faz 4) eklendi. İkisi de kullanıcı isteğiyle ve belgelenerek yapıldı ama **kapsam yine de aşıldı** ve Faz 4'e taşıma işi bıraktı — yol haritası tam olarak bundan kaçınmak için "baştan sunucuda" demişti.
+   - Kapsam dışı olup olmadığı belirsizse, varsayılan **dışıdır**: sorulur.
+   - Kullanıcı uyarıya rağmen isterse yapılır; o zaman karar `ROADMAP.md`'deki ilgili faza ve gerekiyorsa `CLAUDE.md`'ye "geçici çözüm / öne alınan iş" olarak yazılır (bkz. ders 8).
+   - Bir fazın kendi görevleri bitmeden bir sonraki faza geçilmez.
+7. **Güvenlik, Faz 7'ye ertelenen ayrı bir görev değildir.** `SECURITY.md` dosyasındaki standartlar ilgili faz içinde uygulanır (hangi maddenin hangi fazda olduğu hem `SECURITY.md` bölüm 8'de hem `ROADMAP.md`'deki ilgili faz altında listelenir). Yeni bir endpoint, DB tablosu, dosya yükleme akışı veya ödeme entegrasyonu yazılırken `SECURITY.md`'deki ilgili bölüm önce kontrol edilir.
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
@@ -167,7 +172,7 @@ Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek b
 Şema tasarlanırken bilinmesi gerekenler:
 - Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
 - Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
-- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 6 ve `SECURITY.md` 3.2).
+- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
 - Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
 
 ### 3. CORS middleware'i — sahibi: Serhan, Faz 4
