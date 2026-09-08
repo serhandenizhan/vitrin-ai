@@ -174,6 +174,12 @@ ikon kalır), marka yazısı (< 380 px, işaret kalır) gizleniyor. 320 px'te
 Panel düğmesi **aç/kapat**: açıkken tekrar basılınca kapanıyor ve
 `aria-expanded` ile durumu bildiriyor. İlk sürümde yalnızca açıyordu.
 
+Çekmece **yumuşak kayıyor**: `cubic-bezier(0.32, 0.72, 0, 1)`, açılış 460 ms,
+kapanış 360 ms. Açılma kapanmadan uzun — açılırken paneli tanımak için zaman
+gerekiyor, kapanırken kullanıcı zaten oradan ayrılmış oluyor. Karartma da
+opaklıkla geliyor; koşullu mount/unmount ile kapanırken hiçbir geçiş
+çalışmıyor, öğe bir anda yok oluyordu.
+
 Menü bağlantıları **yumuşak kaydırıyor** (`scroll-behavior: smooth`).
 `scroll-padding-top: 3.5rem` yapışkan çubuğun yüksekliği kadar — olmadan
 hedef bölümün başlığı çubuğun altında kalıyor. "Hareketi azalt" ayarı ve
@@ -322,6 +328,52 @@ public/mock/sample-cutout.png               örnek kesim ("sonra")
 public/mock/sample-photo.png                aynı ürün kadife zeminde ("önce")
 scripts/generate-mock-cutout.py             ikisini de üreten betik (ek bağımlılık yok)
 ```
+
+## Açılıştaki ürün fotoğrafları
+
+`public/photos/atolye.webp` ve `vitrin.webp` — **gerçek ürün fotoğrafları**,
+telifi bize ait. Kullanıcının sağladığı tek kare (2816×1536, 3,6 MB) ikiye
+bölünüp küçültülerek üretiliyor: `node scripts/prepare-photos.mjs`.
+
+Etiketler bilinçli olarak "Önce / Sonra" **değil**, "Atölyede / Vitrinde":
+sağdaki kare bu aracın çıktısı değil, ayrı bir çekim. "Sonra" demek,
+kullanıcıya bu sonucu bu aracın ürettiğini söylemek olurdu. İkisi birlikte
+ürünün **vaadini** anlatıyor; aracın gerçek çıktısını kullanıcı birkaç ekran
+aşağıda kendi fotoğrafıyla görüyor.
+
+**Kaynak dosya `public/` dışında** (`photo-source/`). İlk denemede
+`public/photos/_kaynak/` altındaydı ve bu, 3,6 MB'lik ham JPEG'in olduğu gibi
+**yayınlanması** demekti — Next.js `public/` altındaki her şeyi sunuyor ve
+dağıtıma dahil ediyor. Kimse adresi bilmese de dosya sunucuda duruyor.
+
+Hedef genişlik 900 px: paneller masaüstünde her biri ~384 CSS px kaplıyor,
+2× retina için 768 yetiyor. İlk denemede 1400 px seçilmişti ve atölye karesi
+532 KB'a çıkmıştı (ahşap damarı ve talaş dokusu sıkışmıyor) — ekranda hiç
+kullanılmayan çözünürlük için ödenen bayt.
+
+## Sayfa ağırlığı
+
+Üretim derlemesinde ölçüldü (`next start`, ilk yükleme):
+
+| | |
+| --- | --- |
+| **Toplam aktarılan** | **342 KB** |
+| JavaScript | 160 KB |
+| Font (Inter, latin + latin-ext) | 131 KB |
+| Görseller | 42 KB |
+| CSS | 9 KB |
+| Belge | 9 KB |
+
+Görseller `next/image` ile 384 px sürümlerine iniyor: 900 px'lik kaynaklar
+ekranda 31 KB + 12 KB olarak servis ediliyor.
+
+`tw-animate-css` kaldırıldı — sağladığı sınıfların (`animate-in`, `fade-in`,
+`slide-in-*`, `zoom-in`) hiçbiri kullanılmıyordu; sırf iskelet üreticisi
+eklediği için duruyordu. Hareket bu projede kendi sınıflarımızla kuruluyor
+(`.reveal`, `.drawer`, `.press`).
+
+Tanıtım bölümlerinin tamamı sunucu bileşeni; istemciye inen tek durum taşıyan
+parça `background-remover.tsx` ve panel/sağlayıcı.
 
 ## Örnek görseller nasıl üretiliyor
 

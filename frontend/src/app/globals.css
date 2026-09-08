@@ -1,5 +1,9 @@
 @import "tailwindcss";
-@import "tw-animate-css";
+/* tw-animate-css KALDIRILDI: sagladigi siniflarin (animate-in, fade-in,
+   slide-in-*, zoom-in) hicbiri projede kullanilmiyor — tarandi. Sirf
+   iskelet ureticisi ekledi diye duruyordu ve derlenen CSS'i bosuna
+   buyutuyordu. Hareket bu projede kendi siniflarimizla kuruluyor
+   (.reveal, .drawer, .press). */
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -327,36 +331,60 @@
 }
 
 /*
- * Sol cekmecenin konumu.
+ * Sol cekmecenin konumu ve hareketi.
  *
- * Uc kez olculerek varilan sonuc: cekmecenin ACIK/KAPALI konumu hicbir
- * harekete bagli DEGIL. Sadece iki duz kural, bilesik secici ile.
+ * BILESIK SECICI zorunlu (`.drawer.drawer-open`). Ilk surumde ikisi de ayni
+ * ozgullukte `@utility` idi; kazanani uretilen dosyadaki SIRA belirliyordu ve
+ * `.drawer` sonra geldigi icin panel "acik" isaretlendigi halde ekran disinda
+ * kaliyordu. Asil hata buydu.
  *
- * Yol boyunca elenen iki yaklasim ve NEDEN elendikleri:
+ * Gecis geri getirildi (once kaldirilmisti): o kaldirma karari, ustteki
+ * ozgulluk hatasi ile gomulu tarayicinin kare uretmemesinin ayni belirtiyi
+ * vermesinden kaynaklaniyordu. Ozgulluk duzeltildikten sonra gecis gercek
+ * tarayicida sorunsuz calisiyor.
  *
- * 1) Tailwind'in `translate-x-0` / `-translate-x-full` ikilisi + `transition`.
- *    Sinif dogru degisiyor, `--tw-translate-x` dogru degeri aliyor, ama
- *    hesaplanan `translate` eski degerde takili kaliyordu.
+ * Egri `cubic-bezier(0.32, 0.72, 0, 1)`: basta hizli, sonda uzun ve yumusak
+ * yavaslama — dogrusal ya da `ease` bir kayma "mekanik" hissettiriyordu.
+ * Acilma kapanmadan biraz UZUN (460ms / 360ms): acilirken paneli tanimak
+ * icin zaman gerekiyor, kapanirken kullanici zaten oradan ayrilmis oluyor.
  *
- * 2) Ayni ozgullukte iki `@utility` + acilista `@keyframes` animasyonu.
- *    Iki sorun birden: (a) ayni ozgullukte olduklari icin kazanani uretilen
- *    dosyadaki SIRA belirliyordu, (b) animasyon `from` degerini tuttugu icin,
- *    animasyon ilerlemedigi anda panel acik isaretlendigi halde ekran disinda
- *    kaliyordu — tarayici kare uretmediginde (arka plan sekmesi, cok yavas
- *    cihaz) kullanici paneli hic acamiyor.
- *
- * Ders: hareket suslemedir, ERISILEBILIRLIK DEGIL. Bir ogenin gorunur olup
- * olmamasi hicbir zaman bir gecisin ya da animasyonun tamamlanmasina
- * birakilmamali. Cekmece bu yuzden aninda aciliyor; karartmanin yumusak
- * gecisi zaten hareket hissini veriyor ve o donsa bile panel kullanilabilir
- * kaliyor.
+ * `will-change` yok: surekli acilip kapanmayan bir oge icin tarayiciyi
+ * kalici bir katman tutmaya zorlamak bellegi bosuna mesgul ediyor.
  */
 .drawer {
   transform: translateX(-100%);
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .drawer.drawer-open {
   transform: translateX(0);
+  transition-duration: 460ms;
+}
+
+/* Karartma: her zaman DOM'da, opaklikla geliyor. Kosullu mount/unmount ile
+   kapanirken hicbir gecis calismiyordu — oge bir anda yok oluyordu. */
+.drawer-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.drawer-backdrop.drawer-backdrop-open {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: 460ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer-backdrop {
+    transition: none;
+  }
+}
+
+.reduce-motion .drawer,
+.reduce-motion .drawer-backdrop {
+  transition: none;
 }
 
 /*

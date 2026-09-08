@@ -1,72 +1,85 @@
 /**
- * Acilis gorseli: aynı urun, once ve sonra.
+ * Acilis gorseli: ayni urun, atolyede ve vitrinde.
  *
- * Ilk halinde burada yalniz kesim duruyordu — guzeldi ama urunun NE YAPTIGINI
- * anlatmiyordu; seffaf arka planli bir yuzuk, siyah zeminde sadece bir yuzuk
- * gibi gorunuyor. Iki kareyi tek cercevede, ince bir altin cizgiyle ayirmak
- * vaadi tek bakista okutuyor: solda kadifenin uzerindeki fotograf, sagda
- * ayni urun arka plansiz.
+ * Gorseller GERCEK urun fotograflari (kullanici sagladi, telifi bize ait) —
+ * onceki surumdeki uretilmis yuzuk yer tutucusunun yerini aldilar.
  *
- * Sag taraftaki dama deseni bilincli: seffafligin GORUNUR olmasi icin. Duz
- * bir zemin uzerinde "arka plan kalkti mi" ayirt edilemiyor.
+ * Etiketler bilincli olarak "Once / Sonra" DEGIL, "Atolyede / Vitrinde":
+ *  - Sagdaki kare bizim aracimizin ciktisi degil, ayri bir cekim. "Sonra"
+ *    demek, kullaniciya bu sonucu bu araciin urettigini soylemek olurdu.
+ *  - Ikisi birlikte urunun VAADINI anlatiyor (dagınık bir cekimden satisa
+ *    hazir bir goruntuye), ki bu Faz 2 + Faz 3'un birlikte yaptigi is.
+ *  - Aracin gercek ciktisini kullanici birkac ekran asagida KENDI
+ *    fotografiyla goruyor; abartmaya gerek yok.
  *
- * Bilincli olarak etkilesimsiz (surgu yok): acilis bolumu bir vitrin, bir
- * oyuncak degil. Kullanici birkac ekran asagida gercek araci zaten deneyecek.
+ * `next/image` ile: kaynaklar 900 px WebP (bkz. scripts/prepare-photos.mjs),
+ * `sizes` ile tarayici yalnizca ihtiyaci olan olcuyu indiriyor. Acilista
+ * gorundukleri icin `priority` — LCP bu gorsel.
  */
 
 import Image from "next/image";
 
+const PANELS = [
+  {
+    src: "/photos/atolye.webp",
+    alt: "Kuyumcu tezgâhında, takım ve talaş arasında duran pırlanta kolye",
+    etiket: "Atölyede",
+    vurgulu: false,
+  },
+  {
+    src: "/photos/vitrin.webp",
+    alt: "Aynı kolye, ceviz ve çelik bir vitrin standında sergilenirken",
+    etiket: "Vitrinde",
+    vurgulu: true,
+  },
+];
+
 export function HeroVisual() {
   return (
-    <div className="relative mx-auto w-full max-w-2xl">
-      {/* Altin isik havuzu — seffaf bir gorselin siyah zeminde "yuzmesini"
-          saglayan sey bu. */}
+    <div className="relative mx-auto w-full max-w-3xl">
+      {/* Altin isik havuzu — kareleri siyah zeminden ayiran yumusak hale. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-8 -z-10 opacity-80 blur-3xl"
+        className="pointer-events-none absolute -inset-10 -z-10 opacity-70 blur-3xl"
         style={{
           background:
-            "radial-gradient(60% 55% at 50% 55%, rgba(212,175,110,0.30), transparent 70%)",
+            "radial-gradient(58% 52% at 50% 50%, rgba(212,175,110,0.26), transparent 72%)",
         }}
       />
 
-      <figure className="border-white/12 overflow-hidden rounded-2xl border shadow-2xl">
+      <figure className="overflow-hidden rounded-2xl border border-white/12 shadow-2xl">
         <div className="grid grid-cols-2">
-          {/* Once */}
-          <div className="relative">
-            <Image
-              src="/mock/sample-photo.png"
-              alt="Kadife zemin üzerinde çekilmiş yüzük fotoğrafı"
-              width={1100}
-              height={1100}
-              priority
-              className="h-auto w-full"
-            />
-            <span className="absolute top-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-white uppercase backdrop-blur-sm">
-              Önce
-            </span>
-          </div>
-
-          {/* Sonra */}
-          <div className="checkerboard relative border-l border-white/20">
-            <Image
-              src="/mock/sample-cutout.png"
-              alt="Aynı yüzüğün arka planı kaldırılmış hâli"
-              width={1100}
-              height={1100}
-              priority
-              className="h-auto w-full"
-            />
-            <span className="bg-gold absolute top-3 right-3 rounded-full px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-black uppercase">
-              Sonra
-            </span>
-          </div>
+          {PANELS.map(({ src, alt, etiket, vurgulu }, index) => (
+            <div
+              key={src}
+              className={index === 1 ? "relative border-l border-white/20" : "relative"}
+            >
+              <Image
+                src={src}
+                alt={alt}
+                width={900}
+                height={982}
+                priority
+                sizes="(max-width: 768px) 50vw, 384px"
+                className="h-full w-full object-cover"
+              />
+              <span
+                className={
+                  vurgulu
+                    ? "bg-gold absolute top-3 right-3 rounded-full px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-black uppercase"
+                    : "pointer-events-none absolute top-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-white uppercase backdrop-blur-sm"
+                }
+              >
+                {etiket}
+              </span>
+            </div>
+          ))}
         </div>
       </figure>
 
-      <figcaption className="on-dark-muted fine-print mt-3 text-center">
-        Örnek görsel — gerçek sonucu kendi fotoğrafınızla birkaç ekran aşağıda
-        görebilirsiniz.
+      <figcaption className="on-dark-muted fine-print mt-3 text-center text-balance">
+        Örnek ürün fotoğrafları. Aracın gerçek çıktısını birkaç ekran aşağıda
+        kendi fotoğrafınızla görebilirsiniz.
       </figcaption>
     </div>
   );

@@ -1,19 +1,20 @@
 """
-Demo (mock) modu ve acilis bolumu icin ornek gorselleri uretir.
+Demo (mock) modunun ornek kesimini uretir.
 
-Iki dosya cikariyor:
-
-  public/mock/sample-cutout.png   seffaf arka planli kesim ("sonra")
-  public/mock/sample-photo.png    ayni urun, dokulu bir yuzeyin uzerinde ("once")
+Cikti: public/mock/sample-cutout.png (seffaf arka planli kesim)
 
 Neden var: `USE_MOCK_BACKEND=true` iken vekil katmani backend'i hic cagirmadan
-sabit bir kesim donduruyor (bkz. src/app/api/remove-background/route.ts), ve
-acilis bolumu urunun ne yaptigini tek bakista anlatan bir once/sonra gorseli
-gosteriyor. Ikili dosyalari kaynagi olmadan commit etmek ileride "bu nereden
-geldi, nasil degistirilir" sorusunu cevapsiz birakir.
+sabit bir kesim donduruyor (bkz. src/app/api/remove-background/route.ts).
+Ikili bir dosyayi kaynagi olmadan commit etmek ileride "bu nereden geldi,
+nasil degistirilir" sorusunu cevapsiz birakir.
 
-Bunlar gercek BiRefNet ciktisi ya da gercek bir urun fotografi DEGILDIR;
-yer tutucudur. Arayuz demo sonucunu her zaman "Demo modu" olarak isaretliyor.
+ACILIS BOLUMU ARTIK BUNU KULLANMIYOR — orada gercek urun fotograflari var
+(bkz. scripts/prepare-photos.mjs). Bu dosya yalnizca demo modu icin kaldi ve
+gercek backend'e karsi uretilmis bir kesimle degistirilebilir; o zaman bu
+betik tamamen kaldirilir.
+
+Bu gercek bir BiRefNet ciktisi DEGILDIR; yer tutucudur. Arayuz demo sonucunu
+her zaman "Demo modu" olarak isaretliyor.
 
 Gorsel kalitesi neden bu kadar onemsendi: ilk surum duz diffuse+specular
 kullaniyordu ve sonuc "plastik oyuncak" gibi duruyordu. Metali metal yapan sey
@@ -463,10 +464,6 @@ def main():
     cutout = downsample_rgba(hi)
     write_png(CUTOUT_PATH, SIZE, SIZE, cutout, color_type=6)
     print("yazildi: %s (%.1f KB)" % (CUTOUT_PATH, os.path.getsize(CUTOUT_PATH) / 1024.0))
-
-    photo = render_photo(cutout)
-    write_png(PHOTO_PATH, SIZE, SIZE, photo, color_type=2)
-    print("yazildi: %s (%.1f KB)" % (PHOTO_PATH, os.path.getsize(PHOTO_PATH) / 1024.0))
 
 
 if __name__ == "__main__":

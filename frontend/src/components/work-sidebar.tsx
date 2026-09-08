@@ -55,14 +55,19 @@ export function WorkSidebar() {
 
   return (
     <>
-      {isSidebarOpen ? (
-        <button
-          type="button"
-          aria-label="Paneli kapat"
-          onClick={closeSidebar}
-          className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]"
-        />
-      ) : null}
+      {/* Karartma her zaman DOM'da: kosullu mount/unmount ile kapanirken
+          hicbir gecis calismiyor, oge bir anda yok oluyordu. */}
+      <button
+        type="button"
+        aria-label="Paneli kapat"
+        aria-hidden={!isSidebarOpen}
+        tabIndex={isSidebarOpen ? 0 : -1}
+        onClick={closeSidebar}
+        className={cn(
+          "drawer-backdrop fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]",
+          isSidebarOpen && "drawer-backdrop-open",
+        )}
+      />
 
       <aside
         aria-label="Çalışmalarım ve ayarlar"
