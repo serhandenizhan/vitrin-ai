@@ -140,6 +140,30 @@ Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADM
 
 **Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
 
-## Açık takip maddesi
+## Açık takip maddeleri
+
+Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
+
+### 1. Backend'de `/health` endpoint'i yok — sahibi: Serhan
+
+Arayüze "servis ayakta mı" göstergesi **konmadı**. Uydurma bir gösterge yanlış bilgi verir: servis kapalıyken "bağlı" yazan bir rozet, kullanıcının hatayı anlamasını zorlaştırır. Şu an servisin kapalı olduğu ilk gerçek istekte açık bir mesajla anlaşılıyor ("Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir.").
+
+Böyle bir gösterge isteniyorsa backend'e küçük bir sağlık endpoint'i eklenmeli. Frontend tarafı hazır: vekil katmanı zaten var, gösterge yarım saatlik iş.
+
+**Not:** endpoint eklenirse model yüklü mü / kapasite dolu mu bilgisini de dönmesi faydalı olur — arayüz `MAX_CONCURRENT_INFERENCES=1` yüzünden gelen 503'ü zaten ayrı bir mesajla gösteriyor, aynı bilgiyi önden verebilmek beklemeyi öngörülebilir kılar.
+
+### 2. Geçmiş çalışmalar tarayıcıda — Faz 4'te sunucuya taşınacak — sahibi: Serhan (şema) + Kaan (bağlama)
+
+Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
+
+Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek bir dosyanın arkasında (`frontend/src/lib/work-history.ts`), yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek. Panel, sağlayıcı ve araç aynı kalacak.
+
+Şema tasarlanırken bilinmesi gerekenler:
+- Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
+- Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
+- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 6 ve `SECURITY.md` 3.2).
+- Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
+
+### 3. CORS middleware'i — sahibi: Serhan, Faz 4
 
 Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
