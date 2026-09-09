@@ -20,6 +20,7 @@ import { ProcessingState } from "@/components/processing-state";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/components/workspace-provider";
 import {
   formatBytes,
   isPreviewableInBrowser,
@@ -29,6 +30,8 @@ import {
 type Status = "idle" | "ready" | "processing" | "done" | "error";
 
 export function BackgroundRemover() {
+  const { recordWork, subscribeToOpenWork } = useWorkspace();
+
   const [status, setStatus] = useState<Status>("idle");
   const [file, setFile] = useState<File | null>(null);
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
@@ -36,6 +39,8 @@ export function BackgroundRemover() {
   const [isMocked, setIsMocked] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /** Gecmisten acilan calismanin adi — o durumda `file` null oluyor. */
+  const [openedFileName, setOpenedFileName] = useState<string | null>(null);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor;
   // aksi halde her yeni fotografta bir oncekinin blob'u bellekte kaliyor.
@@ -59,6 +64,7 @@ export function BackgroundRemover() {
     setIsMocked(false);
     setElapsedSeconds(null);
     setErrorMessage(null);
+    setOpenedFileName(null);
   }, []);
 
   const handleFileSelected = useCallback(
@@ -76,6 +82,7 @@ export function BackgroundRemover() {
       setResultUrl(null);
       setElapsedSeconds(null);
       setFile(selected);
+      setOpenedFileName(null);
       // HEIC'i tarayicilarin cogu goruntuleyemiyor; onizleme yerine bir dosya
       // karti gosteriyoruz. Backend HEIC'i sorunsuz isliyor.
       setOriginalUrl(
@@ -114,17 +121,58 @@ export function BackgroundRemover() {
       }
 
       const blob = await response.blob();
+      const mocked = response.headers.get("X-Mock-Response") === "true";
+      const duration = (performance.now() - startedAt) / 1000;
+
       setResultUrl(trackObjectUrl(URL.createObjectURL(blob)));
-      setIsMocked(response.headers.get("X-Mock-Response") === "true");
-      setElapsedSeconds((performance.now() - startedAt) / 1000);
+      setIsMocked(mocked);
+      setElapsedSeconds(duration);
       setStatus("done");
+
+      // Gecmise yazmak asil akisi bloklamamali: kota dolu ya da depolama
+      // kapaliysa sessizce atlanir, kullanici sonucu yine de gorur/indirir.
+      void recordWork({
+        fileName: file.name,
+        isMocked: mocked,
+        durationSeconds: duration,
+        result: blob,
+      });
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
       );
       setStatus("error");
     }
-  }, [file, trackObjectUrl]);
+  }, [file, trackObjectUrl, recordWork]);
+
+  /**
+   * Kenar cubugundan bir calisma acilinca onu ekrana getir.
+   *
+   * Efekt YALNIZCA abone oluyor; setState olayin geri cagrisinda calisiyor.
+   * Acilmayi context'te bir state olarak tutup efektte okumak zincirleme
+   * render uretiyordu (`react-hooks/set-state-in-effect`) — acilma bir olay,
+   * kalici bir durum degil.
+   *
+   * `file` burada null kaliyor: gecmiste yalnizca SONUC saklaniyor, ozgun
+   * fotograf degil. Sebep kota — ozgun dosyalar 20 MB'a kadar cikabiliyor ve
+   * yirmi kaydin ozguniyle birlikte saklanmasi tarayici kotasini hizla
+   * doldurur. Bu yuzden acilan calismada karsilastirma degil yalnizca sonuc
+   * gosteriliyor; kullanici indirebiliyor.
+   */
+  useEffect(
+    () =>
+      subscribeToOpenWork((work) => {
+        setErrorMessage(null);
+        setFile(null);
+        setOriginalUrl(null);
+        setResultUrl(trackObjectUrl(URL.createObjectURL(work.result)));
+        setIsMocked(work.isMocked);
+        setElapsedSeconds(work.durationSeconds);
+        setOpenedFileName(work.fileName);
+        setStatus("done");
+      }),
+    [subscribeToOpenWork, trackObjectUrl],
+  );
 
   const showDropzone = status === "idle" || (status === "error" && !file);
   const showPreview = status === "ready" || (status === "error" && file !== null);
@@ -194,11 +242,11 @@ export function BackgroundRemover() {
 
         {status === "processing" ? <ProcessingState /> : null}
 
-        {status === "done" && resultUrl && file ? (
+        {status === "done" && resultUrl && (file || openedFileName) ? (
           <ComparisonView
             originalUrl={originalUrl}
             resultUrl={resultUrl}
-            fileName={file.name}
+            fileName={file?.name ?? openedFileName ?? "urun"}
             isMocked={isMocked}
             elapsedSeconds={elapsedSeconds}
             onReset={reset}

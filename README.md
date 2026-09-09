@@ -19,10 +19,27 @@ tamamlandı.
   gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
 - Faz 2: Next.js arayüzü — sürükle-bırak yükleme, istemci tarafı doğrulama,
   sunucu tarafı vekil, demo (mock) modu, önce/sonra karşılaştırması ve PNG
-  indirme. Ayrıntı için `frontend/README.md`.
+  indirme. Üzerine apple.com'dan uyarlanan tasarım dili, sol panel (çalışma
+  geçmişi + ayarlar), logo ve Vitest testleri geldi. Ayrıntı için
+  `frontend/README.md`.
 
 **Kilometre taşı 1 tamamlandı:** fotoğraf yükle → arka plan kalksın → indir
 akışı uçtan uca çalışıyor.
+
+### Ölçümler
+
+| | |
+| --- | --- |
+| BiRefNet CPU inference | ~15 sn/fotoğraf, ilk istekte ~30-35 sn (model yükleme) |
+| BiRefNet tepe RAM | **12–14 GB** — 8 GB'lık sunucu bu modeli kaldırmaz |
+| Arayüz ilk yükleme | **342 KB** (JS 160 · font 131 · görsel 42 · CSS 9) |
+| Yükleme sınırı | 20 MB, 40 megapiksel |
+| Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
+| Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
+| Testler | backend 6 dosya (pytest) · frontend 27 test (Vitest) |
+
+RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
+ölçümleri için `frontend/README.md`.
 
 Faz 3 (arka plan kütüphanesi ve kompozisyon editörü) sırada.
 
@@ -58,6 +75,17 @@ Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları içi
 cp .env.example .env   # değerleri düzenleyin
 docker compose up -d   # yerel PostgreSQL'i başlatır
 ```
+
+### VS Code ile tek tıkla
+
+Projeyi VS Code'da açıp **`Ctrl+Shift+B`** — backend ve frontend birlikte kalkar,
+her biri kendi terminalinde. Durdurmak için ilgili terminalde `Ctrl+C`.
+Tanımlar: `.vscode/tasks.json`.
+
+Diğer görevler `Ctrl+Shift+P` → "Tasks: Run Task" altında: yalnızca frontend
+(demo modu, backend gerekmez) ve "Kontrol: lint + test + build".
+
+### Elle
 
 Frontend'i başlatmak için:
 

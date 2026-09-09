@@ -1,0 +1,88 @@
+{
+  // VS Code görevleri — sistemi tek tıkla ayağa kaldırmak için.
+  //
+  // Çalıştırmak: Ctrl+Shift+P → "Tasks: Run Task" → listeden seçin.
+  // Ya da doğrudan Ctrl+Shift+B ("Vitrin AI: her şeyi başlat" varsayılan).
+  //
+  // Durdurmak: ilgili terminal sekmesine tıklayıp Ctrl+C.
+  //
+  // Neden iki ayrı terminal: backend ve frontend bağımsız süreçler. Biri
+  // çökerse diğeri ayakta kalmalı ve logları karışmamalı — hangi hatanın
+  // nereden geldiği karışık bir çıktıda kaybolur.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Backend (FastAPI, :8000)",
+      "type": "shell",
+      // .venv'i "activate" etmeye gerek yok: doğrudan içindeki python'u
+      // çağırmak PowerShell'in betik çalıştırma politikasına takılmıyor.
+      "command": ".venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "vitrin",
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Frontend (Next.js, :3000)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "vitrin",
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Vitrin AI: her şeyi başlat",
+      "dependsOn": ["Backend (FastAPI, :8000)", "Frontend (Next.js, :3000)"],
+      // Sıra önemli değil: frontend, backend'e yalnızca ilk gerçek istekte
+      // bağlanıyor. Backend geç açılsa bile sayfa açılır.
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Sadece frontend (demo modu — backend gerekmez)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      // Hatırlatma: bu görev .env.local'i DEĞİŞTİRMEZ. Demo modu için
+      // frontend/.env.local içinde USE_MOCK_BACKEND=true olmalı.
+      "detail": "USE_MOCK_BACKEND=true iken backend olmadan çalışır"
+    },
+    {
+      "label": "Kontrol: lint + test + build",
+      "type": "shell",
+      // Zincir `&&` burada DEGIL package.json'da: VS Code `args` icindeki
+      // `&&`'i npm'e duz bir argüman olarak gecirir, ayrica Windows
+      // PowerShell'de `&&` zaten desteklenmiyor. npm script'i cmd.exe'de
+      // calistigi icin zincir orada guvenle kuruluyor.
+      "command": "npm",
+      "args": ["run", "kontrol"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always" },
+      "detail": "Değişiklik yaptıktan sonra bir şeyi bozup bozmadığınızı gösterir"
+    }
+  ]
+}

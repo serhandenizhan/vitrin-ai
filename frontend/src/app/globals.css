@@ -1,5 +1,9 @@
 @import "tailwindcss";
-@import "tw-animate-css";
+/* tw-animate-css KALDIRILDI: sagladigi siniflarin (animate-in, fade-in,
+   slide-in-*, zoom-in) hicbiri projede kullanilmiyor — tarandi. Sirf
+   iskelet ureticisi ekledi diye duruyordu ve derlenen CSS'i bosuna
+   buyutuyordu. Hareket bu projede kendi siniflarimizla kuruluyor
+   (.reveal, .drawer, .press). */
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -303,4 +307,111 @@
   .press:active {
     transform: none;
   }
+}
+
+/*
+ * "Hareketi azalt" ayari (sol panel -> Ayarlar).
+ *
+ * `prefers-reduced-motion` isletim sistemi ayarini zaten dinliyoruz; bu sinif
+ * ONA EK olarak, isletim sisteminde ayari acmak istemeyen ama bu sitede
+ * hareket istemeyen kullanici icin. Saglayici sinifi <html> uzerine yaziyor.
+ */
+.reduce-motion .reveal {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/*
+ * Sol cekmecenin konumu ve hareketi.
+ *
+ * BILESIK SECICI zorunlu (`.drawer.drawer-open`). Ilk surumde ikisi de ayni
+ * ozgullukte `@utility` idi; kazanani uretilen dosyadaki SIRA belirliyordu ve
+ * `.drawer` sonra geldigi icin panel "acik" isaretlendigi halde ekran disinda
+ * kaliyordu. Asil hata buydu.
+ *
+ * Gecis geri getirildi (once kaldirilmisti): o kaldirma karari, ustteki
+ * ozgulluk hatasi ile gomulu tarayicinin kare uretmemesinin ayni belirtiyi
+ * vermesinden kaynaklaniyordu. Ozgulluk duzeltildikten sonra gecis gercek
+ * tarayicida sorunsuz calisiyor.
+ *
+ * Egri `cubic-bezier(0.32, 0.72, 0, 1)`: basta hizli, sonda uzun ve yumusak
+ * yavaslama — dogrusal ya da `ease` bir kayma "mekanik" hissettiriyordu.
+ * Acilma kapanmadan biraz UZUN (460ms / 360ms): acilirken paneli tanimak
+ * icin zaman gerekiyor, kapanirken kullanici zaten oradan ayrilmis oluyor.
+ *
+ * `will-change` yok: surekli acilip kapanmayan bir oge icin tarayiciyi
+ * kalici bir katman tutmaya zorlamak bellegi bosuna mesgul ediyor.
+ */
+.drawer {
+  transform: translateX(-100%);
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.drawer.drawer-open {
+  transform: translateX(0);
+  transition-duration: 460ms;
+}
+
+/* Karartma: her zaman DOM'da, opaklikla geliyor. Kosullu mount/unmount ile
+   kapanirken hicbir gecis calismiyordu — oge bir anda yok oluyordu. */
+.drawer-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.drawer-backdrop.drawer-backdrop-open {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: 460ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer-backdrop {
+    transition: none;
+  }
+}
+
+.reduce-motion .drawer,
+.reduce-motion .drawer-backdrop {
+  transition: none;
+}
+
+/*
+ * Menu baglantilari yumusak kaydirsin.
+ *
+ * Varsayilan davranis sayfayi aniden hedefe "firlatiyor" ve kullanici nereye
+ * gittigini takip edemiyor. `scroll-behavior: smooth` bunu tarayicinin kendi
+ * yumusatmasina birakiyor — JS gerekmiyor, klavye ve adres cubugundaki
+ * bagla (#dene gibi) da ayni sekilde calisiyor.
+ *
+ * `scroll-padding-top` ust cubugun yuksekligi kadar (56px): olmadan hedef
+ * bolumun basligi yapiskan cubugun ALTINDA kaliyor.
+ *
+ * Hareketi azalt ayari ve isletim sistemi tercihi bunu kapatiyor — uzun
+ * sayfalarda yumusak kaydirma bazi kullanicilarda bas donmesi yapiyor.
+ */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 3.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+html.reduce-motion {
+  scroll-behavior: auto;
 }
