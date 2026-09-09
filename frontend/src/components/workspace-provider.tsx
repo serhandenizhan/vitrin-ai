@@ -91,6 +91,24 @@ type WorkspaceValue = {
   studyo: StudyoVerisi | null;
   studyoAc: (veri: StudyoVerisi) => void;
   studyoKapat: () => void;
+
+  /**
+   * Basa don: studyoyu kapatir, araci bos duruma alir ve sayfanin basina
+   * kaydirir.
+   *
+   * Akisin sonunda (gorsel indirildikten sonra) kullanicinin elinde yalnizca
+   * "Geri" vardi ve o da inceleme ekranina donduruyordu — is bitmisken ayni
+   * fotografin sonucuna donmek bir cikmaz. Bu, akisi bastan baslatan tek
+   * dugme.
+   *
+   * Sifirlama `subscribeToReset` ile OLAY olarak yayiliyor, state olarak
+   * degil: aracin sifirlanmasi bir an, kalici bir durum degil. State
+   * tutulsaydi arac bunu bir efektin govdesinde okuyup setState cagirmak
+   * zorunda kalirdi ki `react-hooks/set-state-in-effect` bunu hakli olarak
+   * reddediyor (ayni gerekce: `subscribeToOpenWork`).
+   */
+  anaMenuyeDon: () => void;
+  subscribeToReset: (listener: () => void) => () => void;
 };
 
 export type StudyoVerisi = {
@@ -178,6 +196,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSidebarOpen(false);
   }, []);
 
+  // "Basa don" olayinin dinleyicileri.
+  const resetListenersRef = useRef(new Set<() => void>());
+
+  const subscribeToReset = useCallback((listener: () => void) => {
+    const listeners = resetListenersRef.current;
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
+  const anaMenuyeDon = useCallback(() => {
+    setStudyo(null);
+    setSidebarOpen(false);
+    for (const listener of resetListenersRef.current) listener();
+    // `auto`: kullanici "basa don" dedi, yumusak kaydirma burada bekleme
+    // hissi veriyor — sayfa zaten tamamen degisti.
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
   const subscribeToOpenWork = useCallback(
     (listener: (work: WorkRecord) => void) => {
       const listeners = openListenersRef.current;
@@ -210,6 +248,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeSignIn: () => setSignInOpen(false),
       settings,
       updateSettings,
+      anaMenuyeDon,
+      subscribeToReset,
       studyo,
       studyoAc: (veri: StudyoVerisi) => {
         setStudyo(veri);
@@ -232,6 +272,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       settings,
       updateSettings,
       studyo,
+      anaMenuyeDon,
+      subscribeToReset,
     ],
   );
 

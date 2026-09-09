@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ImagePlus, RotateCcw } from "lucide-react";
+import { Download, ImagePlus, RotateCcw, Sparkles } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -46,6 +46,7 @@ export function ComparisonView({
   onReset,
 }: ComparisonViewProps) {
   const { studyoAc } = useWorkspace();
+  const [vitrinAiAcik, setVitrinAiAcik] = useState(false);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
     genislik: number;
     yukseklik: number;
@@ -141,6 +142,37 @@ export function ComparisonView({
             <RotateCcw className="size-4" strokeWidth={1.75} aria-hidden />
             Yeni fotoğraf
           </Button>
+        </div>
+
+        {/*
+          "Vitrin AI" burada, kesim biter bitmez: kullanicinin "simdi ne
+          yapayim" diye dusundugu an tam bu an. Studyonun icinde, kullanici
+          zaten elle bir sahne kurmaya baslamisken teklif etmek gec kaliyordu.
+
+          Ozellik henuz yok; dugme acikca "yakinda" diyor. Calisir gibi
+          gorunup hicbir sey yapmayan bir dugme kullaniciya kendi hatasi hissi
+          verirdi (bkz. kok CLAUDE.md ders 8).
+        */}
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setVitrinAiAcik((a) => !a)}
+            aria-expanded={vitrinAiAcik}
+            className="press rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
+            Sahneyi Vitrin AI kursun
+            <span className="text-[0.6875rem] opacity-60">yakında</span>
+          </Button>
+
+          {vitrinAiAcik ? (
+            <p className="fine-print max-w-sm text-center opacity-70">
+              Ürününüze uygun zemini, ışığı ve açıyı otomatik seçecek — siz
+              hiçbir ayara dokunmadan. Şu anda geliştiriliyor; hazır olduğunda
+              bu düğme çalışır hâle gelecek.
+            </p>
+          ) : null}
         </div>
 
         {isMocked ? (

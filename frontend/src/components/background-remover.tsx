@@ -30,7 +30,7 @@ import {
 type Status = "idle" | "ready" | "processing" | "done" | "error";
 
 export function BackgroundRemover() {
-  const { recordWork, subscribeToOpenWork } = useWorkspace();
+  const { recordWork, subscribeToOpenWork, subscribeToReset } = useWorkspace();
 
   const [status, setStatus] = useState<Status>("idle");
   const [file, setFile] = useState<File | null>(null);
@@ -159,6 +159,10 @@ export function BackgroundRemover() {
    * doldurur. Bu yuzden acilan calismada karsilastirma degil yalnizca sonuc
    * gosteriliyor; kullanici indirebiliyor.
    */
+  // "Basa don" olayinda arac bos duruma aliniyor. Abonelik, efekt govdesinde
+  // setState cagirmadan calisiyor (bkz. workspace-provider.tsx gerekcesi).
+  useEffect(() => subscribeToReset(reset), [subscribeToReset, reset]);
+
   useEffect(
     () =>
       subscribeToOpenWork((work) => {

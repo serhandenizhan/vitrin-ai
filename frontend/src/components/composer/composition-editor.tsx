@@ -15,7 +15,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Download, Loader2, RotateCw, Sparkles } from "lucide-react";
+import { Crosshair, Download, Loader2, RotateCw } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,6 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
   const [donusum, setDonusum] = useState<Donusum | null>(null);
   const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
-  const [vitrinAiAcik, setVitrinAiAcik] = useState(false);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
     genislik: number;
     yukseklik: number;
@@ -408,34 +407,6 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
               onDegisti={(a) => setGorunum((o) => ({ ...o, isikHavuzu: a }))}
             />
           </div>
-        </div>
-
-        <BolumBasligi>Vitrin AI</BolumBasligi>
-        <div className="px-5 pb-5">
-          {/*
-            Ozellik henuz yok; dugme bilincli olarak "yakinda" diyor. Calisir
-            gibi gorunup hicbir sey yapmayan bir dugme, kullaniciya kendi
-            hatasi hissi verirdi.
-          */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setVitrinAiAcik((a) => !a)}
-            aria-expanded={vitrinAiAcik}
-            className="press min-h-10 w-full justify-start rounded-full bg-white"
-          >
-            <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
-            Sahneyi AI ile kur
-            <span className="ml-auto text-[0.6875rem] font-normal opacity-50">
-              yakında
-            </span>
-          </Button>
-          {vitrinAiAcik ? (
-            <p className="fine-print mt-2 opacity-70">
-              Ürününüze uygun zemini, ışığı ve açıyı otomatik seçecek. Şu anda
-              geliştiriliyor; hazır olduğunda burada açılacak.
-            </p>
-          ) : null}
         </div>
 
         <BolumBasligi>

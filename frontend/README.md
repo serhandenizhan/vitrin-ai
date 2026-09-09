@@ -425,6 +425,19 @@ değiştirmek görseli yeniden ölçekler ve aynı pikselde karşılaştırma im
 olurdu), kesim detayları ve üç eylem. Birincil eylem indirme değil **"Arka plan
 ekle"**: ürünün asıl vaadi satışa hazır görsel, saydam bir PNG değil.
 
+**"Vitrin AI" düğmesi inceleme ekranında**, kesim biter bitmez: kullanıcının
+"şimdi ne yapayım" diye düşündüğü an tam bu an. Önce stüdyonun içindeydi, ama
+orada kullanıcı zaten elle bir sahne kurmaya başlamış oluyor — teklif geç
+kalıyordu. Özellik henüz yok; düğme açıkça "yakında" diyor ve basılınca ne
+yapacağını anlatıyor.
+
+**Akışın sonunda "Ana menü"** — stüdyo başlığında. "Geri" inceleme ekranına
+dönüyor; iş bittiğinde (görsel indirildikten sonra) oraya dönmek bir çıkmaz,
+aynı fotoğrafın sonucu. "Ana menü" stüdyoyu kapatıyor, aracı boş duruma alıyor
+ve sayfayı başa kaydırıyor. Sıfırlama olay olarak yayılıyor (`subscribeToReset`),
+state olarak değil — sıfırlanma bir an, kalıcı bir durum değil; state tutulsaydı
+araç bunu bir efektin gövdesinde okuyup `setState` çağırmak zorunda kalırdı.
+
 Kompozisyon **ayrı bir alanda** — tam ekran stüdyo katmanı. Ayrı bir rota değil
 çünkü girdisi bellekteki bir `blob:` URL; rota değişimi bunu taşımak için
 IndexedDB'ye yazıp geri okumayı ya da global bir depo kurmayı gerektirirdi.

@@ -15,7 +15,7 @@
  */
 
 import { useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Home } from "lucide-react";
 
 import { CompositionEditor } from "@/components/composer/composition-editor";
 import { BrandMark } from "@/components/brand-mark";
@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
 
 export function Studio() {
-  const { studyo, studyoKapat } = useWorkspace();
+  const { studyo, studyoKapat, anaMenuyeDon } = useWorkspace();
 
   // Escape ile cikis ve arkadaki sayfanin kaydirilmasinin durdurulmasi.
   // Katman acikken arka planin kaydirilabilmesi, kullaniciyi "hangi sayfadayim"
@@ -73,8 +73,22 @@ export function Studio() {
           </span>
         </span>
 
-        {/* Sagda gorunmez bir denge blogu: baslik ortada kalsin. */}
-        <span aria-hidden className="w-[4.5rem]" />
+        {/*
+          "Geri" inceleme ekranina donuyor; is bittiginde (gorsel indirildikten
+          sonra) oraya donmek bir cikmaz -- ayni fotografin sonucu. "Ana menu"
+          akisi bastan basliyor: studyo kapaniyor, arac bos duruma aliniyor ve
+          sayfa basa kaydiriliyor.
+        */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={anaMenuyeDon}
+          className="press -mr-1 rounded-full bg-white"
+        >
+          <Home className="size-4" strokeWidth={1.75} aria-hidden />
+          <span className="hidden sm:inline">Ana menü</span>
+        </Button>
       </header>
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
