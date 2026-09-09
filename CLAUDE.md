@@ -186,3 +186,5 @@ Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek b
 ### 3. CORS middleware'i — sahibi: Serhan, Faz 4
 
 Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
+
+`POST /api/admin/backgrounds` (Faz 3) şu anda gerçek bir admin auth yerine geçici bir `X-Admin-Secret` paylaşılan secret header'ıyla korunuyor (`ADMIN_SECRET` env değişkeni). Bu, ders 8'de anlatılan deseninin ikinci tekrarı — bilinçli, kullanıcı onaylı bir geçici çözüm. Faz 4'te gerçek Supabase Auth + rol kontrolü (`is_admin`) devreye girdiğinde bu header tamamen kaldırılıp yerine gerçek yetkilendirme konulacak.
