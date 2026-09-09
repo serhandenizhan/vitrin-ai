@@ -281,6 +281,30 @@ Kullanıcının kendi zeminini yüklemesi ve dışa aktarma ölçü seçenekleri
 zemin yönetimi Faz 6'da, çıktı ölçüsü yol haritasında `2000×2000` olarak sayıyla
 sabit.
 
+**İkinci öne alınan iş — kullanıcı kararı (10.09.2026).** Ana sayfa dışında iki
+sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
+
+- **`/paketler`** — üç plan (Deneme / Atölye / Mağaza). **Fiyat yok**: ödeme
+  sistemi Faz 5'te, buraya sayı yazmak karşılığı olmayan bir taahhüt olurdu.
+  Paketlerin ne içereceği yazılı, fiyat "belirleniyor" olarak işaretli. Faz 5
+  geldiğinde ödeme akışı bu sayfaya bağlanacak.
+- **`/katalog`** — hazırlanan görselleri iki şablona (İkili vitrin, Kapak)
+  yerleştirip A4 oranında (1240×1754, 150 dpi) PNG indirme. **Tamamen istemci
+  tarafında**: backend'e, veritabanına ya da herhangi bir faza dokunmuyor,
+  girdisini var olan çalışma geçmişinden (IndexedDB) veya dosya seçiminden
+  alıyor. Bu yüzden projenin seyrini değiştirmiyor — kullanıcının şartı buydu.
+  Önizleme ile çıktı **tek bir ölçü tablosundan** besleniyor; ikisi ayrı
+  kodlansaydı kaçınılmaz olarak ayrışır ve "ekranda böyle görünmüyordu"
+  sonucunu doğururdu.
+- **Baskıya uygun (CMYK) dışa aktarma — yalnızca düğme.** Ölçüldü ve
+  doğrulandı: gerçek matbaa çıktısı, dosyanın matbaanın ICC profiliyle CMYK'ya
+  çevrilmiş olmasını ister; bu dönüşüm **tarayıcıda yapılamıyor** (canvas
+  yalnızca RGB üretir, PNG formatı CMYK'yı hiç desteklemez). Doğru çözüm sunucu
+  tarafında yeni bir endpoint + ICC profili, yani **fazları etkiler** — bu
+  yüzden kullanıcının talimatına uyularak yalnızca düğme eklendi: basılınca ne
+  olduğunu ve neden kapalı olduğunu açıkça söylüyor. Faz 5'e (ödeme) bağlı bir
+  premium özellik olarak planlanmalı.
+
 Faz 3 bu iş parçasıyla tamamlandı.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan

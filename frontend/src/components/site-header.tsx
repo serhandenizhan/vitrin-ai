@@ -22,13 +22,13 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown, LogIn, PanelLeft } from "lucide-react";
 
 import { NavPanel } from "@/components/nav-panel";
 import {
   HakkindaIcerik,
   NasilCalisirIcerik,
-  PaketlerIcerik,
 } from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -54,12 +54,19 @@ import { cn } from "@/lib/utils";
  * istiyorum" ve "once nasil calistigini anlamak istiyorum". One cikanlar ve
  * teknik bilgiler sayfada duruyor, kaydirinca geliniyor; menude yer kaplamiyor.
  */
-const LINKS = [{ href: "#dene", label: "Deneyin" }];
+const LINKS = [
+  { href: "/#dene", label: "Deneyin" },
+  { href: "/katalog", label: "Katalog" },
+  { href: "/paketler", label: "Paketler" },
+];
 
-/** Panel aciyor; sirasi menudeki gorunum sirasi. */
+/** Panel aciyor; sirasi menudeki gorunum sirasi.
+ *
+ * "Paketler" buradan CIKARILDI: kendi sayfasina tasindi (10.09.2026). Odeme
+ * akisi geldiginde (Faz 5) orada paket secimi, fatura bilgisi ve odeme adimi
+ * olacak; bunlar bir panele sigmaz ve paylasilabilir bir adres ister. */
 const PANELLER = [
   { ad: "nasil", etiket: "Nasıl çalışır" },
-  { ad: "paketler", etiket: "Paketler" },
   { ad: "hakkinda", etiket: "Hakkında" },
 ] as const;
 
@@ -112,8 +119,8 @@ export function SiteHeader() {
           ) : null}
         </button>
 
-        <a
-          href="#top"
+        <Link
+          href="/#top"
           className="flex h-full shrink-0 items-center gap-2 text-[1.0625rem]"
         >
           <BrandMark className="text-gold size-[1.4rem]" />
@@ -124,19 +131,19 @@ export function SiteHeader() {
           <span className="hidden font-semibold tracking-[-0.01em] whitespace-nowrap min-[380px]:inline">
             Vitrin <span className="text-gold">AI</span>
           </span>
-        </a>
+        </Link>
 
         {/* Baglantilar markanin hemen devaminda, ortada degil — ortalanmis bir
             menu genis ekranda savruk duruyor. */}
         <ul className="ml-4 hidden h-full items-stretch gap-1 lg:flex">
           {LINKS.map((link) => (
             <li key={link.href} className="flex">
-              <a
+              <Link
                 href={link.href}
                 className="flex h-full items-center rounded-md px-3 text-[0.875rem] text-[#f3f0eb]/75 transition-colors hover:bg-white/8 hover:text-[#f3f0eb]"
               >
                 {link.label}
-              </a>
+              </Link>
             </li>
           ))}
 
@@ -180,13 +187,13 @@ export function SiteHeader() {
             <span className="hidden sm:inline">Giriş yap</span>
           </button>
 
-          <a
-            href="#dene"
+          <Link
+            href="/#dene"
             className="press bg-gold hover:bg-gold-soft flex min-h-9 items-center rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap text-black transition-colors"
           >
             <span className="sm:hidden">Deneyin</span>
             <span className="hidden sm:inline">Hemen deneyin</span>
-          </a>
+          </Link>
         </div>
       </nav>
     </header>
@@ -198,15 +205,6 @@ export function SiteHeader() {
       ustBaslik="Nasıl çalışır"
     >
       <NasilCalisirIcerik />
-    </NavPanel>
-
-    <NavPanel
-      acik={acikPanel === "paketler"}
-      onKapat={() => setAcikPanel(null)}
-      etiket="Paketler"
-      ustBaslik="Paketler"
-    >
-      <PaketlerIcerik />
     </NavPanel>
 
     <NavPanel

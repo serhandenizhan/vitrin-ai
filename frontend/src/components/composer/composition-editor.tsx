@@ -14,8 +14,9 @@
  */
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Download, Loader2, RotateCw } from "lucide-react";
+import { Crosshair, Download, Loader2, Printer, RotateCw } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const [seciliZeminId, setSeciliZeminId] = useState<string | null>(null);
   const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
+  const [baskiAcik, setBaskiAcik] = useState(false);
   const [donusum, setDonusum] = useState<Donusum | null>(null);
   const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
@@ -434,6 +436,56 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
           >
             JPEG
           </Button>
+        </div>
+
+        {/*
+          BASKIYA UYGUN CIKTI — bilincli olarak yalnizca DUGME.
+
+          Gercek matbaa ciktisi CMYK renk uzayina, matbaanin ICC profiliyle
+          yapilmis bir donusum ister. Bu tarayicida YAPILAMIYOR: canvas
+          yalnizca RGB uretiyor ve PNG formati CMYK'yi hic desteklemiyor.
+          Dogru cozum sunucu tarafinda (ICC profili + TIFF/PDF cikti), yani
+          yeni bir backend endpoint'i — bu da yol haritasindaki fazlari
+          etkiler. Kullanicinin sarti buydu: "fazlari etkileyecekse sadece
+          buton olarak ekle".
+
+          Dugme calisir gibi gorunup hicbir sey yapmiyor DEGIL; basilinca ne
+          oldugunu ve neden kapali oldugunu acikca soyluyor (ders 8 deseni).
+
+          Indirilen PNG'nin zaten KAYIPSIZ oldugu ayrica belirtiliyor —
+          kullanicinin "kayipsiz indirme" ihtiyacinin bir kismi bugun de
+          karsilaniyor, eksik olan yalnizca renk uzayi donusumu.
+        */}
+        <div className="px-5 pb-5">
+          <button
+            type="button"
+            onClick={() => setBaskiAcik((a) => !a)}
+            aria-expanded={baskiAcik}
+            className="press flex min-h-10 w-full items-center gap-2 rounded-full bg-white px-4 text-[0.875rem] ring-1 ring-black/10 transition-colors hover:ring-black/20"
+          >
+            <Printer className="size-4 opacity-70" strokeWidth={1.75} aria-hidden />
+            Baskıya uygun (CMYK)
+            <span className="ml-auto rounded-full bg-black/8 px-2 py-0.5 text-[0.625rem] font-semibold tracking-[0.04em] uppercase opacity-60">
+              Premium
+            </span>
+          </button>
+
+          {baskiAcik ? (
+            <p className="fine-print mt-2 leading-relaxed opacity-70">
+              Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz; dosyanın
+              CMYK renk uzayına, matbaanın ICC profiliyle çevrilmiş olması
+              gerekir. Bu dönüşüm tarayıcıda yapılamadığı için sunucu tarafında
+              hazırlanıyor ve ücretli planlarda açılacak.{" "}
+              <Link href="/paketler" className="underline underline-offset-2">
+                Paketlere bakın
+              </Link>
+              .
+            </p>
+          ) : null}
+
+          <p className="fine-print mt-3 opacity-55">
+            PNG çıktısı zaten kayıpsızdır; JPEG sıkıştırma uygular.
+          </p>
         </div>
       </div>
     </div>
