@@ -15,7 +15,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Download, Loader2, RotateCw } from "lucide-react";
+import { Crosshair, Download, Loader2, RotateCw, Sparkles } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,11 @@ import { useZeminler } from "@/components/composer/use-zeminler";
 import {
   CIKTI_OLCUSU,
   type Donusum,
+  type Gorunum,
   SAHNE_OLCUSU,
+  VARSAYILAN_GORUNUM,
   aciyiNormalize,
+  gorunumVarsayilanMi,
   sigdirmaDonusumu,
 } from "@/lib/composition";
 import type { Zemin } from "@/lib/backgrounds";
@@ -70,6 +73,8 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
   const [donusum, setDonusum] = useState<Donusum | null>(null);
+  const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
+  const [vitrinAiAcik, setVitrinAiAcik] = useState(false);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
     genislik: number;
     yukseklik: number;
@@ -237,6 +242,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             zemin={seciliZemin}
             ekranOlcusu={ekranOlcusu}
             donusum={donusum}
+            gorunum={gorunum}
             onDonusumDegisti={setDonusum}
             onKesimOlculeri={setKesimOlculeri}
             onStageHazir={stageHazir}
@@ -350,6 +356,89 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         </div>
 
         <BolumBasligi>
+          Görünüm
+          {!gorunumVarsayilanMi(gorunum) ? (
+            <button
+              type="button"
+              onClick={() => setGorunum(VARSAYILAN_GORUNUM)}
+              className="ml-2 font-normal normal-case underline underline-offset-2 opacity-70 hover:opacity-100"
+            >
+              sıfırla
+            </button>
+          ) : null}
+        </BolumBasligi>
+        <div className="space-y-3 px-5 pb-5">
+          <Kaydirac
+            etiket="Parlaklık"
+            deger={gorunum.parlaklik}
+            enAz={-0.3}
+            enCok={0.3}
+            adim={0.01}
+            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
+            onDegisti={(d) => setGorunum((o) => ({ ...o, parlaklik: d }))}
+          />
+          <Kaydirac
+            etiket="Kontrast"
+            deger={gorunum.kontrast}
+            enAz={-40}
+            enCok={40}
+            adim={1}
+            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d)}`}
+            onDegisti={(d) => setGorunum((o) => ({ ...o, kontrast: d }))}
+          />
+          <Kaydirac
+            etiket="Doygunluk"
+            deger={gorunum.doygunluk}
+            enAz={-1}
+            enCok={1}
+            adim={0.02}
+            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
+            onDegisti={(d) => setGorunum((o) => ({ ...o, doygunluk: d }))}
+          />
+
+          <div className="flex gap-2 pt-1">
+            <Anahtar
+              etiket="Gölge"
+              acik={gorunum.golge}
+              onDegisti={(a) => setGorunum((o) => ({ ...o, golge: a }))}
+            />
+            <Anahtar
+              etiket="Işık havuzu"
+              acik={gorunum.isikHavuzu}
+              onDegisti={(a) => setGorunum((o) => ({ ...o, isikHavuzu: a }))}
+            />
+          </div>
+        </div>
+
+        <BolumBasligi>Vitrin AI</BolumBasligi>
+        <div className="px-5 pb-5">
+          {/*
+            Ozellik henuz yok; dugme bilincli olarak "yakinda" diyor. Calisir
+            gibi gorunup hicbir sey yapmayan bir dugme, kullaniciya kendi
+            hatasi hissi verirdi.
+          */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setVitrinAiAcik((a) => !a)}
+            aria-expanded={vitrinAiAcik}
+            className="press min-h-10 w-full justify-start rounded-full bg-white"
+          >
+            <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
+            Sahneyi AI ile kur
+            <span className="ml-auto text-[0.6875rem] font-normal opacity-50">
+              yakında
+            </span>
+          </Button>
+          {vitrinAiAcik ? (
+            <p className="fine-print mt-2 opacity-70">
+              Ürününüze uygun zemini, ışığı ve açıyı otomatik seçecek. Şu anda
+              geliştiriliyor; hazır olduğunda burada açılacak.
+            </p>
+          ) : null}
+        </div>
+
+        <BolumBasligi>
           Dışa aktar
           <span className="ml-2 font-normal normal-case opacity-50">
             {CIKTI_OLCUSU}×{CIKTI_OLCUSU}
@@ -377,6 +466,70 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         </div>
       </div>
     </div>
+  );
+}
+
+function Kaydirac({
+  etiket,
+  deger,
+  enAz,
+  enCok,
+  adim,
+  bicimle,
+  onDegisti,
+}: {
+  etiket: string;
+  deger: number;
+  enAz: number;
+  enCok: number;
+  adim: number;
+  bicimle: (deger: number) => string;
+  onDegisti: (deger: number) => void;
+}) {
+  return (
+    <div>
+      <div className="fine-print mb-1.5 flex items-center justify-between opacity-60">
+        <span>{etiket}</span>
+        <span className="tabular-nums">{bicimle(deger)}</span>
+      </div>
+      <input
+        type="range"
+        min={enAz}
+        max={enCok}
+        step={adim}
+        value={deger}
+        aria-label={etiket}
+        onChange={(olay) => onDegisti(Number(olay.target.value))}
+        className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
+      />
+    </div>
+  );
+}
+
+function Anahtar({
+  etiket,
+  acik,
+  onDegisti,
+}: {
+  etiket: string;
+  acik: boolean;
+  onDegisti: (acik: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={acik}
+      onClick={() => onDegisti(!acik)}
+      className={
+        "press min-h-9 flex-1 rounded-full px-3 text-[0.8125rem] transition-colors " +
+        (acik
+          ? "bg-black text-white"
+          : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+      }
+    >
+      {etiket}
+    </button>
   );
 }
 

@@ -14,6 +14,7 @@
  */
 
 import { BackgroundRemover } from "@/components/background-remover";
+import { Studio } from "@/components/composer/studio";
 import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
@@ -32,6 +33,8 @@ export default function HomePage() {
     <WorkspaceProvider>
       <WorkSidebar />
       <SignInNotice />
+      {/* Tam ekran calisma alani; yalnizca acikken bir sey ciziyor. */}
+      <Studio />
       <SiteHeader />
 
       <main className="flex-1">

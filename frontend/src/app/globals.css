@@ -415,3 +415,39 @@ html {
 html.reduce-motion {
   scroll-behavior: auto;
 }
+
+/* Bekleme ekranindaki tarama isigi.
+   Sabit hizda, sonucu tahmin etmiyor — bir yuzde cubugu uydurmak yerine
+   "calisiyor" bilgisini durust bicimde veriyor (bkz. processing-state.tsx). */
+@keyframes tarama {
+  0% {
+    transform: translateY(-110%);
+  }
+  100% {
+    transform: translateY(110%);
+  }
+}
+
+.tarama-isigi::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 45%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(212, 175, 110, 0.42),
+    transparent
+  );
+  animation: tarama 2.1s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Hareket azaltma tercihi: tarama isigi kapaniyor, kart sabit kaliyor.
+   Surekli hareket eden bir sey, vestibuler duyarliligi olan kullanicilarda
+   rahatsizlik yaratabiliyor. */
+@media (prefers-reduced-motion: reduce) {
+  .tarama-isigi::after {
+    animation: none;
+    opacity: 0.25;
+  }
+}

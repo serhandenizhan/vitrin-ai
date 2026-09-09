@@ -244,6 +244,31 @@ yakınsıyor, yan panelde boyut kaydıracı ile "Ortala" ve "15°" düğmeleri v
 Dönüşüm durumu sahnede değil editörde tutuluyor ki kontroller ile tuval aynı
 veriyi paylaşsın.
 
+**Öne alınan iş — kullanıcı kararı (09.09.2026).** Kaan, editöre ürün üzerinde
+ton ayarları ve basit efektler istedi. Bu özellikler `ROADMAP.md`'de **hiçbir fazda
+yoktu** (Faz 5 ödemeler, Faz 6 admin, Faz 7 test/optimizasyon, Faz 8 mobil) — yani
+ertelenmiş değil, hiç planlanmamış yeni özelliklerdi. Kural 6 gereği önce uyarıldı;
+Kaan isteği yineledi ve iş Faz 3'e alındı. Eklenenler:
+
+- **Görünüm ayarları:** parlaklık, kontrast, doygunluk (Konva'nın kendi filtreleri,
+  node `cache()`'lenerek), ürün altına gölge, zemine ışık havuzu
+- **Ayrı çalışma alanı (stüdyo):** kompozisyon artık ana sayfanın içinde değil, tam
+  ekran bir katmanda — solda tuval, sağda özellikler. Ayrı bir rota değil çünkü
+  girdisi bellekteki bir `blob:` URL; rota değişimi bunu taşımak için IndexedDB ya
+  da global bir depo gerektirirdi
+- **İnceleme ekranı:** kesim hazır olduğunda önce/sonra sürgüsü (aynı pikselde
+  karşılaştırma), kesim detayları (çözünürlük, format, süre) ve "Arka plan ekle"
+  düğmesiyle stüdyoya geçiş
+- **Bekleme ekranı:** bulanık önizleme üzerinde tarama ışığı ve gerçek aşama
+  metinleri. Yüzde göstergesi bilinçli olarak YOK — backend ara ilerleme
+  bildirmiyor, uydurma bir çubuk hiçbir şey göstermemekten kötü
+- **"Vitrin AI" düğmesi:** özellik henüz yok, düğme açıkça "yakında" diyor ve
+  basılınca ne yapacağını anlatıyor (ders 8 deseni)
+
+Kullanıcının kendi zeminini yüklemesi ve dışa aktarma ölçü seçenekleri **eklenmedi**:
+zemin yönetimi Faz 6'da, çıktı ölçüsü yol haritasında `2000×2000` olarak sayıyla
+sabit.
+
 Faz 3 bu iş parçasıyla tamamlandı.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan

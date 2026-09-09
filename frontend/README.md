@@ -417,6 +417,26 @@ bırakırdı.
 sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
 
+## Akış: inceleme → stüdyo (Faz 3)
+
+Arka plan kaldırıldıktan sonra **inceleme ekranı** açılıyor: önce/sonra sürgüsü
+(iki görsel üst üste, üstteki `clip-path` ile soldan kırpılıyor — genişlik
+değiştirmek görseli yeniden ölçekler ve aynı pikselde karşılaştırma imkânsız
+olurdu), kesim detayları ve üç eylem. Birincil eylem indirme değil **"Arka plan
+ekle"**: ürünün asıl vaadi satışa hazır görsel, saydam bir PNG değil.
+
+Kompozisyon **ayrı bir alanda** — tam ekran stüdyo katmanı. Ayrı bir rota değil
+çünkü girdisi bellekteki bir `blob:` URL; rota değişimi bunu taşımak için
+IndexedDB'ye yazıp geri okumayı ya da global bir depo kurmayı gerektirirdi.
+Katman sayfanın tamamını kapatıyor (kullanıcı için "başka bir alan"), arkadaki
+durum korunuyor, `Escape` ve "Geri" ile çıkılıyor.
+
+**Bekleme ekranında yüzde göstergesi yok.** Backend ara ilerleme bildirmiyor,
+dolayısıyla bir yüzde çubuğu uydurma olurdu — %80'de donan bir çubuk hiçbir şey
+göstermemekten kötü. Onun yerine kullanıcının fotoğrafı bulanık bir önizleme
+olarak duruyor ve üzerinden tarama ışığı geçiyor; aşama metinleri backend'in
+gerçekten yaptığı sırayı anlatıyor.
+
 ## Kompozisyon editörü (Faz 3)
 
 Kesim hazır olduktan sonra aynı ekranda açılıyor (`src/components/composer/`).
@@ -452,6 +472,20 @@ bir ürünü elle tam 0'a getirmek zor bir istekti.
 **Geometri `src/lib/composition.ts` içinde**, Konva ve React'ten bağımsız: sığdırma
 hesabı, açı normalizasyonu ve dışa aktarma oranı orada. `editor-stage.tsx` içinde
 kalsalardı test etmek Node ortamında `konva` + canvas yüklemeyi gerektirirdi.
+
+**Görünüm ayarları** Konva'nın kendi filtreleriyle (`Brighten`, `Contrast`,
+`HSL`). Filtreler yalnızca `cache()`'lenmiş bir node üzerinde çalışıyor; cache bir
+kez kuruluyor (görsel değiştiğinde), filtre parametreleri değiştiğinde Konva
+önbelleği kendisi yeniden işliyor — her kaydırac hareketinde `cache()` çağırmak
+büyük görsellerde gözle görülür takılma yaratırdı.
+
+**Gölge ve ışık havuzu** ölçüleri sahne koordinatında (1000 birim) veriliyor,
+sabit piksel değil: ürün büyüdükçe gölge de büyüyor. Işık havuzu ürünün değil
+**zeminin** üstünde — ürüne düşen bir vinyet onu soluklaştırırdı.
+
+**Merkeze yakalama:** sürüklerken merkeze 12 birimden yakınsa değer tam merkeze
+çekiliyor. Fareyle tam ortayı tutturmak neredeyse imkânsız ve 1-2 piksellik kayma
+2000 px'e büyütülmüş çıktıda göze batıyor.
 
 **Zeminler** (`src/lib/backgrounds.ts`):
 

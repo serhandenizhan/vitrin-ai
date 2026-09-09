@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   CIKTI_OLCUSU,
   DISA_AKTARMA_ORANI,
+  MERKEZ_YAKALAMA_TOLERANSI,
   SAHNE_OLCUSU,
   SIGDIRMA_PAYI,
+  VARSAYILAN_GORUNUM,
   aciyiNormalize,
+  gorunumVarsayilanMi,
+  merkezeYakala,
   sigdirmaDonusumu,
 } from "@/lib/composition";
 
@@ -80,5 +84,52 @@ describe("DISA_AKTARMA_ORANI", () => {
     // 1999 px'lik tuval üretiyordu.
     expect(Number.isInteger(DISA_AKTARMA_ORANI)).toBe(true);
     expect(SAHNE_OLCUSU * DISA_AKTARMA_ORANI).toBe(CIKTI_OLCUSU);
+  });
+});
+
+describe("merkezeYakala", () => {
+  it("tolerans içindeki değeri tam merkeze çeker", () => {
+    // Fareyle tam ortayı tutturmak neredeyse imkânsız; 1-2 piksellik kayma
+    // 2000 px'e büyütülmüş çıktıda göze batıyor.
+    expect(merkezeYakala(500 + MERKEZ_YAKALAMA_TOLERANSI - 1, 500)).toBe(500);
+    expect(merkezeYakala(500 - MERKEZ_YAKALAMA_TOLERANSI + 1, 500)).toBe(500);
+    expect(merkezeYakala(500, 500)).toBe(500);
+  });
+
+  it("tolerans dışında serbest bırakır", () => {
+    const uzak = 500 + MERKEZ_YAKALAMA_TOLERANSI + 1;
+
+    expect(merkezeYakala(uzak, 500)).toBe(uzak);
+    expect(merkezeYakala(120, 500)).toBe(120);
+  });
+
+  it("sınırın tam üstünde yakalar (kapalı aralık)", () => {
+    expect(merkezeYakala(500 + MERKEZ_YAKALAMA_TOLERANSI, 500)).toBe(500);
+  });
+});
+
+describe("gorunumVarsayilanMi", () => {
+  it("dokunulmamış görünümde true", () => {
+    expect(gorunumVarsayilanMi(VARSAYILAN_GORUNUM)).toBe(true);
+  });
+
+  it("tek bir ayar değişse bile false", () => {
+    // "Sıfırla" düğmesinin ne zaman görüneceğini bu belirliyor; bir alanı
+    // kontrol etmeyi unutmak, kullanıcının geri alamadığı bir ayar bırakırdı.
+    expect(
+      gorunumVarsayilanMi({ ...VARSAYILAN_GORUNUM, parlaklik: 0.1 }),
+    ).toBe(false);
+    expect(gorunumVarsayilanMi({ ...VARSAYILAN_GORUNUM, kontrast: 5 })).toBe(
+      false,
+    );
+    expect(
+      gorunumVarsayilanMi({ ...VARSAYILAN_GORUNUM, doygunluk: -0.2 }),
+    ).toBe(false);
+    expect(gorunumVarsayilanMi({ ...VARSAYILAN_GORUNUM, golge: false })).toBe(
+      false,
+    );
+    expect(
+      gorunumVarsayilanMi({ ...VARSAYILAN_GORUNUM, isikHavuzu: true }),
+    ).toBe(false);
   });
 });

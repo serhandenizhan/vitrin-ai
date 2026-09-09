@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from "react-konva";
-import type Konva from "konva";
+import Konva from "konva";
 
 import type { Zemin } from "@/lib/backgrounds";
 // Saf geometri `@/lib/composition` icinde: Konva/React'ten bagimsiz oldugu icin
@@ -34,8 +34,10 @@ import type { Zemin } from "@/lib/backgrounds";
 import {
   CIKTI_OLCUSU,
   type Donusum,
+  type Gorunum,
   SAHNE_OLCUSU,
   SIGDIRMA_PAYI,
+  merkezeYakala,
   sigdirmaDonusumu,
 } from "@/lib/composition";
 
@@ -48,6 +50,7 @@ export type EditorStageProps = {
   ekranOlcusu: number;
   /** `null` iken sahne kesim yuklenince kendi baslangic yerlesimini hesaplar. */
   donusum: Donusum | null;
+  gorunum: Gorunum;
   onDonusumDegisti: (donusum: Donusum) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onKesimOlculeri: (olculer: { genislik: number; yukseklik: number }) => void;
@@ -104,6 +107,7 @@ export function EditorStage({
   zemin,
   ekranOlcusu,
   donusum,
+  gorunum,
   onDonusumDegisti,
   onKesimOlculeri,
   onStageHazir,
@@ -162,6 +166,19 @@ export function EditorStage({
     });
   }, [onDonusumDegisti]);
 
+  // Konva'da filtreler YALNIZCA cache'lenmis bir node uzerinde calisir: filtre
+  // zinciri, node'un onbellege alinmis tuvaline uygulaniyor. Cache bir kez
+  // kuruluyor (gorsel degistiginde); filtre PARAMETRELERI degistiginde Konva
+  // onbellegi kendisi yeniden isliyor, tekrar cache() cagirmak gerekmiyor —
+  // her kaydirac hareketinde cache almak buyuk gorsellerde gozle gorulur bir
+  // takilma yaratirdi.
+  useEffect(() => {
+    const node = kesimRef.current;
+    if (!node || !kesim) return;
+    node.cache();
+    node.getLayer()?.batchDraw();
+  }, [kesim]);
+
   const yerlesim = useMemo(() => {
     if (donusum) return donusum;
     if (!kesim) return null;
@@ -204,6 +221,31 @@ export function EditorStage({
             }
           />
         )}
+
+        {/*
+          Isik havuzu: zeminin ustune dusen yumusak radyal aydinlanma. Vitrin
+          fotografciliginin en yaygin hilesi — goz once aydinlik bolgeye gidiyor,
+          urun zeminden ayrisiyor. Zemin katmaninda duruyor ki urunun ONUNE
+          gecmesin; urunun uzerine dusen bir vinyet urunu soluklastirirdi.
+        */}
+        {gorunum.isikHavuzu ? (
+          <Rect
+            width={SAHNE_OLCUSU}
+            height={SAHNE_OLCUSU}
+            fillRadialGradientStartPoint={{ x: SAHNE_OLCUSU / 2, y: SAHNE_OLCUSU / 2 }}
+            fillRadialGradientEndPoint={{ x: SAHNE_OLCUSU / 2, y: SAHNE_OLCUSU / 2 }}
+            fillRadialGradientStartRadius={0}
+            fillRadialGradientEndRadius={SAHNE_OLCUSU * 0.62}
+            fillRadialGradientColorStops={[
+              0,
+              "rgba(255,255,255,0.30)",
+              0.55,
+              "rgba(255,255,255,0.06)",
+              1,
+              "rgba(0,0,0,0.34)",
+            ]}
+          />
+        ) : null}
       </Layer>
 
       <Layer>
@@ -222,6 +264,34 @@ export function EditorStage({
             scaleY={yerlesim.olcek}
             rotation={yerlesim.aci}
             draggable
+            // Filtreler yukaridaki `cache()` ile birlikte calisiyor.
+            filters={[
+              Konva.Filters.Brighten,
+              Konva.Filters.Contrast,
+              Konva.Filters.HSL,
+            ]}
+            brightness={gorunum.parlaklik}
+            contrast={gorunum.kontrast}
+            saturation={gorunum.doygunluk}
+            // Golge urunu zemine "oturtuyor". Olcuier sahne koordinatinda
+            // (1000 birim) verildigi icin urun buyudukce golge de buyuyor;
+            // sabit piksel verilseydi buyuk urunlerde golge kaybolurdu.
+            shadowEnabled={gorunum.golge}
+            shadowColor="#000000"
+            shadowBlur={38 / (yerlesim.olcek || 1)}
+            shadowOpacity={0.32}
+            shadowOffsetY={26 / (yerlesim.olcek || 1)}
+            dragBoundFunc={(konum) => {
+              // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
+              // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
+              // olcegiyle carpip boluyoruz.
+              const olcek = ekranOlcusu / SAHNE_OLCUSU;
+              const merkez = (SAHNE_OLCUSU / 2) * olcek;
+              return {
+                x: merkezeYakala(konum.x, merkez),
+                y: merkezeYakala(konum.y, merkez),
+              };
+            }}
             onMouseDown={() => setSecili(true)}
             onTouchStart={() => setSecili(true)}
             onDragEnd={donusumuBildir}
@@ -246,15 +316,15 @@ export function EditorStage({
           // kalin dikdortgen cerceve kullaniliyordu ve urunun onune geciyordu:
           // kullanici sonucu degerlendirmeye calisirken gozu once secim
           // kutusuna takiliyordu. Cerceve artik yalnizca bir ipucu.
-          anchorSize={ekranPikseli(9)}
-          anchorCornerRadius={ekranPikseli(5)}
+          anchorSize={ekranPikseli(7)}
+          anchorCornerRadius={ekranPikseli(3.5)}
           anchorStroke="#b08d4f"
           anchorFill="#ffffff"
-          anchorStrokeWidth={ekranPikseli(1.5)}
+          anchorStrokeWidth={ekranPikseli(1.25)}
           borderStroke="#b08d4f"
           borderStrokeWidth={ekranPikseli(1)}
           borderDash={[ekranPikseli(4), ekranPikseli(4)]}
-          rotateAnchorOffset={ekranPikseli(26)}
+          rotateAnchorOffset={ekranPikseli(22)}
           // 15 derecelik kademeler: kuyumcu vitrini kompozisyonlarinda aci
           // genellikle ya duz ya da belirgin bir egim. Serbest aci hala mumkun
           // (kademe yalnizca yakinina gelindiginde yakaliyor), ama duz durmasi

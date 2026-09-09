@@ -77,6 +77,25 @@ type WorkspaceValue = {
 
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
+
+  /**
+   * Studyo — kompozisyon icin acilan tam ekran calisma alani.
+   *
+   * Neden ayri bir ROTA degil de tam ekran katman: studyonun girdisi bellekteki
+   * bir `blob:` URL (kesim). Rota degistirmek bu URL'i tasimak icin ya
+   * IndexedDB'ye yazip geri okumayi ya da global bir depo kurmayi gerektirirdi;
+   * ikisi de kullanicinin gormedigi bir karmasiklik. Katman, sayfanin tamamini
+   * kapatiyor — kullanici icin "baska bir alana gecmis" oluyor — ama arkadaki
+   * durum korunuyor, geri donunce inceleme ekrani oldugu gibi duruyor.
+   */
+  studyo: StudyoVerisi | null;
+  studyoAc: (veri: StudyoVerisi) => void;
+  studyoKapat: () => void;
+};
+
+export type StudyoVerisi = {
+  kesimUrl: string;
+  dosyaAdi: string;
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -92,6 +111,7 @@ export function useWorkspace(): WorkspaceValue {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSignInOpen, setSignInOpen] = useState(false);
+  const [studyo, setStudyo] = useState<StudyoVerisi | null>(null);
   const [works, setWorks] = useState<WorkRecord[]>([]);
   const [isHistoryLoaded, setHistoryLoaded] = useState(false);
 
@@ -190,6 +210,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeSignIn: () => setSignInOpen(false),
       settings,
       updateSettings,
+      studyo,
+      studyoAc: (veri: StudyoVerisi) => {
+        setStudyo(veri);
+        // Studyo tam ekran; acik kalan kenar cubugu altinda gorunmez bir
+        // sekilde durup geri donuldugunde sasirtici bicimde aciliyordu.
+        setSidebarOpen(false);
+      },
+      studyoKapat: () => setStudyo(null),
     }),
     [
       isSidebarOpen,
@@ -203,6 +231,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isSignInOpen,
       settings,
       updateSettings,
+      studyo,
     ],
   );
 

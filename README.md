@@ -25,8 +25,10 @@ ve **Faz 3 — arka plan kütüphanesi + kompozisyon editörü** tamamlandı.
 - Faz 3 (backend): `backgrounds` tablosu (Postgres + Alembic), Cloudflare R2
   depolama (presigned URL, sunucuda üretilen UUID anahtar), `POST /api/admin/backgrounds`
   ve `GET /api/backgrounds`. Gerçek bir R2 bucket'ına karşı uçtan uca doğrulandı.
-- Faz 3 (frontend): Konva.js kompozisyon editörü — zemin seç, ürünü
-  sürükle/ölçekle/döndür, 2000×2000 PNG/JPEG indir. Backend zemin döndürmediğinde
+- Faz 3 (frontend): kesim hazır olduğunda önce/sonra sürgüsüyle inceleme ekranı;
+  "Arka plan ekle" ile açılan tam ekran **stüdyo** — zemin seç, ürünü
+  sürükle/ölçekle/döndür, parlaklık/kontrast/doygunluk ayarla, gölge ve ışık
+  havuzu uygula, 2000×2000 PNG/JPEG indir. Backend zemin döndürmediğinde
   ya da hiç ayakta olmadığında yer tutucu zeminlere sessizce düşüyor; imzalı
   URL'ler ömrünün %75'inde yenileniyor.
 
@@ -44,7 +46,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend 66 test (pytest) · frontend 53 test (Vitest) |
+| Testler | backend 66 test (pytest) · frontend 58 test (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 PNG/JPEG (ölçü doğrulandı) |
 
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz

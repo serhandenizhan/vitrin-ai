@@ -240,7 +240,9 @@ export function BackgroundRemover() {
           </div>
         ) : null}
 
-        {status === "processing" ? <ProcessingState /> : null}
+        {status === "processing" ? (
+          <ProcessingState onizlemeUrl={originalUrl} />
+        ) : null}
 
         {status === "done" && resultUrl && (file || openedFileName) ? (
           <ComparisonView
