@@ -232,7 +232,10 @@ baştan çözüldü:
   `visibilitychange` ikinci bir tetikleyici. Seçili zemin nesneyle değil **id**
   ile tutuluyor; böylece yenileme kullanıcının seçimini sıfırlamıyor.
 
-Doğrulama sırasında üç hata bulunup düzeltildi: kesirli `pixelRatio` yüzünden
+Doğrulama sırasında dört hata bulunup düzeltildi (dördüncüsü: stüdyo katmanı
+site başlığıyla aynı `z-index`'teydi ve DOM'da ondan önce geldiği için üst 56
+px'teki "Geri"/"Ana menü" düğmeleri görünüyor ama basılamıyordu — ders 13'ün
+aynı sınıfı, eşitlikte kazananı sıra belirler); kesirli `pixelRatio` yüzünden
 çıktının 2000 yerine 1999 px olması, ölçümün `ResizeObserver`'a bırakılması
 (kare üretmeyen bir bağlamda hiç tetiklenmiyor) ve grid öğesinin `min-width: auto`
 yüzünden kendi içeriğini ölçmesi. Üçü de kalıcı ders olarak `CLAUDE.md`'ye

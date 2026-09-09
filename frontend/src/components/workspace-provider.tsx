@@ -257,7 +257,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // sekilde durup geri donuldugunde sasirtici bicimde aciliyordu.
         setSidebarOpen(false);
       },
-      studyoKapat: () => setStudyo(null),
+      studyoKapat: () => {
+        setStudyo(null);
+        // Studyo kapaninca kullanici sayfanin kaldigi yerde kaliyordu ve bu
+        // genellikle tanitim bolumlerinin ortasiydi — sonuc ekrani ekranin
+        // 1600 px altinda kaliyor, kullanici "geri gelemedim" saniyordu.
+        // Aracin bolumunu goruse getiriyoruz.
+        //
+        // `requestAnimationFrame`: katman ayni karede kaldiriliyor, kaydirma
+        // ondan SONRA yapilmali; aksi halde hedefin konumu katman hala
+        // yerindeyken olculuyor.
+        requestAnimationFrame(() => {
+          document
+            .getElementById("dene")
+            ?.scrollIntoView({ block: "start", behavior: "auto" });
+        });
+      },
     }),
     [
       isSidebarOpen,

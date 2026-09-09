@@ -451,3 +451,77 @@ html.reduce-motion {
     opacity: 0.25;
   }
 }
+
+/* "Vitrin AI" dugmesi — henuz gelmemis bir ozellik, ama akisin en dikkat
+   cekici anini hak ediyor: kesim bittigi anda kullaniciya "bunu senin yerine
+   ben kurabilirim" diyor.
+
+   Altin, cunku vurgu rengimiz o (bkz. tasarim dili). Uzerinden gecen parilti
+   sabit hizda ve dongusel; bir ilerleme ya da yuklenme ANLAMI TASIMIYOR,
+   yalnizca dugmenin ozel oldugunu soyluyor. */
+@keyframes sihir-parilti {
+  0% {
+    background-position: -140% 0;
+  }
+  100% {
+    background-position: 240% 0;
+  }
+}
+
+@keyframes sihir-kivilcim {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15) rotate(18deg);
+  }
+}
+
+.sihir-dugme {
+  position: relative;
+  overflow: hidden;
+  color: #3a2a06;
+  background-image: linear-gradient(
+    100deg,
+    var(--color-gold-soft) 0%,
+    var(--color-gold) 45%,
+    var(--color-gold-soft) 100%
+  );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 8px 22px -10px oklch(0.72 0.09 78 / 0.85);
+}
+
+.sihir-dugme::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.75) 50%,
+    transparent 65%
+  );
+  background-size: 220% 100%;
+  animation: sihir-parilti 2.8s linear infinite;
+}
+
+.sihir-dugme .sihir-ikon {
+  animation: sihir-kivilcim 2.2s ease-in-out infinite;
+}
+
+/* Hareket azaltma tercihi: parilti ve kivilcim durur, altin zemin ve
+   kabartma kalir — dugme yine belirgin ama hicbir sey hareket etmiyor. */
+@media (prefers-reduced-motion: reduce) {
+  .sihir-dugme::after,
+  .sihir-dugme .sihir-ikon {
+    animation: none;
+  }
+  .sihir-dugme::after {
+    opacity: 0.25;
+  }
+}

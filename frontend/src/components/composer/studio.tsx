@@ -52,15 +52,23 @@ export function Studio() {
       role="dialog"
       aria-modal="true"
       aria-label="Kompozisyon stüdyosu"
-      className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-white"
+      /*
+        z-60: site basligi ve kenar cubugu z-50'de. Studyo da z-50 iken ust
+        56 px'teki her tiklamayi SITE BASLIGI yutuyordu — esit z-index'te
+        kazanani DOM sirasi belirliyor ve site basligi studyodan sonra
+        geliyor. Sonuc: "Geri" ve "Ana menu" dugmeleri gorunuyor ama
+        basilamiyordu. (Kok CLAUDE.md ders 13'un ayni sinifi: esit
+        ozgullukte/oncelikte kazanani SIRA belirler.)
+      */
+      className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white"
     >
       <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-black/8 bg-white/85 px-4 backdrop-blur-xl sm:px-6">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={studyoKapat}
-          className="press -ml-2 rounded-full"
+          className="press -ml-1 rounded-full bg-white"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
           Geri
@@ -87,7 +95,7 @@ export function Studio() {
           className="press -mr-1 rounded-full bg-white"
         >
           <Home className="size-4" strokeWidth={1.75} aria-hidden />
-          <span className="hidden sm:inline">Ana menü</span>
+          Ana menü
         </Button>
       </header>
 

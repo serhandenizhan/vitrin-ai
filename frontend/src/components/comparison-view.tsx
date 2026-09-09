@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ImagePlus, RotateCcw, Sparkles } from "lucide-react";
+import { Download, ImagePlus, RotateCcw, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -154,17 +154,22 @@ export function ComparisonView({
           verirdi (bkz. kok CLAUDE.md ders 8).
         */}
         <div className="flex flex-col items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={() => setVitrinAiAcik((a) => !a)}
             aria-expanded={vitrinAiAcik}
-            className="press rounded-full text-muted-foreground hover:text-foreground"
+            className="sihir-dugme press inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-[0.9375rem] font-medium"
           >
-            <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
+            <Sparkles
+              className="sihir-ikon size-4"
+              strokeWidth={2}
+              aria-hidden
+            />
             Sahneyi Vitrin AI kursun
-            <span className="text-[0.6875rem] opacity-60">yakında</span>
-          </Button>
+            <span className="rounded-full bg-black/12 px-2 py-0.5 text-[0.6875rem] font-semibold tracking-[0.04em] uppercase">
+              yakında
+            </span>
+          </button>
 
           {vitrinAiAcik ? (
             <p className="fine-print max-w-sm text-center opacity-70">
@@ -210,6 +215,8 @@ function Detay({ baslik, deger }: { baslik: string; deger: string }) {
  * `rounded-[inherit]`: `clip-path` yeni bir kirpma baglami acip kapsayicinin
  * yuvarlak koselerini gecersiz kiliyordu (Faz 2'de ayni tuzaga dusulmustu).
  */
+const YAKINLASTIRMA = 2.6;
+
 function OnceSonra({
   originalUrl,
   resultUrl,
@@ -218,6 +225,9 @@ function OnceSonra({
   resultUrl: string;
 }) {
   const [oran, setOran] = useState(0.5);
+  const [yakin, setYakin] = useState(false);
+  /** Yakinlastirma odagi, kapsayiciya gore 0-1 araliginda. */
+  const [odak, setOdak] = useState({ x: 0.5, y: 0.5 });
   const kapsayiciRef = useRef<HTMLDivElement | null>(null);
   // Suruklenip suruklenmedigi REF'te: `pointermove` icinde state okunsaydi
   // kapanis eski degeri gorur ve ilk hareket yutulurdu (Faz 2'de yasandi).
@@ -229,6 +239,29 @@ function OnceSonra({
     const kutu = kapsayici.getBoundingClientRect();
     setOran(Math.min(1, Math.max(0, (istemciX - kutu.left) / kutu.width)));
   }, []);
+
+  // Yakinlastirmada surukleme, cizgiyi degil ODAGI tasiyor: buyutulmus
+  // goruntude gezinmek isteniyor. Cizgi bu modda alttaki kaydiracla
+  // ayarlaniyor.
+  const odakHesapla = useCallback((istemciX: number, istemciY: number) => {
+    const kapsayici = kapsayiciRef.current;
+    if (!kapsayici) return;
+    const kutu = kapsayici.getBoundingClientRect();
+    setOdak({
+      x: Math.min(1, Math.max(0, (istemciX - kutu.left) / kutu.width)),
+      y: Math.min(1, Math.max(0, (istemciY - kutu.top) / kutu.height)),
+    });
+  }, []);
+
+  // Iki gorsele de AYNI donusum uygulaniyor. Farkli uygulansaydi (ornegin
+  // yalnizca sonuca) taraflar ayni pikselde ust uste gelmez ve karsilastirma
+  // anlamini kaybederdi.
+  const donusum = yakin
+    ? {
+        transform: `scale(${YAKINLASTIRMA})`,
+        transformOrigin: `${odak.x * 100}% ${odak.y * 100}%`,
+      }
+    : undefined;
 
   return (
     <div className="mx-auto w-full max-w-md">
@@ -243,10 +276,13 @@ function OnceSonra({
             // Pointer capture bazi tarayici/girdi kombinasyonlarinda
             // reddediliyor; yakalama olmadan da surukleme calisiyor.
           }
-          oranHesapla(olay.clientX);
+          if (yakin) odakHesapla(olay.clientX, olay.clientY);
+          else oranHesapla(olay.clientX);
         }}
         onPointerMove={(olay) => {
-          if (surukleniyorRef.current) oranHesapla(olay.clientX);
+          if (!surukleniyorRef.current) return;
+          if (yakin) odakHesapla(olay.clientX, olay.clientY);
+          else oranHesapla(olay.clientX);
         }}
         onPointerUp={() => {
           surukleniyorRef.current = false;
@@ -260,6 +296,7 @@ function OnceSonra({
           src={originalUrl}
           alt="Yüklenen özgün fotoğraf"
           draggable={false}
+          style={donusum}
           className="absolute inset-0 h-full w-full rounded-[inherit] object-contain"
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -267,7 +304,7 @@ function OnceSonra({
           src={resultUrl}
           alt="Arka planı kaldırılmış ürün görseli"
           draggable={false}
-          style={{ clipPath: `inset(0 ${(1 - oran) * 100}% 0 0)` }}
+          style={{ ...donusum, clipPath: `inset(0 ${(1 - oran) * 100}% 0 0)` }}
           className="checkerboard absolute inset-0 h-full w-full rounded-[inherit] object-contain"
         />
 
@@ -289,6 +326,31 @@ function OnceSonra({
           </span>
         </div>
 
+        {/*
+          Buyutec: ince zincir halkalari ve tas kenarlari mucevherde kalitenin
+          belirleyicisi ve normal olcude bu detay gorunmuyor. Kullanicinin
+          kesimin gercekten iyi olup olmadigina karar verebilmesi icin
+          yakindan bakabilmesi gerekiyor.
+        */}
+        <button
+          type="button"
+          onClick={(olay) => {
+            olay.stopPropagation();
+            setYakin((y) => !y);
+          }}
+          onPointerDown={(olay) => olay.stopPropagation()}
+          aria-pressed={yakin}
+          aria-label={yakin ? "Uzaklaştır" : "Yakınlaştırıp incele"}
+          title={yakin ? "Uzaklaştır" : "Yakınlaştırıp incele"}
+          className="press absolute right-3 bottom-3 z-10 flex size-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/75"
+        >
+          {yakin ? (
+            <ZoomOut className="size-4" strokeWidth={1.75} aria-hidden />
+          ) : (
+            <ZoomIn className="size-4" strokeWidth={1.75} aria-hidden />
+          )}
+        </button>
+
         <span className="fine-print pointer-events-none absolute top-3 left-3 rounded-full bg-black/55 px-2 py-0.5 text-white backdrop-blur-sm">
           Özgün
         </span>
@@ -299,6 +361,12 @@ function OnceSonra({
 
       {/* Klavye erisimi: surukleme fare/dokunma gerektiriyor, bu kaydirac ayni
           isi klavyeyle yapabiliyor. Gorsel olarak sade tutuldu. */}
+      <p className="fine-print mt-2 text-center opacity-60">
+        {yakin
+          ? `${YAKINLASTIRMA}× yakınlaştırıldı — sürükleyerek gezinin, çizgiyi aşağıdaki kaydıraçla taşıyın`
+          : "Çizgiyi sürükleyin · yakından incelemek için büyüteci kullanın"}
+      </p>
+
       <input
         type="range"
         min={0}
@@ -306,7 +374,7 @@ function OnceSonra({
         value={Math.round(oran * 100)}
         aria-label="Önce/sonra karşılaştırma çizgisi"
         onChange={(olay) => setOran(Number(olay.target.value) / 100)}
-        className="accent-gold mt-3 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
+        className="accent-gold mt-2 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
       />
     </div>
   );
