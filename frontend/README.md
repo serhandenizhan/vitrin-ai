@@ -416,3 +416,41 @@ bırakırdı.
 ~15 saniye (bkz. kök `CLAUDE.md` "Bilinen kısıt"). Bekleme ekranı geçen süreyi
 sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
+
+## Kompozisyon editörü (Faz 3)
+
+Kesim hazır olduktan sonra aynı ekranda açılıyor (`src/components/composer/`).
+Konva.js sahnesi; zemin seçimi, sürükle/ölçekle/döndür ve 2000×2000 dışa aktarma.
+
+**Sahne her zaman kare ve mantıksal ölçüsü sabit (1000).** Ekranda kapsayıcısına
+sığacak kadar küçük çiziliyor, ama tüm koordinatlar mantıksal ölçü üzerinden
+tutulup Konva'nın kendi `scale`'i ile küçültülüyor. İki faydası var: kullanıcının
+yerleşimi ekran boyutundan bağımsız (telefonda konumlandırılan ürün masaüstünde
+aynı yerde), ve dışa aktarma sırasında oran tam sayı oluyor.
+
+**Dışa aktarma sırasında sahne geçici olarak mantıksal ölçüsüne alınıyor**
+(`scale = 1`), böylece oran `2000 / 1000 = 2`. Doğrudan `2000 / ekranGenişliği`
+kullanıldığında ekran genişliği yuvarlak olmadığı için (ör. 434 px) sonuç
+2000 değil **1999** px çıkıyordu — bu, elle ölçülmeden fark edilmeyen bir hata.
+Transformer tutamakları dışa aktarmadan önce gizleniyor, sonra geri alınıyor.
+
+**Zeminler** (`src/lib/backgrounds.ts`):
+
+- Yer tutucular kod içinde gradyan tanımı, dosya değil — kaynağı olmayan ikili
+  dosya commit edilmiyor ve dört zemin sıfır bayt ediyor.
+- Sunucudan gelen zeminler `/api/backgrounds` vekilinden. Vekil **hiç 5xx
+  dönmüyor**: backend kapalıysa da 200 + boş liste dönüyor, `X-Backgrounds-Source`
+  başlığı (`backend` / `unavailable`) verinin nereden geldiğini söylüyor. Editör
+  tek bir yolu ele alıyor, iki ayrı hata dalını değil.
+- İmzalı URL'ler süreli. Liste, backend'in `expires_in` alanına göre ömrünün
+  **%75'inde** yenileniyor; hesap listedeki en erken ölen URL'e göre yapılıyor.
+  Sekme arka planda kalırsa zamanlayıcı kısılabildiği için `visibilitychange`
+  ikinci bir tetikleyici. Seçili zemin **id** ile tutuluyor, nesneyle değil —
+  yenileme kullanıcının seçimini sıfırlamıyor.
+
+**İlk boyut ölçümü `ResizeObserver`'a bırakılmıyor**, `getBoundingClientRect()`
+ile senkron yapılıyor: observer geri çağrıları "update the rendering" adımının
+parçası ve kare üretmeyen bir bağlamda (gizli sekme) hiç teslim edilmeyebiliyor.
+Ölçülen kapsayıcıya `min-w-0` verilmesi de şart — yoksa grid öğesinin
+`min-width: auto` değeri yüzünden ölçüm kullanılabilir alanı değil kendi
+içeriğini ölçüyor ve sahne kapsayıcısından taşıyor.

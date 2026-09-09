@@ -193,7 +193,7 @@ Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi
 tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
 için `frontend/README.md` → "Tasarım dili".
 
-### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — 🔄 Devam ediyor (backend tamamlandı)
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ✅ Tamamlandı
 
 - Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
 - Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
@@ -214,8 +214,31 @@ migration ile eklenir. **Gerçek bir Cloudflare R2 bucket'ına karşı uçtan uc
 doğrulandı**: yükle (`POST /api/admin/backgrounds`) → listele (`GET /api/backgrounds`)
 → dönen presigned URL'den gerçek dosya indirildi ve piksel/boyut olarak yüklenen
 görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici nesneler ve DB
-kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
-olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
+kaydı temizlendi. **Sonuç (Kaan) — kompozisyon editörü tamamlandı.** Kesim hazır olduktan sonra
+aynı ekranda açılan Konva.js sahnesi: zemin seç, ürünü sürükle/ölçekle/döndür,
+2000×2000 PNG veya JPEG olarak indir. Yol haritasının işaretlediği iki tuzak
+baştan çözüldü:
+
+- **Boş liste / backend yok.** `GET /api/backgrounds` vekili (`frontend/src/app/api/backgrounds/route.ts`)
+  hiçbir koşulda 5xx dönmüyor; backend kapalıysa da 200 + boş liste dönüyor ve
+  `X-Backgrounds-Source` başlığıyla verinin nereden geldiğini söylüyor. Editör
+  tek bir yolu (boş liste) ele alıyor, iki ayrı hata dalını değil. Yer tutucu
+  zeminler listeden hiç çıkmıyor, dolayısıyla "zemin listesi boş" diye bir durum
+  hiç oluşmuyor. Yer tutucular dosya değil, kod içinde gradyan tanımı — kaynağı
+  olmayan ikili dosya commit edilmiyor (bkz. kök `CLAUDE.md`).
+- **İmzalı URL süresi.** Liste, backend'in `expires_in` alanına göre ömrünün
+  %75'inde yenileniyor; hesap listedeki **en erken ölen** URL'e göre yapılıyor.
+  Sekme uzun süre arka planda kalırsa zamanlayıcı kısılabildiği için
+  `visibilitychange` ikinci bir tetikleyici. Seçili zemin nesneyle değil **id**
+  ile tutuluyor; böylece yenileme kullanıcının seçimini sıfırlamıyor.
+
+Doğrulama sırasında üç hata bulunup düzeltildi: kesirli `pixelRatio` yüzünden
+çıktının 2000 yerine 1999 px olması, ölçümün `ResizeObserver`'a bırakılması
+(kare üretmeyen bir bağlamda hiç tetiklenmiyor) ve grid öğesinin `min-width: auto`
+yüzünden kendi içeriğini ölçmesi. Üçü de kalıcı ders olarak `CLAUDE.md`'ye
+eklenecek (PR #7 birleştikten sonra, ders numaraları çakışmasın diye).
+
+Faz 3 bu iş parçasıyla tamamlandı.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 

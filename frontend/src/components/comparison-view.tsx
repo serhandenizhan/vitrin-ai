@@ -10,6 +10,7 @@
 
 import { Download, RotateCcw } from "lucide-react";
 
+import { CompositionEditor } from "@/components/composer/composition-editor";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +111,23 @@ export function ComparisonView({
               : null}
         </p>
       </div>
+
+      {/*
+        Faz 3 — kompozisyon editoru. Kesim hazir olduktan SONRA geliyor cunku
+        girdisi tam olarak o: editorun var olabilmesi icin once bir kesim
+        gerekiyor. Ayri bir sayfaya koymak, kullaniciyi akisin ortasinda bir
+        yonlendirmeye sokardi; burada ayni ekranda devam ediyor.
+      */}
+      <section className="border-t pt-8">
+        <div className="mb-6 text-center">
+          <h3 className="display-feature">Vitrine yerleştirin</h3>
+          <p className="lede mx-auto mt-2 max-w-xl text-balance">
+            Ürünü bir zemin üzerine taşıyın, boyutlandırın ve satışa hazır
+            görseli indirin.
+          </p>
+        </div>
+        <CompositionEditor kesimUrl={resultUrl} dosyaAdi={fileName} />
+      </section>
     </div>
   );
 }

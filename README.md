@@ -12,8 +12,8 @@ koruyor.
 
 ## Durum
 
-**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru** ve **Faz 2 — web frontend MVP**
-tamamlandı.
+**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru**, **Faz 2 — web frontend MVP**
+ve **Faz 3 — arka plan kütüphanesi + kompozisyon editörü** tamamlandı.
 
 - Faz 1: `POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
   gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
@@ -22,9 +22,17 @@ tamamlandı.
   indirme. Üzerine apple.com'dan uyarlanan tasarım dili, sol panel (çalışma
   geçmişi + ayarlar), logo ve Vitest testleri geldi. Ayrıntı için
   `frontend/README.md`.
+- Faz 3 (backend): `backgrounds` tablosu (Postgres + Alembic), Cloudflare R2
+  depolama (presigned URL, sunucuda üretilen UUID anahtar), `POST /api/admin/backgrounds`
+  ve `GET /api/backgrounds`. Gerçek bir R2 bucket'ına karşı uçtan uca doğrulandı.
+- Faz 3 (frontend): Konva.js kompozisyon editörü — zemin seç, ürünü
+  sürükle/ölçekle/döndür, 2000×2000 PNG/JPEG indir. Backend zemin döndürmediğinde
+  ya da hiç ayakta olmadığında yer tutucu zeminlere sessizce düşüyor; imzalı
+  URL'ler ömrünün %75'inde yenileniyor.
 
 **Kilometre taşı 1 tamamlandı:** fotoğraf yükle → arka plan kalksın → indir
-akışı uçtan uca çalışıyor.
+akışı uçtan uca çalışıyor. **Faz 3 ile ürünün tam vaadi kapandı:** fotoğraf
+yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli indir.
 
 ### Ölçümler
 
@@ -36,12 +44,14 @@ akışı uçtan uca çalışıyor.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend 6 dosya (pytest) · frontend 27 test (Vitest) |
+| Testler | backend 66 test (pytest) · frontend 45 test (Vitest) |
+| Kompozisyon çıktısı | 2000×2000 PNG/JPEG (ölçü doğrulandı) |
 
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
 ölçümleri için `frontend/README.md`.
 
-Faz 3 (arka plan kütüphanesi ve kompozisyon editörü) sırada.
+Faz 4 (veritabanı ve kullanıcı hesapları — Supabase Auth, RLS, sunucu tarafı
+proje geçmişi) sırada.
 
 ## Ekip
 
@@ -65,7 +75,7 @@ Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları içi
 
 ```
 /backend    FastAPI uygulaması, AI inference servisi (Faz 1 tamamlandı — bkz. backend/README.md)
-/frontend   Next.js web uygulaması (Faz 2 tamamlandı — bkz. frontend/README.md)
+/frontend   Next.js web uygulaması (Faz 2-3 tamamlandı — bkz. frontend/README.md)
 /mobile     React Native uygulaması (Faz 8'de eklenecek)
 ```
 
