@@ -174,7 +174,10 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   kısıtları (tür + boyut) vekilde de tekrar uygulanır. Bu, güvenlik sınırının kendisi
   değildir (asıl sınır backend'dir), ama Faz 4/5'te auth ve ödeme anahtarları
   devreye girdiğinde bunların tarayıcıya sızmasını engelleyecek katmanı şimdiden kurar.
-- **Faz 3:** R2 presigned URL, path traversal koruması
+- **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`).
+  `POST /api/admin/backgrounds` geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
+  korunuyor — bu bilinçli bir geçici çözüm (bkz. kök `CLAUDE.md` ders 8), Faz 4'te
+  gerçek Supabase Auth + rol kontrolüyle değiştirilecek.
 - **Faz 4:** Şifre hash'leme, JWT/session tasarımı, IDOR koruması (bu fazda en kritik —
   şema yanlış tasarlanırsa sonradan düzeltmek pahalı)
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency

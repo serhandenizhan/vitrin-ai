@@ -8,3 +8,12 @@ pillow-heif==0.21.0
 filetype==1.2.0
 rembg[cpu]==2.0.61
 onnxruntime==1.20.1
+sqlalchemy==2.0.36
+# SQLAlchemy'nin async ORM köprüsü (AsyncSession.close() vb.) bu paketi
+# gerektiriyor ama bu sürümde otomatik bağımlılık olarak gelmiyor — pip
+# install sırasında "greenlet library is required" hatasıyla açığa çıktı,
+# bu yüzden burada ayrıca pinleniyor (brief'te yoktu, bkz. task-1-report.md).
+greenlet==3.5.5
+asyncpg==0.30.0
+alembic==1.14.0
+boto3==1.34.162

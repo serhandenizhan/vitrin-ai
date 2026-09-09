@@ -140,7 +140,7 @@ Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi
 tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
 için `frontend/README.md` → "Tasarım dili".
 
-### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ⏳ Planlanan
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — 🔄 Devam ediyor (backend tamamlandı)
 
 - Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
 - Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
@@ -149,9 +149,25 @@ için `frontend/README.md` → "Tasarım dili".
 - Backend boş liste dönerse (henüz gerçek zemin yoksa) editör yer tutucu (placeholder) zeminlere sessizce düşmeli, hiç kırılmamalı
 - Zemin görsellerinin R2'den gelen imzalı URL'leri süreli (örn. 1 saat) — editör uzun süre açık kalırsa yeniden fetch/refresh mekanizması gerekir (önceki iterasyonda bu atlanıp sessiz bir hata haline gelmişti, bu sefer baştan tasarlanmalı)
 
+**Sonuç (Serhan) — backend kısmı tamamlandı.** `backgrounds` tablosu (Postgres) +
+Alembic migration eklendi; `POST /api/admin/backgrounds` (dosya doğrulaması aynı
+Faz 1 katmanlarından geçiyor, R2'ye UUID tabanlı `r2_key` ile yükleniyor, geçici bir
+`X-Admin-Secret` paylaşılan secret header'ıyla korunuyor — bkz. kök `CLAUDE.md` ders 8
+ve "Açık takip maddesi") ve `GET /api/backgrounds` (herkese açık, her kayıt için
+süreli presigned URL ile döner) yazıldı. R2 depolama servisi (boto3, S3-uyumlu)
+`backend/app/services/storage.py` içinde. Şema bilinçli olarak minimal tutuldu —
+kategori/etiket alanı yok, MVP için gerek görülmedi; ihtiyaç ortaya çıkarsa ayrı bir
+migration ile eklenir. **Gerçek bir Cloudflare R2 bucket'ına karşı uçtan uca elle
+doğrulandı**: yükle (`POST /api/admin/backgrounds`) → listele (`GET /api/backgrounds`)
+→ dönen presigned URL'den gerçek dosya indirildi ve piksel/boyut olarak yüklenen
+görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici nesneler ve DB
+kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
+olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
+
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
+- **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 6)
 - Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (bu sefer baştan sunucuda — önceki iterasyonda geçici olarak IndexedDB'de tutulup sonra taşınması planlanmıştı, bu ihtiyaç ortadan kalkıyor çünkü DB şeması aynı anda kuruluyor)
 - Oturum çerezde tutulur (`@supabase/ssr`), localStorage'da değil
 - Middleware yetkilendirme sayılmaz — sadece yönlendirme kolaylığı; gerçek denetim RLS'te ve sunucu bileşenlerinde ikinci kez kontrol edilir

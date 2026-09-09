@@ -5,7 +5,9 @@ ve arka plan meta verisi Faz 3'te eklenecek.
 
 **Durum:** Faz 1 tamamlandı — `POST /api/remove-background` endpoint'i çalışıyor,
 birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG) doğrulandı,
-Docker build başarıyla derleniyor ve container düzgün başlıyor.
+Docker build başarıyla derleniyor ve container düzgün başlıyor. Faz 3'ün backend kısmı
+(arka plan kütüphanesi: yükleme + listeleme + R2 depolama) da tamamlandı — ayrıntılar
+aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde.
 
 ## Yerel çalıştırma (venv ile)
 
@@ -43,6 +45,17 @@ docker run -p 8000:8000 --env-file .env vitrin-ai-backend
 
 Container root olmayan bir kullanıcıyla (`appuser`) çalışır.
 
+**GEÇİCİ kısıt — migration'lar container içinden çalışmıyor:** `Dockerfile`
+sadece `app/` dizinini image'a kopyalıyor; `alembic/` ve `alembic.ini` image'a
+dahil değil ve container'ın başlatma adımında bir migration adımı yok. Yani bu
+image'dan çalışan bir container **kendi migration'larını çalıştıramaz** —
+`backgrounds` tablosunun (ve gelecekteki tabloların) oluşması hâlâ bir
+geliştiricinin tam bir checkout'tan hedef veritabanına karşı elle
+`alembic upgrade head` çalıştırmasına bağlı; bu adım deploy'dan önce veya
+deploy ile birlikte, ayrı olarak yapılmalı. Bu bilinçli bir kısayol —
+Dockerfile'ı/deploy sürecini yeniden yapılandırmak bu PR'ın kapsamı dışında
+tutuldu, sessizce bırakılmadı (bkz. kök `CLAUDE.md` ders 8).
+
 **Not:** Yerelde Docker Desktop'a ayrılan bellek 12-14GB'ın altındaysa gerçek bir
 inference isteği container'ı OOM ile kill eder (`exitcode=137`) — bu bir kod
 hatası değil, yukarıdaki RAM kısıtının doğal sonucu. Docker Desktop'ın bellek
@@ -58,6 +71,10 @@ sunucu/instance seçin.
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
+| `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
+| `ADMIN_SECRET` | yok (zorunlu) | `POST /api/admin/backgrounds` için geçici paylaşılan secret — Faz 4'te gerçek Supabase Auth ile değişecek |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. **Dikkat:** bunlar boş bırakılırsa `GET /api/backgrounds` hata VERMEZ — geçerli görünümlü ama çalışmayan presigned URL'ler (`https://.r2.cloudflarestorage.com/...`) döner; bu, koddan bakmadan fark edilebilecek bir hata modu değildir |
+| `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
 değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`). Karşılığı Faz 2'de
