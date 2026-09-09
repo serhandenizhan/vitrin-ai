@@ -238,6 +238,12 @@ Doğrulama sırasında üç hata bulunup düzeltildi: kesirli `pixelRatio` yüz�
 yüzünden kendi içeriğini ölçmesi. Üçü de kalıcı ders olarak `CLAUDE.md`'ye
 eklenecek (PR #7 birleştikten sonra, ders numaraları çakışmasın diye).
 
+Editörün arayüzü ayrıca cilalandı: seçim çerçevesi Konva'nın kalın varsayılanı
+yerine 1 px kesikli altın çizgi + 9 px yuvarlak tutamak, döndürme 15° kademelerine
+yakınsıyor, yan panelde boyut kaydıracı ile "Ortala" ve "15°" düğmeleri var.
+Dönüşüm durumu sahnede değil editörde tutuluyor ki kontroller ile tuval aynı
+veriyi paylaşsın.
+
 Faz 3 bu iş parçasıyla tamamlandı.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan

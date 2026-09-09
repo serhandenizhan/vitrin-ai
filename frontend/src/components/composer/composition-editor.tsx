@@ -8,16 +8,25 @@
  * kurulurken `window` ve `canvas`'a dokunuyor, sunucuda calistirilirsa
  * derleme aninda patlar. Bu, kutuphanenin bilinen bir kisiti; gecici bir
  * cozum degil.
+ *
+ * Donusum durumu (konum/olcek/aci) BURADA tutuluyor, sahnede degil — yandaki
+ * kontroller ile tuvalin ayni veriyi paylasmasi icin (bkz. editor-stage.tsx).
  */
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ImageIcon, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Crosshair, Download, Loader2, RotateCw } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
 import { useZeminler } from "@/components/composer/use-zeminler";
-import { CIKTI_OLCUSU, SAHNE_OLCUSU } from "@/components/composer/editor-stage";
+import {
+  CIKTI_OLCUSU,
+  type Donusum,
+  SAHNE_OLCUSU,
+  aciyiNormalize,
+  sigdirmaDonusumu,
+} from "@/lib/composition";
 import type { Zemin } from "@/lib/backgrounds";
 
 const EditorStage = dynamic(
@@ -25,8 +34,8 @@ const EditorStage = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="checkerboard flex aspect-square w-full items-center justify-center rounded-2xl">
-        <Loader2 className="size-5 animate-spin opacity-60" />
+      <div className="flex aspect-square w-full items-center justify-center bg-[#f5f5f7]">
+        <Loader2 className="size-5 animate-spin opacity-40" />
       </div>
     ),
   },
@@ -45,17 +54,26 @@ const EN_BUYUK_EKRAN_OLCUSU = 560;
 /**
  * Baslangic olcusu bilincli olarak KUCUK.
  *
- * Ust sinirdan baslamak, `ResizeObserver` ilk olcumu yapana kadar gecen tek
- * karede sahnenin kapsayicisindan tasmasina yol aciyor. Kucukten baslayip
- * buyumek, ters yondeki tasmadan gorsel olarak daha az rahatsiz edici.
+ * Ust sinirdan baslamak, ilk olcum yapilana kadar gecen tek karede sahnenin
+ * kapsayicisindan tasmasina yol aciyor. Kucukten baslayip buyumek, ters
+ * yondeki tasmadan gorsel olarak daha az rahatsiz edici.
  */
 const BASLANGIC_EKRAN_OLCUSU = 240;
+
+/** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
+const EN_KUCUK_OLCEK_ORANI = 0.25;
+const EN_BUYUK_OLCEK_ORANI = 2.5;
 
 export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps) {
   const { zeminler, sunucuZeminiVar, yukleniyor } = useZeminler();
   const [seciliZeminId, setSeciliZeminId] = useState<string | null>(null);
   const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
+  const [donusum, setDonusum] = useState<Donusum | null>(null);
+  const [kesimOlculeri, setKesimOlculeri] = useState<{
+    genislik: number;
+    yukseklik: number;
+  } | null>(null);
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const kapsayiciRef = useRef<HTMLDivElement | null>(null);
@@ -102,6 +120,47 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const stageHazir = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
   }, []);
+
+  /** Kesimin sahneye tam oturdugu olcek — kaydiracin referans noktasi. */
+  const sigdirmaOlcegi = useMemo(
+    () =>
+      kesimOlculeri
+        ? sigdirmaDonusumu(kesimOlculeri.genislik, kesimOlculeri.yukseklik).olcek
+        : null,
+    [kesimOlculeri],
+  );
+
+  const ortalaVeSigdir = useCallback(() => {
+    if (!kesimOlculeri) return;
+    setDonusum(
+      sigdirmaDonusumu(kesimOlculeri.genislik, kesimOlculeri.yukseklik),
+    );
+  }, [kesimOlculeri]);
+
+  const olcekAyarla = useCallback(
+    (oran: number) => {
+      if (!sigdirmaOlcegi) return;
+      setDonusum((onceki) => ({
+        x: onceki?.x ?? SAHNE_OLCUSU / 2,
+        y: onceki?.y ?? SAHNE_OLCUSU / 2,
+        aci: onceki?.aci ?? 0,
+        olcek: sigdirmaOlcegi * oran,
+      }));
+    },
+    [sigdirmaOlcegi],
+  );
+
+  const dondur = useCallback((derece: number) => {
+    setDonusum((onceki) => ({
+      x: onceki?.x ?? SAHNE_OLCUSU / 2,
+      y: onceki?.y ?? SAHNE_OLCUSU / 2,
+      olcek: onceki?.olcek ?? 1,
+      aci: aciyiNormalize((onceki?.aci ?? 0) + derece),
+    }));
+  }, []);
+
+  const mevcutOran =
+    donusum && sigdirmaOlcegi ? donusum.olcek / sigdirmaOlcegi : 1;
 
   const disaAktar = useCallback(
     (bicim: "png" | "jpeg") => {
@@ -161,38 +220,38 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   );
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
       {/*
         `min-w-0` sart: grid ogelerinin varsayilan `min-width: auto` degeri,
         ogenin ICERIGINDEN daha dar olmasini engelliyor. Konva sahnesi kendine
         acik bir piksel genisligi verdigi icin bu bir geri besleme dongusu
         yaratiyordu: sahne 560 px -> kapsayici 560 px'e itiliyor ->
-        `ResizeObserver` 560 okuyor -> sahne 560'ta kaliyor. Sonuc, dar
-        ekranlarda kapsayicisindan tasan bir tuval (529 px'lik bir panelde
-        560 px'lik sahne olcüldü). `min-w-0`, kapsayicinin gercek kullanilabilir
-        genisligi bildirmesini sagliyor.
+        olcum 560 okuyor -> sahne 560'ta kaliyor. Sonuc, dar ekranlarda
+        kapsayicisindan tasan bir tuval. `min-w-0`, kapsayicinin gercek
+        kullanilabilir genisligi bildirmesini sagliyor.
       */}
       <div ref={kapsayiciRef} className="mx-auto w-full max-w-[35rem] min-w-0">
-        <div className="overflow-hidden rounded-2xl border border-black/10 shadow-sm">
+        <div className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1">
           <EditorStage
             kesimUrl={kesimUrl}
             zemin={seciliZemin}
             ekranOlcusu={ekranOlcusu}
+            donusum={donusum}
+            onDonusumDegisti={setDonusum}
+            onKesimOlculeri={setKesimOlculeri}
             onStageHazir={stageHazir}
           />
         </div>
-        <p className="fine-print mt-3 text-center opacity-70">
-          Ürünü sürükleyin; köşelerden boyutlandırın, üstteki tutamaçtan
-          döndürün.
+        <p className="fine-print mt-3 text-center opacity-60">
+          Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
+          döndürün
         </p>
       </div>
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-[0.8125rem] font-medium tracking-[0.06em] uppercase opacity-60">
-            Zemin
-          </h3>
-          <div className="mt-3 grid grid-cols-4 gap-2 lg:grid-cols-3">
+      <div className="divide-black/8 rounded-2xl bg-[#f5f5f7] divide-y">
+        <BolumBasligi>Zemin</BolumBasligi>
+        <div className="px-5 pb-5">
+          <div className="grid grid-cols-6 gap-2 lg:grid-cols-4">
             {zeminler.map((zemin) => {
               const aktif = zemin.id === seciliZemin.id;
               return (
@@ -203,10 +262,17 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
                   title={zemin.ad}
                   aria-label={zemin.ad}
                   aria-pressed={aktif}
+                  // Secili halka `ring` yardimcilariyla veriliyor, keyfi bir
+                  // `shadow-[...]` ile degil: keyfi coklu golge denendiginde
+                  // Tailwind iki golge katmani uretti ama ikisi de SEFFAF
+                  // kaldi, yani secili zemin hic belli olmuyordu (tarayicida
+                  // olculerek yakalandi). `ring` bu isi tek bir ongorulebilir
+                  // ozellikle yapiyor.
                   className={
-                    aktif
-                      ? "ring-gold aspect-square overflow-hidden rounded-lg ring-2 ring-offset-2"
-                      : "aspect-square overflow-hidden rounded-lg ring-1 ring-black/10"
+                    "aspect-square rounded-full ring-offset-[#f5f5f7] transition-transform duration-200 " +
+                    (aktif
+                      ? "ring-gold scale-105 ring-2 ring-offset-2"
+                      : "ring-1 ring-black/15 hover:scale-105")
                   }
                   style={
                     zemin.tur === "yer-tutucu"
@@ -229,44 +295,96 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             yokken "iste zeminleriniz" demek yanlis olurdu.
           */}
           {!yukleniyor && !sunucuZeminiVar ? (
-            <p className="fine-print mt-3 opacity-70">
-              Zemin kütüphanesi henüz hazırlanıyor. Şimdilik sade zeminlerle
-              çalışabilirsiniz.
+            <p className="fine-print mt-3 opacity-60">
+              Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
             </p>
           ) : null}
         </div>
 
-        <div>
-          <h3 className="text-[0.8125rem] font-medium tracking-[0.06em] uppercase opacity-60">
-            Dışa aktar
-          </h3>
-          <p className="fine-print mt-1 opacity-70">
-            {CIKTI_OLCUSU}×{CIKTI_OLCUSU} piksel
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <BolumBasligi>Yerleşim</BolumBasligi>
+        <div className="space-y-4 px-5 pb-5">
+          <div>
+            <div className="fine-print mb-2 flex items-center justify-between opacity-60">
+              <span>Boyut</span>
+              <span className="tabular-nums">
+                {Math.round(mevcutOran * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={EN_KUCUK_OLCEK_ORANI * 100}
+              max={EN_BUYUK_OLCEK_ORANI * 100}
+              step={1}
+              value={Math.round(mevcutOran * 100)}
+              disabled={!sigdirmaOlcegi}
+              aria-label="Ürün boyutu"
+              onChange={(olay) => olcekAyarla(Number(olay.target.value) / 100)}
+              className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
+            />
+          </div>
+
+          <div className="flex gap-2">
             <Button
               type="button"
-              onClick={() => disaAktar("png")}
-              disabled={disaAktariliyor}
-              className="press"
+              variant="outline"
+              size="sm"
+              onClick={() => dondur(15)}
+              disabled={!kesimOlculeri}
+              className="press flex-1 rounded-full bg-white"
             >
-              <Download className="size-4" />
-              PNG
+              <RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden />
+              15°
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => disaAktar("jpeg")}
-              disabled={disaAktariliyor}
-              className="press"
+              size="sm"
+              onClick={ortalaVeSigdir}
+              disabled={!kesimOlculeri}
+              className="press flex-1 rounded-full bg-white"
             >
-              <ImageIcon className="size-4" />
-              JPEG
+              <Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />
+              Ortala
             </Button>
           </div>
         </div>
+
+        <BolumBasligi>
+          Dışa aktar
+          <span className="ml-2 font-normal normal-case opacity-50">
+            {CIKTI_OLCUSU}×{CIKTI_OLCUSU}
+          </span>
+        </BolumBasligi>
+        <div className="flex gap-2 px-5 pb-5">
+          <Button
+            type="button"
+            onClick={() => disaAktar("png")}
+            disabled={disaAktariliyor}
+            className="press min-h-10 flex-1 rounded-full"
+          >
+            <Download className="size-4" strokeWidth={1.75} aria-hidden />
+            PNG
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => disaAktar("jpeg")}
+            disabled={disaAktariliyor}
+            className="press min-h-10 flex-1 rounded-full bg-white"
+          >
+            JPEG
+          </Button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function BolumBasligi({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="px-5 pt-5 pb-3 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase opacity-50">
+      {children}
+    </h3>
   );
 }
 

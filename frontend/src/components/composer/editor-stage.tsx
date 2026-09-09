@@ -3,7 +3,7 @@
 /**
  * Konva sahnesi: zemin + kesim, surukle/olcekle/dondur.
  *
- * TASARIM KARARI — sahne her zaman KARE ve mantiksal olcusu sabit.
+ * TASARIM KARARI 1 — sahne her zaman KARE ve mantiksal olcusu sabit.
  *
  * Sahne ekranda kapsayicisina sigacak kadar kucuk cizilir, ama icindeki tum
  * koordinatlar `SAHNE_OLCUSU` (1000) uzerinden tutulur ve Konva'nin kendi
@@ -12,32 +12,46 @@
  *  - Kullanicinin yaptigi yerlesim ekran boyutundan BAGIMSIZ. Telefonda
  *    konumlandirilan bir urun, masaustunde ayni yerde duruyor; pencere yeniden
  *    boyutlandiginda kompozisyon kaymiyor.
- *  - Disa aktarma tek satir: `pixelRatio = 2000 / SAHNE_OLCUSU`. Ayri bir
- *    offscreen sahne kurup her nesneyi yeniden olceklemeye gerek yok — bu,
- *    "ekranda gordugun ile disa aktarilan ayni degil" sinifindaki hatalarin
- *    en yaygin kaynagi.
+ *  - Disa aktarma orani tam sayi tutuyor (bkz. composition-editor.tsx).
+ *
+ * TASARIM KARARI 2 — donusum (konum/olcek/aci) PARENT'ta tutuluyor.
+ *
+ * Sahne kendi ic durumunu saklamiyor; `donusum` prop'unu ciziyor ve kullanici
+ * surukleyip olcekledikce `onDonusumDegisti` ile haber veriyor. Boylece yandaki
+ * kontroller (boyut kaydiraci, ortala/sigdir, aci) ile tuvalin kendisi AYNI
+ * veriyi paylasiyor — iki ayri dogruluk kaynagi olusmuyor. Konva ornegini disari
+ * acip imperative cagrilar yapmak da mumkundu ama o zaman kaydiracin gosterdigi
+ * deger ile tuvaldeki gercek olcek sessizce ayrisabilirdi.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from "react-konva";
 import type Konva from "konva";
 
 import type { Zemin } from "@/lib/backgrounds";
+// Saf geometri `@/lib/composition` icinde: Konva/React'ten bagimsiz oldugu icin
+// Node ortaminda canvas yuklemeden test edilebiliyor.
+import {
+  CIKTI_OLCUSU,
+  type Donusum,
+  SAHNE_OLCUSU,
+  SIGDIRMA_PAYI,
+  sigdirmaDonusumu,
+} from "@/lib/composition";
 
-/** Sahnenin mantiksal olcusu. Disa aktarma bunun katlari olarak yapiliyor. */
-export const SAHNE_OLCUSU = 1000;
-
-/** Yol haritasindaki cikti olcusu (ROADMAP.md Faz 3). */
-export const CIKTI_OLCUSU = 2000;
+export { CIKTI_OLCUSU, SAHNE_OLCUSU, SIGDIRMA_PAYI, sigdirmaDonusumu };
+export type { Donusum };
 
 export type EditorStageProps = {
   kesimUrl: string;
   zemin: Zemin;
   ekranOlcusu: number;
-  /** Sahne referansini disari verir — disa aktarma butonu bunu kullaniyor. */
+  /** `null` iken sahne kesim yuklenince kendi baslangic yerlesimini hesaplar. */
+  donusum: Donusum | null;
+  onDonusumDegisti: (donusum: Donusum) => void;
+  /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
+  onKesimOlculeri: (olculer: { genislik: number; yukseklik: number }) => void;
   onStageHazir: (stage: Konva.Stage | null) => void;
-  /** Kullanici sahneye dokundugunda (secim degistiginde) haber verir. */
-  onSecimDegisti?: (secili: boolean) => void;
 };
 
 /**
@@ -89,8 +103,10 @@ export function EditorStage({
   kesimUrl,
   zemin,
   ekranOlcusu,
+  donusum,
+  onDonusumDegisti,
+  onKesimOlculeri,
   onStageHazir,
-  onSecimDegisti,
 }: EditorStageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const kesimRef = useRef<Konva.Image | null>(null);
@@ -106,6 +122,14 @@ export function EditorStage({
     return () => onStageHazir(null);
   }, [onStageHazir]);
 
+  // Kesim yuklendiginde dogal olculeri ve baslangic yerlesimi parent'a bildir.
+  // Efektten cagrilan bir callback; senkron `setState` degil, bu yuzden
+  // React Compiler'in kaskad-render uyarisini tetiklemiyor.
+  useEffect(() => {
+    if (!kesim) return;
+    onKesimOlculeri({ genislik: kesim.width, yukseklik: kesim.height });
+  }, [kesim, onKesimOlculeri]);
+
   // Transformer'i secili nesneye bagla. Konva'da bu elle yapilmali:
   // transformer, node listesini kendisi kesfetmiyor.
   useEffect(() => {
@@ -115,35 +139,34 @@ export function EditorStage({
 
     transformer.nodes(secili && kesimNode ? [kesimNode] : []);
     transformer.getLayer()?.batchDraw();
-  }, [secili, kesim]);
-
-  useEffect(() => {
-    onSecimDegisti?.(secili);
-  }, [secili, onSecimDegisti]);
-
-  /**
-   * Kesimin baslangic yerlesimi: sahnenin ortasinda, kenarlarda pay birakacak
-   * sekilde olceklenmis.
-   *
-   * `Math.min` ile olcekleniyor ki hem cok genis hem cok uzun gorseller
-   * sahneye TAMAMEN sigsin — `Math.max` kullanilsaydi gorselin bir kismi
-   * disarda kalirdi ve kullanici urunun kirpildigini sanirdi.
-   */
-  const baslangic = useMemo(() => {
-    if (!kesim) return null;
-    const pay = 0.72;
-    const olcek = Math.min(
-      (SAHNE_OLCUSU * pay) / kesim.width,
-      (SAHNE_OLCUSU * pay) / kesim.height,
-    );
-    return {
-      x: SAHNE_OLCUSU / 2,
-      y: SAHNE_OLCUSU / 2,
-      olcek,
-    };
-  }, [kesim]);
+  }, [secili, kesim, donusum]);
 
   const ekranOlcegi = ekranOlcusu / SAHNE_OLCUSU;
+
+  // Sahne kucultulmus ciziliyor; cizgi ve tutamak olculeri bu olcege BOLUNUYOR
+  // ki ekranda her zaman ayni kalinlikta gorunsunler. Bolunmezse tutamaklar
+  // kucuk ekranlarda devasa, buyuk ekranlarda goze gorunmez olurdu.
+  const ekranPikseli = useCallback(
+    (piksel: number) => piksel / ekranOlcegi,
+    [ekranOlcegi],
+  );
+
+  const donusumuBildir = useCallback(() => {
+    const node = kesimRef.current;
+    if (!node) return;
+    onDonusumDegisti({
+      x: node.x(),
+      y: node.y(),
+      olcek: node.scaleX(),
+      aci: node.rotation(),
+    });
+  }, [onDonusumDegisti]);
+
+  const yerlesim = useMemo(() => {
+    if (donusum) return donusum;
+    if (!kesim) return null;
+    return sigdirmaDonusumu(kesim.width, kesim.height);
+  }, [donusum, kesim]);
 
   return (
     <Stage
@@ -184,22 +207,25 @@ export function EditorStage({
       </Layer>
 
       <Layer>
-        {kesim && baslangic ? (
+        {kesim && yerlesim ? (
           <KonvaImage
             ref={kesimRef}
             image={kesim}
-            x={baslangic.x}
-            y={baslangic.y}
+            x={yerlesim.x}
+            y={yerlesim.y}
             // `offset` gorselin merkezine kuruluyor: dondurme ve olcekleme
             // kosede degil MERKEZDE olsun. Varsayilan sol-ust cikis noktasiyla
             // dondurmek, kullaniciya nesnenin "kacmasi" gibi gorunur.
             offsetX={kesim.width / 2}
             offsetY={kesim.height / 2}
-            scaleX={baslangic.olcek}
-            scaleY={baslangic.olcek}
+            scaleX={yerlesim.olcek}
+            scaleY={yerlesim.olcek}
+            rotation={yerlesim.aci}
             draggable
             onMouseDown={() => setSecili(true)}
             onTouchStart={() => setSecili(true)}
+            onDragEnd={donusumuBildir}
+            onTransformEnd={donusumuBildir}
           />
         ) : null}
 
@@ -216,13 +242,29 @@ export function EditorStage({
             "bottom-right",
           ]}
           keepRatio
+          // Ince cerceve + kucuk dairesel tutamaklar. Onceki surumde varsayilan
+          // kalin dikdortgen cerceve kullaniliyordu ve urunun onune geciyordu:
+          // kullanici sonucu degerlendirmeye calisirken gozu once secim
+          // kutusuna takiliyordu. Cerceve artik yalnizca bir ipucu.
+          anchorSize={ekranPikseli(9)}
+          anchorCornerRadius={ekranPikseli(5)}
+          anchorStroke="#b08d4f"
+          anchorFill="#ffffff"
+          anchorStrokeWidth={ekranPikseli(1.5)}
+          borderStroke="#b08d4f"
+          borderStrokeWidth={ekranPikseli(1)}
+          borderDash={[ekranPikseli(4), ekranPikseli(4)]}
+          rotateAnchorOffset={ekranPikseli(26)}
+          // 15 derecelik kademeler: kuyumcu vitrini kompozisyonlarinda aci
+          // genellikle ya duz ya da belirgin bir egim. Serbest aci hala mumkun
+          // (kademe yalnizca yakinina gelindiginde yakaliyor), ama duz durmasi
+          // istenen bir urunu elle 0'a getirmek zor bir istekti.
+          rotationSnaps={[0, 15, 30, 45, 60, 75, 90, 180, 270]}
+          rotationSnapTolerance={4}
           // Cok kucultup nesneyi kaybetmeyi engelle.
           boundBoxFunc={(eski, yeni) =>
-            yeni.width < 20 || yeni.height < 20 ? eski : yeni
+            yeni.width < 24 || yeni.height < 24 ? eski : yeni
           }
-          anchorSize={12 / ekranOlcegi}
-          borderStrokeWidth={1 / ekranOlcegi}
-          anchorStrokeWidth={1 / ekranOlcegi}
         />
       </Layer>
     </Stage>

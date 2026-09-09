@@ -44,7 +44,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend 66 test (pytest) · frontend 45 test (Vitest) |
+| Testler | backend 66 test (pytest) · frontend 53 test (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 PNG/JPEG (ölçü doğrulandı) |
 
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz

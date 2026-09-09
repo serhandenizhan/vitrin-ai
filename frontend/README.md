@@ -434,6 +434,25 @@ kullanıldığında ekran genişliği yuvarlak olmadığı için (ör. 434 px) s
 2000 değil **1999** px çıkıyordu — bu, elle ölçülmeden fark edilmeyen bir hata.
 Transformer tutamakları dışa aktarmadan önce gizleniyor, sonra geri alınıyor.
 
+**Dönüşüm durumu (konum/ölçek/açı) sahnede değil, `CompositionEditor`'da**
+tutuluyor. Sahne `donusum` prop'unu çizip kullanıcı sürükledikçe geri bildiriyor.
+Böylece yandaki kontroller (boyut kaydıracı, "Ortala", "15°") ile tuvalin kendisi
+aynı veriyi paylaşıyor — kaydıracın gösterdiği yüzde ile tuvaldeki gerçek ölçek
+sessizce ayrışamıyor. Konva örneğini dışarı açıp imperative çağırmak mümkündü ama
+o zaman iki ayrı doğruluk kaynağı olurdu.
+
+**Seçim çerçevesi bilinçli olarak hafif:** 1 px kesikli altın çizgi ve 9 px
+yuvarlak tutamaklar. Konva'nın varsayılanı (kalın, parlak mavi, kare tutamaklı)
+ürünün önüne geçiyor; kullanıcı sonucu değerlendirmeye çalışırken gözü önce seçim
+kutusuna takılıyordu. Çizgi ve tutamak ölçüleri sahne ölçeğine bölünüyor ki her
+ekran genişliğinde aynı kalınlıkta görünsünler. Döndürme 15° kademelerine
+yakınsıyor (`rotationSnaps`) — serbest açı hâlâ mümkün, ama düz durması istenen
+bir ürünü elle tam 0'a getirmek zor bir istekti.
+
+**Geometri `src/lib/composition.ts` içinde**, Konva ve React'ten bağımsız: sığdırma
+hesabı, açı normalizasyonu ve dışa aktarma oranı orada. `editor-stage.tsx` içinde
+kalsalardı test etmek Node ortamında `konva` + canvas yüklemeyi gerektirirdi.
+
 **Zeminler** (`src/lib/backgrounds.ts`):
 
 - Yer tutucular kod içinde gradyan tanımı, dosya değil — kaynağı olmayan ikili
