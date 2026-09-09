@@ -143,6 +143,8 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Yapısal fark:** Apple'da ürün bir fotoğraftır, bizde **çalışan aracın kendisi**. Bu yüzden araç tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu.
 
+**Bu karar 10.09.2026'da kullanıcı tarafından revize edildi:** açılıştan sonra, aracın **üstüne** iki bölüm eklendi — uygulama turu (`app-tour.tsx`, yatay kayan ekran galerisi) ve misyon/vizyon (`mission-vision.tsx`). Maliyeti biliniyor ve kabul edildi: "dene" bölümü bir ekran aşağı indi. Karşılığı, ziyaretçinin aracı denemeden önce ne olduğunu görmesi. Tur bilinçli olarak tek ekran yüksekliğinde ve yatay kaydırmalı tutuldu ki araç uzağa düşmesin; hero'daki birincil düğme zaten doğrudan `#dene`'ye gidiyor. Yeni bölüm eklenirken bu denge korunmalı — tanıtım, aracı sayfanın dibine itmemeli.
+
 **Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
 
 **Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı.

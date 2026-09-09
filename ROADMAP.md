@@ -268,6 +268,15 @@ Kaan isteği yineledi ve iş Faz 3'e alındı. Eklenenler:
 - **"Vitrin AI" düğmesi:** özellik henüz yok, düğme açıkça "yakında" diyor ve
   basılınca ne yapacağını anlatıyor (ders 8 deseni)
 
+Ayrıca kullanıcı isteğiyle ana sayfaya iki tanıtım bölümü eklendi (10.09.2026):
+**uygulama turu** (yatay kayan, uygulamanın kendi arayüzünün DOM ile kurulmuş
+dört ekranı — bitmap ekran görüntüsü değil, böylece arayüz değiştiğinde sessizce
+eskimiyor) ve **misyon/vizyon**. İkisi de sunucu bileşeni, istemciye hiç inmiyor.
+Kaydırmaya bağlı animasyon `animation-timeline: view()` ile, JavaScript'siz;
+desteklemeyen tarayıcıda kartlar düz duruyor, hiçbir şey kaybolmuyor. Bu ekleme
+`CLAUDE.md`'deki "araç açılıştan hemen sonra" kilitli kararını revize ediyor;
+karar orada da kayıtlı.
+
 Kullanıcının kendi zeminini yüklemesi ve dışa aktarma ölçü seçenekleri **eklenmedi**:
 zemin yönetimi Faz 6'da, çıktı ölçüsü yol haritasında `2000×2000` olarak sayıyla
 sabit.

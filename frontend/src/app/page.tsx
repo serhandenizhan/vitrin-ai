@@ -15,9 +15,11 @@
 
 import { BackgroundRemover } from "@/components/background-remover";
 import { Studio } from "@/components/composer/studio";
+import { AppTour } from "@/components/marketing/app-tour";
 import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
+import { MissionVision } from "@/components/marketing/mission-vision";
 import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
 import { SignInNotice } from "@/components/sign-in-notice";
@@ -39,6 +41,20 @@ export default function HomePage() {
 
       <main className="flex-1">
         <Hero />
+
+        {/*
+          Uygulama turu ve misyon/vizyon, aracin USTUNDE.
+
+          Bu, CLAUDE.md'deki "arac tanitim bolumlerinin sonuna degil acilistan
+          hemen sonraya konuldu" kararinin kullanici tarafindan revize edilmis
+          hali (10.09.2026). Maliyeti biliniyor: "dene" bolumu bir ekran asagi
+          indi. Karsiligi, ziyaretcinin araci denemeden once ne oldugunu
+          gormesi. Tur bilincli olarak TEK EKRAN yuksekliginde ve yatay
+          kaydirmali tutuldu ki arac uzaga dusmesin; hero'daki birincil dugme
+          zaten dogrudan #dene'ye gidiyor.
+        */}
+        <AppTour />
+        <MissionVision />
 
         <section id="dene" className="surface-mist section-rhythm">
           <div className="mx-auto w-full max-w-3xl px-5">

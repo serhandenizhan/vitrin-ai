@@ -111,6 +111,39 @@ type WorkspaceValue = {
   subscribeToReset: (listener: () => void) => () => void;
 };
 
+/**
+ * Arac bolumune gecerken kullanilan kaydirma ayari.
+ *
+ * `behavior: "instant"` — "auto" DEGIL. `globals.css` icinde
+ * `html { scroll-behavior: smooth }` tanimli ve spesifikasyona gore `"auto"`,
+ * CSS'teki bu degeri kullanmak demek; yani "auto" da yumusak kaydiriyor.
+ * Yumusak kaydirma kare uretimine bagli ve gorunmeyen bir baglamda hic
+ * ilerlemiyor (bkz. kok CLAUDE.md ders 13 ortam artefakti) — ama asil sebep
+ * urunle ilgili: kullanici panelden bir calismaya tikladiginda ya da studyodan
+ * ciktiginda hedefe DOGRUDAN gitmeyi bekliyor, sayfanin uzun bir yolu
+ * suzulerek gecmesini degil.
+ */
+const KAYDIRMA: ScrollIntoViewOptions = {
+  block: "start",
+  behavior: "instant",
+};
+
+/**
+ * Arac bolumunu goruse getirir.
+ *
+ * `setTimeout(..., 0)` — `requestAnimationFrame` DEGIL. Kaydirma, React durumu
+ * islendikten (panel/katman kapandiktan) sonra yapilmali; ama rAF kare
+ * uretimine bagli ve kare uretmeyen bir baglamda (gorunmez sekme/panel) HIC
+ * calismiyor — bu dogrulama sirasinda birebir gozlendi, rAF geri cagrisi
+ * saniyelerce tetiklenmedi. Sifir gecikmeli zamanlayici kare uretiminden
+ * bagimsiz calisiyor ve ayni sonucu veriyor.
+ */
+function aracaKaydir(): void {
+  setTimeout(() => {
+    document.getElementById("dene")?.scrollIntoView(KAYDIRMA);
+  }, 0);
+}
+
 export type StudyoVerisi = {
   kesimUrl: string;
   dosyaAdi: string;
@@ -194,6 +227,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const openWork = useCallback((work: WorkRecord) => {
     for (const listener of openListenersRef.current) listener(work);
     setSidebarOpen(false);
+    // Calisma aciliyordu ama kullanici sayfanin kaldigi yerde kaliyordu —
+    // panelden bir ise tikladiginda ekranda hicbir sey degismiyor gibi
+    // gorunuyordu. `requestAnimationFrame`: panel ayni karede kapaniyor,
+    // kaydirma ondan SONRA yapilmali; aksi halde hedefin konumu panel hala
+    // acikken olculuyor.
+    aracaKaydir();
   }, []);
 
   // "Basa don" olayinin dinleyicileri.
@@ -267,11 +306,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // `requestAnimationFrame`: katman ayni karede kaldiriliyor, kaydirma
         // ondan SONRA yapilmali; aksi halde hedefin konumu katman hala
         // yerindeyken olculuyor.
-        requestAnimationFrame(() => {
-          document
-            .getElementById("dene")
-            ?.scrollIntoView({ block: "start", behavior: "auto" });
-        });
+        aracaKaydir();
       },
     }),
     [

@@ -461,10 +461,10 @@ html.reduce-motion {
    yalnizca dugmenin ozel oldugunu soyluyor. */
 @keyframes sihir-parilti {
   0% {
-    background-position: -140% 0;
+    transform: translateX(-160%) skewX(-18deg);
   }
   100% {
-    background-position: 240% 0;
+    transform: translateX(320%) skewX(-18deg);
   }
 }
 
@@ -483,6 +483,9 @@ html.reduce-motion {
 .sihir-dugme {
   position: relative;
   overflow: hidden;
+  /* Kendi yigin baglamini acsin: icindeki parilti seridi disari tasmasin ve
+     tarayici bu ogeyi ayri bir katmanda tutabilsin. */
+  isolation: isolate;
   color: #3a2a06;
   background-image: linear-gradient(
     100deg,
@@ -495,19 +498,32 @@ html.reduce-motion {
     0 8px 22px -10px oklch(0.72 0.09 78 / 0.85);
 }
 
+/*
+  Parilti `background-position` ile DEGIL `transform` ile hareket ediyor.
+  Onceki surumde arka plan konumu animasyonluydu; bu her karede yeniden BOYAMA
+  gerektiriyor ve dongu basa donerken gorunur bir takilma yapiyordu.
+  `transform`, tarayicinin bilesik (compositor) katmaninda calisiyor: boyama
+  yok, dolayisiyla takilma da yok.
+
+  Serit, dugmenin solunda tamamen disarida basliyor ve saginda tamamen disarida
+  bitiyor; dongu basa dondugunde ekranda gorunur bir sicrama olmuyor.
+*/
 .sihir-dugme::after {
   content: "";
   position: absolute;
-  inset: 0;
+  top: -30%;
+  bottom: -30%;
+  left: 0;
+  width: 38%;
   pointer-events: none;
+  will-change: transform;
   background: linear-gradient(
-    100deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.75) 50%,
-    transparent 65%
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.72),
+    transparent
   );
-  background-size: 220% 100%;
-  animation: sihir-parilti 2.8s linear infinite;
+  animation: sihir-parilti 2.6s linear infinite;
 }
 
 .sihir-dugme .sihir-ikon {
@@ -523,5 +539,60 @@ html.reduce-motion {
   }
   .sihir-dugme::after {
     opacity: 0.25;
+  }
+}
+
+/* Uygulama turu — yatay galeri.
+
+   Kaydirma cubugu gizleniyor ama kaydirma calismaya devam ediyor: serit zaten
+   "yana kaydirin" diye soyluyor ve kartlarin altinda duran kalin bir cubuk
+   Apple'in galeri dilinde yok. */
+.tur-serit {
+  scrollbar-width: none;
+  scroll-padding-inline: 1.25rem;
+}
+.tur-serit::-webkit-scrollbar {
+  display: none;
+}
+
+/* Kartlar merkeze yaklastikca one cikiyor — Apple urun galerilerindeki his.
+
+   `animation-timeline: view()` bir KAYDIRMA ILERLEMESINE bagli animasyon:
+   JavaScript yok, ana is parcaciginda hicbir sey calismiyor. Destegi olmayan
+   tarayicilarda kural bloguyla birlikte yok sayiliyor ve kartlar duz duruyor —
+   hicbir sey kaybolmuyor, yalnizca sus eksiliyor.
+
+   `@supports` ile sarmalanmasinin sebebi: destegi olmayan tarayicilarda
+   `animation-name` gecerli kalip animasyonu ANINDA son karesine sabitleyebilir;
+   o zaman kartlar kalici olarak solgun gorunurdu. */
+@supports (animation-timeline: view()) {
+  @keyframes tur-karti-belir {
+    /* Girerken ve cikarken hafif kucuk ve solgun; ortadayken tam. */
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(0.94);
+    }
+    45%,
+    55% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .tur-kart {
+    animation: tur-karti-belir linear both;
+    animation-timeline: view(inline);
+    /* Serit dar oldugu icin araligi genis tutuyoruz; aksi halde kart daha
+       ekrana tam girmeden "cikiyor" sayiliyor. */
+    animation-range: entry 5% exit 95%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tur-kart {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
