@@ -7,8 +7,7 @@
  * Gorsel metnin altinda ve tam ortada duruyor.
  */
 
-import Image from "next/image";
-
+import { HeroVisual } from "@/components/marketing/hero-visual";
 import { Reveal } from "@/components/reveal";
 
 export function Hero() {
@@ -56,28 +55,8 @@ export function Hero() {
         </Reveal>
 
         <Reveal delay={320} className="w-full">
-          {/*
-           * Gorsel: demo modunun ornek kesimi. Arkasindaki altin isik
-           * havuzu, seffaf bir PNG'in siyah zeminde "yuzuyor" gibi
-           * durmasini sagliyor — Apple'in urun fotograflarindaki ayni is.
-           */}
-          <div className="relative mx-auto mt-6 flex w-full max-w-lg items-center justify-center">
-            <div
-              aria-hidden
-              className="absolute inset-0 -z-10 mx-auto max-w-md rounded-full opacity-70 blur-3xl"
-              style={{
-                background:
-                  "radial-gradient(circle at 50% 55%, rgba(212,175,110,0.38), transparent 68%)",
-              }}
-            />
-            <Image
-              src="/mock/sample-cutout.png"
-              alt="Arka planı kaldırılmış bir yüzük görseli"
-              width={900}
-              height={900}
-              priority
-              className="h-auto w-full max-w-md drop-shadow-2xl"
-            />
+          <div className="mt-8 w-full">
+            <HeroVisual />
           </div>
         </Reveal>
       </div>
