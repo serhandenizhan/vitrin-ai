@@ -21,23 +21,37 @@
  * yuksekligini kapliyor (`flex h-full items-center`).
  */
 
-import { LogIn, PanelLeft } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, LogIn, PanelLeft } from "lucide-react";
 
+import { AboutPanel } from "@/components/about-panel";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
+/*
+ * Menu bilincli olarak KISA.
+ *
+ * Onceden dort baglanti vardi: Deneyin / One cikanlar / Nasil calisir /
+ * Teknik bilgiler. Dordu de sayfanin ayni akisinda ust uste duran bolumlere
+ * gidiyordu, yani menu kullaniciya bir SECIM sunmuyor, yalnizca ayni sayfanin
+ * icindekilerini tekrar ediyordu — ve hangisinin gerekli oldugu belirsizdi.
+ *
+ * Kalan iki baglanti gercekten ayri iki niyete karsilik geliyor: "denemek
+ * istiyorum" ve "once nasil calistigini anlamak istiyorum". One cikanlar ve
+ * teknik bilgiler sayfada duruyor, kaydirinca geliniyor; menude yer kaplamiyor.
+ */
 const LINKS = [
   { href: "#dene", label: "Deneyin" },
-  { href: "#ozellikler", label: "Öne çıkanlar" },
   { href: "#nasil", label: "Nasıl çalışır" },
-  { href: "#teknik", label: "Teknik bilgiler" },
 ];
 
 export function SiteHeader() {
   const { isSidebarOpen, toggleSidebar, works, openSignIn } = useWorkspace();
+  const [hakkindaAcik, setHakkindaAcik] = useState(false);
 
   return (
+    <>
     <header
       className={cn(
         "sticky top-0 z-50 h-14 border-b border-white/10",
@@ -104,6 +118,32 @@ export function SiteHeader() {
               </a>
             </li>
           ))}
+
+          {/* Hakkinda bir BAGLANTI degil, panel aciyor: gittigi bir yer yok,
+              acildigi bir yer var. Ok isareti bunu onceden soyluyor. */}
+          <li className="flex">
+            <button
+              type="button"
+              onClick={() => setHakkindaAcik((a) => !a)}
+              aria-expanded={hakkindaAcik}
+              className={cn(
+                "flex h-full items-center gap-1 rounded-md px-3 text-[0.875rem] transition-colors",
+                hakkindaAcik
+                  ? "bg-white/10 text-[#f5f5f7]"
+                  : "text-[#f5f5f7]/75 hover:bg-white/8 hover:text-[#f5f5f7]",
+              )}
+            >
+              Hakkında
+              <ChevronDown
+                className={cn(
+                  "size-3.5 transition-transform duration-300",
+                  hakkindaAcik && "rotate-180",
+                )}
+                strokeWidth={2}
+                aria-hidden
+              />
+            </button>
+          </li>
         </ul>
 
         <div className="ml-auto flex h-full items-center gap-1.5 sm:gap-2.5">
@@ -126,5 +166,8 @@ export function SiteHeader() {
         </div>
       </nav>
     </header>
+
+    <AboutPanel acik={hakkindaAcik} onKapat={() => setHakkindaAcik(false)} />
+    </>
   );
 }

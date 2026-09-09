@@ -19,7 +19,6 @@ import { AppTour } from "@/components/marketing/app-tour";
 import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
-import { MissionVision } from "@/components/marketing/mission-vision";
 import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
 import { SignInNotice } from "@/components/sign-in-notice";
@@ -43,7 +42,10 @@ export default function HomePage() {
         <Hero />
 
         {/*
-          Uygulama turu ve misyon/vizyon, aracin USTUNDE.
+          Uygulama turu aracin USTUNDE. Misyon/vizyon ve amac, sayfada bolum
+          olarak DEGIL ust cubuktaki "Hakkinda" panelinde (bkz. about-panel.tsx):
+          araci kullanmak icin gerekli olmayan metinler ziyaretciyi aractan bir
+          ekran uzaklastiriyordu.
 
           Bu, CLAUDE.md'deki "arac tanitim bolumlerinin sonuna degil acilistan
           hemen sonraya konuldu" kararinin kullanici tarafindan revize edilmis
@@ -54,7 +56,6 @@ export default function HomePage() {
           zaten dogrudan #dene'ye gidiyor.
         */}
         <AppTour />
-        <MissionVision />
 
         <section id="dene" className="surface-mist section-rhythm">
           <div className="mx-auto w-full max-w-3xl px-5">

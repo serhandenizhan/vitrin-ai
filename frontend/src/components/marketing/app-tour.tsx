@@ -1,18 +1,17 @@
 /**
  * "Uygulama nasil calisiyor" — yatay kayan ekran turu.
  *
- * TASARIM KARARI — kartlar EKRAN GORUNTUSU (bitmap) DEGIL, uygulamanin kendi
- * arayuzunun DOM ile yeniden kurulmus hali.
+ * TASARIM KARARI 1 — arayuz kisimlari EKRAN GORUNTUSU (bitmap) DEGIL,
+ * uygulamanin kendi arayuzunun DOM ile yeniden kurulmus hali. Iki sebep:
+ * her cozunurlukte keskin (ve yuzlerce KB bitmap inmiyor), ve arayuz
+ * degistiginde ekran goruntuleri sessizce eskiyor — DOM kopyasi ayni
+ * token'lari, ayni siniflari kullandigi icin eskimiyor.
  *
- * Uc sebep:
- *  1. Durustluk. Elimizde uydurma bir "sonuc gorseli" yok; kartlar gercekten
- *     var olan ekranlari ve gercek urun fotograflarimizi gosteriyor. Uretilmis
- *     bir cikti fotografini "iste sonuc" diye koymak, aracin yapmadigi bir seyi
- *     vaat etmek olurdu.
- *  2. Keskinlik. Her ekran cozunurlugunde net; 3 ekran goruntusu icin
- *     yuzlerce KB bitmap indirmek de gerekmiyor.
- *  3. Bakim. Arayuz degistiginde ekran goruntuleri sessizce eskiyor ve kimse
- *     fark etmiyor; DOM kopyasi ayni token'lari ve ayni siniflari kullaniyor.
+ * TASARIM KARARI 2 — kartlardaki URUN gorselleri ise gercek: kesim ve
+ * kompozisyon, `scripts/prepare-showcase.mjs` tarafindan KENDI fotografimiz
+ * calisan backend'e gonderilerek uretiliyor. Yani "iste sonuc" derken
+ * gosterilen sey, kullanicinin alacagi seyin ta kendisi; stok fotograf ya da
+ * elle rotuslanmis bir "temsili gorsel" yok.
  *
  * Bu bir sunucu bileseni: hicbir parcasi istemciye inmiyor.
  */
@@ -195,26 +194,28 @@ function KarsilastirmaEkrani() {
   return (
     <div className="checkerboard relative h-full">
       <Image
-        src="/photos/atolye.webp"
+        src="/photos/vitrin.webp"
         alt="Özgün fotoğraf"
         width={900}
         height={982}
         sizes="19rem"
         className="absolute inset-0 h-full w-full object-cover"
       />
-      {/* Sag yari: "kesilmis" taraf. Dama deseni uzerinde duruyor, tipki
-          aracin kendisindeki gibi. */}
+      {/* Sag yari: ARACIN GERCEK CIKTISI. `scripts/prepare-showcase.mjs`,
+          soldaki fotografi calisan backend'e gonderip kesimi uretiyor —
+          burada gosterilen sey, kullanicinin alacagi seyin ta kendisi.
+          Dama deseni uzerinde duruyor, tipki aracin kendisindeki gibi. */}
       <div
         className="absolute inset-0"
         style={{ clipPath: "inset(0 0 0 52%)" }}
       >
         <Image
-          src="/photos/vitrin.webp"
+          src="/showcase/kesim.webp"
           alt="Arka planı kaldırılmış ürün"
           width={900}
-          height={982}
+          height={1200}
           sizes="19rem"
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
         />
       </div>
       <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]">
@@ -246,12 +247,12 @@ function StudyoEkrani() {
       <div className="flex-1 rounded-xl bg-gradient-to-br from-[#3a2f1c] via-[#7a6231] to-[#241d12] p-3">
         <div className="relative h-full">
           <Image
-            src="/photos/vitrin.webp"
+            src="/showcase/kesim.webp"
             alt="Zemin üzerine yerleştirilmiş ürün"
             width={900}
-            height={982}
+            height={1200}
             sizes="12rem"
-            className="absolute inset-0 m-auto h-3/4 w-3/4 object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.45)]"
+            className="absolute inset-0 m-auto h-[88%] w-[88%] object-contain drop-shadow-[0_12px_20px_rgba(0,0,0,0.5)]"
           />
           {/* Ince secim cercevesi — araçtaki gerçek hâliyle aynı dil. */}
           <span className="border-gold/80 absolute inset-[12%] rounded-[2px] border border-dashed" />

@@ -417,6 +417,41 @@ bırakırdı.
 sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
 
+## Menü ve "Hakkında" paneli
+
+Menüde iki bağlantı var: **Deneyin** ve **Nasıl çalışır**. Önceden dört vardı
+(Öne çıkanlar ve Teknik bilgiler de) ama dördü de aynı sayfanın alt alta duran
+bölümlerine gidiyordu — menü bir *seçim* sunmuyor, sayfanın içindekilerini
+tekrar ediyordu. Kalan iki bağlantı gerçekten ayrı iki niyete karşılık geliyor:
+"denemek istiyorum" ve "önce nasıl çalıştığını anlamak istiyorum". Diğer
+bölümler sayfada duruyor, kaydırınca geliniyor.
+
+**Amaç, misyon ve vizyon sayfa bölümü değil, üst çubuktan açılan bir panel**
+(`about-panel.tsx`). Bu üç metin aracı kullanmak için gerekli değil; sayfaya
+bölüm olarak konduklarında ziyaretçinin araca ulaşması bir ekran gecikiyordu.
+Panel, isteyen için bir tıklama uzakta; istemeyen için hiç yok. Escape ile ve
+dışına tıklayarak kapanıyor.
+
+## Tanıtım görselleri gerçek çıktı
+
+`scripts/prepare-showcase.mjs`, `public/photos/vitrin.webp`'i **çalışan
+backend'e gönderip** kesimi üretiyor ve altın zemin üzerine yerleştiriyor
+(`public/showcase/`). Yani turda "işte sonuç" derken gösterilen şey stok
+fotoğraf ya da elle rötuşlanmış bir temsilî görsel değil, kullanıcının alacağı
+şeyin ta kendisi.
+
+Kaynak olarak ham `photo-source/urun-foto.jpg` **kullanılmıyor**: o karede
+ürünün yanında kuyumcu testeresi ve serbest bir zincir de var, BiRefNet salient
+object segmentasyonu yaptığı için onları da koruyor ve kesimde havada duran bir
+testere kalıyor (kök `CLAUDE.md`'deki bilinen sınırlama). Tek konulu kare
+kullanıldığında sonuç temiz.
+
+Çalıştırmak (backend :8000'de ayakta olmalı):
+
+```bash
+npm run gorselleri-hazirla
+```
+
 ## Akış: inceleme → stüdyo (Faz 3)
 
 Arka plan kaldırıldıktan sonra **inceleme ekranı** açılıyor: önce/sonra sürgüsü

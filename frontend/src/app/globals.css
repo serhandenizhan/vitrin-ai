@@ -596,3 +596,38 @@ html.reduce-motion {
     transform: none;
   }
 }
+
+/* "Hakkinda" paneli — ust cubugun altindan asagi acilir.
+
+   Bileşik seçici (`.hakkinda-panel.hakkinda-panel-acik`) BILINCLI: ikisi de
+   ayni ozgullukte olsaydi kazanani uretilen dosyadaki sira belirlerdi ve panel
+   hic acilmazdi — Faz 2'de sol cekmecede tam olarak bu yasandi (bkz. kok
+   CLAUDE.md ders 13). */
+.hakkinda-panel {
+  transform: translateY(-8px);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 260ms ease-out,
+    visibility 0s linear 320ms;
+}
+
+.hakkinda-panel.hakkinda-panel-acik {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transition:
+    transform 380ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 240ms ease-out,
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hakkinda-panel,
+  .hakkinda-panel.hakkinda-panel-acik {
+    transition-duration: 0s;
+  }
+}
