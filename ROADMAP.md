@@ -157,12 +157,12 @@ ve "Açık takip maddesi") ve `GET /api/backgrounds` (herkese açık, her kayıt
 süreli presigned URL ile döner) yazıldı. R2 depolama servisi (boto3, S3-uyumlu)
 `backend/app/services/storage.py` içinde. Şema bilinçli olarak minimal tutuldu —
 kategori/etiket alanı yok, MVP için gerek görülmedi; ihtiyaç ortaya çıkarsa ayrı bir
-migration ile eklenir. Gerçek bir R2 bucket'ına karşı uçtan uca elle doğrulama
-(yükle → listele → presigned URL'i tarayıcıda aç) henüz yapılmadı — gerçek Cloudflare
-R2 kimlik bilgileri gerektiriyor, bu adım Serhan `backend/.env`'e gerçek kimlik
-bilgilerini girdiğinde tamamlanacak. Kaan'ın Konva.js tabanlı kompozisyon editörü
-ayrı bir iş parçası olarak sürüyor; Faz 3 bu editör de bitene kadar tam
-tamamlanmış sayılmaz.
+migration ile eklenir. **Gerçek bir Cloudflare R2 bucket'ına karşı uçtan uca elle
+doğrulandı**: yükle (`POST /api/admin/backgrounds`) → listele (`GET /api/backgrounds`)
+→ dönen presigned URL'den gerçek dosya indirildi ve piksel/boyut olarak yüklenen
+görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici nesneler ve DB
+kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
+olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
