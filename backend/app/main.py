@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
@@ -30,3 +31,4 @@ app.add_middleware(
     path=ROUTE_PATH,
 )
 app.include_router(remove_background_router)
+app.include_router(backgrounds_router)
