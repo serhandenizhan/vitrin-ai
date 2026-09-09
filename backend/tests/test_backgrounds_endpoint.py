@@ -21,7 +21,19 @@ def _jpeg_bytes() -> bytes:
 
 def _client(db_session, storage_mock) -> TestClient:
     async def _override_db_session():
-        yield db_session
+        try:
+            yield db_session
+        finally:
+            # TestClient, isteği ayrı bir event loop'ta (AnyIO portal) çalıştırır;
+            # bağlantı burada serbest bırakılmazsa fixture teardown'ı farklı bir
+            # loop'ta rollback denerken "attached to a different loop" hatası alır.
+            # rollback() (expire_on_commit ayarından bağımsız olarak) session'daki
+            # TÜM nesneleri expire eder; bu da testin request sonrası halihazırda
+            # set edilmiş attribute'lara (ör. active.id) senkron eriştiği yerlerde
+            # "MissingGreenlet" hatasına yol açıyordu. commit() ise (bu test
+            # session factory'si expire_on_commit=False ile kurulduğu için)
+            # nesneleri expire etmeden aynı şekilde bağlantıyı serbest bırakır.
+            await db_session.commit()
 
     app.dependency_overrides[get_db_session] = _override_db_session
     app.dependency_overrides[get_storage_service] = lambda: storage_mock
