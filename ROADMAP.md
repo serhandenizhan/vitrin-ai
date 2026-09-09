@@ -164,6 +164,27 @@ görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici ne
 kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
 olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
 
+**İnceleme düzeltmeleri (Kaan).** Backend birleştirildikten sonra yapılan
+incelemede üç madde düzeltildi:
+
+1. **Admin secret karşılaştırması non-ASCII secret'larda çalışmıyordu.** Starlette
+   header baytlarını `latin-1` ile decode ediyor; karşılaştırmanın her iki tarafını
+   `utf-8` ile encode etmek gelen baytları ikinci kez kodluyordu (double-encode) ve
+   `ADMIN_SECRET` içinde Türkçe karakter varsa DOĞRU secret gönderildiğinde bile
+   kalıcı 401 üretiyordu. Mevcut test yalnızca "500 değil 401" diye baktığı için
+   bozuk sürüm de yeşil geçiyordu; doğru secret'ın 201 döndürdüğünü doğrulayan test
+   eklendi. (PR #5'te GitHub Copilot incelemesinin yakaladığı bulgu.)
+2. **`GET /api/backgrounds` artık `expires_in` alanı da dönüyor.** İmzalı URL'nin
+   ömrü sunucuda `BACKGROUND_URL_EXPIRY_SECONDS` ile yapılandırılabiliyor; bu alan
+   olmadan editörün tek seçeneği süreyi kendi tarafına sabitlemek olurdu ve sunucu
+   ayarı değiştiğinde sessizce süresi dolmuş URL'lerle çalışırdı — yukarıdaki
+   "sessiz hata" uyarısının tam olarak tarif ettiği durum.
+3. **R2 ayarları eksikken artık açıkça hata veriliyor.** Boş `R2_ACCOUNT_ID` ile
+   boto3 sessizce `https://.r2.cloudflarestorage.com` endpoint'i üretiyor ve
+   "geçerli görünen ama çalışmayan" imzalı URL'ler dönüyordu; yanlış yapılandırma
+   sunucuda değil kullanıcının tarayıcısında kırık görsel olarak ortaya çıkardı.
+   (Copilot incelemesinin ikinci bulgusu.)
+
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
