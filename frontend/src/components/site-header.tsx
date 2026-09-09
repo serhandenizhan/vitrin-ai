@@ -24,12 +24,25 @@
 import { useState } from "react";
 import { ChevronDown, LogIn, PanelLeft } from "lucide-react";
 
-import { AboutPanel } from "@/components/about-panel";
+import { NavPanel } from "@/components/nav-panel";
+import {
+  HakkindaIcerik,
+  NasilCalisirIcerik,
+  PaketlerIcerik,
+} from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
 /*
+ * Menudeki her oge ya bir YERE goturuyor ya bir sey ACIYOR — ikisi karisik
+ * degil. Tek baglanti "Deneyin"; digerleri panel aciyor ve yanlarindaki ok
+ * bunu onceden soyluyor.
+ *
+ * Panel iceriklerinin ortak yani: hicbiri araci KULLANMAK icin gerekli degil.
+ * Sayfaya bolum olarak konduklarinda ziyaretcinin araca ulasmasi her biri icin
+ * bir ekran geciktiriyordu.
+ *
  * Menu bilincli olarak KISA.
  *
  * Onceden dort baglanti vardi: Deneyin / One cikanlar / Nasil calisir /
@@ -41,21 +54,29 @@ import { cn } from "@/lib/utils";
  * istiyorum" ve "once nasil calistigini anlamak istiyorum". One cikanlar ve
  * teknik bilgiler sayfada duruyor, kaydirinca geliniyor; menude yer kaplamiyor.
  */
-const LINKS = [
-  { href: "#dene", label: "Deneyin" },
-  { href: "#nasil", label: "Nasıl çalışır" },
-];
+const LINKS = [{ href: "#dene", label: "Deneyin" }];
+
+/** Panel aciyor; sirasi menudeki gorunum sirasi. */
+const PANELLER = [
+  { ad: "nasil", etiket: "Nasıl çalışır" },
+  { ad: "paketler", etiket: "Paketler" },
+  { ad: "hakkinda", etiket: "Hakkında" },
+] as const;
+
+type PanelAdi = (typeof PANELLER)[number]["ad"];
 
 export function SiteHeader() {
   const { isSidebarOpen, toggleSidebar, works, openSignIn } = useWorkspace();
-  const [hakkindaAcik, setHakkindaAcik] = useState(false);
+  // Ayni anda tek panel: iki panelin ust uste binmesi ya da biri acikken
+  // digerinin arkasinda kalmasi mumkun olmasin.
+  const [acikPanel, setAcikPanel] = useState<PanelAdi | null>(null);
 
   return (
     <>
     <header
       className={cn(
         "sticky top-0 z-50 h-14 border-b border-white/10",
-        "bg-black/70 text-[#f5f5f7] backdrop-blur-xl backdrop-saturate-150",
+        "bg-black/70 text-[#f3f0eb] backdrop-blur-xl backdrop-saturate-150",
       )}
     >
       <nav
@@ -76,8 +97,8 @@ export function SiteHeader() {
           className={cn(
             "relative flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
             isSidebarOpen
-              ? "bg-white/15 text-[#f5f5f7]"
-              : "text-[#f5f5f7]/85 hover:bg-white/10 hover:text-[#f5f5f7]",
+              ? "bg-white/15 text-[#f3f0eb]"
+              : "text-[#f3f0eb]/85 hover:bg-white/10 hover:text-[#f3f0eb]",
           )}
         >
           <PanelLeft className="size-[1.15rem]" strokeWidth={1.75} aria-hidden />
@@ -112,45 +133,48 @@ export function SiteHeader() {
             <li key={link.href} className="flex">
               <a
                 href={link.href}
-                className="flex h-full items-center rounded-md px-3 text-[0.875rem] text-[#f5f5f7]/75 transition-colors hover:bg-white/8 hover:text-[#f5f5f7]"
+                className="flex h-full items-center rounded-md px-3 text-[0.875rem] text-[#f3f0eb]/75 transition-colors hover:bg-white/8 hover:text-[#f3f0eb]"
               >
                 {link.label}
               </a>
             </li>
           ))}
 
-          {/* Hakkinda bir BAGLANTI degil, panel aciyor: gittigi bir yer yok,
-              acildigi bir yer var. Ok isareti bunu onceden soyluyor. */}
-          <li className="flex">
-            <button
-              type="button"
-              onClick={() => setHakkindaAcik((a) => !a)}
-              aria-expanded={hakkindaAcik}
-              className={cn(
-                "flex h-full items-center gap-1 rounded-md px-3 text-[0.875rem] transition-colors",
-                hakkindaAcik
-                  ? "bg-white/10 text-[#f5f5f7]"
-                  : "text-[#f5f5f7]/75 hover:bg-white/8 hover:text-[#f5f5f7]",
-              )}
-            >
-              Hakkında
-              <ChevronDown
-                className={cn(
-                  "size-3.5 transition-transform duration-300",
-                  hakkindaAcik && "rotate-180",
-                )}
-                strokeWidth={2}
-                aria-hidden
-              />
-            </button>
-          </li>
+          {PANELLER.map((panel) => {
+            const acik = acikPanel === panel.ad;
+            return (
+              <li key={panel.ad} className="flex">
+                <button
+                  type="button"
+                  onClick={() => setAcikPanel(acik ? null : panel.ad)}
+                  aria-expanded={acik}
+                  className={cn(
+                    "flex h-full items-center gap-1 rounded-md px-3 text-[0.875rem] transition-colors",
+                    acik
+                      ? "bg-white/12 text-[#f3f0eb]"
+                      : "text-[#f3f0eb]/75 hover:bg-white/8 hover:text-[#f3f0eb]",
+                  )}
+                >
+                  {panel.etiket}
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 transition-transform duration-300",
+                      acik && "rotate-180",
+                    )}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                </button>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="ml-auto flex h-full items-center gap-1.5 sm:gap-2.5">
           <button
             type="button"
             onClick={openSignIn}
-            className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f5f5f7]/85 transition-colors hover:bg-white/10 hover:text-[#f5f5f7]"
+            className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/85 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
           >
             <LogIn className="size-4" strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Giriş yap</span>
@@ -167,7 +191,32 @@ export function SiteHeader() {
       </nav>
     </header>
 
-    <AboutPanel acik={hakkindaAcik} onKapat={() => setHakkindaAcik(false)} />
+    <NavPanel
+      acik={acikPanel === "nasil"}
+      onKapat={() => setAcikPanel(null)}
+      etiket="Nasıl çalışır"
+      ustBaslik="Nasıl çalışır"
+    >
+      <NasilCalisirIcerik />
+    </NavPanel>
+
+    <NavPanel
+      acik={acikPanel === "paketler"}
+      onKapat={() => setAcikPanel(null)}
+      etiket="Paketler"
+      ustBaslik="Paketler"
+    >
+      <PaketlerIcerik />
+    </NavPanel>
+
+    <NavPanel
+      acik={acikPanel === "hakkinda"}
+      onKapat={() => setAcikPanel(null)}
+      etiket="Vitrin AI hakkında"
+      ustBaslik="Vitrin AI hakkında"
+    >
+      <HakkindaIcerik />
+    </NavPanel>
     </>
   );
 }

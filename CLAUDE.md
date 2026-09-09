@@ -136,6 +136,12 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Uyarlanan (ölçülebilir) şeyler:** tipografi ölçeği ve negatif harf aralığı (hero 64/68 px, bölüm 48/52, alt başlık 28/32, gövde 17/21), 600 ağırlıklı başlıklar, tam genişlikte dönüşümlü koyu/açık bölümler (`#000` / `#1d1d1f` / `#f5f5f7` / `#fff`), 112 px dikey ritim, hap biçimli düğmeler, kaydırınca opaklık + kayma ile ortaya çıkan kısa `ease-out` geçişler.
 
+**Palet 10.09.2026'da sıcak nötrlere çekildi** (kullanıcı kararı: "daha ilgi çekici ve göz yormayacak tonlar"). Apple'ın nötr grileri (`#000` / `#1d1d1f` / `#f5f5f7` / `#fff`) yerine `#0c0b0a` / `#1a1917` / `#f6f4f1` / `#fdfcfb`, koyu zeminde metin `#f3f0eb`. İki gerekçe: saf siyah zeminde saf beyaz metin büyük alanlarda yorucu (karşıtlık ~%92'ye indirildi, WCAG AAA'nın hâlâ çok üzerinde), ve altın vurgu sarımsı-nötr bir zeminde uyum kuruyor — mavi eğilimli `#f5f5f7` üzerinde hafif yeşilimsi duruyordu. Ölçek, ritim ve tipografi değişmedi.
+
+**Büyük başlıklarda nokta kullanılmaz** (kullanıcı kararı, 10.09.2026). `display-hero`, `display-section` ve `display-feature` sınıflarını taşıyan her başlık noktasız biter. Apple'ın kendi başlıkları nokta kullanır ama kullanıcı bu ayrıntıda ayrıştı; kural burada geçerli.
+
+**Menüdeki her öğe ya bir yere götürür ya bir şey açar, ikisi karışık değil.** Tek bağlantı `Deneyin`; `Nasıl çalışır`, `Paketler` ve `Hakkında` panel açıyor (`nav-panel.tsx`) ve yanlarındaki ok bunu önceden söylüyor. Panel içerikleri aracı kullanmak için gerekli olmadığından sayfaya bölüm olarak konmuyor — konduklarında ziyaretçinin araca ulaşması her biri için bir ekran gecikiyordu.
+
 **Uyarlanmayanlar — bilinçli:**
 - **SF Pro kullanılmaz.** Apple'a ait ve lisanslı; yerine Inter (aynı sınıfta neo-grotesk).
 - **Apple'ın metinleri, görselleri ve marka öğeleri kopyalanmaz.** Sayfadaki her cümle ve sayı projenin kendi gerçeğine dayanır.
@@ -143,7 +149,7 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Yapısal fark:** Apple'da ürün bir fotoğraftır, bizde **çalışan aracın kendisi**. Bu yüzden araç tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu.
 
-**Bu karar 10.09.2026'da kullanıcı tarafından revize edildi:** açılıştan sonra, aracın **üstüne** iki bölüm eklendi — uygulama turu (`app-tour.tsx`, yatay kayan ekran galerisi) ve misyon/vizyon (`mission-vision.tsx`). Maliyeti biliniyor ve kabul edildi: "dene" bölümü bir ekran aşağı indi. Karşılığı, ziyaretçinin aracı denemeden önce ne olduğunu görmesi. Tur bilinçli olarak tek ekran yüksekliğinde ve yatay kaydırmalı tutuldu ki araç uzağa düşmesin; hero'daki birincil düğme zaten doğrudan `#dene`'ye gidiyor. Yeni bölüm eklenirken bu denge korunmalı — tanıtım, aracı sayfanın dibine itmemeli.
+**Bu karar 10.09.2026'da iki kez sınandı ve sonunda korundu.** Önce aracın üstüne iki tanıtım bölümü eklendi (uygulama turu + misyon/vizyon); aynı gün ikisi de kaldırıldı. Tur, yatay kaydırmalı galeri olarak kurulmuştu ve kullanıcı hem kaydırmanın masaüstünde iyi çalışmadığını hem görüntünün referans kaliteye ulaşmadığını söyledi; misyon/vizyon ise panele taşındı. **Sonuç: araç yine açılıştan hemen sonra.** Tanıtım metinleri panellerde, görsel örnekler ise aracın ALTINDA (`backgrounds-showcase.tsx`) — kullanıcı kendi fotoğrafını denedikten sonra "başka ne yapabilirim" sorusunun cevabı olarak.
 
 **Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
 

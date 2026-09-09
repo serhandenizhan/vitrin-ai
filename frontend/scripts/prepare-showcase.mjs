@@ -45,10 +45,44 @@ const CIKTI_DIZINI = path.join(FRONTEND, "public", "showcase");
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-/** Kart olculeri; turdaki kartlar 3/4 oraninda. */
+/** Kare kompozisyon — aracin kendi cikti orani (2000x2000) ile ayni. */
 const GENISLIK = 900;
-const YUKSEKLIK = 1200;
+const YUKSEKLIK = 900;
 const KALITE = 80;
+
+/**
+ * Zeminler, editordeki yer tutucularin BIREBIR ayni renk duraklari
+ * (`src/lib/backgrounds.ts`). Sayfada gosterilen ornek ile araci actiginda
+ * karsilasacagi zemin ayni olmali; farkli olsaydi sayfa, urunun vermedigi bir
+ * seyi gostermis olurdu.
+ */
+const ZEMINLER = [
+  {
+    ad: "kadife",
+    baslik: "Kadife siyah",
+    duraklar: [
+      { konum: 0, renk: "#1d1d1f" },
+      { konum: 1, renk: "#000000" },
+    ],
+  },
+  {
+    ad: "altin",
+    baslik: "Altın hale",
+    duraklar: [
+      { konum: 0, renk: "#3a2f1c" },
+      { konum: 0.55, renk: "#7a6231" },
+      { konum: 1, renk: "#241d12" },
+    ],
+  },
+  {
+    ad: "sicak-gri",
+    baslik: "Sıcak gri",
+    duraklar: [
+      { konum: 0, renk: "#d8d4cf" },
+      { konum: 1, renk: "#a8a29b" },
+    ],
+  },
+];
 
 /** Ilk istek modeli bellege yukledigi icin uzun surebiliyor (bkz. CLAUDE.md). */
 const ZAMAN_ASIMI_MS = 180_000;
@@ -106,32 +140,34 @@ async function main() {
     .webp({ quality: KALITE, alphaQuality: 100 })
     .toFile(path.join(CIKTI_DIZINI, "kesim.webp"));
 
-  // 2) Kompozisyon — editordeki "Altin hale" zemininin ayni renk duraklari.
-  //    Zemin SVG ile uretiliyor: gradyan icin ayri bir ikili dosya tutmak
-  //    gerekmesin, degeri degistirmek isteyen tek satir duzeltsin.
-  const zemin = Buffer.from(
-    `<svg width="${GENISLIK}" height="${YUKSEKLIK}" xmlns="http://www.w3.org/2000/svg">
-       <defs>
-         <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-           <stop offset="0" stop-color="#3a2f1c"/>
-           <stop offset="0.55" stop-color="#7a6231"/>
-           <stop offset="1" stop-color="#241d12"/>
-         </linearGradient>
-         <radialGradient id="isik" cx="50%" cy="42%" r="62%">
-           <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
-           <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.06"/>
-           <stop offset="1" stop-color="#000000" stop-opacity="0.34"/>
-         </radialGradient>
-       </defs>
-       <rect width="100%" height="100%" fill="url(#g)"/>
-       <rect width="100%" height="100%" fill="url(#isik)"/>
-     </svg>`,
-  );
+  // 2) Her zemin icin bir kompozisyon. Zeminler SVG ile uretiliyor: gradyan
+  //    icin ayri bir ikili dosya tutmak gerekmesin, rengi degistirmek isteyen
+  //    tek satir duzeltsin.
+  for (const zemin of ZEMINLER) {
+    const duraklar = zemin.duraklar
+      .map((d) => `<stop offset="${d.konum}" stop-color="${d.renk}"/>`)
+      .join("");
 
-  await sharp(zemin)
-    .composite([{ input: yerlesmis, gravity: "center" }])
-    .webp({ quality: KALITE })
-    .toFile(path.join(CIKTI_DIZINI, "vitrin.webp"));
+    const zeminSvg = Buffer.from(
+      `<svg width="${GENISLIK}" height="${YUKSEKLIK}" xmlns="http://www.w3.org/2000/svg">
+         <defs>
+           <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">${duraklar}</linearGradient>
+           <radialGradient id="isik" cx="50%" cy="42%" r="62%">
+             <stop offset="0" stop-color="#ffffff" stop-opacity="0.26"/>
+             <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.05"/>
+             <stop offset="1" stop-color="#000000" stop-opacity="0.30"/>
+           </radialGradient>
+         </defs>
+         <rect width="100%" height="100%" fill="url(#g)"/>
+         <rect width="100%" height="100%" fill="url(#isik)"/>
+       </svg>`,
+    );
+
+    await sharp(zeminSvg)
+      .composite([{ input: yerlesmis, gravity: "center" }])
+      .webp({ quality: KALITE })
+      .toFile(path.join(CIKTI_DIZINI, `vitrin-${zemin.ad}.webp`));
+  }
 
   console.log(`Hazir: ${path.relative(FRONTEND, CIKTI_DIZINI)}`);
 }

@@ -173,8 +173,10 @@
 
 @theme inline {
   /* Kuyum vurgusu — Apple'in mavisinin yerini altin aliyor. */
-  --color-gold: oklch(0.72 0.09 78);
-  --color-gold-soft: oklch(0.82 0.07 80);
+  --color-gold: oklch(0.74 0.105 76);
+  --color-gold-soft: oklch(0.84 0.075 80);
+  /* Koyu zeminlerde ince ayrac cizgileri — beyazin %10'u yerine sicak ton. */
+  --color-hairline: oklch(1 0 0 / 0.12);
 }
 
 /* Hero basligi: Apple 64px/68px, -0.576px, 600 */
@@ -230,34 +232,45 @@
    boyunca donusumlu bir ritim kuruluyor.
    -------------------------------------------------------------------------- */
 
+/* PALET — Apple'in notr grilerinden SICAK notrlere cekildi.
+   Iki sebep:
+   1) Goz yormasin. Saf siyah zeminde saf beyaz metin, buyuk alanlarda en
+      yuksek karsitlik demek; okunakli ama yorucu. Bir tik isinmis siyah ve
+      kirik beyaz karsitligi ~%92'ye dusuruyor — WCAG AAA'nin cok uzerinde
+      kaliyor ama bakisi dinlendiriyor.
+   2) Urune yakissin. Altin, sarimsi-notr bir zeminde kendi rengiyle uyum
+      kuruyor; mavi egilimli #f5f5f7 uzerinde ise hafif yesilimsi duruyordu.
+   Degerler yine SABIT (token degil): bir bolum koyu isaretlendiginde acik
+   temada da koyu kalmali, donusumlu ritim buna dayaniyor. */
+
 @utility surface-black {
-  background-color: #000000;
-  color: #f5f5f7;
+  background-color: #0c0b0a;
+  color: #f3f0eb;
 }
 
 @utility surface-charcoal {
-  background-color: #1d1d1f;
-  color: #f5f5f7;
+  background-color: #1a1917;
+  color: #f3f0eb;
 }
 
 @utility surface-mist {
-  background-color: #f5f5f7;
-  color: #1d1d1f;
+  background-color: #f6f4f1;
+  color: #1a1917;
 }
 
 @utility surface-white {
-  background-color: #ffffff;
-  color: #1d1d1f;
+  background-color: #fdfcfb;
+  color: #1a1917;
 }
 
 /* Koyu yuzeylerde ikincil metin */
 @utility on-dark-muted {
-  color: #a1a1a6;
+  color: #a8a29a;
 }
 
 /* Acik yuzeylerde ikincil metin */
 @utility on-light-muted {
-  color: #6e6e73;
+  color: #6b6862;
 }
 
 /* Bolum dikey ritmi — Apple 112px */
@@ -542,68 +555,13 @@ html.reduce-motion {
   }
 }
 
-/* Uygulama turu — yatay galeri.
+/* Ust cubuk panelleri (Nasil calisir / Paketler / Hakkinda).
 
-   Kaydirma cubugu gizleniyor ama kaydirma calismaya devam ediyor: serit zaten
-   "yana kaydirin" diye soyluyor ve kartlarin altinda duran kalin bir cubuk
-   Apple'in galeri dilinde yok. */
-.tur-serit {
-  scrollbar-width: none;
-  scroll-padding-inline: 1.25rem;
-}
-.tur-serit::-webkit-scrollbar {
-  display: none;
-}
-
-/* Kartlar merkeze yaklastikca one cikiyor — Apple urun galerilerindeki his.
-
-   `animation-timeline: view()` bir KAYDIRMA ILERLEMESINE bagli animasyon:
-   JavaScript yok, ana is parcaciginda hicbir sey calismiyor. Destegi olmayan
-   tarayicilarda kural bloguyla birlikte yok sayiliyor ve kartlar duz duruyor —
-   hicbir sey kaybolmuyor, yalnizca sus eksiliyor.
-
-   `@supports` ile sarmalanmasinin sebebi: destegi olmayan tarayicilarda
-   `animation-name` gecerli kalip animasyonu ANINDA son karesine sabitleyebilir;
-   o zaman kartlar kalici olarak solgun gorunurdu. */
-@supports (animation-timeline: view()) {
-  @keyframes tur-karti-belir {
-    /* Girerken ve cikarken hafif kucuk ve solgun; ortadayken tam. */
-    0%,
-    100% {
-      opacity: 0.45;
-      transform: scale(0.94);
-    }
-    45%,
-    55% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  .tur-kart {
-    animation: tur-karti-belir linear both;
-    animation-timeline: view(inline);
-    /* Serit dar oldugu icin araligi genis tutuyoruz; aksi halde kart daha
-       ekrana tam girmeden "cikiyor" sayiliyor. */
-    animation-range: entry 5% exit 95%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tur-kart {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* "Hakkinda" paneli — ust cubugun altindan asagi acilir.
-
-   Bileşik seçici (`.hakkinda-panel.hakkinda-panel-acik`) BILINCLI: ikisi de
+   Bileşik seçici (`.nav-panel.nav-panel-acik`) BILINCLI: ikisi de
    ayni ozgullukte olsaydi kazanani uretilen dosyadaki sira belirlerdi ve panel
    hic acilmazdi — Faz 2'de sol cekmecede tam olarak bu yasandi (bkz. kok
    CLAUDE.md ders 13). */
-.hakkinda-panel {
+.nav-panel {
   transform: translateY(-8px);
   opacity: 0;
   pointer-events: none;
@@ -614,7 +572,7 @@ html.reduce-motion {
     visibility 0s linear 320ms;
 }
 
-.hakkinda-panel.hakkinda-panel-acik {
+.nav-panel.nav-panel-acik {
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
@@ -625,9 +583,27 @@ html.reduce-motion {
     visibility 0s;
 }
 
+/* Icerik, panelin kendisinden 60ms sonra ve biraz daha yoldan geliyor:
+   panel inerken icerik de ayni yonde hareket edince gecis TEK bir hareket
+   gibi okunuyor — Apple'in acilir panellerindeki his budur. */
+.nav-panel .nav-panel-icerik {
+  transform: translateY(10px);
+  opacity: 0;
+  transition:
+    transform 420ms cubic-bezier(0.32, 0.72, 0, 1) 60ms,
+    opacity 300ms ease-out 60ms;
+}
+
+.nav-panel.nav-panel-acik .nav-panel-icerik {
+  transform: translateY(0);
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .hakkinda-panel,
-  .hakkinda-panel.hakkinda-panel-acik {
+  .nav-panel,
+  .nav-panel.nav-panel-acik,
+  .nav-panel .nav-panel-icerik,
+  .nav-panel.nav-panel-acik .nav-panel-icerik {
     transition-duration: 0s;
   }
 }

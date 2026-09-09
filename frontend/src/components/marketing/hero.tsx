@@ -20,9 +20,9 @@ export function Hero() {
 
         <Reveal delay={80}>
           <h1 className="display-hero max-w-3xl text-balance">
-            Ürününüz kalsın.
+            Ürününüz kalsın
             <br />
-            Arka planı gitsin.
+            Arka planı gitsin
           </h1>
         </Reveal>
 

@@ -15,7 +15,7 @@
 
 import { BackgroundRemover } from "@/components/background-remover";
 import { Studio } from "@/components/composer/studio";
-import { AppTour } from "@/components/marketing/app-tour";
+import { BackgroundsShowcase } from "@/components/marketing/backgrounds-showcase";
 import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
@@ -41,28 +41,12 @@ export default function HomePage() {
       <main className="flex-1">
         <Hero />
 
-        {/*
-          Uygulama turu aracin USTUNDE. Misyon/vizyon ve amac, sayfada bolum
-          olarak DEGIL ust cubuktaki "Hakkinda" panelinde (bkz. about-panel.tsx):
-          araci kullanmak icin gerekli olmayan metinler ziyaretciyi aractan bir
-          ekran uzaklastiriyordu.
-
-          Bu, CLAUDE.md'deki "arac tanitim bolumlerinin sonuna degil acilistan
-          hemen sonraya konuldu" kararinin kullanici tarafindan revize edilmis
-          hali (10.09.2026). Maliyeti biliniyor: "dene" bolumu bir ekran asagi
-          indi. Karsiligi, ziyaretcinin araci denemeden once ne oldugunu
-          gormesi. Tur bilincli olarak TEK EKRAN yuksekliginde ve yatay
-          kaydirmali tutuldu ki arac uzaga dusmesin; hero'daki birincil dugme
-          zaten dogrudan #dene'ye gidiyor.
-        */}
-        <AppTour />
-
         <section id="dene" className="surface-mist section-rhythm">
           <div className="mx-auto w-full max-w-3xl px-5">
             <Reveal>
               <div className="mb-9 text-center">
                 <h2 className="display-section text-balance">
-                  Kendi fotoğrafınızla deneyin.
+                  Kendi fotoğrafınızla deneyin
                 </h2>
                 <p className="lede on-light-muted mx-auto mt-3 max-w-lg text-pretty">
                   Kayıt gerekmiyor. Fotoğrafınızı yükleyin, sonucu saniyeler
@@ -76,6 +60,11 @@ export default function HomePage() {
             </Reveal>
           </div>
         </section>
+
+        {/* Zemin galerisi araci HEMEN takip ediyor: kullanici kendi
+            fotografini denedikten sonra "peki baska ne yapabilirim"
+            sorusunun cevabi bu. */}
+        <BackgroundsShowcase />
 
         <Highlights />
         <HowItWorks />

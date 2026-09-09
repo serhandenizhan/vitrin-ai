@@ -58,7 +58,7 @@ export function HowItWorks() {
       <div className="mx-auto w-full max-w-5xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
-            Üç adım. Hepsi bu.
+            Üç adımda bitiyor
           </h2>
         </Reveal>
 
@@ -80,7 +80,7 @@ export function HowItWorks() {
         <Reveal delay={120}>
           <div className="mt-16 rounded-2xl bg-white p-7 sm:mt-20 sm:p-10">
             <h3 className="display-feature text-balance">
-              En iyi sonuç için üç öneri.
+              En iyi sonuç için üç öneri
             </h3>
             <p className="lede on-light-muted mt-2.5 max-w-2xl text-pretty">
               Çıktı kalitesini en çok düşüren etkenler modelin değil, girdinin
