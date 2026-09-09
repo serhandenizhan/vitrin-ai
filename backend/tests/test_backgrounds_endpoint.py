@@ -93,3 +93,36 @@ async def test_happy_path_uploads_and_creates_row(db_session):
     row = result.scalar_one()
     assert row.r2_key == f"backgrounds/{background_id}.jpg"
     assert row.is_active is True
+
+
+async def test_list_backgrounds_returns_empty_list_when_none_exist(db_session):
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.get("/api/backgrounds")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_list_backgrounds_returns_only_active_with_presigned_urls(db_session):
+    from unittest.mock import MagicMock
+
+    active = Background(id=uuid.uuid4(), r2_key="backgrounds/active.jpg", is_active=True)
+    inactive = Background(id=uuid.uuid4(), r2_key="backgrounds/inactive.jpg", is_active=False)
+    db_session.add_all([active, inactive])
+    await db_session.commit()
+
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(
+        side_effect=lambda key: f"https://signed.example/{key}"
+    )
+    client = _client(db_session, storage_mock)
+
+    response = client.get("/api/backgrounds")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == str(active.id)
+    assert body[0]["url"] == f"https://signed.example/{active.r2_key}"

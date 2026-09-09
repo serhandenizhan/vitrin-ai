@@ -4,6 +4,7 @@ import uuid
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -84,3 +85,20 @@ async def create_background(
     await db.commit()
 
     return {"id": str(background_id)}
+
+
+@router.get("/api/backgrounds")
+async def list_backgrounds(
+    db: AsyncSession = Depends(get_db_session),
+    storage: R2StorageService = Depends(get_storage_service),
+) -> list[dict[str, str]]:
+    result = await db.execute(
+        select(Background)
+        .where(Background.is_active.is_(True))
+        .order_by(Background.created_at)
+    )
+    backgrounds = result.scalars().all()
+    return [
+        {"id": str(bg.id), "url": storage.generate_presigned_url(bg.r2_key)}
+        for bg in backgrounds
+    ]
