@@ -24,7 +24,11 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 10. **Ders — `USE_MOCK_BACKEND` gibi geçici test bayrakları unutulabiliyor.** Önceki iterasyonda gerçek backend tekrar çalışır hale geldiğinde bu bayrağın kapatılmayı unutulması, "neden sonuç hep aynı örnek görsel" şeklinde bir kafa karışıklığına yol açmıştı. Bu tür bayraklar açıldığında bir hatırlatma notu bırakılmalı.
 11. **Ders — dosya/klasör path'lerini kod içine hard-code etmeyin.** Önceki iterasyonda bir benchmark script'i geliştiricinin kendi makinesindeki mutlak path'i (`/Users/...`) içeriyordu; bu hem başka bir geliştiricide hem CI'da çalışmayı kırdı. Path'ler her zaman repo köküne göre türetilmeli ve env değişkeniyle override edilebilmeli.
 12. **Ders — araçların ürettiği `.gitignore` ve yardımcı dosyaları da denetleyin.** Faz 2'de `create-next-app`'in ürettiği `frontend/.gitignore` içindeki `.env*` deseni, negasyon olmadığı için `.env.example`'ı da yutuyordu — fark edilmeseydi yeni bir geliştirici hangi ortam değişkenlerine ihtiyaç olduğunu göremezdi (`!.env.example` eklendi). Aynı araç ayrıca `frontend/` altına kendi `AGENTS.md` ve `CLAUDE.md` dosyalarını üretiyor; kök `CLAUDE.md` tek doğru kaynak olduğu için bu `next.config.ts` içinde `agentRules: false` ile kapatıldı. **Genel kural: bir iskelet üreticisi (scaffolder) çalıştırdıktan sonra ürettiği dosyaları tek tek gözden geçirin — sessizce yanlış davranan bir yapılandırma bırakabiliyor.**
-13. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
+13. **Ders — aynı özgüllükteki iki `@utility` arasında kazananı SIRA belirler; ve bir hatayı ortamın kendisiyle karıştırmayın.** Faz 2'de sol çekmece "açık" işaretlendiği hâlde ekran dışında kalıyordu. İki ayrı şey aynı belirtiyi veriyordu ve bu, teşhisi üç tura yaydı:
+    - **Asıl hata:** `.drawer` ve `.drawer-open` ikisi de `@utility` idi, yani aynı özgüllükte; kazananı üretilen dosyadaki sıra belirliyordu ve `.drawer` sonra geldiği için her zaman o kazanıyordu. **Durum değiştiren sınıf çiftlerinde bileşik seçici kullanın** (`.drawer.drawer-open`, 0-2-0).
+    - **Ortam artefaktı:** doğrulama yapılan gömülü tarayıcı paneli gizliyken hiç kare üretmiyor; `requestAnimationFrame` çalışmıyor, dolayısıyla CSS geçişleri ve `scroll-behavior: smooth` ilerlemiyor ve hesaplanan değer eski hâlinde donuyor. Bu bir kod hatası **değil**; gerçek bir tarayıcıda geçiş çalışıyor ve arka plandaki bir sekme öne geldiğinde geçiş tamamlanıyor.
+    **Ders:** bir belirtiyi kod hatası saymadan önce ortamın kendisini eleyin. Ölçüm aracının sınırı, ölçülen şeyin özelliği gibi görünebiliyor. (Geçiş, özgüllük düzeltildikten sonra bilinçli olarak geri getirildi — bkz. `frontend/src/app/globals.css`.)
+14. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
 
 ## Proje genel bakış
 
@@ -37,7 +41,12 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 3. **Dil kuralı:** kaynak kod (değişken adları, API alanları vb.) İngilizcedir; kod içindeki yorumlar sadece Türkçe yazılır. Üst seviye dokümantasyon dosyaları (`CLAUDE.md`, `ROADMAP.md`) kullanıcı talebi üzerine Türkçe tutulabilir. Sohbet Türkçe devam eder.
 4. **`README.md`'yi de her adımda güncel tutun.** Kök dizindeki `README.md`, projenin GitHub'daki dış yüzüdür — yeni bir özellik, mimari değişiklik veya proje durumu güncellemesi olduğunda bunu da güncelleyin. Değişiklik hangi ekip üyesi (Serhan veya Kaan) tarafından yapılıyor olursa olsun aynı kural geçerlidir: iş bitmeden önce Claude Code, `README.md`'nin güncellenmesi gerekip gerekmediğini kullanıcıya otomatik olarak sormalı.
 5. **Her PR'dan önce ilgili dokümanların tamamı kontrol edilir:** kök `README.md`, `ROADMAP.md`, `CLAUDE.md`, `SECURITY.md` ve ilgili alt `README` (`frontend/README.md` / `backend/README.md`). Bu bir "gerekirse" maddesi değil — PR açmadan önce tek tek gözden geçirilir ve güncellenmesi gerekmeyenler için kullanıcıya "şu dosyada değişiklik gerekmedi" diye **açıkça** söylenir. Sessizce atlamak yasak. Bir sayı (RAM, süre, limit) birden fazla dokümanda geçiyorsa **hepsi birden** güncellenir.
-6. **Güvenlik, Faz 7'ye ertelenen ayrı bir görev değildir.** `SECURITY.md` dosyasındaki standartlar ilgili faz içinde uygulanır (hangi maddenin hangi fazda olduğu hem `SECURITY.md` bölüm 8'de hem `ROADMAP.md`'deki ilgili faz altında listelenir). Yeni bir endpoint, DB tablosu, dosya yükleme akışı veya ödeme entegrasyonu yazılırken `SECURITY.md`'deki ilgili bölüm önce kontrol edilir.
+6. **Faz dışına çıkılmaz — çıkılacaksa ÖNCE uyarılır.** (Kaan'ın kararı, 08.09.2026.) Bir istek, o an üzerinde çalışılan fazın `ROADMAP.md`'deki kapsamının dışındaysa: **iş yapılmadan önce** kullanıcıya bunun hangi faza ait olduğu ve neden şimdi yapılmaması gerektiği söylenir, onayı beklenir. Sessizce yapmak da, "nasılsa faydalı" diye eklemek de yasak.
+   - Bu kural Faz 2'de fiilen yaşandığı için kondu: çalışma geçmişi (Faz 4, sunucuda) tarayıcıda yapıldı ve "giriş yap" arayüz öğesi (Faz 4) eklendi. İkisi de kullanıcı isteğiyle ve belgelenerek yapıldı ama **kapsam yine de aşıldı** ve Faz 4'e taşıma işi bıraktı — yol haritası tam olarak bundan kaçınmak için "baştan sunucuda" demişti.
+   - Kapsam dışı olup olmadığı belirsizse, varsayılan **dışıdır**: sorulur.
+   - Kullanıcı uyarıya rağmen isterse yapılır; o zaman karar `ROADMAP.md`'deki ilgili faza ve gerekiyorsa `CLAUDE.md`'ye "geçici çözüm / öne alınan iş" olarak yazılır (bkz. ders 8).
+   - Bir fazın kendi görevleri bitmeden bir sonraki faza geçilmez.
+7. **Güvenlik, Faz 7'ye ertelenen ayrı bir görev değildir.** `SECURITY.md` dosyasındaki standartlar ilgili faz içinde uygulanır (hangi maddenin hangi fazda olduğu hem `SECURITY.md` bölüm 8'de hem `ROADMAP.md`'deki ilgili faz altında listelenir). Yeni bir endpoint, DB tablosu, dosya yükleme akışı veya ödeme entegrasyonu yazılırken `SECURITY.md`'deki ilgili bölüm önce kontrol edilir.
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
@@ -94,7 +103,16 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 - Dosya yükleme kabul eden hiçbir endpoint sadece dosya uzantısına/content-type header'ına güvenmez; boyut sınırı ve magic-byte içerik doğrulaması **Faz 1'den itibaren** eklenir (önceki iterasyonda sonradan yama olarak eklenmişti).
 - Yeni bir admin/yetkili endpoint yazılırken rol kontrolü backend'de yapılır; frontend'in bir öğeyi gizlemesi yetkilendirme sayılmaz.
 - Ödeme/webhook kodu yazılırken imza doğrulaması ve idempotency olmadan "tamamlandı" denilmez.
+- **`frontend/public/` altındaki her dosya internete açıktır** ve dağıtıma dahil edilir. Oraya yalnızca yayınlanması *istenen* dosyalar konur; ham/kaynak/ara dosyalar (yüksek çözünürlüklü orijinaller, notlar, yedekler) `public/` dışında tutulur. Faz 2'de 3,6 MB'lik bir kaynak fotoğraf yanlışlıkla oraya konmuş, fark edilip `frontend/photo-source/` altına taşınmıştı (bkz. `SECURITY.md` bölüm 7).
 - Bu kurallardan biriyle çelişen bir kısayol gerekiyorsa (örn. hız kaygısıyla), bunu sessizce yapmak yerine kullanıcıya açıkça belirtin ve onay isteyin.
+
+## Sistemi çalıştırma
+
+VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.vscode/tasks.json`). Görev dosyası bilinçli olarak commit ediliyor — "sistemi nasıl ayağa kaldıracağım" bilgisi kişisel bir tercih değil, projenin parçası. Kişisel VS Code ayarları (`settings.json` vb.) yok sayılmaya devam ediyor.
+
+**Tuzak:** `.gitignore`'da dizinin kendisi (`.vscode/`) değil **içeriği** (`.vscode/*`) dışlanmalı — git, dışlanmış bir dizinin içine hiç bakmadığı için `!.vscode/tasks.json` negasyonu aksi hâlde çalışmaz.
+
+**İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
 
 ## Frontend çalıştırma (Faz 2'de kuruldu)
 
@@ -108,6 +126,8 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
 - **Backend'de `/health` endpoint'i yok**, bu yüzden arayüzde "servis ayakta mı" göstergesi bulunmuyor — uydurma bir gösterge yanlış bilgi verirdi. Böyle bir gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmeli (Serhan).
+- **Frontend testleri:** `cd frontend && npm test` (Vitest). Kapsam saf mantık ve sunucu kodu — yükleme kısıtları ve arka plan kaldırma vekili. Bileşen testleri (React Testing Library) ve E2E (Playwright) bilinçli olarak Faz 7'ye bırakıldı.
+- **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`) ve `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
 ## Arayüz tasarım dili (kilitli karar — Faz 2)
@@ -127,7 +147,43 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı.
 
-## Açık takip maddesi
+## Geçici çözüm kaydı — geçmiş çalışmalar tarayıcıda (Faz 2)
+
+Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADMAP.md` proje geçmişini Faz 4'e ve **sunucuya** koyuyor; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor. Ders 8'in gereği olarak bu sessizce yapılmadı:
+
+- Depo bir arayüzün arkasında: `frontend/src/lib/work-history.ts`. Faz 4'te yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç hiç değişmeyecek.
+- Panelde kullanıcıya açıkça yazıyor: "yalnızca bu cihazda saklanıyor, hesap sistemi geldiğinde hesabınıza taşınacak."
+- Ayarlardan kapatılabiliyor ve tümü silinebiliyor.
+- Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra karşılaştırması değil yalnızca sonuç gösterilir.
+- En fazla 20 kayıt.
+
+**Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
+
+## Açık takip maddeleri
+
+Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
+
+### 1. Backend'de `/health` endpoint'i yok — sahibi: Serhan
+
+Arayüze "servis ayakta mı" göstergesi **konmadı**. Uydurma bir gösterge yanlış bilgi verir: servis kapalıyken "bağlı" yazan bir rozet, kullanıcının hatayı anlamasını zorlaştırır. Şu an servisin kapalı olduğu ilk gerçek istekte açık bir mesajla anlaşılıyor ("Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir.").
+
+Böyle bir gösterge isteniyorsa backend'e küçük bir sağlık endpoint'i eklenmeli. Frontend tarafı hazır: vekil katmanı zaten var, gösterge yarım saatlik iş.
+
+**Not:** endpoint eklenirse model yüklü mü / kapasite dolu mu bilgisini de dönmesi faydalı olur — arayüz `MAX_CONCURRENT_INFERENCES=1` yüzünden gelen 503'ü zaten ayrı bir mesajla gösteriyor, aynı bilgiyi önden verebilmek beklemeyi öngörülebilir kılar.
+
+### 2. Geçmiş çalışmalar tarayıcıda — Faz 4'te sunucuya taşınacak — sahibi: Serhan (şema) + Kaan (bağlama)
+
+Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
+
+Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek bir dosyanın arkasında (`frontend/src/lib/work-history.ts`), yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek. Panel, sağlayıcı ve araç aynı kalacak.
+
+Şema tasarlanırken bilinmesi gerekenler:
+- Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
+- Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
+- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
+- Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
+
+### 3. CORS middleware'i — sahibi: Serhan, Faz 4
 
 Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
 

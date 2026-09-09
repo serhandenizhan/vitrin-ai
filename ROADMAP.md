@@ -108,6 +108,13 @@ Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçe
 sürükle-bırak yükleme, istemci tarafı doğrulama, bekleme ekranı, önce/sonra karşılaştırması ve
 PNG indirme tamamlandı. Ayrıntılı gerekçeler `frontend/README.md` dosyasında.
 
+**Frontend testleri eklendi (Vitest, 27 test).** Yığın tablosu Vitest'i listeliyordu ama Faz 2'nin
+ilk turunda frontend'de hiç test yoktu — backend'de Faz 1'den altı test dosyası varken. Kapsam
+bilinçli olarak saf mantık ve sunucu kodu: yükleme kısıtları ve arka plan kaldırma vekili.
+Bileşen testleri ve Playwright E2E, yol haritasının koyduğu yerde (Faz 7) bırakıldı — arayüz hâlâ
+hızla değişirken şimdi eklemek bakım yükü üretirdi. `@types/node` bu sırada 20'den 24'e çekildi;
+makinede zaten Node 24 çalışıyordu ve Vitest 5 bunu şart koşuyor.
+
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
 - **Backend'de `/health` endpoint'i yok.** Arayüzde "backend ayakta mı" göstergesi bu yüzden
@@ -127,6 +134,52 @@ Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 - **Next.js 16 varsayılan olarak `frontend/` altına `AGENTS.md` ve `CLAUDE.md` üretiyor.**
   Kök `CLAUDE.md` tek doğru kaynak olduğu için `next.config.ts` içinde `agentRules: false`
   ile kapatıldı; aksi halde iki CLAUDE.md kaçınılmaz olarak birbirinden ayrışırdı.
+
+**Sol panel, geçmiş ve ayarlar (Kaan, kullanıcı isteği) — kısmen Faz 4'ten öne alındı.**
+Kullanıcı, geçmiş çalışmaların ve ayarların görünür olduğu bir sol panel istedi. Panel, geçmiş
+listesi (küçük önizleme + tek tıkla geri açma + tek tek silme) ve ayarlar (geçmiş kaydını
+aç/kapat, hareketi azalt, tümünü sil) içeriyor.
+
+**Dikkat — bilinçli geçici çözüm:** geçmiş şu anda **tarayıcıda** (IndexedDB) tutuluyor.
+Bu fazın planında yoktu ve Faz 4 "proje geçmişi baştan sunucuda" diyor. Faz 4'ün şeması ve
+RLS'i henüz olmadığı için tek seçenek tarayıcıydı. Riski sınırlamak için:
+
+- Depo bir arayüzün arkasında (`frontend/src/lib/work-history.ts`); Faz 4'te yalnızca o
+  dosyanın gövdesi sunucu çağrılarıyla değişecek, arayüzün geri kalanı aynı kalacak.
+- Panelde kullanıcıya açıkça yazıyor: "yalnızca bu cihazda saklanıyor, hesap sistemi
+  geldiğinde hesabınıza taşınacak."
+- Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (özgün dosyalar 20 MB'a kadar
+  çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur).
+  Bunun görünür sonucu: geçmişten açılan bir çalışmada önce/sonra karşılaştırması değil
+  yalnızca sonuç gösteriliyor.
+- En fazla 20 kayıt tutuluyor.
+
+**Faz 4'te yapılacak:** `work-history.ts` sunucuya bağlanacak ve bu madde kapanacak. Var olan
+tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı ürün kararı — taşınmayacaksa kullanıcıya
+önceden bildirilmeli.
+
+**Gerçek ürün fotoğrafları ve sayfa ağırlığı (Kaan).** Açılıştaki üretilmiş yüzük yer tutucusu,
+kullanıcının sağladığı gerçek bir ürün fotoğrafıyla değiştirildi (telifi bize ait). Tek kare
+(2816×1536) ikiye bölünüp küçültülerek `atolye.webp` + `vitrin.webp` üretiliyor
+(`frontend/scripts/prepare-photos.mjs`, `sharp` zaten Next.js ile kurulu).
+
+Etiketler bilinçli olarak "Önce / Sonra" **değil**, "Atölyede / Vitrinde": sağdaki kare bu aracın
+çıktısı değil, ayrı bir çekim. "Sonra" demek kullanıcıya o sonucu bu aracın ürettiğini söylemek
+olurdu. İkisi birlikte ürünün **vaadini** anlatıyor; gerçek çıktı birkaç ekran aşağıda
+kullanıcının kendi fotoğrafıyla görülüyor.
+
+İki optimizasyon hatası bulunup düzeltildi:
+- **Kaynak JPEG `public/` altındaydı**, yani 3,6 MB'lik ham dosya olduğu gibi *yayınlanıyordu* —
+  Next.js `public/` altındaki her şeyi sunuyor ve dağıtıma dahil ediyor. `photo-source/` dizinine
+  taşındı (sunulmuyor). Bkz. `SECURITY.md` bölüm 7.
+- **Hedef genişlik 1400 px seçilmişti** ve atölye karesi 532 KB'a çıkmıştı; paneller ekranda
+  ~384 CSS px kaplıyor. 900 px'e indirildi.
+
+Ayrıca `tw-animate-css` kaldırıldı (sağladığı sınıfların hiçbiri kullanılmıyordu; sırf iskelet
+üreticisi eklemişti).
+
+**Ölçüldü — üretim derlemesi, ilk yükleme: toplam 342 KB** (JS 160 · font 131 · görsel 42 ·
+CSS 9 · belge 9). Görseller `next/image` ile 384 px sürümlerine iniyor: 31 KB + 12 KB.
 
 **Arayüz tasarım dili (Kaan, kullanıcı kararı).** Arayüz, kullanıcının referans olarak verdiği
 **apple.com/tr** ürün sayfalarından uyarlandı: tam genişlikte dönüşümlü koyu/açık bölümler,
@@ -188,8 +241,8 @@ incelemede üç madde düzeltildi:
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
-- **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 6)
-- Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (bu sefer baştan sunucuda — önceki iterasyonda geçici olarak IndexedDB'de tutulup sonra taşınması planlanmıştı, bu ihtiyaç ortadan kalkıyor çünkü DB şeması aynı anda kuruluyor)
+- **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 7)
+- Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (sunucuda). **Not:** geçmiş, kullanıcı isteğiyle Faz 2'de geçici olarak tarayıcıya (IndexedDB) kondu — bkz. Faz 2 notları. Bu fazda `frontend/src/lib/work-history.ts` sunucuya bağlanacak ve geçici çözüm kalkacak; arayüzün geri kalanı değişmeyecek çünkü depo zaten bir arayüzün arkasında
 - Oturum çerezde tutulur (`@supabase/ssr`), localStorage'da değil
 - Middleware yetkilendirme sayılmaz — sadece yönlendirme kolaylığı; gerçek denetim RLS'te ve sunucu bileşenlerinde ikinci kez kontrol edilir
 - Parola sıfırlamada kullanıcı numaralandırması engellenir, callback'te açık yönlendirme kapatılır

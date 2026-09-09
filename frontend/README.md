@@ -156,6 +156,149 @@ Footer (açık gri)       → model sınırlamaları, dipnotlar
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
+## Üst çubuk
+
+Marka **en solda**, hemen yanında panel düğmesi; bağlantılar markanın
+devamında; "Giriş yap" ve "Hemen deneyin" en sağda. Çubuk 56 px, bağlantılar
+14 px.
+
+İlk sürümde gövde `max-w-5xl` ile ortalanıyordu ve 1877 px'lik bir ekranda
+logo sayfanın ortasına yakın duruyor, solda kocaman bir boşluk kalıyordu;
+bağlantılar da 12 px'ti ve çevresindeki 64 px'lik başlıkların yanında
+okunmuyordu. İkisi de ekran görüntüsü üzerinden ölçülerek düzeltildi.
+
+Dar ekranda sırayla: bağlantılar (< 1024 px), "Giriş yap" yazısı (< 640 px,
+ikon kalır), marka yazısı (< 380 px, işaret kalır) gizleniyor. 320 px'te
+çubuk içeriği 305 px — taşma yok.
+
+Panel düğmesi **aç/kapat**: açıkken tekrar basılınca kapanıyor ve
+`aria-expanded` ile durumu bildiriyor. İlk sürümde yalnızca açıyordu.
+
+Çekmece **yumuşak kayıyor**: `cubic-bezier(0.32, 0.72, 0, 1)`, açılış 460 ms,
+kapanış 360 ms. Açılma kapanmadan uzun — açılırken paneli tanımak için zaman
+gerekiyor, kapanırken kullanıcı zaten oradan ayrılmış oluyor. Karartma da
+opaklıkla geliyor; koşullu mount/unmount ile kapanırken hiçbir geçiş
+çalışmıyor, öğe bir anda yok oluyordu.
+
+Menü bağlantıları **yumuşak kaydırıyor** (`scroll-behavior: smooth`).
+`scroll-padding-top: 3.5rem` yapışkan çubuğun yüksekliği kadar — olmadan
+hedef bölümün başlığı çubuğun altında kalıyor. "Hareketi azalt" ayarı ve
+işletim sistemi tercihi bunu kapatıyor; uzun sayfalarda yumuşak kaydırma bazı
+kullanıcılarda baş dönmesi yapıyor.
+
+## Logo
+
+`brand-mark.tsx`: yuvarlatılmış bir kare çerçeve (vitrin camı) ve içinde
+briyan kesim bir taş. İkisi birlikte hem sektörü hem ürünü anlatıyor —
+"bir şeyi çerçeveleyip öne çıkarmak". Tek renk SVG, `currentColor` ile
+geliyor; 20 px'te de 200 px'te de aynı netlikte.
+
+## Testler
+
+```bash
+npm test          # tek sefer
+npm run test:watch
+```
+
+Vitest. Kapsam bilinçli olarak **saf mantık ve sunucu kodu**: yükleme
+kısıtları (`upload-constraints`) ve arka plan kaldırma vekili (`route.ts`).
+İkisi de projenin en kolay sessizce bozulabilecek yerleri — biri backend ile
+elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
+çevrildiği yer.
+
+27 test var. Özellikle korunanlar:
+
+- **HEIC yolu.** Windows'ta tarayıcı `.heic` için boş content-type bildiriyor
+  ve backend beyan edilen türü şart koşuyor; bu düzeltme sessizce bozulursa
+  iPhone'dan gelen her fotoğraf reddedilir.
+- **503'ün ayrı mesajı.** 503 bir hata değil geçici bir durum; genel hata
+  metnine düşerse kullanıcı ne yapacağını bilemez.
+- **Zaman aşımı ile bağlantı hatasının ayrılması.** Birinde beklemek,
+  diğerinde birini uyarmak gerekiyor.
+- **Demo modunda backend'in hiç çağrılmaması** ve `X-Mock-Response` başlığı —
+  bu başlık olmadan arayüz sahte sonucu gerçek sanar.
+- **Sınır üstü dosyanın backend'e hiç gönderilmemesi.**
+
+Bileşen testleri (React Testing Library) ve E2E (Playwright) bilinçli olarak
+ertelendi; yol haritası ikisini de Faz 7'ye koyuyor ve arayüz hâlâ hızla
+değişirken şimdi eklemek bakım yükü üretirdi.
+
+**Bir tuzak:** testte dosya boyutunu `Object.defineProperty` ile sahtelemek
+işe yaramıyor — dosya `FormData` + `Request` üzerinden geçerken yeniden
+oluşturuluyor ve sahte `size` kayboluyor. Boyut gerçekten üretilmeli.
+
+## Sol panel: çalışmalarım ve ayarlar
+
+Üst çubuktaki panel düğmesi soldan kayan bir çekmece açıyor.
+
+- **Gövde: çalışmalarım** — geçmiş sonuçlar; küçük önizleme, dosya adı, ne
+  kadar önce yapıldığı. Tıklayınca sonuç ekranda geri açılır, çöp kutusuyla
+  tek tek silinir.
+- **Alt şerit: ayarlar, altında çıkış** — ayarlar geçmiş kaydını aç/kapat,
+  hareketi azalt ve tümünü sil içeriyor; çıkış hesap sistemi gelene kadar
+  soluk duruyor ve tıklanınca durumu açıklayan pencereyi açıyor.
+
+Ayarlar önceden üstte bir sekmeydi; alta alınması paneli tek işli yapıyor
+(gövde = çalışmalar) ve ayarı uygulamalarda beklenen yere koyuyor.
+
+## "Giriş yap" — hesap sistemi henüz yok
+
+Menüde giriş yeri **var** ama tıklayınca `sign-in-notice.tsx` açılıyor: hesap
+sisteminin bir sonraki aşamada geldiğini ve şu anda kayıt gerekmediğini
+söylüyor. Çalışmayan bir düğme koymak ya da sahte bir form açmak kullanıcıya
+yalan söylemek olurdu; tamamen gizlemek ise tasarımı eksik bırakıyordu. Faz
+4'te bu bileşen gerçek giriş/kayıt formuyla değişecek, çağrı noktası aynen
+kalacak.
+
+### Geçmiş şu anda tarayıcıda — bu geçici
+
+`ROADMAP.md` proje geçmişini **Faz 4'e ve sunucuya** koyuyor. Kullanıcı Faz
+2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için
+geçmiş şimdilik **IndexedDB**'de tutuluyor. Riski sınırlayan dört karar:
+
+1. Depo bir arayüzün arkasında (`src/lib/work-history.ts`). Faz 4'te yalnızca
+   o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç
+   hiç değişmeyecek.
+2. Panelde kullanıcıya açıkça yazıyor: *"yalnızca bu cihazda saklanıyor, hesap
+   sistemi geldiğinde hesabınıza taşınacak."* Sessizce yapılmıyor.
+3. Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a
+   kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı
+   kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra
+   karşılaştırması değil yalnızca sonuç gösterilir.
+4. En fazla 20 kayıt; ayarlardan kapatılabilir ve silinebilir.
+
+Depolama açılamazsa (gizli pencere, kota dolu, eski tarayıcı) geçmiş sessizce
+devre dışı kalır — kesim ve indirme akışı bundan etkilenmez.
+
+### Durum nerede tutuluyor
+
+`workspace-provider.tsx` bir context sağlıyor: panel açık/kapalı, geçmiş
+listesi, ayarlar. Sağlayıcı çocuklarını **prop olarak** aldığı için tanıtım
+bölümleri sunucu bileşeni olarak kalmaya devam ediyor.
+
+İki nokta React Compiler kurallarının (`react-hooks/set-state-in-effect`)
+yönlendirmesiyle şöyle kuruldu:
+
+- **Ayarlar `useSyncExternalStore` ile okunuyor** (`src/lib/settings-store.ts`),
+  `useState` + efekt ile değil. Ayarlar localStorage'da, yani React dışı bir
+  kaynakta; efekt gövdesinde setState çağırmak hem zincirleme render hem
+  hidrasyon uyuşmazlığı riskiydi.
+- **"Çalışma açıldı" bir olay, kalıcı bir durum değil.** Context'te state
+  olarak tutulup efektte okunsaydı yine efekt gövdesinde setState olurdu;
+  bunun yerine abonelik deseni var — efekt yalnızca abone oluyor, setState
+  olayın geri çağrısında çalışıyor.
+
+### Çekmecenin konumu neden animasyonsuz
+
+Açık/kapalı konum hiçbir harekete bağlı **değil** — iki düz CSS kuralı ve
+bileşik seçici (`.drawer.drawer-open`). Önce `transition`, sonra `@keyframes`
+ile denendi; ikisinde de tarayıcıda ölçülen sonuç aynıydı: sınıf doğru
+değişiyor ama hesaplanan `transform` eski değerde takılı kalıyor ve panel
+"açık" işaretlendiği hâlde ekran dışında kalıyordu. Hareket ilerlemek için
+kare üretilmesini gerektiriyor; kare üretilmediği anda (arka plan sekmesi, çok
+yavaş cihaz) kullanıcı paneli hiç açamıyor. Ayrıntılı gerekçe
+`globals.css` içinde yazılı.
+
 ## Klasör yapısı
 
 ```
@@ -167,16 +310,97 @@ src/components/upload-dropzone.tsx          sürükle-bırak yükleme
 src/components/processing-state.tsx         bekleme ekranı (geçen süre sayacı)
 src/components/comparison-view.tsx          önce/sonra + PNG indirme
 src/components/reveal.tsx                   kaydırınca ortaya çıkma sarmalayıcısı
+src/components/brand-mark.tsx               logo (SVG)
+src/components/sign-in-notice.tsx           "hesap sistemi yakında" penceresi
+src/components/workspace-provider.tsx       panel/geçmiş/ayarlar context'i
+src/components/work-sidebar.tsx             sol çekmece (çalışmalarım + ayarlar)
 src/components/site-header.tsx              yapışkan üst çubuk
 src/components/site-footer.tsx              dipnotlar
 src/components/marketing/hero.tsx           açılış bölümü
 src/components/marketing/highlights.tsx     öne çıkanlar
 src/components/marketing/how-it-works.tsx   üç adım + çekim önerileri
 src/components/marketing/specs.tsx          teknik bilgiler
+src/components/marketing/hero-visual.tsx    açılıştaki önce/sonra görseli
 src/lib/upload-constraints.ts               backend ile senkron yükleme kısıtları
-public/mock/sample-cutout.png               demo modunun örnek kesimi
-scripts/generate-mock-cutout.py             o kesimi üreten betik (ek bağımlılık yok)
+src/lib/work-history.ts                     geçmiş deposu (GEÇİCİ — IndexedDB)
+src/lib/settings-store.ts                   ayarlar (useSyncExternalStore kaynağı)
+public/mock/sample-cutout.png               örnek kesim ("sonra")
+public/mock/sample-photo.png                aynı ürün kadife zeminde ("önce")
+scripts/generate-mock-cutout.py             ikisini de üreten betik (ek bağımlılık yok)
 ```
+
+## Açılıştaki ürün fotoğrafları
+
+`public/photos/atolye.webp` ve `vitrin.webp` — **gerçek ürün fotoğrafları**,
+telifi bize ait. Kullanıcının sağladığı tek kare (2816×1536, 3,6 MB) ikiye
+bölünüp küçültülerek üretiliyor: `node scripts/prepare-photos.mjs`.
+
+Etiketler bilinçli olarak "Önce / Sonra" **değil**, "Atölyede / Vitrinde":
+sağdaki kare bu aracın çıktısı değil, ayrı bir çekim. "Sonra" demek,
+kullanıcıya bu sonucu bu aracın ürettiğini söylemek olurdu. İkisi birlikte
+ürünün **vaadini** anlatıyor; aracın gerçek çıktısını kullanıcı birkaç ekran
+aşağıda kendi fotoğrafıyla görüyor.
+
+**Kaynak dosya `public/` dışında** (`photo-source/`). İlk denemede
+`public/photos/_kaynak/` altındaydı ve bu, 3,6 MB'lik ham JPEG'in olduğu gibi
+**yayınlanması** demekti — Next.js `public/` altındaki her şeyi sunuyor ve
+dağıtıma dahil ediyor. Kimse adresi bilmese de dosya sunucuda duruyor.
+
+Hedef genişlik 900 px: paneller masaüstünde her biri ~384 CSS px kaplıyor,
+2× retina için 768 yetiyor. İlk denemede 1400 px seçilmişti ve atölye karesi
+532 KB'a çıkmıştı (ahşap damarı ve talaş dokusu sıkışmıyor) — ekranda hiç
+kullanılmayan çözünürlük için ödenen bayt.
+
+## Sayfa ağırlığı
+
+Üretim derlemesinde ölçüldü (`next start`, ilk yükleme):
+
+| | |
+| --- | --- |
+| **Toplam aktarılan** | **342 KB** |
+| JavaScript | 160 KB |
+| Font (Inter, latin + latin-ext) | 131 KB |
+| Görseller | 42 KB |
+| CSS | 9 KB |
+| Belge | 9 KB |
+
+Görseller `next/image` ile 384 px sürümlerine iniyor: 900 px'lik kaynaklar
+ekranda 31 KB + 12 KB olarak servis ediliyor.
+
+`tw-animate-css` kaldırıldı — sağladığı sınıfların (`animate-in`, `fade-in`,
+`slide-in-*`, `zoom-in`) hiçbiri kullanılmıyordu; sırf iskelet üreticisi
+eklediği için duruyordu. Hareket bu projede kendi sınıflarımızla kuruluyor
+(`.reveal`, `.drawer`, `.press`).
+
+Tanıtım bölümlerinin tamamı sunucu bileşeni; istemciye inen tek durum taşıyan
+parça `background-remover.tsx` ve panel/sağlayıcı.
+
+## Örnek görseller nasıl üretiliyor
+
+`scripts/generate-mock-cutout.py` iki dosya çıkarıyor: şeffaf kesim ("sonra")
+ve aynı ürünün kadife zemin üzerindeki hâli ("önce"). Ek bağımlılık yok, PNG
+yazıcı betiğin içinde.
+
+Görselin kalitesi neden bu kadar önemsendi: ilk sürüm düz diffuse+specular
+kullanıyordu ve sonuç plastik oyuncak gibi duruyordu. **Metali metal yapan şey
+ışık değil yansıma.** Şu anki sürüm bir stüdyo ortamı (softbox + karanlık
+çevre + zemin sıçraması) tanımlayıp yansıma vektörüyle örnekliyor, Fresnel
+ekliyor ve 2× süperörnekleme ile kenarları yumuşatıyor.
+
+Yol boyunca üç hata yapıldı ve üçü de betikte yazılı:
+
+1. **Pozlama yoktu** → altının düşük mavi kanalı ton eşlemesinden sonra
+   eziliyor, sarı altın zeytin yeşiline kaçıyordu.
+2. **Ortam neredeyse düzdü** → her yönde benzer değer; metalin okunması için
+   gereken parlak/koyu kontrastı yoktu, sonuç bej plastikti.
+3. **Ton eşleme kanal başına yapılıyordu** → yüksek değerlerde tüm kanallar
+   1'e sıkışıyor, kanallar arası oran bozuluyor ve renk doygunluğunu
+   kaybediyordu. Şimdi **parlaklık** üzerinden ton eşleniyor, renk oranı
+   korunuyor.
+
+**Bunlar gerçek ürün fotoğrafı değildir.** Yer tutucudur; gerçek bir fotoğraf
+her zaman daha iyi olur. Gerçek bir ürün fotoğrafı eklenirse bu betik
+tamamen kaldırılabilir.
 
 ## Demo modunun örnek kesimi
 

@@ -30,7 +30,14 @@ build/
 # Editor / OS
 .DS_Store
 .idea/
-.vscode/
+# Dizinin KENDISI degil ICERIGI disaniyor (`.vscode/*`). `.vscode/` yazilsaydi
+# git dizinin icine hic bakmaz ve asagidaki negasyon calismazdi — dislanmis bir
+# dizinin altindaki dosya geri alinamaz.
+.vscode/*
+# tasks.json bilincli olarak PAYLASILIR: "sistemi nasil ayaga kaldiracagim"
+# bilgisi kisisel bir tercih degil, projenin bir parcasi. Kisisel ayarlar
+# (settings.json, launch.json) yok sayilmaya devam ediyor.
+!.vscode/tasks.json
 *.swp
 
 # Model ağırlıkları / büyük dosyalar (Faz 1'de indirilecek, repoya commit edilmez)
