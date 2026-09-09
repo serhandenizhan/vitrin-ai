@@ -5,7 +5,9 @@ ve arka plan meta verisi Faz 3'te eklenecek.
 
 **Durum:** Faz 1 tamamlandı — `POST /api/remove-background` endpoint'i çalışıyor,
 birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG) doğrulandı,
-Docker build başarıyla derleniyor ve container düzgün başlıyor.
+Docker build başarıyla derleniyor ve container düzgün başlıyor. Faz 3'ün backend kısmı
+(arka plan kütüphanesi: yükleme + listeleme + R2 depolama) da tamamlandı — ayrıntılar
+aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde.
 
 ## Yerel çalıştırma (venv ile)
 
@@ -58,6 +60,10 @@ sunucu/instance seçin.
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
+| `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
+| `ADMIN_SECRET` | yok (zorunlu) | `POST /api/admin/backgrounds` için geçici paylaşılan secret — Faz 4'te gerçek Supabase Auth ile değişecek |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri |
+| `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
 değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`). Karşılığı Faz 2'de

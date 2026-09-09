@@ -140,7 +140,7 @@ Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi
 tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
 için `frontend/README.md` → "Tasarım dili".
 
-### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ⏳ Planlanan
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — 🔄 Devam ediyor (backend tamamlandı)
 
 - Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
 - Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
@@ -148,6 +148,21 @@ için `frontend/README.md` → "Tasarım dili".
 - Depolama anahtarı sunucuda üretilen UUID'den gelmeli, orijinal dosya adından değil (path traversal koruması, `SECURITY.md` bölüm 4)
 - Backend boş liste dönerse (henüz gerçek zemin yoksa) editör yer tutucu (placeholder) zeminlere sessizce düşmeli, hiç kırılmamalı
 - Zemin görsellerinin R2'den gelen imzalı URL'leri süreli (örn. 1 saat) — editör uzun süre açık kalırsa yeniden fetch/refresh mekanizması gerekir (önceki iterasyonda bu atlanıp sessiz bir hata haline gelmişti, bu sefer baştan tasarlanmalı)
+
+**Sonuç (Serhan) — backend kısmı tamamlandı.** `backgrounds` tablosu (Postgres) +
+Alembic migration eklendi; `POST /api/admin/backgrounds` (dosya doğrulaması aynı
+Faz 1 katmanlarından geçiyor, R2'ye UUID tabanlı `r2_key` ile yükleniyor, geçici bir
+`X-Admin-Secret` paylaşılan secret header'ıyla korunuyor — bkz. kök `CLAUDE.md` ders 8
+ve "Açık takip maddesi") ve `GET /api/backgrounds` (herkese açık, her kayıt için
+süreli presigned URL ile döner) yazıldı. R2 depolama servisi (boto3, S3-uyumlu)
+`backend/app/services/storage.py` içinde. Şema bilinçli olarak minimal tutuldu —
+kategori/etiket alanı yok, MVP için gerek görülmedi; ihtiyaç ortaya çıkarsa ayrı bir
+migration ile eklenir. Gerçek bir R2 bucket'ına karşı uçtan uca elle doğrulama
+(yükle → listele → presigned URL'i tarayıcıda aç) henüz yapılmadı — gerçek Cloudflare
+R2 kimlik bilgileri gerektiriyor, bu adım Serhan `backend/.env`'e gerçek kimlik
+bilgilerini girdiğinde tamamlanacak. Kaan'ın Konva.js tabanlı kompozisyon editörü
+ayrı bir iş parçası olarak sürüyor; Faz 3 bu editör de bitene kadar tam
+tamamlanmış sayılmaz.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
