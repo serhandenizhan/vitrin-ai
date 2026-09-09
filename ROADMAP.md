@@ -97,12 +97,48 @@ Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçe
 - Docker'a al, root olmayan kullanıcıyla çalıştır (`SECURITY.md` bölüm 1.2), `.dockerignore` ekle
 - **Çıktı:** CLI/Postman üzerinden test edilebilir çalışan bir segmentasyon API'si, gerçek fotoğraflarla doğrulanmış
 
-### Faz 2 — Web frontend MVP (Kaan liderliğinde, Faz 1 ile paralel yürür) — ⏳ Planlanan
+### Faz 2 — Web frontend MVP (Kaan liderliğinde, Faz 1 ile paralel yürür) — ✅ Tamamlandı
 
 - Next.js iskeleti, sürükle-bırak yükleme, istemci tarafı dosya doğrulaması (backend kısıtlarının aynısı), yüklenme durumu, önce/sonra karşılaştırması (dama deseni üzerinde, şeffaflığın görünmesi için), PNG indirme
 - **Sunucu tarafı vekil kullan** (`/api/remove-background/route.ts` gibi) — tarayıcı FastAPI'ye doğrudan gitmesin; backend'de CORS yok ve ileride secret'ların tarayıcıya sızmaması gerekiyor
 - **Demo (mock) modu ekle** (`USE_MOCK_BACKEND=true`) — BiRefNet 12-14 GB RAM istediği için frontend geliştirmesi backend'i ayakta tutmaya bağımlı olmamalı; sonuç ekranında açıkça "Demo modu" işaretlenir
 - **Kilometre taşı 1:** Faz 1 + Faz 2 birlikte = ilk çalışan demo ("fotoğraf yükle → arka plan kaldırılsın")
+
+**Sonuç (Kaan).** Next.js 16 + TypeScript + Tailwind v4 + shadcn/ui (base-nova) iskeleti kuruldu;
+sürükle-bırak yükleme, istemci tarafı doğrulama, bekleme ekranı, önce/sonra karşılaştırması ve
+PNG indirme tamamlandı. Ayrıntılı gerekçeler `frontend/README.md` dosyasında.
+
+Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
+
+- **Backend'de `/health` endpoint'i yok.** Arayüzde "backend ayakta mı" göstergesi bu yüzden
+  yapılmadı — uydurma bir gösterge yanlış bilgi verirdi. Servisin kapalı olduğu, ilk gerçek
+  istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı"). Böyle bir
+  gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmesi gerekir (Serhan).
+- **Eşzamanlılık sınırı arayüze yansıtıldı.** Backend `MAX_CONCURRENT_INFERENCES=1` ile aynı anda
+  tek inference'a izin veriyor ve kapasite dolunca 503 dönüyor. Bu bir hata değil geçici bir
+  durum olduğu için ayrı ve açık bir mesajla gösteriliyor ("Sistem şu anda meşgul… birkaç saniye
+  sonra tekrar deneyin") — genel hata metni kullanıcıya ne yapacağını söylemiyordu.
+- **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py`); frontend sabitleri bununla elle
+  senkron tutuluyor.
+- **`create-next-app`'in ürettiği `.gitignore` `.env.example`'ı da yutuyordu** (`.env*` deseni,
+  negasyon yok). Fark edilmeseydi yeni bir geliştirici hangi ortam değişkenlerine ihtiyaç
+  olduğunu göremezdi — `!.env.example` eklendi. `CLAUDE.md` ders 12'nin aynı sınıftan bir
+  tekrarı.
+- **Next.js 16 varsayılan olarak `frontend/` altına `AGENTS.md` ve `CLAUDE.md` üretiyor.**
+  Kök `CLAUDE.md` tek doğru kaynak olduğu için `next.config.ts` içinde `agentRules: false`
+  ile kapatıldı; aksi halde iki CLAUDE.md kaçınılmaz olarak birbirinden ayrışırdı.
+
+**Arayüz tasarım dili (Kaan, kullanıcı kararı).** Arayüz, kullanıcının referans olarak verdiği
+**apple.com/tr** ürün sayfalarından uyarlandı: tam genişlikte dönüşümlü koyu/açık bölümler,
+600 ağırlıklı ve negatif harf aralıklı büyük başlıklar, Apple'ın tipografi ölçeği (hero 64/68 px,
+bölüm 48/52, gövde 17/21), 112 px dikey ritim, hap biçimli düğmeler ve kaydırınca ortaya çıkan
+kısa `ease-out` geçişler. **Kopyalanan şey metin, görsel ya da font değil, ölçülebilir tasarım
+dili** — SF Pro Apple'a ait ve lisanslı olduğu için Inter kullanıldı. Vurgu rengi Apple'ın mavisi
+yerine altın: hedef kitle kuyumcu.
+
+Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi**. Bu yüzden araç
+tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
+için `frontend/README.md` → "Tasarım dili".
 
 ### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ⏳ Planlanan
 

@@ -12,10 +12,19 @@ koruyor.
 
 ## Durum
 
-**Faz 0 — Kurulum** ve **Faz 1 — backend/AI motoru** tamamlandı:
-`POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
-gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
-Faz 2 (frontend MVP) sırada.
+**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru** ve **Faz 2 — web frontend MVP**
+tamamlandı.
+
+- Faz 1: `POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
+  gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
+- Faz 2: Next.js arayüzü — sürükle-bırak yükleme, istemci tarafı doğrulama,
+  sunucu tarafı vekil, demo (mock) modu, önce/sonra karşılaştırması ve PNG
+  indirme. Ayrıntı için `frontend/README.md`.
+
+**Kilometre taşı 1 tamamlandı:** fotoğraf yükle → arka plan kalksın → indir
+akışı uçtan uca çalışıyor.
+
+Faz 3 (arka plan kütüphanesi ve kompozisyon editörü) sırada.
 
 ## Ekip
 
@@ -39,7 +48,7 @@ Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları içi
 
 ```
 /backend    FastAPI uygulaması, AI inference servisi (Faz 1 tamamlandı — bkz. backend/README.md)
-/frontend   Next.js web uygulaması (Faz 2'de kurulacak)
+/frontend   Next.js web uygulaması (Faz 2 tamamlandı — bkz. frontend/README.md)
 /mobile     React Native uygulaması (Faz 8'de eklenecek)
 ```
 
@@ -50,5 +59,15 @@ cp .env.example .env   # değerleri düzenleyin
 docker compose up -d   # yerel PostgreSQL'i başlatır
 ```
 
-Backend ve frontend kurulum talimatları ilgili fazlar tamamlandığında bu dosyaya
-ve alt `README.md` dosyalarına eklenecek.
+Frontend'i başlatmak için:
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local   # USE_MOCK_BACKEND=true ile backend olmadan çalışır
+npm run dev
+```
+
+Gerçek uçtan uca akış için backend'i ayrı bir terminalde başlatın ve
+`frontend/.env.local` içinde `USE_MOCK_BACKEND=false` yapın. Ayrıntılar için
+`backend/README.md` ve `frontend/README.md`.

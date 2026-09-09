@@ -23,7 +23,8 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 9. **Ders — bir sayı (RAM, süre, limit) birden fazla dokümanda geçiyorsa hepsi birden güncellenmeli.** Önceki iterasyonda bu atlanmış ve dokümanlar birbiriyle çelişmişti (12 GB ölçümü önce sadece bir dosyaya yazılıp diğer üç dosyada eski rakam kalmıştı). Bu iterasyonda her PR'dan önce ilgili tüm dokümanlar (`README.md`, `ROADMAP.md`, `CLAUDE.md`, alt `README`'ler) kontrol edilmeli.
 10. **Ders — `USE_MOCK_BACKEND` gibi geçici test bayrakları unutulabiliyor.** Önceki iterasyonda gerçek backend tekrar çalışır hale geldiğinde bu bayrağın kapatılmayı unutulması, "neden sonuç hep aynı örnek görsel" şeklinde bir kafa karışıklığına yol açmıştı. Bu tür bayraklar açıldığında bir hatırlatma notu bırakılmalı.
 11. **Ders — dosya/klasör path'lerini kod içine hard-code etmeyin.** Önceki iterasyonda bir benchmark script'i geliştiricinin kendi makinesindeki mutlak path'i (`/Users/...`) içeriyordu; bu hem başka bir geliştiricide hem CI'da çalışmayı kırdı. Path'ler her zaman repo köküne göre türetilmeli ve env değişkeniyle override edilebilmeli.
-12. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
+12. **Ders — araçların ürettiği `.gitignore` ve yardımcı dosyaları da denetleyin.** Faz 2'de `create-next-app`'in ürettiği `frontend/.gitignore` içindeki `.env*` deseni, negasyon olmadığı için `.env.example`'ı da yutuyordu — fark edilmeseydi yeni bir geliştirici hangi ortam değişkenlerine ihtiyaç olduğunu göremezdi (`!.env.example` eklendi). Aynı araç ayrıca `frontend/` altına kendi `AGENTS.md` ve `CLAUDE.md` dosyalarını üretiyor; kök `CLAUDE.md` tek doğru kaynak olduğu için bu `next.config.ts` içinde `agentRules: false` ile kapatıldı. **Genel kural: bir iskelet üreticisi (scaffolder) çalıştırdıktan sonra ürettiği dosyaları tek tek gözden geçirin — sessizce yanlış davranan bir yapılandırma bırakabiliyor.**
+13. **Ders — `.gitignore` dosyasının adını kontrol edin.** Önceki iterasyonda dosya yanlışlıkla `gitignore` (baştaki nokta eksik) olarak commit edilmişti ve hiç etkili olmuyordu (`.venv/`, `.DS_Store` gibi dosyalar git'e görünür kalmıştı). Faz 0'da bunu doğrulayın.
 
 ## Proje genel bakış
 
@@ -95,7 +96,7 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 - Ödeme/webhook kodu yazılırken imza doğrulaması ve idempotency olmadan "tamamlandı" denilmez.
 - Bu kurallardan biriyle çelişen bir kısayol gerekiyorsa (örn. hız kaygısıyla), bunu sessizce yapmak yerine kullanıcıya açıkça belirtin ve onay isteyin.
 
-## Frontend çalıştırma (Faz 2-3'te kurulacak — planlanan yapı)
+## Frontend çalıştırma (Faz 2'de kuruldu)
 
 ```bash
 cd frontend && npm install && cp .env.example .env.local && npm run dev
@@ -103,7 +104,28 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 
 - `frontend/.env.local` içinde `USE_MOCK_BACKEND=true` backend olmadan arayüzü çalıştırır (sahte bir kesim PNG'i döner, arayüzde "Demo modu" olarak işaretlenir). **Dikkat:** bu değer `true` kalırsa gerçek backend ayakta olsa bile arayüz hep demo/mock sonucu gösterir.
 - Gerçek uçtan uca demo için backend'i ayrı bir terminalde başlatın ve `USE_MOCK_BACKEND=false` yapın. İlk istek modeli belleğe yüklediği için daha uzun sürebilir (bkz. "Bilinen kısıt" bölümü).
-- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF — HEIC desteği Faz 1'den itibaren planlanıyor (yukarıya bakın).
+- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Backend HEIC'i işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — arayüz bu formatta önizleme yerine bilgilendirici bir kart gösteriyor.
+- **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
+- Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
+- **Backend'de `/health` endpoint'i yok**, bu yüzden arayüzde "servis ayakta mı" göstergesi bulunmuyor — uydurma bir gösterge yanlış bilgi verirdi. Böyle bir gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmeli (Serhan).
+- Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
+
+## Arayüz tasarım dili (kilitli karar — Faz 2)
+
+Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün sayfalarından uyarlandı. Bu bir stil tercihi değil, kullanıcının açık kararı — yeniden tartışılmayacak, yeni bölümler de aynı dile uyacak.
+
+**Uyarlanan (ölçülebilir) şeyler:** tipografi ölçeği ve negatif harf aralığı (hero 64/68 px, bölüm 48/52, alt başlık 28/32, gövde 17/21), 600 ağırlıklı başlıklar, tam genişlikte dönüşümlü koyu/açık bölümler (`#000` / `#1d1d1f` / `#f5f5f7` / `#fff`), 112 px dikey ritim, hap biçimli düğmeler, kaydırınca opaklık + kayma ile ortaya çıkan kısa `ease-out` geçişler.
+
+**Uyarlanmayanlar — bilinçli:**
+- **SF Pro kullanılmaz.** Apple'a ait ve lisanslı; yerine Inter (aynı sınıfta neo-grotesk).
+- **Apple'ın metinleri, görselleri ve marka öğeleri kopyalanmaz.** Sayfadaki her cümle ve sayı projenin kendi gerçeğine dayanır.
+- **Vurgu rengi Apple'ın mavisi (`#2997ff`) değil, altın.** Hedef kitle kuyumcu.
+
+**Yapısal fark:** Apple'da ürün bir fotoğraftır, bizde **çalışan aracın kendisi**. Bu yüzden araç tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu.
+
+**Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
+
+**Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı.
 
 ## Açık takip maddesi
 
