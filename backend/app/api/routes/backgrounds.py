@@ -32,7 +32,15 @@ def _require_admin_secret(x_admin_secret: str = Header(default="")) -> None:
     # GEÇİCİ: Faz 4'te gerçek Supabase Auth + rol kontrolü gelene kadar bu
     # paylaşılan secret kullanılıyor (bkz. kök CLAUDE.md ders 8). Zamanlama
     # saldırılarına karşı `secrets.compare_digest` ile sabit-zamanlı karşılaştırma.
-    if not secrets.compare_digest(x_admin_secret, settings.admin_secret):
+    # `secrets.compare_digest`, `str` argümanlarında YALNIZCA ASCII karakterlere
+    # izin verir; aksi halde `TypeError` fırlatır (FastAPI bunu 401 değil,
+    # yakalanmamış bir 500'e çevirir). `ADMIN_SECRET` içinde ASCII-dışı bir
+    # karakter (ör. "çokgizli") olursa DOĞRU secret gönderilse bile her istek
+    # 500 alırdı. UTF-8 baytlara çevirerek bu kısıtı kaldırıyoruz, sabit-zamanlı
+    # karşılaştırma özelliği korunuyor.
+    if not secrets.compare_digest(
+        x_admin_secret.encode("utf-8"), settings.admin_secret.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz admin secret."
         )
@@ -68,7 +76,13 @@ async def create_background(
         ) from exc
 
     background_id = uuid.uuid4()
-    extension = CONTENT_TYPE_TO_EXTENSION[file.content_type]
+    # `.get(..., "bin")`: `validate_upload` sadece `file.content_type`'ın
+    # `settings.allowed_content_types` içinde olduğunu garanti eder — bu iki
+    # küme (`allowed_content_types` ve `CONTENT_TYPE_TO_EXTENSION`) birbirinden
+    # BAĞIMSIZ tanımlı. Biri env üzerinden genişletilip diğeri güncellenmezse
+    # bare `[...]` erişimi `KeyError` ile 500'e sızardı; `.get` bunun yerine
+    # genel bir `.bin` uzantısına düşerek savunmacı davranır.
+    extension = CONTENT_TYPE_TO_EXTENSION.get(file.content_type, "bin")
     r2_key = f"backgrounds/{background_id}.{extension}"
 
     # Önce R2'ye yükle, DB satırı YALNIZCA yükleme başarılıysa yazılır — R2

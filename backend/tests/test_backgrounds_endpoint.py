@@ -2,6 +2,7 @@ import io
 import uuid
 from unittest.mock import AsyncMock
 
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select
@@ -40,6 +41,13 @@ def _client(db_session, storage_mock) -> TestClient:
     return TestClient(app)
 
 
+def teardown_function():
+    # Sibling test dosyasındaki (`test_remove_background_endpoint.py`)
+    # convention'la aynı: her testten sonra override'lar temizlenmezse
+    # sonraki testler yanlışlıkla önceki testin mock'larını miras alabilir.
+    app.dependency_overrides.clear()
+
+
 async def test_missing_admin_secret_returns_401(db_session):
     storage_mock = AsyncMock()
     client = _client(db_session, storage_mock)
@@ -61,6 +69,27 @@ async def test_wrong_admin_secret_returns_401(db_session):
         "/api/admin/backgrounds",
         files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
         headers={"X-Admin-Secret": "wrong-secret"},
+    )
+
+    assert response.status_code == 401
+    storage_mock.upload.assert_not_called()
+
+
+async def test_non_ascii_admin_secret_returns_401_not_500(db_session):
+    # `secrets.compare_digest`, `str` argümanlarında ASCII-dışı karakterlerde
+    # `TypeError` fırlatır. ASCII-dışı bir secret gönderildiğinde bile yanıt
+    # 401 olmalı (500 değil) — bkz. app/api/routes/backgrounds.py'deki
+    # UTF-8 bayt karşılaştırması düzeltmesi. Header değeri bytes olarak
+    # veriliyor çünkü httpx, str header değerlerini `ascii` codec'iyle encode
+    # etmeye çalışır (ki bu da testin amacına aykırı şekilde burada patlar);
+    # bytes değer bu kısıtı atlayıp ham baytları doğrudan gönderir.
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers={"X-Admin-Secret": "şifre".encode("utf-8")},
     )
 
     assert response.status_code == 401
@@ -105,6 +134,29 @@ async def test_happy_path_uploads_and_creates_row(db_session):
     row = result.scalar_one()
     assert row.r2_key == f"backgrounds/{background_id}.jpg"
     assert row.is_active is True
+
+
+async def test_r2_upload_failure_returns_502_and_creates_no_row(db_session):
+    # R2 yüklemesi başarısız olursa yetim bir DB kaydı OLUŞMAMALI (bkz.
+    # backgrounds.py'deki "önce R2'ye yükle, DB satırı yalnızca başarılıysa
+    # yazılır" sırası). Bu test o sıranın gerçek bir hata altında da
+    # çalıştığını, sadece happy path'te değil, kanıtlıyor.
+    storage_mock = AsyncMock()
+    storage_mock.upload.side_effect = ClientError(
+        {"Error": {"Code": "InternalError", "Message": "boom"}}, "PutObject"
+    )
+    client = _client(db_session, storage_mock)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers={"X-Admin-Secret": settings.admin_secret},
+    )
+
+    assert response.status_code == 502
+
+    result = await db_session.execute(select(Background))
+    assert result.scalars().all() == []
 
 
 async def test_list_backgrounds_returns_empty_list_when_none_exist(db_session):

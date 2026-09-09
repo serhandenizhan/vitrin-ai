@@ -1,14 +1,26 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
+from app.core.db import engine
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
 
-app = FastAPI(title="vitrin-ai backend")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Uygulama kapanırken process başına tek olan async engine'in connection
+    # pool'unu düzgünce serbest bırak (bkz. app/core/db.py).
+    yield
+    await engine.dispose()
+
+
+app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)
 
 # Modül seviyesinde tek bir örnek: `EndpointAdmissionLimiterMiddleware`'e
 # enjekte edilir (Starlette middleware örneğini gecikmeli/gizli oluşturduğu

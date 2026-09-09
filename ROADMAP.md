@@ -167,6 +167,7 @@ tamamlanmış sayılmaz.
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
+- **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 6)
 - Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (bu sefer baştan sunucuda — önceki iterasyonda geçici olarak IndexedDB'de tutulup sonra taşınması planlanmıştı, bu ihtiyaç ortadan kalkıyor çünkü DB şeması aynı anda kuruluyor)
 - Oturum çerezde tutulur (`@supabase/ssr`), localStorage'da değil
 - Middleware yetkilendirme sayılmaz — sadece yönlendirme kolaylığı; gerçek denetim RLS'te ve sunucu bileşenlerinde ikinci kez kontrol edilir
