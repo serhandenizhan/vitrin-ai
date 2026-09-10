@@ -44,6 +44,7 @@ const ICC_YOLU = process.env.CMYK_ICC_PATH;
 
 /** Composed gorseller birkac MB; ustu bir hata ya da kotuye kullanim isaretidir. */
 const EN_BUYUK_BAYT = 30 * 1024 * 1024;
+const DESTEKLENEN_GORSEL_TURLERI = new Set(["image/jpeg", "image/png"]);
 
 const BICIMLER = {
   jpeg: { uzanti: "jpg", tur: "image/jpeg" },
@@ -56,7 +57,26 @@ function hata(mesaj: string, durum: number): Response {
   return Response.json({ error: mesaj }, { status: durum });
 }
 
+function desteklenenGorselImzasi(veri: Uint8Array): boolean {
+  const jpeg = veri[0] === 0xff && veri[1] === 0xd8 && veri[2] === 0xff;
+  const png =
+    veri[0] === 0x89 &&
+    veri[1] === 0x50 &&
+    veri[2] === 0x4e &&
+    veri[3] === 0x47 &&
+    veri[4] === 0x0d &&
+    veri[5] === 0x0a &&
+    veri[6] === 0x1a &&
+    veri[7] === 0x0a;
+  return jpeg || png;
+}
+
 export async function POST(istek: Request): Promise<Response> {
+  const contentLength = Number(istek.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > EN_BUYUK_BAYT) {
+    return hata("Dosya çok büyük.", 413);
+  }
+
   if (!ICC_YOLU) {
     return hata(
       "Baskı profili yapılandırılmamış. Sunucuda CMYK_ICC_PATH ayarlanmalı.",
@@ -88,12 +108,18 @@ export async function POST(istek: Request): Promise<Response> {
   if (dosya.size > EN_BUYUK_BAYT) {
     return hata("Dosya çok büyük.", 413);
   }
+  if (!DESTEKLENEN_GORSEL_TURLERI.has(dosya.type)) {
+    return hata("Desteklenmeyen görsel türü.", 400);
+  }
   if (!(istenenBicim in BICIMLER)) {
     return hata("Desteklenmeyen biçim.", 400);
   }
 
   const bicim = BICIMLER[istenenBicim as BicimAdi];
   const girdi = Buffer.from(await dosya.arrayBuffer());
+  if (!desteklenenGorselImzasi(girdi)) {
+    return hata("Görsel içeriği dosya türüyle uyuşmuyor.", 400);
+  }
 
   try {
     const boru = sharp(girdi)

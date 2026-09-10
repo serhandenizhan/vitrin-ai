@@ -306,12 +306,14 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   ICC profili dosyaya gömülü — hem TIFF (matbaanın tercihi, LZW kayıpsız) hem
   JPEG. Saydam alanlar beyaza düzleştiriliyor; CMYK'nın alfa kanalı yok.
 
-  **Açık madde:** profil yolu `CMYK_ICC_PATH` ile veriliyor ve varsayılanı yok —
-  profilsiz bir "CMYK" çevrimi matbaada yanlış renk verir, bunu sessizce yapmak
-  özelliği hiç sunmamaktan kötüdür. Geliştirmede işletim sisteminin profili
-  kullanılıyor; **üretime çıkmadan depoya serbest lisanslı bir profil konmalı**
-  (örneğin ECI'nin ISOcoated_v2_eci.icc) ya da matbaanın kendi profili
-  alınmalı.
+  **Ertelenmiş açık madde — sahibi: Kaan.** Profil yolu `CMYK_ICC_PATH` ile
+  veriliyor ve varsayılanı yok. Profilsiz bir "CMYK" çevrimi matbaada yanlış
+  renk verir, bunu sessizce yapmak özelliği hiç sunmamaktan kötüdür.
+  Geliştirmede işletim sisteminin profili kullanılıyor; **üretime çıkmadan
+  depoya serbest lisanslı bir profil konmalı** (örneğin ECI'nin
+  `ISOcoated_v2_eci.icc`) ya da matbaanın kendi profili alınmalı. Bu iş
+  mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
+  baskı koşulu doğrulanarak tamamlanacak.
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,

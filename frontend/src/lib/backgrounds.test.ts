@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  EN_KISA_YENILEME_MS,
   YENILEME_ORANI,
   YER_TUTUCU_ZEMINLER,
   type SunucuZemini,
@@ -66,16 +65,20 @@ describe("yenilemeGecikmesiHesapla", () => {
     );
   });
 
-  it("sure zaten dolmussa alt sinira duser, negatif dondurmez", () => {
+  it("kisa omurlu URL'i suresi dolmadan yeniler", () => {
+    const zemin = sunucuZemini({ gecerlilikSaniye: 10, alinmaZamani: 0 });
+
+    expect(yenilemeGecikmesiHesapla([zemin], 0)).toBe(7_500);
+  });
+
+  it("sure zaten dolmussa hemen yeniler, negatif dondurmez", () => {
     // Sekme uzun sure arka planda kalip zamanlayici gec calistiginda olusan
     // durum. Negatif bir gecikme `setTimeout`'ta hemen tetiklenir ve arka arkaya
     // yenileme dongusu riski dogurur.
     const zemin = sunucuZemini({ gecerlilikSaniye: 60, alinmaZamani: 0 });
     const birSaatSonra = 3600 * 1000;
 
-    expect(yenilemeGecikmesiHesapla([zemin], birSaatSonra)).toBe(
-      EN_KISA_YENILEME_MS,
-    );
+    expect(yenilemeGecikmesiHesapla([zemin], birSaatSonra)).toBe(0);
   });
 });
 

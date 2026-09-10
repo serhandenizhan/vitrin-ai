@@ -87,9 +87,6 @@ export const YER_TUTUCU_ZEMINLER: YerTutucuZemin[] = [
  */
 export const YENILEME_ORANI = 0.75;
 
-/** Cok kisa sureler icin alt sinir — saniyede bir istek atmayalim. */
-export const EN_KISA_YENILEME_MS = 30_000;
-
 /**
  * Bir zemin listesinin ne kadar sonra yenilenmesi gerektigi (ms).
  *
@@ -113,11 +110,10 @@ export function yenilemeGecikmesiHesapla(
     return omurMs * YENILEME_ORANI - gecen;
   });
 
-  // `Math.max(..., EN_KISA_YENILEME_MS)`: gecikme negatif cikabilir (sekme uzun
-  // sure arka planda kalip zamanlayici gec calistiginda). Negatif bir gecikme
-  // ile hemen yenilemek dogru, ama sifira yakin degerler bir yenileme
-  // dongusune yol acabilir — alt sinir bunu engelliyor.
-  return Math.max(Math.min(...gecikmeler), EN_KISA_YENILEME_MS);
+  // Gecikme negatif cikabilir (sekme uzun sure arka planda kalip zamanlayici
+  // gec calistiginda). Bu durumda hemen yenilemek gerekir; sabit bir alt sinir
+  // cok kisa omurlu URL'leri sureleri dolduktan sonra yenilerdi.
+  return Math.max(Math.min(...gecikmeler), 0);
 }
 
 type HamArkaPlan = {
