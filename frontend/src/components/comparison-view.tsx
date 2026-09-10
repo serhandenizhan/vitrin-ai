@@ -45,7 +45,7 @@ export function ComparisonView({
   elapsedSeconds,
   onReset,
 }: ComparisonViewProps) {
-  const { studyoAc } = useWorkspace();
+  const { openStudio } = useWorkspace();
   const [vitrinAiAcik, setVitrinAiAcik] = useState(false);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
     genislik: number;
@@ -114,7 +114,7 @@ export function ComparisonView({
           <Button
             size="lg"
             className="press min-h-11 rounded-full"
-            onClick={() => studyoAc({ kesimUrl: resultUrl, dosyaAdi: fileName })}
+            onClick={() => openStudio({ cutoutUrl: resultUrl, fileName })}
           >
             <ImagePlus className="size-4" strokeWidth={1.75} aria-hidden />
             Arka plan ekle

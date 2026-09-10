@@ -8,19 +8,19 @@
  */
 
 /** Sahnenin mantiksal olcusu. Disa aktarma bunun katlari olarak yapiliyor. */
-export const SAHNE_OLCUSU = 1000;
+export const STAGE_SIZE = 1000;
 
 /** Yol haritasindaki cikti olcusu (ROADMAP.md Faz 3). */
-export const CIKTI_OLCUSU = 2000;
+export const OUTPUT_SIZE = 2000;
 
 /** Urunun sahneye ilk yerlesirken kaplayacagi oran (kenarlarda pay kalsin). */
-export const SIGDIRMA_PAYI = 0.72;
+export const FIT_MARGIN = 0.72;
 
-export type Donusum = {
+export type Transform = {
   x: number;
   y: number;
-  olcek: number;
-  aci: number;
+  scale: number;
+  rotation: number;
 };
 
 /**
@@ -30,15 +30,12 @@ export type Donusum = {
  * TAMAMEN sigsin — `Math.max` kullanilsaydi gorselin uzun kenari tasar ve
  * kullanici urunun kirpildigini sanirdi.
  */
-export function sigdirmaDonusumu(
-  kesimGenislik: number,
-  kesimYukseklik: number,
-): Donusum {
-  const olcek = Math.min(
-    (SAHNE_OLCUSU * SIGDIRMA_PAYI) / kesimGenislik,
-    (SAHNE_OLCUSU * SIGDIRMA_PAYI) / kesimYukseklik,
+export function fitTransform(cutoutWidth: number, cutoutHeight: number): Transform {
+  const scale = Math.min(
+    (STAGE_SIZE * FIT_MARGIN) / cutoutWidth,
+    (STAGE_SIZE * FIT_MARGIN) / cutoutHeight,
   );
-  return { x: SAHNE_OLCUSU / 2, y: SAHNE_OLCUSU / 2, olcek, aci: 0 };
+  return { x: STAGE_SIZE / 2, y: STAGE_SIZE / 2, scale, rotation: 0 };
 }
 
 /**
@@ -49,20 +46,20 @@ export function sigdirmaDonusumu(
  * `%` operatoru negatif sayilarda negatif dondugu icin (`-15 % 360 === -15`)
  * ikinci bir toplama+mod gerekiyor.
  */
-export function aciyiNormalize(derece: number): number {
-  return ((derece % 360) + 360) % 360;
+export function normalizeAngle(degrees: number): number {
+  return ((degrees % 360) + 360) % 360;
 }
 
 /**
  * Disa aktarma icin kullanilacak piksel orani.
  *
  * Bilincli olarak EKRAN olcusune degil MANTIKSAL olcuye dayaniyor. Once
- * `CIKTI_OLCUSU / ekranGenisligi` kullaniliyordu; ekran genisligi kapsayiciya
+ * `OUTPUT_SIZE / ekranGenisligi` kullaniliyordu; ekran genisligi kapsayiciya
  * gore degisken ve genellikle yuvarlak degil (434 px olculdu), oran 4.6082...
  * cikiyor ve Konva 2000 yerine 1999 px'lik bir tuval uretiyordu. Yol haritasi
  * cikti olcusunu sayiyla belirtiyor; 1999 sessizce yanlis bir cikti demek.
  */
-export const DISA_AKTARMA_ORANI = CIKTI_OLCUSU / SAHNE_OLCUSU;
+export const EXPORT_PIXEL_RATIO = OUTPUT_SIZE / STAGE_SIZE;
 
 /**
  * Urun uzerindeki gorunum ayarlari.
@@ -71,35 +68,35 @@ export const DISA_AKTARMA_ORANI = CIKTI_OLCUSU / SAHNE_OLCUSU;
  * bekledigi araliklar (kendi normalize etmiyoruz ki filtre degistiginde iki
  * yerde birden duzeltme gerekmesin).
  */
-export type Gorunum = {
+export type Appearance = {
   /** Konva `Brighten`: -1 (siyah) .. 1 (beyaz). */
-  parlaklik: number;
+  brightness: number;
   /** Konva `Contrast`: -100 .. 100. */
-  kontrast: number;
+  contrast: number;
   /** Konva `HSL` doygunluk: -2 .. 4 araliginda anlamli, 0 = degisiklik yok. */
-  doygunluk: number;
+  saturation: number;
   /** Urunun altina dusen golge — kompozisyonu zemine "oturtuyor". */
-  golge: boolean;
+  shadow: boolean;
   /** Zemine dusen isik havuzu — urunu one cikaran yumusak vinyet. */
-  isikHavuzu: boolean;
+  spotlight: boolean;
 };
 
-export const VARSAYILAN_GORUNUM: Gorunum = {
-  parlaklik: 0,
-  kontrast: 0,
-  doygunluk: 0,
-  golge: true,
-  isikHavuzu: false,
+export const DEFAULT_APPEARANCE: Appearance = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  shadow: true,
+  spotlight: false,
 };
 
 /** Kullanici hicbir ayara dokunmamis mi — "sifirla" dugmesini pasif tutmak icin. */
-export function gorunumVarsayilanMi(gorunum: Gorunum): boolean {
+export function isDefaultAppearance(appearance: Appearance): boolean {
   return (
-    gorunum.parlaklik === VARSAYILAN_GORUNUM.parlaklik &&
-    gorunum.kontrast === VARSAYILAN_GORUNUM.kontrast &&
-    gorunum.doygunluk === VARSAYILAN_GORUNUM.doygunluk &&
-    gorunum.golge === VARSAYILAN_GORUNUM.golge &&
-    gorunum.isikHavuzu === VARSAYILAN_GORUNUM.isikHavuzu
+    appearance.brightness === DEFAULT_APPEARANCE.brightness &&
+    appearance.contrast === DEFAULT_APPEARANCE.contrast &&
+    appearance.saturation === DEFAULT_APPEARANCE.saturation &&
+    appearance.shadow === DEFAULT_APPEARANCE.shadow &&
+    appearance.spotlight === DEFAULT_APPEARANCE.spotlight
   );
 }
 
@@ -108,13 +105,14 @@ export function gorunumVarsayilanMi(gorunum: Gorunum): boolean {
  *
  * Kuyumcu kompozisyonlarinin buyuk cogunlugu ortalanmis; ama fareyle tam
  * ortayi tutturmak neredeyse imkansiz ve 1-2 piksellik kayma buyutulmus
- * ciktida goze batiyor. Merkeze `TOLERANS` kadar yaklasildiginda deger tam
- * merkeze cekiliyor. Tolerans disinda serbest surukleme aynen calisiyor.
+ * ciktida goze batiyor. Merkeze `CENTER_SNAP_TOLERANCE` kadar yaklasildiginda
+ * deger tam merkeze cekiliyor. Tolerans disinda serbest surukleme aynen
+ * calisiyor.
  */
-export const MERKEZ_YAKALAMA_TOLERANSI = 12;
+export const CENTER_SNAP_TOLERANCE = 12;
 
-export function merkezeYakala(deger: number, merkez: number): number {
-  return Math.abs(deger - merkez) <= MERKEZ_YAKALAMA_TOLERANSI ? merkez : deger;
+export function snapToCenter(value: number, center: number): number {
+  return Math.abs(value - center) <= CENTER_SNAP_TOLERANCE ? center : value;
 }
 
 /**
@@ -123,79 +121,87 @@ export function merkezeYakala(deger: number, merkez: number): number {
  * MANTIKSAL olcu her zaman ciktinin YARISI. Bu bilincli: disa aktarma orani
  * boylece her bicimde tam olarak 2 kaliyor. Kesirli bir oran, Konva'nin ic
  * hesabinda bir piksel kaybina yol aciyor — 2000 yerine 1999 px'lik tuval
- * uretildigi birebir olculdu (bkz. DISA_AKTARMA_ORANI gerekcesi).
+ * uretildigi birebir olculdu (bkz. EXPORT_PIXEL_RATIO gerekcesi).
  *
  * "Katalog" bicimi, `/katalog` sayfasindaki sablon yuvalarina birebir oturmasi
  * icin A4 orani (1:1.414). Instagram olculeri platformun kendi onerdikleri:
  * gonderi 1080x1080, hikaye 1080x1920.
+ *
+ * `fileSlug` indirilen dosyanin adina giriyor ve kullaniciya gorunuyor; bu
+ * yuzden anahtarlar Ingilizceye tasinirken Turkce haliyle korundu.
  */
-export type CiktiBicimi = {
-  ad: string;
-  ozet: string;
-  ciktiGenislik: number;
-  ciktiYukseklik: number;
+export type OutputFormat = {
+  label: string;
+  summary: string;
+  outputWidth: number;
+  outputHeight: number;
+  fileSlug: string;
 };
 
-export const CIKTI_BICIMLERI = {
-  kare: {
-    ad: "Kare",
-    ozet: "2000×2000",
-    ciktiGenislik: 2000,
-    ciktiYukseklik: 2000,
+export const OUTPUT_FORMATS = {
+  square: {
+    label: "Kare",
+    summary: "2000×2000",
+    outputWidth: 2000,
+    outputHeight: 2000,
+    fileSlug: "kare",
   },
-  katalog: {
-    ad: "Katalog",
-    ozet: "A4 oranı",
-    ciktiGenislik: 1240,
-    ciktiYukseklik: 1754,
+  catalog: {
+    label: "Katalog",
+    summary: "A4 oranı",
+    outputWidth: 1240,
+    outputHeight: 1754,
+    fileSlug: "katalog",
   },
-  gonderi: {
-    ad: "Instagram gönderi",
-    ozet: "1080×1080",
-    ciktiGenislik: 1080,
-    ciktiYukseklik: 1080,
+  instagramPost: {
+    label: "Instagram gönderi",
+    summary: "1080×1080",
+    outputWidth: 1080,
+    outputHeight: 1080,
+    fileSlug: "gonderi",
   },
-  hikaye: {
-    ad: "Instagram hikâye",
-    ozet: "1080×1920",
-    ciktiGenislik: 1080,
-    ciktiYukseklik: 1920,
+  instagramStory: {
+    label: "Instagram hikâye",
+    summary: "1080×1920",
+    outputWidth: 1080,
+    outputHeight: 1920,
+    fileSlug: "hikaye",
   },
-} as const satisfies Record<string, CiktiBicimi>;
+} as const satisfies Record<string, OutputFormat>;
 
-export type CiktiBicimAdi = keyof typeof CIKTI_BICIMLERI;
+export type OutputFormatName = keyof typeof OUTPUT_FORMATS;
 
 /** Bir bicimin sahnedeki mantiksal olcusu — cikti olcusunun yarisi. */
-export function mantiksalOlcu(bicim: CiktiBicimi): {
-  genislik: number;
-  yukseklik: number;
+export function logicalSize(format: OutputFormat): {
+  width: number;
+  height: number;
 } {
   return {
-    genislik: bicim.ciktiGenislik / 2,
-    yukseklik: bicim.ciktiYukseklik / 2,
+    width: format.outputWidth / 2,
+    height: format.outputHeight / 2,
   };
 }
 
 /**
  * Bir gorseli verilen mantiksal sahneye ortalayip sigdiran donusum.
  *
- * `sigdirmaDonusumu`nun kare olmayan sahneler icin genellestirilmis hali;
+ * `fitTransform`un kare olmayan sahneler icin genellestirilmis hali;
  * kare sahnede ikisi ayni sonucu veriyor.
  */
-export function sahneyeSigdir(
-  sahneGenislik: number,
-  sahneYukseklik: number,
-  kesimGenislik: number,
-  kesimYukseklik: number,
-): Donusum {
-  const olcek = Math.min(
-    (sahneGenislik * SIGDIRMA_PAYI) / kesimGenislik,
-    (sahneYukseklik * SIGDIRMA_PAYI) / kesimYukseklik,
+export function fitToStage(
+  stageWidth: number,
+  stageHeight: number,
+  cutoutWidth: number,
+  cutoutHeight: number,
+): Transform {
+  const scale = Math.min(
+    (stageWidth * FIT_MARGIN) / cutoutWidth,
+    (stageHeight * FIT_MARGIN) / cutoutHeight,
   );
   return {
-    x: sahneGenislik / 2,
-    y: sahneYukseklik / 2,
-    olcek,
-    aci: 0,
+    x: stageWidth / 2,
+    y: stageHeight / 2,
+    scale,
+    rotation: 0,
   };
 }

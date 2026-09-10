@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     "Hazırladığınız ürün görsellerini katalog ve dergi sayfası şablonlarına yerleştirin.",
 };
 
-export default function KatalogPage() {
+export default function CatalogPage() {
   return (
     <SiteShell>
       <section className="surface-mist section-rhythm">

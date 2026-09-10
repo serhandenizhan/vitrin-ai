@@ -30,7 +30,7 @@
  * kaybolmuyor: kullanici yine de sade bir zemin isteyebilir.
  */
 export type PlaceholderBackground = {
-  type: "yer-tutucu";
+  type: "placeholder";
   id: string;
   name: string;
   /** Konva `fillLinearGradientColorStops` formatinda: [oran, renk, ...]. */
@@ -38,7 +38,7 @@ export type PlaceholderBackground = {
 };
 
 export type ServerBackground = {
-  type: "sunucu";
+  type: "server";
   id: string;
   name: string;
   url: string;
@@ -52,26 +52,26 @@ export type Background = PlaceholderBackground | ServerBackground;
 
 export const PLACEHOLDER_BACKGROUNDS: PlaceholderBackground[] = [
   {
-    type: "yer-tutucu",
-    id: "yer-tutucu-kadife",
+    type: "placeholder",
+    id: "placeholder-velvet",
     name: "Kadife siyah",
     gradient: [0, "#1d1d1f", 1, "#000000"],
   },
   {
-    type: "yer-tutucu",
-    id: "yer-tutucu-sis",
+    type: "placeholder",
+    id: "placeholder-mist",
     name: "Sis beyazı",
     gradient: [0, "#ffffff", 1, "#f5f5f7"],
   },
   {
-    type: "yer-tutucu",
-    id: "yer-tutucu-altin",
+    type: "placeholder",
+    id: "placeholder-gold",
     name: "Altın hale",
     gradient: [0, "#3a2f1c", 0.55, "#7a6231", 1, "#241d12"],
   },
   {
-    type: "yer-tutucu",
-    id: "yer-tutucu-sicak-gri",
+    type: "placeholder",
+    id: "placeholder-warm-gray",
     name: "Sıcak gri",
     gradient: [0, "#d8d4cf", 1, "#a8a29b"],
   },
@@ -96,27 +96,27 @@ export const REFRESH_RATIO = 0.75;
  * dolmaz).
  */
 export function calculateRefreshDelay(
-  zeminler: Background[],
-  simdi: number = Date.now(),
+  backgrounds: Background[],
+  now: number = Date.now(),
 ): number | null {
-  const sunucuZeminleri = zeminler.filter(
-    (zemin): zemin is ServerBackground => zemin.type === "sunucu",
+  const serverBackgrounds = backgrounds.filter(
+    (background): background is ServerBackground => background.type === "server",
   );
-  if (sunucuZeminleri.length === 0) return null;
+  if (serverBackgrounds.length === 0) return null;
 
-  const gecikmeler = sunucuZeminleri.map((zemin) => {
-    const gecen = simdi - zemin.fetchedAt;
-    const omurMs = zemin.expiresInSeconds * 1000;
-    return omurMs * REFRESH_RATIO - gecen;
+  const delays = serverBackgrounds.map((background) => {
+    const elapsed = now - background.fetchedAt;
+    const lifetimeMs = background.expiresInSeconds * 1000;
+    return lifetimeMs * REFRESH_RATIO - elapsed;
   });
 
   // Gecikme negatif cikabilir (sekme uzun sure arka planda kalip zamanlayici
   // gec calistiginda). Bu durumda hemen yenilemek gerekir; sabit bir alt sinir
   // cok kisa omurlu URL'leri sureleri dolduktan sonra yenilerdi.
-  return Math.max(Math.min(...gecikmeler), 0);
+  return Math.max(Math.min(...delays), 0);
 }
 
-type HamArkaPlan = {
+type RawBackground = {
   id: string;
   url: string;
   expiresIn: number;
@@ -133,31 +133,31 @@ export async function fetchBackgrounds(
   fetchFn: typeof fetch = fetch,
 ): Promise<ServerBackground[]> {
   try {
-    const yanit = await fetchFn("/api/backgrounds", { cache: "no-store" });
-    if (!yanit.ok) return [];
+    const response = await fetchFn("/api/backgrounds", { cache: "no-store" });
+    if (!response.ok) return [];
 
-    const govde: unknown = await yanit.json();
-    if (!Array.isArray(govde)) return [];
+    const body: unknown = await response.json();
+    if (!Array.isArray(body)) return [];
 
-    const alinmaZamani = Date.now();
-    return govde
+    const fetchedAt = Date.now();
+    return body
       .filter(
-        (kayit): kayit is HamArkaPlan =>
-          typeof kayit === "object" &&
-          kayit !== null &&
-          typeof (kayit as HamArkaPlan).id === "string" &&
-          typeof (kayit as HamArkaPlan).url === "string",
+        (record): record is RawBackground =>
+          typeof record === "object" &&
+          record !== null &&
+          typeof (record as RawBackground).id === "string" &&
+          typeof (record as RawBackground).url === "string",
       )
-      .map((kayit, sira) => ({
-        type: "sunucu" as const,
-        id: kayit.id,
-        name: `Zemin ${sira + 1}`,
-        url: kayit.url,
+      .map((record, index) => ({
+        type: "server" as const,
+        id: record.id,
+        name: `Zemin ${index + 1}`,
+        url: record.url,
         expiresInSeconds:
-          typeof kayit.expiresIn === "number" && kayit.expiresIn > 0
-            ? kayit.expiresIn
+          typeof record.expiresIn === "number" && record.expiresIn > 0
+            ? record.expiresIn
             : 600,
-        fetchedAt: alinmaZamani,
+        fetchedAt,
       }));
   } catch {
     return [];
@@ -172,6 +172,6 @@ export async function fetchBackgrounds(
  * Boylece "zemin listesi bos" diye bir durum olusmuyor ve editor bu ihtimali
  * hic ele almak zorunda kalmiyor.
  */
-export function createBackgroundList(sunucuZeminleri: ServerBackground[]): Background[] {
-  return [...sunucuZeminleri, ...PLACEHOLDER_BACKGROUNDS];
+export function createBackgroundList(serverBackgrounds: ServerBackground[]): Background[] {
+  return [...serverBackgrounds, ...PLACEHOLDER_BACKGROUNDS];
 }

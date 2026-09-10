@@ -16,49 +16,64 @@
  */
 
 /** Sayfa uzerinde bir dikdortgen; degerler sayfa olcusune gore 0-1 orani. */
-export type Kutu = {
+export type Box = {
   x: number;
   y: number;
-  g: number;
-  y2: number;
+  width: number;
+  height: number;
 };
+
+export type TemplateColor = "accent" | "ink" | "muted";
 
 /** Bir metin ogesi: kutusu, punto orani, hizasi ve rol. */
-export type MetinOgesi = {
-  alan: "ustEtiket" | "baslik" | "altBilgi";
-  kutu: Kutu;
+export type TextElement = {
+  field: "eyebrow" | "title" | "footer";
+  box: Box;
   /** Punto, sayfa GENISLIGININ orani olarak. */
-  puntoOrani: number;
-  hiza: "sol" | "orta";
-  renk: "vurgu" | "murekkep" | "solgun";
+  fontSizeRatio: number;
+  align: "left" | "center";
+  color: TemplateColor;
   /** Buyuk harfe cevrilsin mi. */
-  buyukHarf?: boolean;
+  uppercase?: boolean;
   /** Harf araligi, punto orani. */
-  aralik?: number;
+  letterSpacing?: number;
 };
 
-export type Cizgi = {
-  kutu: Kutu;
-  renk: "murekkep" | "solgun";
-  opaklik: number;
+export type Rule = {
+  box: Box;
+  color: "ink" | "muted";
+  opacity: number;
 };
 
-export type SablonAdi = "ikili" | "kapak" | "uclu";
+export type TemplateName = "duo" | "cover" | "trio";
 
-export type Sablon = {
-  ad: SablonAdi;
-  baslik: string;
-  ozet: string;
+export type CatalogTexts = { eyebrow: string; title: string; footer: string };
+
+export type Template = {
+  name: TemplateName;
+  /** Indirilen dosyanin adinda kullanilir; kullaniciya gorundugu icin Turkce. */
+  fileSlug: string;
+  title: string;
+  summary: string;
   /** Sayfa zemini ve metin renkleri. */
-  kagit: string;
-  murekkep: string;
-  solgun: string;
-  vurgu: string;
+  paper: string;
+  ink: string;
+  muted: string;
+  accent: string;
   /** Gorsel yuvalari; sirasi arayuzdeki sirayla ayni. */
-  yuvalar: Kutu[];
-  metinler: MetinOgesi[];
-  cizgiler: Cizgi[];
+  slots: Box[];
+  texts: TextElement[];
+  rules: Rule[];
 };
+
+/** Bir sablonun renk roluna karsilik gelen gercek rengi. */
+export function templateColor(template: Template, color: TemplateColor): string {
+  return color === "accent"
+    ? template.accent
+    : color === "muted"
+      ? template.muted
+      : template.ink;
+}
 
 /* --------------------------------------------------------------------------
    Renkler
@@ -69,132 +84,141 @@ export type Sablon = {
    genel paletinde de gecerli (bkz. kok CLAUDE.md, sicak notrler).
    -------------------------------------------------------------------------- */
 
-const KAGIT = "#f4f1ec";
-const MUREKKEP = "#1a1917";
-const SOLGUN = "#6b6862";
-const ALTIN = "#a8834a";
+const PAPER = "#f4f1ec";
+const INK = "#1a1917";
+const MUTED = "#6b6862";
+const GOLD = "#a8834a";
 
-const KOYU_KAGIT = "#1a1917";
-const KOYU_MUREKKEP = "#f3f0eb";
-const KOYU_SOLGUN = "#a8a29a";
+const DARK_PAPER = "#1a1917";
+const DARK_INK = "#f3f0eb";
+const DARK_MUTED = "#a8a29a";
 
-export const SABLONLAR: Record<SablonAdi, Sablon> = {
+export const TEMPLATES: Record<TemplateName, Template> = {
   /* --- Ikili vitrin: iki urun yan yana, ustte baslik bandi ---------------- */
-  ikili: {
-    ad: "ikili",
-    baslik: "İkili vitrin",
-    ozet: "İki ürün, üstte başlık",
-    kagit: KAGIT,
-    murekkep: MUREKKEP,
-    solgun: SOLGUN,
-    vurgu: ALTIN,
-    yuvalar: [
-      { x: 0.075, y: 0.26, g: 0.4, y2: 0.52 },
-      { x: 0.525, y: 0.26, g: 0.4, y2: 0.52 },
+  duo: {
+    name: "duo",
+    fileSlug: "ikili",
+    title: "İkili vitrin",
+    summary: "İki ürün, üstte başlık",
+    paper: PAPER,
+    ink: INK,
+    muted: MUTED,
+    accent: GOLD,
+    slots: [
+      { x: 0.075, y: 0.26, width: 0.4, height: 0.52 },
+      { x: 0.525, y: 0.26, width: 0.4, height: 0.52 },
     ],
-    metinler: [
+    texts: [
       {
-        alan: "ustEtiket",
-        kutu: { x: 0.075, y: 0.085, g: 0.85, y2: 0.035 },
-        puntoOrani: 0.019,
-        hiza: "sol",
-        renk: "vurgu",
-        buyukHarf: true,
-        aralik: 0.16,
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.085, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "left",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
       },
       {
-        alan: "baslik",
-        kutu: { x: 0.075, y: 0.125, g: 0.85, y2: 0.065 },
-        puntoOrani: 0.052,
-        hiza: "sol",
-        renk: "murekkep",
+        field: "title",
+        box: { x: 0.075, y: 0.125, width: 0.85, height: 0.065 },
+        fontSizeRatio: 0.052,
+        align: "left",
+        color: "ink",
       },
       {
-        alan: "altBilgi",
-        kutu: { x: 0.075, y: 0.915, g: 0.85, y2: 0.03 },
-        puntoOrani: 0.014,
-        hiza: "orta",
-        renk: "solgun",
-        buyukHarf: true,
-        aralik: 0.1,
+        field: "footer",
+        box: { x: 0.075, y: 0.915, width: 0.85, height: 0.03 },
+        fontSizeRatio: 0.014,
+        align: "center",
+        color: "muted",
+        uppercase: true,
+        letterSpacing: 0.1,
       },
     ],
-    cizgiler: [{ kutu: { x: 0.075, y: 0.215, g: 0.85, y2: 0.0008 }, renk: "murekkep", opaklik: 0.14 }],
+    rules: [
+      { box: { x: 0.075, y: 0.215, width: 0.85, height: 0.0008 }, color: "ink", opacity: 0.14 },
+    ],
   },
 
   /* --- Kapak: tek buyuk urun, altta marka blogu -------------------------- */
-  kapak: {
-    ad: "kapak",
-    baslik: "Kapak",
-    ozet: "Tek ürün, altta marka",
-    kagit: KOYU_KAGIT,
-    murekkep: KOYU_MUREKKEP,
-    solgun: KOYU_SOLGUN,
-    vurgu: ALTIN,
-    yuvalar: [{ x: 0.075, y: 0.1, g: 0.85, y2: 0.62 }],
-    metinler: [
+  cover: {
+    name: "cover",
+    fileSlug: "kapak",
+    title: "Kapak",
+    summary: "Tek ürün, altta marka",
+    paper: DARK_PAPER,
+    ink: DARK_INK,
+    muted: DARK_MUTED,
+    accent: GOLD,
+    slots: [{ x: 0.075, y: 0.1, width: 0.85, height: 0.62 }],
+    texts: [
       {
-        alan: "ustEtiket",
-        kutu: { x: 0.075, y: 0.805, g: 0.85, y2: 0.035 },
-        puntoOrani: 0.019,
-        hiza: "sol",
-        renk: "vurgu",
-        buyukHarf: true,
-        aralik: 0.16,
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.805, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "left",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
       },
       {
-        alan: "baslik",
-        kutu: { x: 0.075, y: 0.845, g: 0.85, y2: 0.075 },
-        puntoOrani: 0.06,
-        hiza: "sol",
-        renk: "murekkep",
+        field: "title",
+        box: { x: 0.075, y: 0.845, width: 0.85, height: 0.075 },
+        fontSizeRatio: 0.06,
+        align: "left",
+        color: "ink",
       },
     ],
-    cizgiler: [{ kutu: { x: 0.075, y: 0.775, g: 0.85, y2: 0.0008 }, renk: "murekkep", opaklik: 0.2 }],
+    rules: [
+      { box: { x: 0.075, y: 0.775, width: 0.85, height: 0.0008 }, color: "ink", opacity: 0.2 },
+    ],
   },
 
   /* --- Uclu izgara: bir buyuk, iki kucuk --------------------------------- */
-  uclu: {
-    ad: "uclu",
-    baslik: "Üçlü ızgara",
-    ozet: "Bir büyük, iki küçük",
-    kagit: KAGIT,
-    murekkep: MUREKKEP,
-    solgun: SOLGUN,
-    vurgu: ALTIN,
-    yuvalar: [
-      { x: 0.075, y: 0.235, g: 0.85, y2: 0.36 },
-      { x: 0.075, y: 0.615, g: 0.412, y2: 0.24 },
-      { x: 0.513, y: 0.615, g: 0.412, y2: 0.24 },
+  trio: {
+    name: "trio",
+    fileSlug: "uclu",
+    title: "Üçlü ızgara",
+    summary: "Bir büyük, iki küçük",
+    paper: PAPER,
+    ink: INK,
+    muted: MUTED,
+    accent: GOLD,
+    slots: [
+      { x: 0.075, y: 0.235, width: 0.85, height: 0.36 },
+      { x: 0.075, y: 0.615, width: 0.412, height: 0.24 },
+      { x: 0.513, y: 0.615, width: 0.412, height: 0.24 },
     ],
-    metinler: [
+    texts: [
       {
-        alan: "ustEtiket",
-        kutu: { x: 0.075, y: 0.08, g: 0.85, y2: 0.035 },
-        puntoOrani: 0.019,
-        hiza: "sol",
-        renk: "vurgu",
-        buyukHarf: true,
-        aralik: 0.16,
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.08, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "left",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
       },
       {
-        alan: "baslik",
-        kutu: { x: 0.075, y: 0.118, g: 0.85, y2: 0.06 },
-        puntoOrani: 0.048,
-        hiza: "sol",
-        renk: "murekkep",
+        field: "title",
+        box: { x: 0.075, y: 0.118, width: 0.85, height: 0.06 },
+        fontSizeRatio: 0.048,
+        align: "left",
+        color: "ink",
       },
       {
-        alan: "altBilgi",
-        kutu: { x: 0.075, y: 0.9, g: 0.85, y2: 0.03 },
-        puntoOrani: 0.014,
-        hiza: "orta",
-        renk: "solgun",
-        buyukHarf: true,
-        aralik: 0.1,
+        field: "footer",
+        box: { x: 0.075, y: 0.9, width: 0.85, height: 0.03 },
+        fontSizeRatio: 0.014,
+        align: "center",
+        color: "muted",
+        uppercase: true,
+        letterSpacing: 0.1,
       },
     ],
-    cizgiler: [{ kutu: { x: 0.075, y: 0.198, g: 0.85, y2: 0.0008 }, renk: "murekkep", opaklik: 0.14 }],
+    rules: [
+      { box: { x: 0.075, y: 0.198, width: 0.85, height: 0.0008 }, color: "ink", opacity: 0.14 },
+    ],
   },
 };
 
@@ -202,14 +226,14 @@ export const SABLONLAR: Record<SablonAdi, Sablon> = {
    Yuva donusumu — kullanicinin gorseli buyutup kaydirmasi
    -------------------------------------------------------------------------- */
 
-export type YuvaDonusumu = {
+export type SlotTransform = {
   /** Taban yerlesimin carpani; 1 = tabanin kendisi. */
-  olcek: number;
+  scale: number;
   /** Kutu genisligi/yuksekliginin orani olarak kaydirma. */
   x: number;
   y: number;
   /** Derece cinsinden dondurme. */
-  aci: number;
+  rotation: number;
   /**
    * Taban yerlesim: `true` ise kutuyu DOLDURUR (cover), `false` ise kutuya
    * SIGAR (contain).
@@ -220,24 +244,24 @@ export type YuvaDonusumu = {
    * Doldurma, cerceveyi tam kaplar; disarda kalan kisim kirpilir ve kullanici
    * isterse olcegi kucultup tamamini gorebilir. Karar kullanicida kaliyor.
    */
-  doldur: boolean;
+  cover: boolean;
 };
 
-export const VARSAYILAN_DONUSUM: YuvaDonusumu = {
-  olcek: 1,
+export const DEFAULT_SLOT_TRANSFORM: SlotTransform = {
+  scale: 1,
   x: 0,
   y: 0,
-  aci: 0,
-  doldur: true,
+  rotation: 0,
+  cover: true,
 };
 
-export const EN_KUCUK_OLCEK = 0.3;
-export const EN_BUYUK_OLCEK = 3;
+export const MIN_SLOT_SCALE = 0.3;
+export const MAX_SLOT_SCALE = 3;
 
 /**
  * Bir gorselin kutu icindeki YERLESIMINI hesaplar.
  *
- * Taban yerlesim `doldur` bayragina gore `cover` ya da `contain`; kullanicinin
+ * Taban yerlesim `cover` bayragina gore `cover` ya da `contain`; kullanicinin
  * olcegi bunun uzerine bir CARPAN. Gorselin EN-BOY ORANI her durumda korunuyor
  * — genislik ve yukseklik ayni katsayiyla carpiliyor, dolayisiyla gorsel
  * hicbir kosulda ezilmiyor/gerilmiyor. Kutu disinda kalan kisim cagiran taraf
@@ -246,28 +270,25 @@ export const EN_BUYUK_OLCEK = 3;
  * Hem onizleme hem disa aktarma bu fonksiyonu kullaniyor; ayrismalari mumkun
  * degil.
  */
-export function yuvaYerlesimi(
-  kutu: { g: number; y2: number },
-  gorsel: { genislik: number; yukseklik: number },
-  donusum: YuvaDonusumu,
-): { x: number; y: number; g: number; y2: number } {
-  const enBoyOrani = [
-    kutu.g / gorsel.genislik,
-    kutu.y2 / gorsel.yukseklik,
-  ] as const;
+export function slotPlacement(
+  box: { width: number; height: number },
+  image: { width: number; height: number },
+  transform: SlotTransform,
+): Box {
+  const ratios = [box.width / image.width, box.height / image.height] as const;
 
-  const taban = donusum.doldur
-    ? Math.max(enBoyOrani[0], enBoyOrani[1])
-    : Math.min(enBoyOrani[0], enBoyOrani[1]);
+  const base = transform.cover
+    ? Math.max(ratios[0], ratios[1])
+    : Math.min(ratios[0], ratios[1]);
 
-  const olcek = taban * donusum.olcek;
-  const g = gorsel.genislik * olcek;
-  const y2 = gorsel.yukseklik * olcek;
+  const scale = base * transform.scale;
+  const width = image.width * scale;
+  const height = image.height * scale;
 
   return {
-    x: (kutu.g - g) / 2 + donusum.x * kutu.g,
-    y: (kutu.y2 - y2) / 2 + donusum.y * kutu.y2,
-    g,
-    y2,
+    x: (box.width - width) / 2 + transform.x * box.width,
+    y: (box.height - height) / 2 + transform.y * box.height,
+    width,
+    height,
   };
 }

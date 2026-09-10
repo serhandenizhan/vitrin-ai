@@ -614,6 +614,6 @@ html.reduce-motion {
    GENISLIGININ orani olarak veriliyor (`cqw`). Boylece ekrandaki kucuk
    onizleme ile 1240 px'lik cikti ayni orantiyi paylasiyor — vw kullanilsaydi
    punto ekran genisligine baglanir ve onizleme ile cikti ayrisirdi. */
-.catalog-kap {
+.catalog-container {
   container-type: inline-size;
 }

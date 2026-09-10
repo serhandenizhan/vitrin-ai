@@ -23,29 +23,29 @@ import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
 
 export function Studio() {
-  const { studyo, studyoKapat, anaMenuyeDon } = useWorkspace();
+  const { studio, closeStudio, returnToStart } = useWorkspace();
 
   // Escape ile cikis ve arkadaki sayfanin kaydirilmasinin durdurulmasi.
   // Katman acikken arka planin kaydirilabilmesi, kullaniciyi "hangi sayfadayim"
   // sorusuna dusuruyor.
   useEffect(() => {
-    if (!studyo) return;
+    if (!studio) return;
 
-    function tusaBasildi(olay: KeyboardEvent) {
-      if (olay.key === "Escape") studyoKapat();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeStudio();
     }
-    document.addEventListener("keydown", tusaBasildi);
+    document.addEventListener("keydown", handleKeyDown);
 
-    const oncekiTasma = document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.removeEventListener("keydown", tusaBasildi);
-      document.body.style.overflow = oncekiTasma;
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
     };
-  }, [studyo, studyoKapat]);
+  }, [studio, closeStudio]);
 
-  if (!studyo) return null;
+  if (!studio) return null;
 
   return (
     <div
@@ -67,7 +67,7 @@ export function Studio() {
           type="button"
           variant="outline"
           size="sm"
-          onClick={studyoKapat}
+          onClick={closeStudio}
           className="press -ml-1 rounded-full bg-white"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
@@ -84,14 +84,14 @@ export function Studio() {
         {/*
           "Geri" inceleme ekranina donuyor; is bittiginde (gorsel indirildikten
           sonra) oraya donmek bir cikmaz -- ayni fotografin sonucu. "Ana menu"
-          akisi bastan basliyor: studyo kapaniyor, arac bos duruma aliniyor ve
+          akisi bastan basliyor: studio kapaniyor, arac bos duruma aliniyor ve
           sayfa basa kaydiriliyor.
         */}
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={anaMenuyeDon}
+          onClick={returnToStart}
           className="press -mr-1 rounded-full bg-white"
         >
           <Home className="size-4" strokeWidth={1.75} aria-hidden />
@@ -101,8 +101,8 @@ export function Studio() {
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         <CompositionEditor
-          cutoutUrl={studyo.kesimUrl}
-          fileName={studyo.dosyaAdi}
+          cutoutUrl={studio.cutoutUrl}
+          fileName={studio.fileName}
         />
       </div>
     </div>

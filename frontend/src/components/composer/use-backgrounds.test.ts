@@ -3,16 +3,16 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useBackgrounds } from "@/components/composer/use-zeminler";
+import { useBackgrounds } from "@/components/composer/use-backgrounds";
 
-const ilkYanit = [
-  { id: "r2-1", url: "https://r2.example/once", expiresIn: 3600 },
+const initialResponse = [
+  { id: "r2-1", url: "https://r2.example/before", expiresIn: 3600 },
 ];
-const yenilenmisYanit = [
-  { id: "r2-1", url: "https://r2.example/sonra", expiresIn: 3600 },
+const refreshedResponse = [
+  { id: "r2-1", url: "https://r2.example/after", expiresIn: 3600 },
 ];
 
-describe("useZeminler", () => {
+describe("useBackgrounds", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -30,15 +30,15 @@ describe("useZeminler", () => {
 
   it("sekme tekrar görünür olduğunda imzalı URL listesini yeniler", async () => {
     fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(ilkYanit)))
-      .mockResolvedValueOnce(new Response(JSON.stringify(yenilenmisYanit)));
+      .mockResolvedValueOnce(new Response(JSON.stringify(initialResponse)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(refreshedResponse)));
 
     const { result } = renderHook(() => useBackgrounds());
 
     await waitFor(() => {
       expect(result.current.backgrounds[0]).toMatchObject({
         id: "r2-1",
-        url: "https://r2.example/once",
+        url: "https://r2.example/before",
       });
     });
 
@@ -50,7 +50,7 @@ describe("useZeminler", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(result.current.backgrounds[0]).toMatchObject({
         id: "r2-1",
-        url: "https://r2.example/sonra",
+        url: "https://r2.example/after",
       });
     });
   });

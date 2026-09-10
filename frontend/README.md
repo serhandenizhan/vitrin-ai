@@ -200,11 +200,12 @@ npm test          # tek sefer
 npm run test:watch
 ```
 
-Vitest. Kapsam saf mantık ve sunucu koduna ek olarak iki kritik React bileşen
-senaryosunu da içerir: R2 imzalı URL yenilemesi ve kullanıcının zemin seçiminin
-liste yenilendikten sonra korunması.
+Vitest. Kapsam saf mantık ve sunucu koduna ek olarak kritik React bileşen
+senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin seçiminin
+liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
+geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-65 test sekiz dosyaya dağılmış:
+68 test sekiz dosyaya dağılmış:
 
 | dosya | kapsam |
 | --- | --- |
@@ -214,8 +215,8 @@ liste yenilendikten sonra korunması.
 | `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
 | `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
 | `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
-| `components/composer/use-zeminler.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
-| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması |
+| `components/composer/use-backgrounds.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
+| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması |
 
 Özellikle korunanlar:
 
@@ -453,7 +454,7 @@ metin bandına taşması mümkün değil — önceki sürümde yerleşim akışa
 için büyük bir görsel başlığı aşağı itebiliyordu.
 
 **Boyut ve konum kaydıraçları** yuvanın kendi kutusuna göre oran veriyor;
-`yuvaYerlesimi()` hem önizlemede hem dışa aktarmada aynı fonksiyon.
+`slotPlacement()` hem önizlemede hem dışa aktarmada aynı fonksiyon.
 
 **Tuzak:** yuvadaki `<img>` etiketine `max-width: none` verilmesi zorunlu.
 Tailwind'in temel katmanı tüm görsellere `max-width: 100%` uyguluyor ve bu,

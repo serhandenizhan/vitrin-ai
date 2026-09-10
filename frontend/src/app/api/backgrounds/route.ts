@@ -39,37 +39,37 @@ const BACKEND_TIMEOUT_MS = 8_000;
  * izin vermektense, gereginden erken yenilemek daha ucuz — yenileme tek bir
  * kucuk JSON istegi.
  */
-const VARSAYILAN_GECERLILIK_SANIYE = 600;
+const DEFAULT_EXPIRY_SECONDS = 600;
 
-export type ArkaPlanYaniti = {
+export type BackgroundResponse = {
   id: string;
   url: string;
   expiresIn: number;
 };
 
 /** Backend'den gelen ham kaydin bekledigimiz sekle uyup uymadigini dogrular. */
-function kaydiCozumle(ham: unknown): ArkaPlanYaniti | null {
-  if (typeof ham !== "object" || ham === null) return null;
-  const kayit = ham as Record<string, unknown>;
-  if (typeof kayit.id !== "string" || typeof kayit.url !== "string") return null;
+function parseRecord(raw: unknown): BackgroundResponse | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.id !== "string" || typeof record.url !== "string") return null;
 
   // `expires_in` yoksa ya da sayi degilse varsayilana dus — alanin eksikligi
   // tum listeyi cope atmak icin bir sebep degil.
-  const sure =
-    typeof kayit.expires_in === "number" && Number.isFinite(kayit.expires_in)
-      ? kayit.expires_in
-      : VARSAYILAN_GECERLILIK_SANIYE;
+  const expiresIn =
+    typeof record.expires_in === "number" && Number.isFinite(record.expires_in)
+      ? record.expires_in
+      : DEFAULT_EXPIRY_SECONDS;
 
-  return { id: kayit.id, url: kayit.url, expiresIn: sure };
+  return { id: record.id, url: record.url, expiresIn };
 }
 
-function yanit(
-  arkaPlanlar: ArkaPlanYaniti[],
-  kaynak: "backend" | "unavailable",
+function createResponse(
+  backgrounds: BackgroundResponse[],
+  source: "backend" | "unavailable",
 ): Response {
-  return Response.json(arkaPlanlar, {
+  return Response.json(backgrounds, {
     headers: {
-      "X-Backgrounds-Source": kaynak,
+      "X-Backgrounds-Source": source,
       // Imzali URL'ler sureli: bir ara katmanin bunlari onbellege almasi,
       // suresi dolmus URL'lerin servis edilmesi demek olurdu.
       "Cache-Control": "no-store",
@@ -79,36 +79,36 @@ function yanit(
 
 export async function GET(): Promise<Response> {
   try {
-    const backendYaniti = await fetch(`${BACKEND_URL}/api/backgrounds`, {
+    const backendResponse = await fetch(`${BACKEND_URL}/api/backgrounds`, {
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
       cache: "no-store",
     });
 
-    if (!backendYaniti.ok) {
+    if (!backendResponse.ok) {
       console.warn(
-        `[api/backgrounds] backend ${backendYaniti.status} dondu; yer tutucu zeminlere dusuluyor`,
+        `[api/backgrounds] backend ${backendResponse.status} dondu; yer tutucu zeminlere dusuluyor`,
       );
-      return yanit([], "unavailable");
+      return createResponse([], "unavailable");
     }
 
-    const govde: unknown = await backendYaniti.json();
-    if (!Array.isArray(govde)) {
+    const body: unknown = await backendResponse.json();
+    if (!Array.isArray(body)) {
       console.warn("[api/backgrounds] backend dizi disi bir govde dondu");
-      return yanit([], "unavailable");
+      return createResponse([], "unavailable");
     }
 
     // Bozuk kayitlar tek tek eleniyor, tum liste degil: bir kaydin `url`'u
     // eksikse yalnizca o zemin kayboluyor, editor geri kalaniyla calisiyor.
-    const arkaPlanlar = govde
-      .map(kaydiCozumle)
-      .filter((kayit): kayit is ArkaPlanYaniti => kayit !== null);
+    const backgrounds = body
+      .map(parseRecord)
+      .filter((record): record is BackgroundResponse => record !== null);
 
-    return yanit(arkaPlanlar, "backend");
-  } catch (hata) {
+    return createResponse(backgrounds, "backend");
+  } catch (error) {
     console.warn(
       "[api/backgrounds] backend'e ulasilamadi; yer tutucu zeminlere dusuluyor:",
-      hata instanceof Error ? hata.message : hata,
+      error instanceof Error ? error.message : error,
     );
-    return yanit([], "unavailable");
+    return createResponse([], "unavailable");
   }
 }

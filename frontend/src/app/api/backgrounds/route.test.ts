@@ -2,20 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "@/app/api/backgrounds/route";
 
-function backendYaniti(govde: unknown, status = 200): Response {
+function backendResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => govde,
+    json: async () => body,
   } as unknown as Response;
 }
 
-let uyariCasusu: ReturnType<typeof vi.spyOn>;
+let warnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   // Vekil, backend'e ulasamadiginda bilincli olarak uyari log'luyor; test
   // ciktisini kirletmesin diye susturuluyor ama cagrildigi dogrulanabiliyor.
-  uyariCasusu = vi.spyOn(console, "warn").mockImplementation(() => {});
+  warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -29,18 +29,18 @@ describe("GET /api/backgrounds", () => {
       vi
         .fn()
         .mockResolvedValue(
-          backendYaniti([{ id: "a", url: "https://imzali/a", expires_in: 3600 }]),
+          backendResponse([{ id: "a", url: "https://signed/a", expires_in: 3600 }]),
         ),
     );
 
-    const yanit = await GET();
-    const govde = await yanit.json();
+    const response = await GET();
+    const body = await response.json();
 
-    expect(yanit.status).toBe(200);
-    expect(yanit.headers.get("X-Backgrounds-Source")).toBe("backend");
-    expect(yanit.headers.get("Cache-Control")).toBe("no-store");
-    expect(govde).toEqual([
-      { id: "a", url: "https://imzali/a", expiresIn: 3600 },
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Backgrounds-Source")).toBe("backend");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(body).toEqual([
+      { id: "a", url: "https://signed/a", expiresIn: 3600 },
     ]);
   });
 
@@ -51,38 +51,38 @@ describe("GET /api/backgrounds", () => {
     // dalini ele almak zorunda kalmasin.
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
-    const yanit = await GET();
+    const response = await GET();
 
-    expect(yanit.status).toBe(200);
-    expect(yanit.headers.get("X-Backgrounds-Source")).toBe("unavailable");
-    expect(await yanit.json()).toEqual([]);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Backgrounds-Source")).toBe("unavailable");
+    expect(await response.json()).toEqual([]);
     // Sessizce yutulmuyor: sunucu log'unda iz birakiyor.
-    expect(uyariCasusu).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   it("backend hata kodu dondurdugunde de bos listeye duser", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(backendYaniti({ detail: "patladi" }, 500)),
+      vi.fn().mockResolvedValue(backendResponse({ detail: "patladi" }, 500)),
     );
 
-    const yanit = await GET();
+    const response = await GET();
 
-    expect(yanit.status).toBe(200);
-    expect(yanit.headers.get("X-Backgrounds-Source")).toBe("unavailable");
-    expect(await yanit.json()).toEqual([]);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Backgrounds-Source")).toBe("unavailable");
+    expect(await response.json()).toEqual([]);
   });
 
   it("dizi disi govdeyi reddeder", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(backendYaniti({ id: "tek-nesne" })),
+      vi.fn().mockResolvedValue(backendResponse({ id: "single-object" })),
     );
 
-    const yanit = await GET();
+    const response = await GET();
 
-    expect(yanit.headers.get("X-Backgrounds-Source")).toBe("unavailable");
-    expect(await yanit.json()).toEqual([]);
+    expect(response.headers.get("X-Backgrounds-Source")).toBe("unavailable");
+    expect(await response.json()).toEqual([]);
   });
 
   it("expires_in yoksa varsayilan sure ile doldurur", async () => {
@@ -90,29 +90,29 @@ describe("GET /api/backgrounds", () => {
     // backend surumune karsi vekil tum listeyi cope atmamali.
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(backendYaniti([{ id: "a", url: "https://x/a" }])),
+      vi.fn().mockResolvedValue(backendResponse([{ id: "a", url: "https://x/a" }])),
     );
 
-    const govde = await (await GET()).json();
+    const body = await (await GET()).json();
 
-    expect(govde[0].expiresIn).toBeGreaterThan(0);
+    expect(body[0].expiresIn).toBeGreaterThan(0);
   });
 
   it("bozuk kayitlari eler, saglam olanlari gecirir", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        backendYaniti([
-          { id: "iyi", url: "https://x/iyi", expires_in: 60 },
-          { id: "urlsuz" },
-          "metin",
+        backendResponse([
+          { id: "good", url: "https://x/good", expires_in: 60 },
+          { id: "no-url" },
+          "text",
         ]),
       ),
     );
 
-    const govde = await (await GET()).json();
+    const body = await (await GET()).json();
 
-    expect(govde).toHaveLength(1);
-    expect(govde[0].id).toBe("iyi");
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe("good");
   });
 });

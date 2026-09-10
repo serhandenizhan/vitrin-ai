@@ -315,10 +315,26 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
   baskı koşulu doğrulanarak tamamlanacak.
 
-  **Kod standardı takip maddesi — Claude.** Faz 3 kaynak kodunda kalan Türkçe
-  identifierlar (değişkenler, tipler ve alanlar) `CLAUDE.md` dil kuralına uygun
-  biçimde İngilizceye taşınacak. Kullanıcı metinleri ve Türkçe yorumlar
-  değişmeyecek; dönüşüm TypeScript referanslarıyla güvenli biçimde yapılacak.
+  **Kod standardı — Türkçe identifierlar İngilizceye taşındı (10.09.2026).**
+  Kompozisyon editörü, katalog, zemin kaynağı ve stüdyo sözleşmesindeki
+  değişken, tip, alan ve bileşen adları `CLAUDE.md` dil kuralına uyduruldu;
+  kullanıcı metinleri ve Türkçe yorumlar değişmedi. İndirilen dosya adları
+  kullanıcıya göründüğü için Türkçe kaldı (`fileSlug`: `yuzuk-kare.png`,
+  `katalog-ikili.png`). `/katalog` rotası bir URL olduğu için değişmedi.
+
+  **Dışa aktarma hatası artık sessiz değil (10.09.2026).** `toDataURL` hata
+  atarsa sahne boyutu/ölçeği ve Transformer'lar `finally` ile geri yükleniyor
+  ve kullanıcıya mesaj gösteriliyor. Gerçek tarayıcıda ölçülen tuzak: Konva
+  "tainted" tuvalde hatayı fırlatmıyor, boş string döndürüyor — bu da hata
+  sayılıyor. İkisi için de regression testi var.
+
+  **R2 CORS — kısmen doğrulandı, sahibi: Serhan.** Sahte bir CORS'lu ve bir
+  CORS'suz origin'le gerçek tarayıcıda smoke test yapıldı: kural varken
+  2000×2000 çıktı zeminle birlikte doğru; kural yokken zemin sessizce
+  gradyana düşüyor. Gerçek bucket'a karşı doğrulama R2 kimlik bilgileri
+  olmadığı için yapılmadı; `backend/scripts/check_r2_cors.py` ve kural şablonu
+  (`backend/README.md` → "R2 CORS") hazır. Production alan adı belirlenince
+  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 5).
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,

@@ -88,9 +88,9 @@ type WorkspaceValue = {
    * kapatiyor — kullanici icin "baska bir alana gecmis" oluyor — ama arkadaki
    * durum korunuyor, geri donunce inceleme ekrani oldugu gibi duruyor.
    */
-  studyo: StudyoVerisi | null;
-  studyoAc: (veri: StudyoVerisi) => void;
-  studyoKapat: () => void;
+  studio: StudioData | null;
+  openStudio: (veri: StudioData) => void;
+  closeStudio: () => void;
 
   /**
    * Basa don: studyoyu kapatir, araci bos duruma alir ve sayfanin basina
@@ -107,7 +107,7 @@ type WorkspaceValue = {
    * zorunda kalirdi ki `react-hooks/set-state-in-effect` bunu hakli olarak
    * reddediyor (ayni gerekce: `subscribeToOpenWork`).
    */
-  anaMenuyeDon: () => void;
+  returnToStart: () => void;
   subscribeToReset: (listener: () => void) => () => void;
 };
 
@@ -144,9 +144,9 @@ function aracaKaydir(): void {
   }, 0);
 }
 
-export type StudyoVerisi = {
-  kesimUrl: string;
-  dosyaAdi: string;
+export type StudioData = {
+  cutoutUrl: string;
+  fileName: string;
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -162,7 +162,7 @@ export function useWorkspace(): WorkspaceValue {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSignInOpen, setSignInOpen] = useState(false);
-  const [studyo, setStudyo] = useState<StudyoVerisi | null>(null);
+  const [studio, setStudio] = useState<StudioData | null>(null);
   const [works, setWorks] = useState<WorkRecord[]>([]);
   const [isHistoryLoaded, setHistoryLoaded] = useState(false);
 
@@ -246,8 +246,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const anaMenuyeDon = useCallback(() => {
-    setStudyo(null);
+  const returnToStart = useCallback(() => {
+    setStudio(null);
     setSidebarOpen(false);
     for (const listener of resetListenersRef.current) listener();
     // `auto`: kullanici "basa don" dedi, yumusak kaydirma burada bekleme
@@ -287,17 +287,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeSignIn: () => setSignInOpen(false),
       settings,
       updateSettings,
-      anaMenuyeDon,
+      returnToStart,
       subscribeToReset,
-      studyo,
-      studyoAc: (veri: StudyoVerisi) => {
-        setStudyo(veri);
+      studio,
+      openStudio: (veri: StudioData) => {
+        setStudio(veri);
         // Studyo tam ekran; acik kalan kenar cubugu altinda gorunmez bir
         // sekilde durup geri donuldugunde sasirtici bicimde aciliyordu.
         setSidebarOpen(false);
       },
-      studyoKapat: () => {
-        setStudyo(null);
+      closeStudio: () => {
+        setStudio(null);
         // Studyo kapaninca kullanici sayfanin kaldigi yerde kaliyordu ve bu
         // genellikle tanitim bolumlerinin ortasiydi — sonuc ekrani ekranin
         // 1600 px altinda kaliyor, kullanici "geri gelemedim" saniyordu.
@@ -321,8 +321,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isSignInOpen,
       settings,
       updateSettings,
-      studyo,
-      anaMenuyeDon,
+      studio,
+      returnToStart,
       subscribeToReset,
     ],
   );

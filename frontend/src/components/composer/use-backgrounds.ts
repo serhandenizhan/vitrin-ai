@@ -32,55 +32,55 @@ export function useBackgrounds(): BackgroundState {
 
   // Zamanlayici id'si ref'te: her yenilemede yenisi kuruluyor, eskisi
   // temizleniyor. State'te tutmak gereksiz bir render turu acardi.
-  const zamanlayiciRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bilesen kaldirildiktan sonra ucan bir istek state'e yazmasin.
-  const canliRef = useRef(true);
+  const isMountedRef = useRef(true);
 
-  const yenile = useCallback(async () => {
-    const gelen = await fetchBackgrounds();
-    if (!canliRef.current) return;
-    setServerBackgrounds(gelen);
+  const refresh = useCallback(async () => {
+    const fetched = await fetchBackgrounds();
+    if (!isMountedRef.current) return;
+    setServerBackgrounds(fetched);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    canliRef.current = true;
-    void yenile();
+    isMountedRef.current = true;
+    void refresh();
     return () => {
-      canliRef.current = false;
-      if (zamanlayiciRef.current !== null) clearTimeout(zamanlayiciRef.current);
+      isMountedRef.current = false;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
-  }, [yenile]);
+  }, [refresh]);
 
   // Her yeni listede zamanlayici yeniden kuruluyor: gecikme, listedeki EN ERKEN
-  // olen URL'e gore hesaplaniyor (bkz. yenilemeGecikmesiHesapla).
+  // olen URL'e gore hesaplaniyor (bkz. calculateRefreshDelay).
   useEffect(() => {
-    if (zamanlayiciRef.current !== null) clearTimeout(zamanlayiciRef.current);
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
 
-    const gecikme = calculateRefreshDelay(serverBackgrounds);
-    if (gecikme === null) return;
+    const delay = calculateRefreshDelay(serverBackgrounds);
+    if (delay === null) return;
 
-    zamanlayiciRef.current = setTimeout(() => {
-      void yenile();
-    }, gecikme);
+    timerRef.current = setTimeout(() => {
+      void refresh();
+    }, delay);
 
     return () => {
-      if (zamanlayiciRef.current !== null) clearTimeout(zamanlayiciRef.current);
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
-  }, [serverBackgrounds, yenile]);
+  }, [serverBackgrounds, refresh]);
 
   // Sekme uzun sure arka planda kalirsa tarayici zamanlayiciyi kisabiliyor ya da
   // erteleyebiliyor; kullanici geri dondugunde URL'ler olmus olabilir. Gorunur
   // hale gelisi ikinci bir yenileme tetikleyicisi olarak kullaniyoruz —
   // zamanlayici tek basina yeterli degil.
   useEffect(() => {
-    function gorunurlukDegisti() {
-      if (document.visibilityState === "visible") void yenile();
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") void refresh();
     }
-    document.addEventListener("visibilitychange", gorunurlukDegisti);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
-      document.removeEventListener("visibilitychange", gorunurlukDegisti);
-  }, [yenile]);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [refresh]);
 
   const backgrounds = useMemo(
     () => createBackgroundList(serverBackgrounds),

@@ -6,7 +6,7 @@
  * TASARIM KARARI 1 — sahne her zaman KARE ve mantiksal olcusu sabit.
  *
  * Sahne ekranda kapsayicisina sigacak kadar kucuk cizilir, ama icindeki tum
- * koordinatlar `SAHNE_OLCUSU` (1000) uzerinden tutulur ve Konva'nin kendi
+ * koordinatlar `STAGE_SIZE` (1000) uzerinden tutulur ve Konva'nin kendi
  * `scale`'i ile kucultulur. Bunun iki faydasi var:
  *
  *  - Kullanicinin yaptigi yerlesim ekran boyutundan BAGIMSIZ. Telefonda
@@ -16,8 +16,8 @@
  *
  * TASARIM KARARI 2 — donusum (konum/olcek/aci) PARENT'ta tutuluyor.
  *
- * Sahne kendi ic durumunu saklamiyor; `donusum` prop'unu ciziyor ve kullanici
- * surukleyip olcekledikce `onDonusumDegisti` ile haber veriyor. Boylece yandaki
+ * Sahne kendi ic durumunu saklamiyor; `transform` prop'unu ciziyor ve kullanici
+ * surukleyip olcekledikce `onTransformChange` ile haber veriyor. Boylece yandaki
  * kontroller (boyut kaydiraci, ortala/sigdir, aci) ile tuvalin kendisi AYNI
  * veriyi paylasiyor — iki ayri dogruluk kaynagi olusmuyor. Konva ornegini disari
  * acip imperative cagrilar yapmak da mumkundu ama o zaman kaydiracin gosterdigi
@@ -32,33 +32,33 @@ import type { Background } from "@/lib/backgrounds";
 // Saf geometri `@/lib/composition` icinde: Konva/React'ten bagimsiz oldugu icin
 // Node ortaminda canvas yuklemeden test edilebiliyor.
 import {
-  CIKTI_OLCUSU,
-  type Donusum,
-  type Gorunum,
-  SAHNE_OLCUSU,
-  SIGDIRMA_PAYI,
-  merkezeYakala,
-  sahneyeSigdir,
-  sigdirmaDonusumu,
+  OUTPUT_SIZE,
+  type Appearance,
+  STAGE_SIZE,
+  FIT_MARGIN,
+  type Transform,
+  fitToStage,
+  fitTransform,
+  snapToCenter,
 } from "@/lib/composition";
 
-export { CIKTI_OLCUSU, SAHNE_OLCUSU, SIGDIRMA_PAYI, sigdirmaDonusumu };
-export type { Donusum };
+export { OUTPUT_SIZE, STAGE_SIZE, FIT_MARGIN, fitTransform };
+export type { Transform };
 
 export type EditorStageProps = {
-  kesimUrl: string;
-  zemin: Background;
+  cutoutUrl: string;
+  background: Background;
   /** Sahnenin ekrandaki GENISLIGI; yukseklik mantiksal orandan turetiliyor. */
-  ekranOlcusu: number;
-  sahneGenislik: number;
-  sahneYukseklik: number;
+  displayWidth: number;
+  stageWidth: number;
+  stageHeight: number;
   /** `null` iken sahne kesim yuklenince kendi baslangic yerlesimini hesaplar. */
-  donusum: Donusum | null;
-  gorunum: Gorunum;
-  onDonusumDegisti: (donusum: Donusum) => void;
+  transform: Transform | null;
+  appearance: Appearance;
+  onTransformChange: (transform: Transform) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
-  onKesimOlculeri: (olculer: { genislik: number; yukseklik: number }) => void;
-  onStageHazir: (stage: Konva.Stage | null) => void;
+  onCutoutSize: (size: { width: number; height: number }) => void;
+  onStageReady: (stage: Konva.Stage | null) => void;
 };
 
 /**
@@ -67,22 +67,26 @@ export type EditorStageProps = {
  * `useImage` benzeri bir paket eklemek yerine elle yaziliyor: tek ihtiyacimiz
  * olan sey bu ve `crossOrigin` ayarini kendimiz kontrol etmemiz gerekiyor —
  * R2'den gelen imzali URL'ler farkli bir kaynaktan geliyor ve `crossOrigin`
- * ayarlanmazsa canvas "tainted" hale gelir, `toDataURL` sessizce SecurityError
- * firlatir. Bu, tam olarak disa aktarma aninda ortaya cikan bir hata olurdu.
- * TODO(Claude): R2 bucket'in production ve localhost originleri icin GET/HEAD
- * CORS kurali gercek ortamda doğrulanmali; imzali URL ile tarayici export smoke
- * testi kayda gecmeli.
+ * ayarlanmazsa canvas "tainted" hale gelir; Konva bu durumda SecurityError'i
+ * kendisi yakalayip BOS bir veri URL'i dondurur (bkz. composition-editor.tsx).
+ *
+ * `crossOrigin` ayarliyken bucket'in CORS kurali o origin'i icermiyorsa ise
+ * tarayici gorseli HIC yuklemiyor: `onerror` calisiyor ve sahne gradyana
+ * dusuyor. Kucuk onizleme CSS arka plani oldugu icin (CORS gerektirmiyor)
+ * yine gorunuyor — yani eksik kural gozle fark edilmiyor, cikti zeminsiz
+ * iniyor. Tarayicida sahte bir CORS'suz origin'le birebir olculdu. Kuralin
+ * gercek bucket'ta dogrulanmasi: `backend/scripts/check_r2_cors.py`.
  */
-function useGorsel(url: string | null): HTMLImageElement | null {
+function useLoadedImage(url: string | null): HTMLImageElement | null {
   // Yuklenen gorsel, GELDIGI URL ile birlikte saklaniyor. Yalnizca gorseli
   // saklasaydik, URL degistigi anda (zemin degistirildiginde) yenisi yuklenene
   // kadar EKSIGININ yerine bir onceki zemin gorunurdu. URL'i yaninda tutmak,
   // "bu gorsel su anki url'e mi ait" sorusunu render sirasinda cevaplatiyor;
   // boylece efekt icinde senkron `setState` cagirmaya da gerek kalmiyor
   // (React Compiler bunu hakli olarak uyariyor: kaskad render uretir).
-  const [yuklenen, setYuklenen] = useState<{
+  const [loaded, setLoaded] = useState<{
     url: string;
-    gorsel: HTMLImageElement;
+    image: HTMLImageElement;
   } | null>(null);
 
   useEffect(() => {
@@ -91,41 +95,41 @@ function useGorsel(url: string | null): HTMLImageElement | null {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
 
-    let iptal = false;
+    let cancelled = false;
     img.onload = () => {
-      if (!iptal) setYuklenen({ url, gorsel: img });
+      if (!cancelled) setLoaded({ url, image: img });
     };
     // `onerror` bilincli olarak state'e dokunmuyor: zemin yuklenemezse
-    // `yuklenen.url` bu url'e hic esitlenmiyor ve asagidaki karsilastirma
+    // `loaded.url` bu url'e hic esitlenmiyor ve asagidaki karsilastirma
     // `null` donuyor — cagiran taraf gradyana dusuyor. Kirik bir gorsel
     // gostermektense zemini yok saymak daha az yaniltici.
     img.src = url;
 
     return () => {
-      iptal = true;
+      cancelled = true;
     };
   }, [url]);
 
-  return yuklenen !== null && yuklenen.url === url ? yuklenen.gorsel : null;
+  return loaded !== null && loaded.url === url ? loaded.image : null;
 }
 
 export function EditorStage({
-  kesimUrl,
-  zemin,
-  ekranOlcusu,
-  sahneGenislik,
-  sahneYukseklik,
-  donusum,
-  gorunum,
-  onDonusumDegisti,
-  onKesimOlculeri,
-  onStageHazir,
+  cutoutUrl,
+  background,
+  displayWidth,
+  stageWidth,
+  stageHeight,
+  transform,
+  appearance,
+  onTransformChange,
+  onCutoutSize,
+  onStageReady,
 }: EditorStageProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
-  const kesimRef = useRef<Konva.Image | null>(null);
+  const cutoutRef = useRef<Konva.Image | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
 
-  const [secili, setSecili] = useState(true);
+  const [isSelected, setIsSelected] = useState(true);
 
   /**
    * Cift parmakla yakinlastirma.
@@ -138,56 +142,58 @@ export function EditorStage({
    * Ref'te tutuluyor cunku hareket sirasinda okunuyor; state olsaydi kapanis
    * eski degeri gorurdu (Faz 2'de ayni tuzaga dusulmustu).
    */
-  const dokunmaRef = useRef<{ mesafe: number; olcek: number } | null>(null);
+  const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
 
-  const kesim = useGorsel(kesimUrl);
-  const zeminGorseli = useGorsel(zemin.type === "sunucu" ? zemin.url : null);
+  const cutout = useLoadedImage(cutoutUrl);
+  const backgroundImage = useLoadedImage(
+    background.type === "server" ? background.url : null,
+  );
 
   useEffect(() => {
-    onStageHazir(stageRef.current);
-    return () => onStageHazir(null);
-  }, [onStageHazir]);
+    onStageReady(stageRef.current);
+    return () => onStageReady(null);
+  }, [onStageReady]);
 
   // Kesim yuklendiginde dogal olculeri ve baslangic yerlesimi parent'a bildir.
   // Efektten cagrilan bir callback; senkron `setState` degil, bu yuzden
   // React Compiler'in kaskad-render uyarisini tetiklemiyor.
   useEffect(() => {
-    if (!kesim) return;
-    onKesimOlculeri({ genislik: kesim.width, yukseklik: kesim.height });
-  }, [kesim, onKesimOlculeri]);
+    if (!cutout) return;
+    onCutoutSize({ width: cutout.width, height: cutout.height });
+  }, [cutout, onCutoutSize]);
 
   // Transformer'i secili nesneye bagla. Konva'da bu elle yapilmali:
   // transformer, node listesini kendisi kesfetmiyor.
   useEffect(() => {
     const transformer = transformerRef.current;
-    const kesimNode = kesimRef.current;
+    const cutoutNode = cutoutRef.current;
     if (!transformer) return;
 
-    transformer.nodes(secili && kesimNode ? [kesimNode] : []);
+    transformer.nodes(isSelected && cutoutNode ? [cutoutNode] : []);
     transformer.getLayer()?.batchDraw();
-  }, [secili, kesim, donusum]);
+  }, [isSelected, cutout, transform]);
 
-  const ekranOlcegi = ekranOlcusu / sahneGenislik;
-  const ekranYuksekligi = sahneYukseklik * ekranOlcegi;
+  const displayScale = displayWidth / stageWidth;
+  const displayHeight = stageHeight * displayScale;
 
   // Sahne kucultulmus ciziliyor; cizgi ve tutamak olculeri bu olcege BOLUNUYOR
   // ki ekranda her zaman ayni kalinlikta gorunsunler. Bolunmezse tutamaklar
   // kucuk ekranlarda devasa, buyuk ekranlarda goze gorunmez olurdu.
-  const ekranPikseli = useCallback(
-    (piksel: number) => piksel / ekranOlcegi,
-    [ekranOlcegi],
+  const screenPixels = useCallback(
+    (pixels: number) => pixels / displayScale,
+    [displayScale],
   );
 
-  const donusumuBildir = useCallback(() => {
-    const node = kesimRef.current;
+  const reportTransform = useCallback(() => {
+    const node = cutoutRef.current;
     if (!node) return;
-    onDonusumDegisti({
+    onTransformChange({
       x: node.x(),
       y: node.y(),
-      olcek: node.scaleX(),
-      aci: node.rotation(),
+      scale: node.scaleX(),
+      rotation: node.rotation(),
     });
-  }, [onDonusumDegisti]);
+  }, [onTransformChange]);
 
   // Konva'da filtreler YALNIZCA cache'lenmis bir node uzerinde calisir: filtre
   // zinciri, node'un onbellege alinmis tuvaline uygulaniyor. Cache bir kez
@@ -196,79 +202,75 @@ export function EditorStage({
   // her kaydirac hareketinde cache almak buyuk gorsellerde gozle gorulur bir
   // takilma yaratirdi.
   useEffect(() => {
-    const node = kesimRef.current;
-    if (!node || !kesim) return;
+    const node = cutoutRef.current;
+    if (!node || !cutout) return;
     node.cache();
     node.getLayer()?.batchDraw();
-  }, [kesim]);
+  }, [cutout]);
 
-  const yerlesim = useMemo(() => {
-    if (donusum) return donusum;
-    if (!kesim) return null;
-    return sahneyeSigdir(sahneGenislik, sahneYukseklik, kesim.width, kesim.height);
-  }, [donusum, kesim, sahneGenislik, sahneYukseklik]);
+  const placement = useMemo(() => {
+    if (transform) return transform;
+    if (!cutout) return null;
+    return fitToStage(stageWidth, stageHeight, cutout.width, cutout.height);
+  }, [transform, cutout, stageWidth, stageHeight]);
 
   return (
     <Stage
       ref={stageRef}
-      width={ekranOlcusu}
-      height={ekranYuksekligi}
-      scaleX={ekranOlcegi}
-      scaleY={ekranOlcegi}
-      onMouseDown={(olay) => {
+      width={displayWidth}
+      height={displayHeight}
+      scaleX={displayScale}
+      scaleY={displayScale}
+      onMouseDown={(event) => {
         // Bos alana tiklamak secimi kaldirir — tutamaklarin surekli ekranda
         // durmasi, kullanicinin sonucu degerlendirmesini zorlastiriyor.
-        if (olay.target === olay.target.getStage()) setSecili(false);
+        if (event.target === event.target.getStage()) setIsSelected(false);
       }}
-      onTouchStart={(olay) => {
-        const dokunuslar = olay.evt.touches;
-        if (dokunuslar.length === 2) {
+      onTouchStart={(event) => {
+        const touches = event.evt.touches;
+        if (touches.length === 2) {
           // Iki parmak: yakinlastirma basliyor, secim degismiyor.
-          olay.evt.preventDefault();
-          const [a, b] = [dokunuslar[0], dokunuslar[1]];
-          dokunmaRef.current = {
-            mesafe: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
-            olcek: yerlesim?.olcek ?? 1,
+          event.evt.preventDefault();
+          const [a, b] = [touches[0], touches[1]];
+          pinchRef.current = {
+            distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+            scale: placement?.scale ?? 1,
           };
           return;
         }
-        if (olay.target === olay.target.getStage()) setSecili(false);
+        if (event.target === event.target.getStage()) setIsSelected(false);
       }}
-      onTouchMove={(olay) => {
-        const dokunuslar = olay.evt.touches;
-        const baslangic = dokunmaRef.current;
-        if (dokunuslar.length !== 2 || !baslangic || !yerlesim) return;
+      onTouchMove={(event) => {
+        const touches = event.evt.touches;
+        const start = pinchRef.current;
+        if (touches.length !== 2 || !start || !placement) return;
 
-        olay.evt.preventDefault();
-        const [a, b] = [dokunuslar[0], dokunuslar[1]];
-        const mesafe = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-        if (baslangic.mesafe === 0) return;
+        event.evt.preventDefault();
+        const [a, b] = [touches[0], touches[1]];
+        const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        if (start.distance === 0) return;
 
-        onDonusumDegisti({
-          ...yerlesim,
-          olcek: baslangic.olcek * (mesafe / baslangic.mesafe),
+        onTransformChange({
+          ...placement,
+          scale: start.scale * (distance / start.distance),
         });
       }}
       onTouchEnd={() => {
-        dokunmaRef.current = null;
+        pinchRef.current = null;
       }}
     >
       <Layer listening={false}>
-        {zeminGorseli ? (
-          <KonvaImage
-            image={zeminGorseli}
-            width={sahneGenislik}
-            height={sahneYukseklik}
-          />
+        {backgroundImage ? (
+          <KonvaImage image={backgroundImage} width={stageWidth} height={stageHeight} />
         ) : (
           <Rect
-            width={sahneGenislik}
-            height={sahneYukseklik}
+            width={stageWidth}
+            height={stageHeight}
             fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-            fillLinearGradientEndPoint={{ x: sahneGenislik, y: sahneYukseklik }}
+            fillLinearGradientEndPoint={{ x: stageWidth, y: stageHeight }}
             fillLinearGradientColorStops={
-              zemin.type === "yer-tutucu"
-                ? zemin.gradient
+              background.type === "placeholder"
+                ? background.gradient
                 : [0, "#1d1d1f", 1, "#000000"]
             }
           />
@@ -280,14 +282,14 @@ export function EditorStage({
           urun zeminden ayrisiyor. Zemin katmaninda duruyor ki urunun ONUNE
           gecmesin; urunun uzerine dusen bir vinyet urunu soluklastirirdi.
         */}
-        {gorunum.isikHavuzu ? (
+        {appearance.spotlight ? (
           <Rect
-            width={sahneGenislik}
-            height={sahneYukseklik}
-            fillRadialGradientStartPoint={{ x: sahneGenislik / 2, y: sahneYukseklik / 2 }}
-            fillRadialGradientEndPoint={{ x: sahneGenislik / 2, y: sahneYukseklik / 2 }}
+            width={stageWidth}
+            height={stageHeight}
+            fillRadialGradientStartPoint={{ x: stageWidth / 2, y: stageHeight / 2 }}
+            fillRadialGradientEndPoint={{ x: stageWidth / 2, y: stageHeight / 2 }}
             fillRadialGradientStartRadius={0}
-            fillRadialGradientEndRadius={Math.max(sahneGenislik, sahneYukseklik) * 0.62}
+            fillRadialGradientEndRadius={Math.max(stageWidth, stageHeight) * 0.62}
             fillRadialGradientColorStops={[
               0,
               "rgba(255,255,255,0.30)",
@@ -301,20 +303,20 @@ export function EditorStage({
       </Layer>
 
       <Layer>
-        {kesim && yerlesim ? (
+        {cutout && placement ? (
           <KonvaImage
-            ref={kesimRef}
-            image={kesim}
-            x={yerlesim.x}
-            y={yerlesim.y}
+            ref={cutoutRef}
+            image={cutout}
+            x={placement.x}
+            y={placement.y}
             // `offset` gorselin merkezine kuruluyor: dondurme ve olcekleme
             // kosede degil MERKEZDE olsun. Varsayilan sol-ust cikis noktasiyla
             // dondurmek, kullaniciya nesnenin "kacmasi" gibi gorunur.
-            offsetX={kesim.width / 2}
-            offsetY={kesim.height / 2}
-            scaleX={yerlesim.olcek}
-            scaleY={yerlesim.olcek}
-            rotation={yerlesim.aci}
+            offsetX={cutout.width / 2}
+            offsetY={cutout.height / 2}
+            scaleX={placement.scale}
+            scaleY={placement.scale}
+            rotation={placement.rotation}
             draggable
             // Filtreler yukaridaki `cache()` ile birlikte calisiyor.
             filters={[
@@ -322,30 +324,30 @@ export function EditorStage({
               Konva.Filters.Contrast,
               Konva.Filters.HSL,
             ]}
-            brightness={gorunum.parlaklik}
-            contrast={gorunum.kontrast}
-            saturation={gorunum.doygunluk}
+            brightness={appearance.brightness}
+            contrast={appearance.contrast}
+            saturation={appearance.saturation}
             // Golge urunu zemine "oturtuyor". Olcuier sahne koordinatinda
             // (1000 birim) verildigi icin urun buyudukce golge de buyuyor;
             // sabit piksel verilseydi buyuk urunlerde golge kaybolurdu.
-            shadowEnabled={gorunum.golge}
+            shadowEnabled={appearance.shadow}
             shadowColor="#000000"
-            shadowBlur={38 / (yerlesim.olcek || 1)}
+            shadowBlur={38 / (placement.scale || 1)}
             shadowOpacity={0.32}
-            shadowOffsetY={26 / (yerlesim.olcek || 1)}
-            dragBoundFunc={(konum) => {
+            shadowOffsetY={26 / (placement.scale || 1)}
+            dragBoundFunc={(position) => {
               // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
               // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
               // olcegiyle carpip boluyoruz.
               return {
-                x: merkezeYakala(konum.x, (sahneGenislik / 2) * ekranOlcegi),
-                y: merkezeYakala(konum.y, (sahneYukseklik / 2) * ekranOlcegi),
+                x: snapToCenter(position.x, (stageWidth / 2) * displayScale),
+                y: snapToCenter(position.y, (stageHeight / 2) * displayScale),
               };
             }}
-            onMouseDown={() => setSecili(true)}
-            onTouchStart={() => setSecili(true)}
-            onDragEnd={donusumuBildir}
-            onTransformEnd={donusumuBildir}
+            onMouseDown={() => setIsSelected(true)}
+            onTouchStart={() => setIsSelected(true)}
+            onDragEnd={reportTransform}
+            onTransformEnd={reportTransform}
           />
         ) : null}
 
@@ -366,15 +368,15 @@ export function EditorStage({
           // kalin dikdortgen cerceve kullaniliyordu ve urunun onune geciyordu:
           // kullanici sonucu degerlendirmeye calisirken gozu once secim
           // kutusuna takiliyordu. Cerceve artik yalnizca bir ipucu.
-          anchorSize={ekranPikseli(7)}
-          anchorCornerRadius={ekranPikseli(3.5)}
+          anchorSize={screenPixels(7)}
+          anchorCornerRadius={screenPixels(3.5)}
           anchorStroke="#b08d4f"
           anchorFill="#ffffff"
-          anchorStrokeWidth={ekranPikseli(1.25)}
+          anchorStrokeWidth={screenPixels(1.25)}
           borderStroke="#b08d4f"
-          borderStrokeWidth={ekranPikseli(1)}
-          borderDash={[ekranPikseli(4), ekranPikseli(4)]}
-          rotateAnchorOffset={ekranPikseli(22)}
+          borderStrokeWidth={screenPixels(1)}
+          borderDash={[screenPixels(4), screenPixels(4)]}
+          rotateAnchorOffset={screenPixels(22)}
           // 15 derecelik kademeler: kuyumcu vitrini kompozisyonlarinda aci
           // genellikle ya duz ya da belirgin bir egim. Serbest aci hala mumkun
           // (kademe yalnizca yakinina gelindiginde yakaliyor), ama duz durmasi
@@ -382,8 +384,8 @@ export function EditorStage({
           rotationSnaps={[0, 15, 30, 45, 60, 75, 90, 180, 270]}
           rotationSnapTolerance={4}
           // Cok kucultup nesneyi kaybetmeyi engelle.
-          boundBoxFunc={(eski, yeni) =>
-            yeni.width < 24 || yeni.height < 24 ? eski : yeni
+          boundBoxFunc={(oldBox, newBox) =>
+            newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
           }
         />
       </Layer>

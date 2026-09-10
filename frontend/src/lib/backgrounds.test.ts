@@ -9,47 +9,47 @@ import {
   fetchBackgrounds,
 } from "@/lib/backgrounds";
 
-function sunucuZemini(
-  ozellikler: Partial<ServerBackground> = {},
+function serverBackground(
+  overrides: Partial<ServerBackground> = {},
 ): ServerBackground {
   return {
-    type: "sunucu",
+    type: "server",
     id: "z1",
     name: "Zemin 1",
-    url: "https://imzali.example/z1",
+    url: "https://signed.example/z1",
     expiresInSeconds: 3600,
     fetchedAt: 1_000_000,
-    ...ozellikler,
+    ...overrides,
   };
 }
 
-function yanitOlustur(govde: unknown, ok = true): Response {
+function createResponse(body: unknown, ok = true): Response {
   return {
     ok,
-    json: async () => govde,
+    json: async () => body,
   } as unknown as Response;
 }
 
-describe("yenilemeGecikmesiHesapla", () => {
+describe("calculateRefreshDelay", () => {
   it("sunucu zemini yoksa yenileme planlamaz", () => {
     expect(calculateRefreshDelay(PLACEHOLDER_BACKGROUNDS)).toBeNull();
   });
 
   it("omrun %75'inde yeniler", () => {
-    const zemin = sunucuZemini({ expiresInSeconds: 3600, fetchedAt: 0 });
+    const background = serverBackground({ expiresInSeconds: 3600, fetchedAt: 0 });
 
     // Saat 0'da alindi, omur 1 saat -> 45. dakikada yenilenmeli.
-    expect(calculateRefreshDelay([zemin], 0)).toBe(
+    expect(calculateRefreshDelay([background], 0)).toBe(
       3600 * 1000 * REFRESH_RATIO,
     );
   });
 
   it("gecen sureyi dusuyor", () => {
-    const zemin = sunucuZemini({ expiresInSeconds: 3600, fetchedAt: 0 });
-    const onDakika = 10 * 60 * 1000;
+    const background = serverBackground({ expiresInSeconds: 3600, fetchedAt: 0 });
+    const tenMinutes = 10 * 60 * 1000;
 
-    expect(calculateRefreshDelay([zemin], onDakika)).toBe(
-      3600 * 1000 * REFRESH_RATIO - onDakika,
+    expect(calculateRefreshDelay([background], tenMinutes)).toBe(
+      3600 * 1000 * REFRESH_RATIO - tenMinutes,
     );
   });
 
@@ -57,37 +57,37 @@ describe("yenilemeGecikmesiHesapla", () => {
     // Liste tek seferde yenilendigi icin en kisa omurlu kayit hepsini birden
     // tetiklemeli; aksi halde kisa omurlu zemin, uzun omurlunun yenilenmesini
     // beklerken oluyordu.
-    const uzun = sunucuZemini({ id: "uzun", expiresInSeconds: 3600, fetchedAt: 0 });
-    const kisa = sunucuZemini({ id: "kisa", expiresInSeconds: 600, fetchedAt: 0 });
+    const long = serverBackground({ id: "long", expiresInSeconds: 3600, fetchedAt: 0 });
+    const short = serverBackground({ id: "short", expiresInSeconds: 600, fetchedAt: 0 });
 
-    expect(calculateRefreshDelay([uzun, kisa], 0)).toBe(
+    expect(calculateRefreshDelay([long, short], 0)).toBe(
       600 * 1000 * REFRESH_RATIO,
     );
   });
 
   it("kisa omurlu URL'i suresi dolmadan yeniler", () => {
-    const zemin = sunucuZemini({ expiresInSeconds: 10, fetchedAt: 0 });
+    const background = serverBackground({ expiresInSeconds: 10, fetchedAt: 0 });
 
-    expect(calculateRefreshDelay([zemin], 0)).toBe(7_500);
+    expect(calculateRefreshDelay([background], 0)).toBe(7_500);
   });
 
   it("sure zaten dolmussa hemen yeniler, negatif dondurmez", () => {
     // Sekme uzun sure arka planda kalip zamanlayici gec calistiginda olusan
     // durum. Negatif bir gecikme `setTimeout`'ta hemen tetiklenir ve arka arkaya
     // yenileme dongusu riski dogurur.
-    const zemin = sunucuZemini({ expiresInSeconds: 60, fetchedAt: 0 });
-    const birSaatSonra = 3600 * 1000;
+    const background = serverBackground({ expiresInSeconds: 60, fetchedAt: 0 });
+    const oneHourLater = 3600 * 1000;
 
-    expect(calculateRefreshDelay([zemin], birSaatSonra)).toBe(0);
+    expect(calculateRefreshDelay([background], oneHourLater)).toBe(0);
   });
 });
 
-describe("zeminListesiOlustur", () => {
+describe("createBackgroundList", () => {
   it("yer tutucular sunucu zeminleri gelse de listede kalir", () => {
-    const liste = createBackgroundList([sunucuZemini()]);
+    const list = createBackgroundList([serverBackground()]);
 
-    expect(liste).toHaveLength(1 + PLACEHOLDER_BACKGROUNDS.length);
-    expect(liste[0].type).toBe("sunucu");
+    expect(list).toHaveLength(1 + PLACEHOLDER_BACKGROUNDS.length);
+    expect(list[0].type).toBe("server");
   });
 
   it("sunucu zemini yokken bile liste bos degil", () => {
@@ -97,19 +97,19 @@ describe("zeminListesiOlustur", () => {
   });
 });
 
-describe("zeminleriGetir", () => {
+describe("fetchBackgrounds", () => {
   it("backend kayitlarini cozumler", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        yanitOlustur([{ id: "a", url: "https://x/a", expiresIn: 900 }]),
+        createResponse([{ id: "a", url: "https://x/a", expiresIn: 900 }]),
       );
 
-    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
-    expect(zeminler).toHaveLength(1);
-    expect(zeminler[0].id).toBe("a");
-    expect(zeminler[0].expiresInSeconds).toBe(900);
+    expect(backgrounds).toHaveLength(1);
+    expect(backgrounds[0].id).toBe("a");
+    expect(backgrounds[0].expiresInSeconds).toBe(900);
   });
 
   it("expires_in yoksa varsayilan sureye duser", async () => {
@@ -117,11 +117,11 @@ describe("zeminleriGetir", () => {
     // backend surumune karsi da calismali.
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(yanitOlustur([{ id: "a", url: "https://x/a" }]));
+      .mockResolvedValue(createResponse([{ id: "a", url: "https://x/a" }]));
 
-    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
-    expect(zeminler[0].expiresInSeconds).toBeGreaterThan(0);
+    expect(backgrounds[0].expiresInSeconds).toBeGreaterThan(0);
   });
 
   it("ag hatasinda firlatmaz, bos liste doner", async () => {
@@ -135,7 +135,7 @@ describe("zeminleriGetir", () => {
   it("dizi disi govdede bos liste doner", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(yanitOlustur({ hata: "beklenmedik" }));
+      .mockResolvedValue(createResponse({ error: "unexpected" }));
 
     await expect(
       fetchBackgrounds(fetchMock as unknown as typeof fetch),
@@ -144,16 +144,16 @@ describe("zeminleriGetir", () => {
 
   it("bozuk kayitlari eler, saglamlari korur", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      yanitOlustur([
-        { id: "iyi", url: "https://x/iyi", expiresIn: 300 },
-        { id: "urlsuz" },
+      createResponse([
+        { id: "good", url: "https://x/good", expiresIn: 300 },
+        { id: "no-url" },
         null,
       ]),
     );
 
-    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
-    expect(zeminler).toHaveLength(1);
-    expect(zeminler[0].id).toBe("iyi");
+    expect(backgrounds).toHaveLength(1);
+    expect(backgrounds[0].id).toBe("good");
   });
 });

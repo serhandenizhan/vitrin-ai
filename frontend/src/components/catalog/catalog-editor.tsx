@@ -26,22 +26,23 @@ import {
 
 import {
   CatalogPageView,
-  type YuvaIcerigi,
+  type SlotContent,
 } from "@/components/catalog/catalog-page-view";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
-  CIKTI_GENISLIK,
-  CIKTI_YUKSEKLIK,
-  katalogCiz,
+  CATALOG_HEIGHT,
+  CATALOG_WIDTH,
+  renderCatalog,
 } from "@/lib/catalog-export";
 import {
-  EN_BUYUK_OLCEK,
-  EN_KUCUK_OLCEK,
-  SABLONLAR,
-  type SablonAdi,
-  VARSAYILAN_DONUSUM,
-  type YuvaDonusumu,
+  type CatalogTexts,
+  DEFAULT_SLOT_TRANSFORM,
+  MAX_SLOT_SCALE,
+  MIN_SLOT_SCALE,
+  type SlotTransform,
+  TEMPLATES,
+  type TemplateName,
 } from "@/lib/catalog-templates";
 import { validateFile } from "@/lib/upload-constraints";
 
@@ -52,33 +53,33 @@ import { validateFile } from "@/lib/upload-constraints";
  * (bkz. scripts/prepare-showcase.mjs). Kullanici bos bir sayfayla degil,
  * calisan bir ornekle karsilasiyor; fikri anlatmanin en kisa yolu bu.
  */
-const ORNEK = {
-  sablon: "ikili" as SablonAdi,
-  metinler: {
-    ustEtiket: "Sonbahar 2026",
-    baslik: "Pırlanta Koleksiyonu",
-    altBilgi: "Vitrin AI ile hazırlandı",
+const SAMPLE: { template: TemplateName; texts: CatalogTexts; images: string[] } = {
+  template: "duo",
+  texts: {
+    eyebrow: "Sonbahar 2026",
+    title: "Pırlanta Koleksiyonu",
+    footer: "Vitrin AI ile hazırlandı",
   },
-  gorseller: ["/showcase/vitrin-kadife.webp", "/showcase/vitrin-altin.webp"],
+  images: ["/showcase/vitrin-kadife.webp", "/showcase/vitrin-altin.webp"],
 };
 
-const VARSAYILAN_METINLER = {
-  ustEtiket: "Sonbahar 2026",
-  baslik: "Yeni Koleksiyon",
-  altBilgi: "Vitrin AI ile hazırlandı",
+const DEFAULT_TEXTS: CatalogTexts = {
+  eyebrow: "Sonbahar 2026",
+  title: "Yeni Koleksiyon",
+  footer: "Vitrin AI ile hazırlandı",
 };
 
 export function CatalogEditor() {
   const { works, isHistoryLoaded } = useWorkspace();
 
-  const [sablonAdi, setSablonAdi] = useState<SablonAdi | null>(null);
-  const [yuvalar, setYuvalar] = useState<YuvaIcerigi[]>([]);
-  const [metinler, setMetinler] = useState(VARSAYILAN_METINLER);
-  const [seciliYuva, setSeciliYuva] = useState<number | null>(null);
-  const [hata, setHata] = useState<string | null>(null);
-  const [disaAktariliyor, setDisaAktariliyor] = useState(false);
+  const [templateName, setTemplateName] = useState<TemplateName | null>(null);
+  const [slots, setSlots] = useState<SlotContent[]>([]);
+  const [texts, setTexts] = useState(DEFAULT_TEXTS);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const dosyaGirdisiRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor.
   const objectUrlRef = useRef<string[]>([]);
@@ -87,135 +88,135 @@ export function CatalogEditor() {
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  const sablon = sablonAdi ? SABLONLAR[sablonAdi] : null;
+  const template = templateName ? TEMPLATES[templateName] : null;
 
   // Gorunen yuva listesi RENDER SIRASINDA turetiliyor. Boylece iki yuvali
   // sablondan tek yuvaliya gecip geri donuldugunde ikinci gorsel KAYBOLMUYOR.
-  const gorunenYuvalar = useMemo(
+  const visibleSlots = useMemo(
     () =>
-      sablon
-        ? Array.from({ length: sablon.yuvalar.length }, (_, i) => yuvalar[i] ?? null)
+      template
+        ? Array.from({ length: template.slots.length }, (_, i) => slots[i] ?? null)
         : [],
-    [sablon, yuvalar],
+    [template, slots],
   );
 
-  const doluSayisi = gorunenYuvalar.filter(Boolean).length;
+  const filledCount = visibleSlots.filter(Boolean).length;
 
   /** Bir URL'den yuva icerigi kurar; dogal olculeri okumak icin gorseli yukler. */
-  const icerikKur = useCallback(
-    (url: string, ad: string): Promise<NonNullable<YuvaIcerigi>> =>
-      new Promise((coz, reddet) => {
+  const buildContent = useCallback(
+    (url: string, name: string): Promise<NonNullable<SlotContent>> =>
+      new Promise((resolve, reject) => {
         const img = new window.Image();
         img.crossOrigin = "anonymous";
         img.onload = () =>
-          coz({
+          resolve({
             url,
-            ad,
-            genislik: img.width,
-            yukseklik: img.height,
-            donusum: { ...VARSAYILAN_DONUSUM },
+            name,
+            width: img.width,
+            height: img.height,
+            transform: { ...DEFAULT_SLOT_TRANSFORM },
           });
-        img.onerror = () => reddet(new Error("Görsel yüklenemedi"));
+        img.onerror = () => reject(new Error("Görsel yüklenemedi"));
         img.src = url;
       }),
     [],
   );
 
-  const yuvayaKoy = useCallback(
-    async (sira: number, url: string, ad: string) => {
+  const placeInSlot = useCallback(
+    async (index: number, url: string, name: string) => {
       try {
-        const icerik = await icerikKur(url, ad);
-        setYuvalar((onceki) => {
-          const yeni = [...onceki];
-          yeni[sira] = icerik;
-          return yeni;
+        const content = await buildContent(url, name);
+        setSlots((previous) => {
+          const next = [...previous];
+          next[index] = content;
+          return next;
         });
-        setHata(null);
+        setError(null);
       } catch {
-        setHata("Görsel yüklenemedi.");
+        setError("Görsel yüklenemedi.");
       }
     },
-    [icerikKur],
+    [buildContent],
   );
 
-  const ornekleBasla = useCallback(async () => {
-    setSablonAdi(ORNEK.sablon);
-    setMetinler(ORNEK.metinler);
-    const icerikler = await Promise.all(
-      ORNEK.gorseller.map((url, i) => icerikKur(url, `örnek-${i + 1}`)),
+  const startWithSample = useCallback(async () => {
+    setTemplateName(SAMPLE.template);
+    setTexts(SAMPLE.texts);
+    const contents = await Promise.all(
+      SAMPLE.images.map((url, i) => buildContent(url, `örnek-${i + 1}`)),
     );
-    setYuvalar(icerikler);
-    setSeciliYuva(null);
-  }, [icerikKur]);
+    setSlots(contents);
+    setSelectedSlot(null);
+  }, [buildContent]);
 
-  const donusumuGuncelle = useCallback(
-    (sira: number, yama: Partial<YuvaDonusumu>) => {
-      setYuvalar((onceki) => {
-        const yeni = [...onceki];
-        const mevcut = yeni[sira];
-        if (!mevcut) return onceki;
-        yeni[sira] = { ...mevcut, donusum: { ...mevcut.donusum, ...yama } };
-        return yeni;
+  const updateTransform = useCallback(
+    (index: number, patch: Partial<SlotTransform>) => {
+      setSlots((previous) => {
+        const next = [...previous];
+        const current = next[index];
+        if (!current) return previous;
+        next[index] = { ...current, transform: { ...current.transform, ...patch } };
+        return next;
       });
     },
     [],
   );
 
-  const disaAktar = useCallback(async () => {
-    if (!sablon) return;
-    setDisaAktariliyor(true);
+  const exportPage = useCallback(async () => {
+    if (!template) return;
+    setIsExporting(true);
     try {
-      const veriUrl = await katalogCiz({
-        sablon,
-        yuvalar: gorunenYuvalar,
-        metinler,
+      const dataUrl = await renderCatalog({
+        template,
+        slots: visibleSlots,
+        texts,
       });
-      const bag = document.createElement("a");
-      bag.href = veriUrl;
-      bag.download = `katalog-${sablon.ad}.png`;
-      bag.click();
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `katalog-${template.fileSlug}.png`;
+      link.click();
     } catch {
-      setHata("Sayfa dışa aktarılamadı.");
+      setError("Sayfa dışa aktarılamadı.");
     } finally {
-      setDisaAktariliyor(false);
+      setIsExporting(false);
     }
-  }, [sablon, gorunenYuvalar, metinler]);
+  }, [template, visibleSlots, texts]);
 
   /* --- Galeri ----------------------------------------------------------- */
 
-  if (!sablon) {
+  if (!template) {
     return (
       <div>
         <div className="grid gap-5 sm:grid-cols-3">
-          {Object.values(SABLONLAR).map((s) => (
+          {Object.values(TEMPLATES).map((option) => (
             <button
-              key={s.ad}
+              key={option.name}
               type="button"
               onClick={() => {
-                setSablonAdi(s.ad);
-                setSeciliYuva(null);
+                setTemplateName(option.name);
+                setSelectedSlot(null);
               }}
               className="press group text-left"
             >
               <div className="overflow-hidden rounded-[1.25rem] ring-1 ring-black/10 transition-shadow group-hover:ring-black/25">
                 <div
-                  className="catalog-kap"
-                  style={{ aspectRatio: `${CIKTI_GENISLIK} / ${CIKTI_YUKSEKLIK}` }}
+                  className="catalog-container"
+                  style={{ aspectRatio: `${CATALOG_WIDTH} / ${CATALOG_HEIGHT}` }}
                 >
                   {/* Mini onizleme, gercek sablonun kendisi — ayri bir
                       "kapak resmi" tutulsaydi sablon degistiginde sessizce
                       eskirdi. */}
                   <CatalogPageView
-                    sablon={s}
-                    yuvalar={s.yuvalar.map(() => null)}
-                    metinler={VARSAYILAN_METINLER}
+                    template={option}
+                    slots={option.slots.map(() => null)}
+                    texts={DEFAULT_TEXTS}
                   />
                 </div>
               </div>
               <h3 className="mt-3 text-[1.0625rem] font-semibold tracking-[-0.01em]">
-                {s.baslik}
+                {option.title}
               </h3>
-              <p className="on-light-muted fine-print mt-0.5">{s.ozet}</p>
+              <p className="on-light-muted fine-print mt-0.5">{option.summary}</p>
             </button>
           ))}
         </div>
@@ -224,7 +225,7 @@ export function CatalogEditor() {
           <Button
             type="button"
             variant="outline"
-            onClick={ornekleBasla}
+            onClick={startWithSample}
             className="press min-h-11 rounded-full bg-white"
           >
             <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
@@ -237,24 +238,24 @@ export function CatalogEditor() {
 
   /* --- Calisma alani ---------------------------------------------------- */
 
-  const secili = seciliYuva !== null ? gorunenYuvalar[seciliYuva] : null;
+  const selected = selectedSlot !== null ? visibleSlots[selectedSlot] : null;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <div className="mx-auto w-full max-w-[32rem] min-w-0">
         <div
-          className="catalog-kap overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
-          style={{ aspectRatio: `${CIKTI_GENISLIK} / ${CIKTI_YUKSEKLIK}` }}
+          className="catalog-container overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
+          style={{ aspectRatio: `${CATALOG_WIDTH} / ${CATALOG_HEIGHT}` }}
         >
           <CatalogPageView
-            sablon={sablon}
-            yuvalar={gorunenYuvalar}
-            metinler={metinler}
-            duzenlenebilir
-            seciliYuva={seciliYuva}
-            onYuvaSecildi={setSeciliYuva}
-            onYuvaTasindi={(sira, x, y) =>
-              donusumuGuncelle(sira, {
+            template={template}
+            slots={visibleSlots}
+            texts={texts}
+            editable
+            selectedSlot={selectedSlot}
+            onSlotSelect={setSelectedSlot}
+            onSlotMove={(index, x, y) =>
+              updateTransform(index, {
                 // Sinir: gorsel tamamen kutunun disina surukleneemesin, aksi
                 // halde kullanici gorseli "kaybediyor" ve geri getirmenin tek
                 // yolu sifirlama oluyor.
@@ -262,36 +263,36 @@ export function CatalogEditor() {
                 y: Math.max(-1, Math.min(1, y)),
               })
             }
-            onYuvaOlceklendi={(sira, olcek) =>
-              donusumuGuncelle(sira, {
-                olcek: Math.max(EN_KUCUK_OLCEK, Math.min(EN_BUYUK_OLCEK, olcek)),
+            onSlotScale={(index, scale) =>
+              updateTransform(index, {
+                scale: Math.max(MIN_SLOT_SCALE, Math.min(MAX_SLOT_SCALE, scale)),
               })
             }
-            onYuvaBosaltildi={(sira) => {
-              setYuvalar((onceki) => {
-                const yeni = [...onceki];
-                yeni[sira] = null;
-                return yeni;
+            onSlotClear={(index) => {
+              setSlots((previous) => {
+                const next = [...previous];
+                next[index] = null;
+                return next;
               });
-              setSeciliYuva(null);
+              setSelectedSlot(null);
             }}
           />
         </div>
         <p className="fine-print mt-3 text-center opacity-55">
-          A4 oranında · {CIKTI_GENISLIK}×{CIKTI_YUKSEKLIK} piksel
+          A4 oranında · {CATALOG_WIDTH}×{CATALOG_HEIGHT} piksel
         </p>
       </div>
 
       <div className="divide-black/8 divide-y rounded-2xl bg-[#efece6]">
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
-          <span className="text-[0.9375rem] font-medium">{sablon.baslik}</span>
+          <span className="text-[0.9375rem] font-medium">{template.title}</span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => {
-              setSablonAdi(null);
-              setSeciliYuva(null);
+              setTemplateName(null);
+              setSelectedSlot(null);
             }}
             className="press -mr-2 rounded-full"
           >
@@ -300,35 +301,35 @@ export function CatalogEditor() {
           </Button>
         </div>
 
-        <Baslik>Metinler</Baslik>
+        <SectionHeading>Metinler</SectionHeading>
         <div className="space-y-3 px-5 pb-5">
-          <Alan
-            etiket="Üst etiket"
-            deger={metinler.ustEtiket}
-            onDegisti={(d) => setMetinler((m) => ({ ...m, ustEtiket: d }))}
+          <TextField
+            label="Üst etiket"
+            value={texts.eyebrow}
+            onChange={(v) => setTexts((t) => ({ ...t, eyebrow: v }))}
           />
-          <Alan
-            etiket="Başlık"
-            deger={metinler.baslik}
-            onDegisti={(d) => setMetinler((m) => ({ ...m, baslik: d }))}
+          <TextField
+            label="Başlık"
+            value={texts.title}
+            onChange={(v) => setTexts((t) => ({ ...t, title: v }))}
           />
-          {sablon.metinler.some((m) => m.alan === "altBilgi") ? (
-            <Alan
-              etiket="Alt bilgi"
-              deger={metinler.altBilgi}
-              onDegisti={(d) => setMetinler((m) => ({ ...m, altBilgi: d }))}
+          {template.texts.some((element) => element.field === "footer") ? (
+            <TextField
+              label="Alt bilgi"
+              value={texts.footer}
+              onChange={(v) => setTexts((t) => ({ ...t, footer: v }))}
             />
           ) : null}
         </div>
 
-        <Baslik>
+        <SectionHeading>
           Görseller
           <span className="ml-2 font-normal normal-case opacity-50">
-            {doluSayisi}/{sablon.yuvalar.length}
+            {filledCount}/{template.slots.length}
           </span>
-        </Baslik>
+        </SectionHeading>
         <div className="space-y-3 px-5 pb-5">
-          {seciliYuva === null ? (
+          {selectedSlot === null ? (
             <p className="fine-print opacity-60">
               Sayfadaki bir alana dokunun; görsel ekleyip yerleştirin.
             </p>
@@ -338,53 +339,53 @@ export function CatalogEditor() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => dosyaGirdisiRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 className="press w-full justify-start rounded-full bg-white"
               >
                 <ImagePlus className="size-4" strokeWidth={1.75} aria-hidden />
-                {secili ? "Görseli değiştir" : "Bilgisayardan seçin"}
+                {selected ? "Görseli değiştir" : "Bilgisayardan seçin"}
               </Button>
 
               {/* Boyut ve konum — kullanicinin acikca istedigi kontrol.
                   Degerler yuvanin KENDI kutusuna gore oran; sablon degisse de
                   ayni yerlesim korunuyor. */}
-              {secili ? (
+              {selected ? (
                 <div className="space-y-2.5 pt-1">
-                  <Kaydirac
-                    etiket="Boyut"
-                    deger={secili.donusum.olcek}
-                    enAz={EN_KUCUK_OLCEK}
-                    enCok={EN_BUYUK_OLCEK}
-                    adim={0.02}
-                    bicimle={(d) => `${Math.round(d * 100)}%`}
-                    onDegisti={(d) => donusumuGuncelle(seciliYuva, { olcek: d })}
+                  <Slider
+                    label="Boyut"
+                    value={selected.transform.scale}
+                    min={MIN_SLOT_SCALE}
+                    max={MAX_SLOT_SCALE}
+                    step={0.02}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                    onChange={(v) => updateTransform(selectedSlot, { scale: v })}
                   />
-                  <Kaydirac
-                    etiket="Döndür"
-                    deger={secili.donusum.aci}
-                    enAz={-45}
-                    enCok={45}
-                    adim={1}
-                    bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d)}°`}
-                    onDegisti={(d) => donusumuGuncelle(seciliYuva, { aci: d })}
+                  <Slider
+                    label="Döndür"
+                    value={selected.transform.rotation}
+                    min={-45}
+                    max={45}
+                    step={1}
+                    format={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}°`}
+                    onChange={(v) => updateTransform(selectedSlot, { rotation: v })}
                   />
-                  <Kaydirac
-                    etiket="Yatay"
-                    deger={secili.donusum.x}
-                    enAz={-1}
-                    enCok={1}
-                    adim={0.01}
-                    bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
-                    onDegisti={(d) => donusumuGuncelle(seciliYuva, { x: d })}
+                  <Slider
+                    label="Yatay"
+                    value={selected.transform.x}
+                    min={-1}
+                    max={1}
+                    step={0.01}
+                    format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
+                    onChange={(v) => updateTransform(selectedSlot, { x: v })}
                   />
-                  <Kaydirac
-                    etiket="Dikey"
-                    deger={secili.donusum.y}
-                    enAz={-1}
-                    enCok={1}
-                    adim={0.01}
-                    bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
-                    onDegisti={(d) => donusumuGuncelle(seciliYuva, { y: d })}
+                  <Slider
+                    label="Dikey"
+                    value={selected.transform.y}
+                    min={-1}
+                    max={1}
+                    step={0.01}
+                    format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
+                    onChange={(v) => updateTransform(selectedSlot, { y: v })}
                   />
                   <div className="flex gap-2 pt-0.5">
                     {/*
@@ -396,23 +397,21 @@ export function CatalogEditor() {
                     {([
                       ["Doldur", true],
                       ["Sığdır", false],
-                    ] as const).map(([etiket, deger]) => (
+                    ] as const).map(([label, cover]) => (
                       <button
-                        key={etiket}
+                        key={label}
                         type="button"
                         role="switch"
-                        aria-checked={secili.donusum.doldur === deger}
-                        onClick={() =>
-                          donusumuGuncelle(seciliYuva, { doldur: deger })
-                        }
+                        aria-checked={selected.transform.cover === cover}
+                        onClick={() => updateTransform(selectedSlot, { cover })}
                         className={
                           "press min-h-8 flex-1 rounded-full text-[0.8125rem] transition-colors " +
-                          (secili.donusum.doldur === deger
+                          (selected.transform.cover === cover
                             ? "bg-black text-white"
                             : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
                         }
                       >
-                        {etiket}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -420,7 +419,7 @@ export function CatalogEditor() {
                   <button
                     type="button"
                     onClick={() =>
-                      donusumuGuncelle(seciliYuva, { ...VARSAYILAN_DONUSUM })
+                      updateTransform(selectedSlot, { ...DEFAULT_SLOT_TRANSFORM })
                     }
                     className="fine-print flex items-center gap-1.5 pt-0.5 underline underline-offset-2 opacity-60 hover:opacity-100"
                   >
@@ -435,27 +434,25 @@ export function CatalogEditor() {
               {isHistoryLoaded && works.length > 0 ? (
                 <div className="max-h-44 space-y-1 overflow-y-auto pt-1">
                   <p className="fine-print px-1 opacity-55">Çalışmalarımdan</p>
-                  {works.map((kayit) => (
+                  {works.map((work) => (
                     <button
-                      key={kayit.id}
+                      key={work.id}
                       type="button"
                       onClick={() => {
-                        const url = URL.createObjectURL(kayit.result);
+                        const url = URL.createObjectURL(work.result);
                         objectUrlRef.current.push(url);
-                        void yuvayaKoy(seciliYuva, url, kayit.fileName);
+                        void placeInSlot(selectedSlot, url, work.fileName);
                       }}
                       className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left transition-colors hover:bg-black/5"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={kayit.thumbnail}
+                        src={work.thumbnail}
                         alt=""
                         aria-hidden
                         className="checkerboard size-9 shrink-0 rounded-md object-contain"
                       />
-                      <span className="fine-print truncate">
-                        {kayit.fileName}
-                      </span>
+                      <span className="fine-print truncate">{work.fileName}</span>
                     </button>
                   ))}
                 </div>
@@ -463,49 +460,47 @@ export function CatalogEditor() {
             </>
           )}
 
-          {hata ? <p className="fine-print text-red-700">{hata}</p> : null}
+          {error ? <p className="fine-print text-red-700">{error}</p> : null}
 
           <input
-            ref={dosyaGirdisiRef}
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             className="sr-only"
-            onChange={(olay) => {
-              const dosya = olay.target.files?.[0];
-              olay.target.value = "";
-              if (!dosya || seciliYuva === null) return;
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file || selectedSlot === null) return;
 
-              const dogrulamaHatasi = validateFile(dosya);
-              if (dogrulamaHatasi) {
-                setHata(dogrulamaHatasi.message);
+              const validationError = validateFile(file);
+              if (validationError) {
+                setError(validationError.message);
                 return;
               }
-              const url = URL.createObjectURL(dosya);
+              const url = URL.createObjectURL(file);
               objectUrlRef.current.push(url);
-              void yuvayaKoy(seciliYuva, url, dosya.name);
+              void placeInSlot(selectedSlot, url, file.name);
             }}
           />
         </div>
 
-        <Baslik>Dışa aktar</Baslik>
+        <SectionHeading>Dışa aktar</SectionHeading>
         <div className="px-5 pb-5">
           <Button
             type="button"
-            onClick={disaAktar}
-            disabled={disaAktariliyor || doluSayisi === 0}
+            onClick={exportPage}
+            disabled={isExporting || filledCount === 0}
             className="press min-h-10 w-full rounded-full"
           >
-            {disaAktariliyor ? (
+            {isExporting ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : (
               <Download className="size-4" strokeWidth={1.75} aria-hidden />
             )}
             PNG indir
           </Button>
-          {doluSayisi === 0 ? (
-            <p className="fine-print mt-2 opacity-55">
-              En az bir görsel ekleyin.
-            </p>
+          {filledCount === 0 ? (
+            <p className="fine-print mt-2 opacity-55">En az bir görsel ekleyin.</p>
           ) : null}
         </div>
       </div>
@@ -513,7 +508,7 @@ export function CatalogEditor() {
   );
 }
 
-function Baslik({ children }: { children: React.ReactNode }) {
+function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="px-5 pt-5 pb-3 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase opacity-50">
       {children}
@@ -521,59 +516,59 @@ function Baslik({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Alan({
-  etiket,
-  deger,
-  onDegisti,
+function TextField({
+  label,
+  value,
+  onChange,
 }: {
-  etiket: string;
-  deger: string;
-  onDegisti: (deger: string) => void;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="block">
-      <span className="fine-print block opacity-60">{etiket}</span>
+      <span className="fine-print block opacity-60">{label}</span>
       <input
         type="text"
-        value={deger}
-        onChange={(olay) => onDegisti(olay.target.value)}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         className="focus:ring-gold mt-1 w-full rounded-lg bg-white px-3 py-2 text-[0.875rem] ring-1 ring-black/10 outline-none focus:ring-2"
       />
     </label>
   );
 }
 
-function Kaydirac({
-  etiket,
-  deger,
-  enAz,
-  enCok,
-  adim,
-  bicimle,
-  onDegisti,
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
 }: {
-  etiket: string;
-  deger: number;
-  enAz: number;
-  enCok: number;
-  adim: number;
-  bicimle: (deger: number) => string;
-  onDegisti: (deger: number) => void;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
 }) {
   return (
     <div>
       <div className="fine-print mb-1 flex items-center justify-between opacity-60">
-        <span>{etiket}</span>
-        <span className="tabular-nums">{bicimle(deger)}</span>
+        <span>{label}</span>
+        <span className="tabular-nums">{format(value)}</span>
       </div>
       <input
         type="range"
-        min={enAz}
-        max={enCok}
-        step={adim}
-        value={deger}
-        aria-label={etiket}
-        onChange={(olay) => onDegisti(Number(olay.target.value))}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onChange={(event) => onChange(Number(event.target.value))}
         className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
       />
     </div>

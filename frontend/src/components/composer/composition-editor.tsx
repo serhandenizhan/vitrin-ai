@@ -19,17 +19,17 @@ import { Crosshair, Download, Loader2, Printer, RotateCw } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
-import { useBackgrounds } from "@/components/composer/use-zeminler";
+import { useBackgrounds } from "@/components/composer/use-backgrounds";
 import {
-  CIKTI_BICIMLERI,
-  type CiktiBicimAdi,
-  type Donusum,
-  type Gorunum,
-  VARSAYILAN_GORUNUM,
-  aciyiNormalize,
-  gorunumVarsayilanMi,
-  mantiksalOlcu,
-  sahneyeSigdir,
+  OUTPUT_FORMATS,
+  type OutputFormatName,
+  type Transform,
+  type Appearance,
+  DEFAULT_APPEARANCE,
+  normalizeAngle,
+  isDefaultAppearance,
+  logicalSize,
+  fitToStage,
 } from "@/lib/composition";
 import type { Background } from "@/lib/backgrounds";
 
@@ -53,7 +53,7 @@ export type CompositionEditorProps = {
 };
 
 /** Sahnenin ekrandaki ust siniri — daha buyugu masaustunde sayfayi tasiyor. */
-const EN_BUYUK_EKRAN_OLCUSU = 560;
+const MAX_DISPLAY_SIZE = 560;
 
 /**
  * Baslangic olcusu bilincli olarak KUCUK.
@@ -62,24 +62,33 @@ const EN_BUYUK_EKRAN_OLCUSU = 560;
  * kapsayicisindan tasmasina yol aciyor. Kucukten baslayip buyumek, ters
  * yondeki tasmadan gorsel olarak daha az rahatsiz edici.
  */
-const BASLANGIC_EKRAN_OLCUSU = 240;
+const INITIAL_DISPLAY_SIZE = 240;
 
 /** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
-const EN_KUCUK_OLCEK_ORANI = 0.25;
-const EN_BUYUK_OLCEK_ORANI = 2.5;
+const MIN_SCALE_RATIO = 0.25;
+const MAX_SCALE_RATIO = 2.5;
+
+/**
+ * Cizim basarisiz oldugunda gosterilen mesaj. Teknik sebep (genellikle bir
+ * zeminin CORS izni) kullaniciya degil konsola yaziliyor; kullanicinin
+ * yapabilecegi tek sey yenileyip tekrar denemek.
+ */
+const EXPORT_ERROR_MESSAGE =
+  "Görsel dışa aktarılamadı. Sayfayı yenileyip tekrar deneyin.";
+
+type PrintStatus = "idle" | "preparing" | "done" | { error: string };
 
 export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProps) {
   const { backgrounds, hasServerBackground, isLoading } = useBackgrounds();
-  const [seciliZeminId, setSeciliZeminId] = useState<string | null>(null);
-  const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
-  const [disaAktariliyor, setDisaAktariliyor] = useState(false);
-  const [baskiAcik, setBaskiAcik] = useState(false);
-  const [bicimAdi, setBicimAdi] = useState<CiktiBicimAdi>("kare");
-  const [baskiDurumu, setBaskiDurumu] = useState<
-    "bos" | "hazirlaniyor" | "hazir" | string
-  >("bos");
-  const [donusum, setDonusum] = useState<Donusum | null>(null);
-  const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
+  const [selectedBackgroundId, setSelectedBackgroundId] = useState<string | null>(null);
+  const [displaySize, setDisplaySize] = useState(INITIAL_DISPLAY_SIZE);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
+  const [formatName, setFormatName] = useState<OutputFormatName>("square");
+  const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
+  const [transform, setTransform] = useState<Transform | null>(null);
+  const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
 
   /**
    * Geri alma yigini.
@@ -91,31 +100,33 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
    * State degil REF: yigin arayuzu etkilemiyor, yalnizca Ctrl+Z aninda
    * okunuyor. State olsaydi her adimda gereksiz bir render olurdu.
    */
-  const gecmisRef = useRef<{ donusum: Donusum | null; gorunum: Gorunum }[]>([]);
+  const historyRef = useRef<{ transform: Transform | null; appearance: Appearance }[]>(
+    [],
+  );
 
-  const adimKaydet = useCallback(() => {
-    gecmisRef.current.push({ donusum, gorunum });
+  const pushHistory = useCallback(() => {
+    historyRef.current.push({ transform, appearance });
     // Yigin sinirli: 50 adim, bir oturumda geri alinmak istenecek her seyi
     // fazlasiyla kapsiyor ve bellegi buyutmuyor.
-    if (gecmisRef.current.length > 50) gecmisRef.current.shift();
-  }, [donusum, gorunum]);
+    if (historyRef.current.length > 50) historyRef.current.shift();
+  }, [transform, appearance]);
 
-  const geriAl = useCallback(() => {
-    const onceki = gecmisRef.current.pop();
-    if (!onceki) return;
-    setDonusum(onceki.donusum);
-    setGorunum(onceki.gorunum);
+  const undo = useCallback(() => {
+    const previous = historyRef.current.pop();
+    if (!previous) return;
+    setTransform(previous.transform);
+    setAppearance(previous.appearance);
   }, []);
-  const [kesimOlculeri, setKesimOlculeri] = useState<{
-    genislik: number;
-    yukseklik: number;
+  const [cutoutSize, setCutoutSize] = useState<{
+    width: number;
+    height: number;
   } | null>(null);
 
   const stageRef = useRef<Konva.Stage | null>(null);
-  const kapsayiciRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const bicim = CIKTI_BICIMLERI[bicimAdi];
-  const sahne = useMemo(() => mantiksalOlcu(bicim), [bicim]);
+  const format = OUTPUT_FORMATS[formatName];
+  const stageSize = useMemo(() => logicalSize(format), [format]);
 
   // Sahne kare ve kapsayicisina sigmali. `ResizeObserver`, `window.resize`
   // yerine kullaniliyor: kapsayici, pencere degismeden de (panel acilip
@@ -130,23 +141,23 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
   // Ilk olcum tek basina dogru boyutu belirledigi icin, observer artik yalnizca
   // SONRAKI degisiklikleri (panel acilip kapanmasi, pencere boyutu) izliyor.
   useEffect(() => {
-    const kapsayici = kapsayiciRef.current;
-    if (!kapsayici) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    function olcuveUygula(genislik: number) {
-      if (genislik <= 0) return;
-      setEkranOlcusu(
-        Math.max(BASLANGIC_EKRAN_OLCUSU, Math.min(genislik, EN_BUYUK_EKRAN_OLCUSU)),
+    function applyWidth(width: number) {
+      if (width <= 0) return;
+      setDisplaySize(
+        Math.max(INITIAL_DISPLAY_SIZE, Math.min(width, MAX_DISPLAY_SIZE)),
       );
     }
 
-    olcuveUygula(kapsayici.getBoundingClientRect().width);
+    applyWidth(container.getBoundingClientRect().width);
 
-    const gozlemci = new ResizeObserver(([girdi]) =>
-      olcuveUygula(girdi.contentRect.width),
+    const observer = new ResizeObserver(([entry]) =>
+      applyWidth(entry.contentRect.width),
     );
-    gozlemci.observe(kapsayici);
-    return () => gozlemci.disconnect();
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
 
   /**
@@ -159,84 +170,80 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
    * yazarken urun kayardi.
    */
   useEffect(() => {
-    function tusaBasildi(olay: KeyboardEvent) {
-      const hedef = olay.target as HTMLElement | null;
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
       if (
-        hedef &&
-        (hedef.tagName === "INPUT" ||
-          hedef.tagName === "TEXTAREA" ||
-          hedef.isContentEditable)
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
       ) {
         return;
       }
 
-      if ((olay.ctrlKey || olay.metaKey) && olay.key.toLowerCase() === "z") {
-        olay.preventDefault();
-        geriAl();
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        undo();
         return;
       }
 
-      const yonler: Record<string, [number, number]> = {
+      const directions: Record<string, [number, number]> = {
         ArrowLeft: [-1, 0],
         ArrowRight: [1, 0],
         ArrowUp: [0, -1],
         ArrowDown: [0, 1],
       };
-      const yon = yonler[olay.key];
-      if (!yon) return;
+      const direction = directions[event.key];
+      if (!direction) return;
 
-      olay.preventDefault();
-      const adim = (olay.shiftKey ? 10 : 1) * (sahne.genislik / 500);
-      adimKaydet();
-      setDonusum((onceki) => ({
-        x: (onceki?.x ?? sahne.genislik / 2) + yon[0] * adim,
-        y: (onceki?.y ?? sahne.yukseklik / 2) + yon[1] * adim,
-        olcek: onceki?.olcek ?? 1,
-        aci: onceki?.aci ?? 0,
+      event.preventDefault();
+      const step = (event.shiftKey ? 10 : 1) * (stageSize.width / 500);
+      pushHistory();
+      setTransform((previous) => ({
+        x: (previous?.x ?? stageSize.width / 2) + direction[0] * step,
+        y: (previous?.y ?? stageSize.height / 2) + direction[1] * step,
+        scale: previous?.scale ?? 1,
+        rotation: previous?.rotation ?? 0,
       }));
     }
 
-    document.addEventListener("keydown", tusaBasildi);
-    return () => document.removeEventListener("keydown", tusaBasildi);
-  }, [geriAl, adimKaydet, sahne]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [undo, pushHistory, stageSize]);
 
   // Secili zemin id ile tutuluyor, nesneyle degil: liste yenilendiginde
   // (imzali URL'ler tazelendiginde) nesne kimligi degisiyor ama id ayni
   // kaliyor, dolayisiyla kullanicinin secimi yenilemeden SAG CIKIYOR.
   // Nesneyi saklasaydik her yenilemede secim ilk zemine donerdi.
-  const seciliZemin: Background =
-    backgrounds.find((zemin) => zemin.id === seciliZeminId) ?? backgrounds[0];
+  const selectedBackground: Background =
+    backgrounds.find((background) => background.id === selectedBackgroundId) ??
+    backgrounds[0];
 
-  const stageHazir = useCallback((stage: Konva.Stage | null) => {
+  const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
   }, []);
 
   /** Kesimin sahneye tam oturdugu olcek — kaydiracin referans noktasi. */
-  const sigdirmaOlcegi = useMemo(
+  const fitScale = useMemo(
     () =>
-      kesimOlculeri
-        ? sahneyeSigdir(
-            sahne.genislik,
-            sahne.yukseklik,
-            kesimOlculeri.genislik,
-            kesimOlculeri.yukseklik,
-          ).olcek
+      cutoutSize
+        ? fitToStage(
+            stageSize.width,
+            stageSize.height,
+            cutoutSize.width,
+            cutoutSize.height,
+          ).scale
         : null,
-    [kesimOlculeri, sahne],
+    [cutoutSize, stageSize],
   );
 
-  const ortalaVeSigdir = useCallback(() => {
-    if (!kesimOlculeri) return;
-    adimKaydet();
-    setDonusum(
-      sahneyeSigdir(
-        sahne.genislik,
-        sahne.yukseklik,
-        kesimOlculeri.genislik,
-        kesimOlculeri.yukseklik,
-      ),
+  const centerAndFit = useCallback(() => {
+    if (!cutoutSize) return;
+    pushHistory();
+    setTransform(
+      fitToStage(stageSize.width, stageSize.height, cutoutSize.width, cutoutSize.height),
     );
-  }, [kesimOlculeri, sahne, adimKaydet]);
+  }, [cutoutSize, stageSize, pushHistory]);
 
   /**
    * Bicim degistirir ve yerlesimi sifirlar.
@@ -249,109 +256,125 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
    * tutuluyor; yeni sahnede anlamsiz bir yerde kalirlardi. `null`, sahneye
    * "kendi baslangic yerlesimini hesapla" demek.
    */
-  const bicimiDegistir = useCallback((ad: CiktiBicimAdi) => {
-    setBicimAdi(ad);
-    setDonusum(null);
+  const changeFormat = useCallback((name: OutputFormatName) => {
+    setFormatName(name);
+    setTransform(null);
   }, []);
 
-  const olcekAyarla = useCallback(
-    (oran: number) => {
-      if (!sigdirmaOlcegi) return;
-      setDonusum((onceki) => ({
-        x: onceki?.x ?? sahne.genislik / 2,
-        y: onceki?.y ?? sahne.yukseklik / 2,
-        aci: onceki?.aci ?? 0,
-        olcek: sigdirmaOlcegi * oran,
+  const setScaleRatio = useCallback(
+    (ratio: number) => {
+      if (!fitScale) return;
+      setTransform((previous) => ({
+        x: previous?.x ?? stageSize.width / 2,
+        y: previous?.y ?? stageSize.height / 2,
+        rotation: previous?.rotation ?? 0,
+        scale: fitScale * ratio,
       }));
     },
-    [sigdirmaOlcegi, sahne],
+    [fitScale, stageSize],
   );
 
-  const dondur = useCallback(
-    (derece: number) => {
-      setDonusum((onceki) => ({
-        x: onceki?.x ?? sahne.genislik / 2,
-        y: onceki?.y ?? sahne.yukseklik / 2,
-        olcek: onceki?.olcek ?? 1,
-        aci: aciyiNormalize((onceki?.aci ?? 0) + derece),
+  const rotateBy = useCallback(
+    (degrees: number) => {
+      setTransform((previous) => ({
+        x: previous?.x ?? stageSize.width / 2,
+        y: previous?.y ?? stageSize.height / 2,
+        scale: previous?.scale ?? 1,
+        rotation: normalizeAngle((previous?.rotation ?? 0) + degrees),
       }));
     },
-    [sahne],
+    [stageSize],
   );
 
-  const mevcutOran =
-    donusum && sigdirmaOlcegi ? donusum.olcek / sigdirmaOlcegi : 1;
+  const currentRatio = transform && fitScale ? transform.scale / fitScale : 1;
 
-  /** Sahneyi cizip veri URL'i dondurur; indirmeyi cagirana birakiyor. */
-  // TODO(Claude): `toDataURL` hata atarsa sahne boyutu, olcegi ve Transformer
-  // dugumleri icteki bir `finally` ile geri yuklenmeli; atan bir Konva exportu
-  // icin regression testi de eklenmeli.
-  const sahneyiCiz = useCallback(
-    (tur: "png" | "jpeg"): string | null => {
+  /**
+   * Sahneyi cizip veri URL'i dondurur; indirmeyi cagirana birakiyor.
+   *
+   * `toDataURL` hata atabilir — en olasi sebep, CORS kurali eksik bir R2
+   * zemininin tuvali "tainted" yapmasi (SecurityError). Hata cagirana
+   * iletiliyor ama sahne ONCE geri yukleniyor: `finally` olmasaydi editor
+   * mantiksal olcude (1000 px) ve secim tutamaklari gizli halde kalirdi.
+   */
+  const renderStage = useCallback(
+    (type: "png" | "jpeg"): string | null => {
       const stage = stageRef.current;
       if (!stage) return null;
 
-      setDisaAktariliyor(true);
+      setIsExporting(true);
+      // Transformer tutamaklari sahnenin bir parcasi; gizlenmezse secim
+      // cercevesi ve koseleri CIKTIYA da girer. Disa aktarmadan once
+      // gecici olarak gizleniyor, `finally` icinde geri aliniyor.
+      const transformers = stage.find("Transformer");
+      const previousWidth = stage.width();
+      const previousHeight = stage.height();
+      const previousScale = { x: stage.scaleX(), y: stage.scaleY() };
+
       try {
-        // Transformer tutamaklari sahnenin bir parcasi; gizlenmezse secim
-        // cercevesi ve koseleri CIKTIYA da girer. Disa aktarmadan once
-        // gecici olarak gizleniyor, sonra geri aliniyor.
-        const transformerlar = stage.find("Transformer");
-        transformerlar.forEach((node) => node.hide());
+        transformers.forEach((node) => node.hide());
         stage.draw();
 
         // Sahne, disa aktarma suresince EKRAN olcusunden MANTIKSAL olcusune
         // aliniyor (olcek 1). Sebebi bir off-by-one hatasi:
         //
-        // Once dogrudan `pixelRatio: CIKTI_OLCUSU / ekranOlcusu` kullaniliyordu.
+        // Once dogrudan `pixelRatio: OUTPUT_SIZE / displaySize` kullaniliyordu.
         // Ekran olcusu kapsayiciya gore degisken ve genellikle yuvarlak degil;
         // 434 px genisliginde olculdugunde oran 4.6082... cikiyor ve Konva'nin
         // ic hesabi 2000 yerine 1999 px'lik bir tuval uretiyordu. Yol haritasi
         // cikti olcusunu 2000x2000 olarak SAYIYLA belirtiyor; 1999 sessizce
         // yanlis bir cikti demek.
         //
-        // Mantiksal olcuye alindiginda oran CIKTI_OLCUSU / SAHNE_OLCUSU = 2,
+        // Mantiksal olcuye alindiginda oran OUTPUT_SIZE / STAGE_SIZE = 2,
         // yani tam sayi; sonuc her ekran genisliginde birebir 2000x2000.
-        const oncekiGenislik = stage.width();
-        const oncekiYukseklik = stage.height();
-        const oncekiOlcek = { x: stage.scaleX(), y: stage.scaleY() };
-
-        stage.width(sahne.genislik);
-        stage.height(sahne.yukseklik);
+        stage.width(stageSize.width);
+        stage.height(stageSize.height);
         stage.scale({ x: 1, y: 1 });
 
-        const veriUrl = stage.toDataURL({
-          mimeType: tur === "png" ? "image/png" : "image/jpeg",
+        const dataUrl = stage.toDataURL({
+          mimeType: type === "png" ? "image/png" : "image/jpeg",
           quality: 0.92,
           // Mantiksal olcu her zaman ciktinin yarisi oldugu icin oran tam 2.
-          pixelRatio: bicim.ciktiGenislik / sahne.genislik,
+          pixelRatio: format.outputWidth / stageSize.width,
         });
-
-        stage.width(oncekiGenislik);
-        stage.height(oncekiYukseklik);
-        stage.scale(oncekiOlcek);
-        transformerlar.forEach((node) => node.show());
-        stage.draw();
-
-        return veriUrl;
+        // Konva "tainted" tuvalde SecurityError'i FIRLATMIYOR: kendisi yakalayip
+        // konsola yaziyor ve bos string donduruyor (konva/lib/Canvas.js,
+        // tarayicida da olculdu). Burada hataya cevrilmezse PNG dugmesi hicbir
+        // sey yapmiyor gibi gorunur ve kullanici sebebini hic ogrenemez.
+        if (!dataUrl) {
+          throw new Error("Konva bos veri URL'i dondurdu (tuval tainted olabilir).");
+        }
+        return dataUrl;
       } finally {
-        setDisaAktariliyor(false);
+        stage.width(previousWidth);
+        stage.height(previousHeight);
+        stage.scale(previousScale);
+        transformers.forEach((node) => node.show());
+        stage.draw();
+        setIsExporting(false);
       }
     },
-    [sahne, bicim],
+    [stageSize, format],
   );
 
   /** Sahneyi indirilebilir bir dosyaya cevirir. */
-  const indir = useCallback(
-    (tur: "png" | "jpeg") => {
-      const veriUrl = sahneyiCiz(tur);
-      if (!veriUrl) return;
-      const bag = document.createElement("a");
-      bag.href = veriUrl;
-      bag.download = `${fileName.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
-      bag.click();
+  const download = useCallback(
+    (type: "png" | "jpeg") => {
+      let dataUrl: string | null;
+      try {
+        dataUrl = renderStage(type);
+      } catch (error) {
+        console.error("[composer] disa aktarma basarisiz:", error);
+        setExportError(EXPORT_ERROR_MESSAGE);
+        return;
+      }
+      setExportError(null);
+      if (!dataUrl) return;
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `${fileName.replace(/\.[^.]+$/, "")}-${format.fileSlug}.${type === "jpeg" ? "jpg" : "png"}`;
+      link.click();
     },
-    [sahneyiCiz, fileName, bicimAdi],
+    [renderStage, fileName, format],
   );
 
   /**
@@ -361,41 +384,51 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
    * kosulunun ICC profiliyle CMYK'ya cevriliyor (bkz. app/api/cmyk/route.ts).
    * Tarayicida yapilamaz: canvas yalnizca RGB uretir, PNG CMYK'yi desteklemez.
    */
-  const baskiyaIndir = useCallback(
-    async (bicimTuru: "jpeg" | "tiff") => {
-      const veriUrl = sahneyiCiz("png");
-      if (!veriUrl) return;
-
-      setBaskiDurumu("hazirlaniyor");
+  const downloadForPrint = useCallback(
+    async (printFormat: "jpeg" | "tiff") => {
+      // Cizim ayri yakalaniyor: asagidaki `catch` ag hatalari icin ve
+      // "Sunucuya ulaşılamadı" diyor; tarayicidaki bir cizim hatasini oyle
+      // raporlamak kullaniciyi yanlis yere yonlendirirdi.
+      let dataUrl: string | null;
       try {
-        const govde = new FormData();
-        govde.append("file", await (await fetch(veriUrl)).blob(), "sahne.png");
-        govde.append("format", bicimTuru);
+        dataUrl = renderStage("png");
+      } catch (error) {
+        console.error("[composer] CMYK icin cizim basarisiz:", error);
+        setPrintStatus({ error: EXPORT_ERROR_MESSAGE });
+        return;
+      }
+      if (!dataUrl) return;
 
-        const yanit = await fetch("/api/cmyk", { method: "POST", body: govde });
-        if (!yanit.ok) {
-          const hata = await yanit.json().catch(() => null);
-          setBaskiDurumu(hata?.error ?? "Dönüşüm başarısız oldu.");
+      setPrintStatus("preparing");
+      try {
+        const body = new FormData();
+        body.append("file", await (await fetch(dataUrl)).blob(), "sahne.png");
+        body.append("format", printFormat);
+
+        const response = await fetch("/api/cmyk", { method: "POST", body });
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => null);
+          setPrintStatus({ error: errorBody?.error ?? "Dönüşüm başarısız oldu." });
           return;
         }
 
-        const blob = await yanit.blob();
+        const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        const bag = document.createElement("a");
-        bag.href = url;
-        bag.download = `${fileName.replace(/\.[^.]+$/, "")}-cmyk.${bicimTuru === "tiff" ? "tif" : "jpg"}`;
-        bag.click();
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${fileName.replace(/\.[^.]+$/, "")}-cmyk.${printFormat === "tiff" ? "tif" : "jpg"}`;
+        link.click();
         // Iptal GECIKTIRILIYOR. `click()`'ten hemen sonra iptal etmek, tarayici
         // blob'u okumaya baslamadan URL'i gecersiz kilabiliyor ve indirme
         // sessizce basarisiz oluyor. Bir dakika, en yavas cihazda bile fazlasiyla
         // yeterli; sonra bellek serbest kaliyor.
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        setBaskiDurumu("hazir");
+        setPrintStatus("done");
       } catch {
-        setBaskiDurumu("Sunucuya ulaşılamadı.");
+        setPrintStatus({ error: "Sunucuya ulaşılamadı." });
       }
     },
-    [sahneyiCiz, fileName],
+    [renderStage, fileName],
   );
 
   return (
@@ -416,27 +449,27 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
         `top-14` ust cubugun yuksekligi kadar.
       */}
       <div
-        ref={kapsayiciRef}
+        ref={containerRef}
         className="mx-auto w-full max-w-[22rem] min-w-0 sm:max-w-[26rem] lg:sticky lg:top-20 lg:max-w-[35rem]"
       >
         <div
           className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1"
-          style={{ aspectRatio: `${bicim.ciktiGenislik} / ${bicim.ciktiYukseklik}` }}
+          style={{ aspectRatio: `${format.outputWidth} / ${format.outputHeight}` }}
         >
           <EditorStage
-            kesimUrl={cutoutUrl}
-            zemin={seciliZemin}
-            ekranOlcusu={ekranOlcusu}
-            sahneGenislik={sahne.genislik}
-            sahneYukseklik={sahne.yukseklik}
-            donusum={donusum}
-            gorunum={gorunum}
-            onDonusumDegisti={(yeni) => {
-              adimKaydet();
-              setDonusum(yeni);
+            cutoutUrl={cutoutUrl}
+            background={selectedBackground}
+            displayWidth={displaySize}
+            stageWidth={stageSize.width}
+            stageHeight={stageSize.height}
+            transform={transform}
+            appearance={appearance}
+            onTransformChange={(next) => {
+              pushHistory();
+              setTransform(next);
             }}
-            onKesimOlculeri={setKesimOlculeri}
-            onStageHazir={stageHazir}
+            onCutoutSize={setCutoutSize}
+            onStageReady={handleStageReady}
           />
         </div>
         <p className="fine-print mt-3 text-center opacity-60">
@@ -446,19 +479,19 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
       </div>
 
       <div className="divide-black/8 rounded-2xl bg-[#f5f5f7] divide-y">
-        <BolumBasligi>Zemin</BolumBasligi>
+        <SectionHeading>Zemin</SectionHeading>
         <div className="px-5 pb-5">
           <div className="grid grid-cols-6 gap-2 lg:grid-cols-4">
-            {backgrounds.map((zemin) => {
-              const aktif = zemin.id === seciliZemin.id;
+            {backgrounds.map((background) => {
+              const isActive = background.id === selectedBackground.id;
               return (
                 <button
-                  key={zemin.id}
+                  key={background.id}
                   type="button"
-                  onClick={() => setSeciliZeminId(zemin.id)}
-                  title={zemin.name}
-                  aria-label={zemin.name}
-                  aria-pressed={aktif}
+                  onClick={() => setSelectedBackgroundId(background.id)}
+                  title={background.name}
+                  aria-label={background.name}
+                  aria-pressed={isActive}
                   // Secili halka `ring` yardimcilariyla veriliyor, keyfi bir
                   // `shadow-[...]` ile degil: keyfi coklu golge denendiginde
                   // Tailwind iki golge katmani uretti ama ikisi de SEFFAF
@@ -467,15 +500,15 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
                   // ozellikle yapiyor.
                   className={
                     "aspect-square rounded-full ring-offset-[#f5f5f7] transition-transform duration-200 " +
-                    (aktif
+                    (isActive
                       ? "ring-gold scale-105 ring-2 ring-offset-2"
                       : "ring-1 ring-black/15 hover:scale-105")
                   }
                   style={
-                    zemin.type === "yer-tutucu"
-                      ? { background: gradyanCss(zemin.gradient) }
+                    background.type === "placeholder"
+                      ? { background: gradientCss(background.gradient) }
                       : {
-                          backgroundImage: `url(${zemin.url})`,
+                          backgroundImage: `url(${background.url})`,
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                         }
@@ -498,24 +531,22 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           ) : null}
         </div>
 
-        <BolumBasligi>Yerleşim</BolumBasligi>
+        <SectionHeading>Yerleşim</SectionHeading>
         <div className="space-y-4 px-5 pb-5">
           <div>
             <div className="fine-print mb-2 flex items-center justify-between opacity-60">
               <span>Boyut</span>
-              <span className="tabular-nums">
-                {Math.round(mevcutOran * 100)}%
-              </span>
+              <span className="tabular-nums">{Math.round(currentRatio * 100)}%</span>
             </div>
             <input
               type="range"
-              min={EN_KUCUK_OLCEK_ORANI * 100}
-              max={EN_BUYUK_OLCEK_ORANI * 100}
+              min={MIN_SCALE_RATIO * 100}
+              max={MAX_SCALE_RATIO * 100}
               step={1}
-              value={Math.round(mevcutOran * 100)}
-              disabled={!sigdirmaOlcegi}
+              value={Math.round(currentRatio * 100)}
+              disabled={!fitScale}
               aria-label="Ürün boyutu"
-              onChange={(olay) => olcekAyarla(Number(olay.target.value) / 100)}
+              onChange={(event) => setScaleRatio(Number(event.target.value) / 100)}
               className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
             />
           </div>
@@ -525,8 +556,8 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => dondur(15)}
-              disabled={!kesimOlculeri}
+              onClick={() => rotateBy(15)}
+              disabled={!cutoutSize}
               className="press flex-1 rounded-full bg-white"
             >
               <RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -536,8 +567,8 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               type="button"
               variant="outline"
               size="sm"
-              onClick={ortalaVeSigdir}
-              disabled={!kesimOlculeri}
+              onClick={centerAndFit}
+              disabled={!cutoutSize}
               className="press flex-1 rounded-full bg-white"
             >
               <Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -546,60 +577,60 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           </div>
         </div>
 
-        <BolumBasligi>
+        <SectionHeading>
           Görünüm
-          {!gorunumVarsayilanMi(gorunum) ? (
+          {!isDefaultAppearance(appearance) ? (
             <button
               type="button"
-              onClick={() => setGorunum(VARSAYILAN_GORUNUM)}
+              onClick={() => setAppearance(DEFAULT_APPEARANCE)}
               className="ml-2 font-normal normal-case underline underline-offset-2 opacity-70 hover:opacity-100"
             >
               sıfırla
             </button>
           ) : null}
-        </BolumBasligi>
+        </SectionHeading>
         <div className="space-y-3 px-5 pb-5">
-          <Kaydirac
-            etiket="Parlaklık"
-            deger={gorunum.parlaklik}
-            enAz={-0.3}
-            enCok={0.3}
-            adim={0.01}
-            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
-            onBasladi={adimKaydet}
-            onDegisti={(d) => setGorunum((o) => ({ ...o, parlaklik: d }))}
+          <Slider
+            label="Parlaklık"
+            value={appearance.brightness}
+            min={-0.3}
+            max={0.3}
+            step={0.01}
+            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
+            onStart={pushHistory}
+            onChange={(v) => setAppearance((a) => ({ ...a, brightness: v }))}
           />
-          <Kaydirac
-            etiket="Kontrast"
-            deger={gorunum.kontrast}
-            enAz={-40}
-            enCok={40}
-            adim={1}
-            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d)}`}
-            onBasladi={adimKaydet}
-            onDegisti={(d) => setGorunum((o) => ({ ...o, kontrast: d }))}
+          <Slider
+            label="Kontrast"
+            value={appearance.contrast}
+            min={-40}
+            max={40}
+            step={1}
+            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`}
+            onStart={pushHistory}
+            onChange={(v) => setAppearance((a) => ({ ...a, contrast: v }))}
           />
-          <Kaydirac
-            etiket="Doygunluk"
-            deger={gorunum.doygunluk}
-            enAz={-1}
-            enCok={1}
-            adim={0.02}
-            bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
-            onBasladi={adimKaydet}
-            onDegisti={(d) => setGorunum((o) => ({ ...o, doygunluk: d }))}
+          <Slider
+            label="Doygunluk"
+            value={appearance.saturation}
+            min={-1}
+            max={1}
+            step={0.02}
+            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
+            onStart={pushHistory}
+            onChange={(v) => setAppearance((a) => ({ ...a, saturation: v }))}
           />
 
           <div className="flex gap-2 pt-1">
-            <Anahtar
-              etiket="Gölge"
-              acik={gorunum.golge}
-              onDegisti={(a) => setGorunum((o) => ({ ...o, golge: a }))}
+            <Toggle
+              label="Gölge"
+              isOn={appearance.shadow}
+              onChange={(on) => setAppearance((a) => ({ ...a, shadow: on }))}
             />
-            <Anahtar
-              etiket="Işık havuzu"
-              acik={gorunum.isikHavuzu}
-              onDegisti={(a) => setGorunum((o) => ({ ...o, isikHavuzu: a }))}
+            <Toggle
+              label="Işık havuzu"
+              isOn={appearance.spotlight}
+              onChange={(on) => setAppearance((a) => ({ ...a, spotlight: on }))}
             />
           </div>
         </div>
@@ -610,43 +641,43 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           Konva'nin ic hesabinda bir piksel kaybina yol aciyor (2000 yerine
           1999 px uretildigi birebir olculdu).
         */}
-        <BolumBasligi>Çıktı boyutu</BolumBasligi>
+        <SectionHeading>Çıktı boyutu</SectionHeading>
         <div className="grid grid-cols-2 gap-2 px-5 pb-5">
           {(
-            Object.entries(CIKTI_BICIMLERI) as [
-              CiktiBicimAdi,
-              (typeof CIKTI_BICIMLERI)[CiktiBicimAdi],
+            Object.entries(OUTPUT_FORMATS) as [
+              OutputFormatName,
+              (typeof OUTPUT_FORMATS)[OutputFormatName],
             ][]
-          ).map(([ad, b]) => (
+          ).map(([name, option]) => (
             <button
-              key={ad}
+              key={name}
               type="button"
-              onClick={() => bicimiDegistir(ad)}
-              aria-pressed={bicimAdi === ad}
+              onClick={() => changeFormat(name)}
+              aria-pressed={formatName === name}
               className={
                 "press rounded-xl px-3 py-2 text-left transition-shadow " +
-                (bicimAdi === ad
+                (formatName === name
                   ? "ring-gold bg-white ring-2"
                   : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
               }
             >
-              <span className="block text-[0.8125rem] font-medium">{b.ad}</span>
-              <span className="fine-print block opacity-55">{b.ozet}</span>
+              <span className="block text-[0.8125rem] font-medium">{option.label}</span>
+              <span className="fine-print block opacity-55">{option.summary}</span>
             </button>
           ))}
         </div>
 
-        <BolumBasligi>
+        <SectionHeading>
           Dışa aktar
           <span className="ml-2 font-normal normal-case opacity-50">
-            {bicim.ciktiGenislik}×{bicim.ciktiYukseklik}
+            {format.outputWidth}×{format.outputHeight}
           </span>
-        </BolumBasligi>
+        </SectionHeading>
         <div className="flex gap-2 px-5 pb-5">
           <Button
             type="button"
-            onClick={() => indir("png")}
-            disabled={disaAktariliyor}
+            onClick={() => download("png")}
+            disabled={isExporting}
             className="press min-h-10 flex-1 rounded-full"
           >
             <Download className="size-4" strokeWidth={1.75} aria-hidden />
@@ -655,13 +686,18 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           <Button
             type="button"
             variant="outline"
-            onClick={() => indir("jpeg")}
-            disabled={disaAktariliyor}
+            onClick={() => download("jpeg")}
+            disabled={isExporting}
             className="press min-h-10 flex-1 rounded-full bg-white"
           >
             JPEG
           </Button>
         </div>
+        {exportError ? (
+          <p role="alert" className="fine-print -mt-3 px-5 pb-5 text-red-700">
+            {exportError}
+          </p>
+        ) : null}
 
         {/*
           BASKIYA UYGUN CIKTI — artik gercek.
@@ -674,21 +710,21 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           CMYK'yi hic desteklemez. Dort kanalli bir goruntu ve icine gomulu
           bir cikti profili yalnizca sunucuda mumkun.
         */}
-        <BolumBasligi>
+        <SectionHeading>
           Baskıya uygun
           <span className="ml-2 font-normal normal-case opacity-50">CMYK</span>
-        </BolumBasligi>
+        </SectionHeading>
         <div className="px-5 pb-5">
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => baskiyaIndir("tiff")}
-              disabled={baskiDurumu === "hazirlaniyor"}
+              onClick={() => downloadForPrint("tiff")}
+              disabled={printStatus === "preparing"}
               className="press min-h-10 flex-1 rounded-full bg-white"
             >
-              {baskiDurumu === "hazirlaniyor" ? (
+              {printStatus === "preparing" ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Printer className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -699,8 +735,8 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => baskiyaIndir("jpeg")}
-              disabled={baskiDurumu === "hazirlaniyor"}
+              onClick={() => downloadForPrint("jpeg")}
+              disabled={printStatus === "preparing"}
               className="press min-h-10 flex-1 rounded-full bg-white"
             >
               JPEG
@@ -709,14 +745,14 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
 
           <button
             type="button"
-            onClick={() => setBaskiAcik((a) => !a)}
-            aria-expanded={baskiAcik}
+            onClick={() => setIsPrintInfoOpen((open) => !open)}
+            aria-expanded={isPrintInfoOpen}
             className="fine-print mt-2 underline underline-offset-2 opacity-60 hover:opacity-100"
           >
             Bu ne demek?
           </button>
 
-          {baskiAcik ? (
+          {isPrintInfoOpen ? (
             <p className="fine-print mt-1.5 leading-relaxed opacity-70">
               Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu
               seçenek görseli, hedef baskı koşulunun ICC profiliyle CMYK renk
@@ -726,14 +762,13 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
             </p>
           ) : null}
 
-          {baskiDurumu !== "bos" && baskiDurumu !== "hazirlaniyor" ? (
-            <p
-              className={
-                "fine-print mt-2 " +
-                (baskiDurumu === "hazir" ? "opacity-60" : "text-red-700")
-              }
-            >
-              {baskiDurumu === "hazir" ? "İndirildi." : baskiDurumu}
+          {printStatus === "done" ? (
+            <p role="status" className="fine-print mt-2 opacity-60">
+              İndirildi.
+            </p>
+          ) : typeof printStatus === "object" ? (
+            <p role="alert" className="fine-print mt-2 text-red-700">
+              {printStatus.error}
             </p>
           ) : null}
 
@@ -746,77 +781,77 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
   );
 }
 
-function Kaydirac({
-  etiket,
-  deger,
-  enAz,
-  enCok,
-  adim,
-  bicimle,
-  onDegisti,
-  onBasladi,
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
+  onStart,
 }: {
-  etiket: string;
-  deger: number;
-  enAz: number;
-  enCok: number;
-  adim: number;
-  bicimle: (deger: number) => string;
-  onDegisti: (deger: number) => void;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
   /** Kaydiraca BASILDIGINDA cagriliyor — geri alma adimi burada kaydediliyor,
       her deger degisiminde degil; aksi halde tek surukleme yuzlerce adim
       uretirdi. */
-  onBasladi?: () => void;
+  onStart?: () => void;
 }) {
   return (
     <div>
       <div className="fine-print mb-1.5 flex items-center justify-between opacity-60">
-        <span>{etiket}</span>
-        <span className="tabular-nums">{bicimle(deger)}</span>
+        <span>{label}</span>
+        <span className="tabular-nums">{format(value)}</span>
       </div>
       <input
         type="range"
-        min={enAz}
-        max={enCok}
-        step={adim}
-        value={deger}
-        aria-label={etiket}
-        onPointerDown={onBasladi}
-        onChange={(olay) => onDegisti(Number(olay.target.value))}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onPointerDown={onStart}
+        onChange={(event) => onChange(Number(event.target.value))}
         className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
       />
     </div>
   );
 }
 
-function Anahtar({
-  etiket,
-  acik,
-  onDegisti,
+function Toggle({
+  label,
+  isOn,
+  onChange,
 }: {
-  etiket: string;
-  acik: boolean;
-  onDegisti: (acik: boolean) => void;
+  label: string;
+  isOn: boolean;
+  onChange: (isOn: boolean) => void;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={acik}
-      onClick={() => onDegisti(!acik)}
+      aria-checked={isOn}
+      onClick={() => onChange(!isOn)}
       className={
         "press min-h-9 flex-1 rounded-full px-3 text-[0.8125rem] transition-colors " +
-        (acik
+        (isOn
           ? "bg-black text-white"
           : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
       }
     >
-      {etiket}
+      {label}
     </button>
   );
 }
 
-function BolumBasligi({ children }: { children: React.ReactNode }) {
+function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="px-5 pt-5 pb-3 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase opacity-50">
       {children}
@@ -825,10 +860,10 @@ function BolumBasligi({ children }: { children: React.ReactNode }) {
 }
 
 /** Konva'nin `[oran, renk, ...]` dizisini CSS gradyanina cevirir (onizleme). */
-function gradyanCss(duraklar: (number | string)[]): string {
-  const parcalar: string[] = [];
-  for (let i = 0; i < duraklar.length; i += 2) {
-    parcalar.push(`${duraklar[i + 1]} ${Number(duraklar[i]) * 100}%`);
+function gradientCss(stops: (number | string)[]): string {
+  const parts: string[] = [];
+  for (let i = 0; i < stops.length; i += 2) {
+    parts.push(`${stops[i + 1]} ${Number(stops[i]) * 100}%`);
   }
-  return `linear-gradient(135deg, ${parcalar.join(", ")})`;
+  return `linear-gradient(135deg, ${parts.join(", ")})`;
 }
