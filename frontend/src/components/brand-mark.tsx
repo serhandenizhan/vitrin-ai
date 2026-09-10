@@ -1,15 +1,21 @@
 /**
- * Vitrin AI logosu.
+ * Vitrin AI isareti.
  *
- * Fikir: "vitrin" bir cerceve, icindeki de urun. Isaret, yuvarlatilmis bir
- * kare cerceve (vitrin camı) ve icinde briyan kesim bir tas. Ikisi birlikte
- * hem sektoru (kuyum) hem urunu (bir seyi cerceveleyip one cikarmak)
- * anlatiyor.
+ * Kullanicinin verdigi logonun YAZISIZ hali: yumusak bir dalga ve altinda tek
+ * bir nokta. Dalga hem vitrin tentesini/kemerini hem de urunun one ciktigi
+ * tepe noktasini okutuyor; nokta, o tepenin altina yerlesmis tasi.
  *
- * Neden SVG ve tek renk: 20 pikselde de 200 pikselde de ayni netlikte
- * duruyor, tema degisiminde `currentColor` ile geliyor, ve ayri bir dosya
- * indirmiyor. Fasetalar sabit genislikte cizgi degil DOLGU — kucultuldugunde
- * ince cizgiler once kayboluyordu.
+ * Neden yeniden cizilmis SVG, ekran goruntusu degil:
+ *  - Her olcude net; 20 pikselde de 200 pikselde de ayni.
+ *  - `currentColor` ile geliyor, yani bulundugu yerin rengini aliyor: ust
+ *    cubukta altin, koyu panelde kirik beyaz. Ayri bir renk sabiti tutulmuyor.
+ *  - Ayri bir dosya indirilmiyor.
+ *
+ * Cizgi SABIT GENISLIKTE degil, `vector-effect` de kullanilmiyor: `stroke`
+ * viewBox ile birlikte olcekleniyor, dolayisiyla kucuk boyutta oran korunuyor.
+ *
+ * Olcu: isaret GENIS (yaklasik 4:1). Kare bir kutuya sokulmamali; kullanim
+ * yerlerinde yukseklik veriliyor, genislik `w-auto` ile geliyor.
  */
 
 type BrandMarkProps = {
@@ -19,50 +25,31 @@ type BrandMarkProps = {
 export function BrandMark({ className }: BrandMarkProps) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 0 116 34"
       fill="none"
       aria-hidden
       className={className}
       focusable="false"
     >
-      {/* Vitrin cercevesi */}
-      <rect
-        x="2.6"
-        y="2.6"
-        width="18.8"
-        height="18.8"
-        rx="5.2"
+      {/*
+        Dalga: sol uctan asagi, ortada tepe, sagda tekrar asagi ve saga
+        yukselerek biten tek bir cizgi. Uclar yuvarlak (`round`) — logonun
+        kendisinde de uclar kesik degil yuvarlak.
+      */}
+      <path
+        d="M4 6.5
+           C5.2 20.5 12.5 27.5 23 27.5
+           C36.5 27.5 45.5 6.5 58 6.5
+           C70.5 6.5 79.5 27.5 93 27.5
+           C103.5 27.5 110.8 20.5 112 6.5"
         stroke="currentColor"
-        strokeWidth="1.5"
-        opacity="0.55"
+        strokeWidth="4.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
 
-      {/* Tas — govde */}
-      <path
-        d="M9.1 9.6h5.8l1.5 2.5L12 17.6 7.6 12.1z"
-        fill="currentColor"
-      />
-
-      {/* Masa (table) fasetasi — govdeden biraz daha koyu bir kesit yerine
-          bosluk birakiliyor; kucuk olculerde bu, tasin duz bir ucgen degil
-          kesilmis bir tas oldugunu okutan tek ipucu. */}
-      <path
-        d="M9.1 9.6h5.8l-1.1 2.5h-3.6z"
-        fill="#000"
-        opacity="0.28"
-      />
+      {/* Tepenin altindaki nokta — dalganin tam ortasinda hizali. */}
+      <circle cx="58" cy="20.4" r="3.1" fill="currentColor" />
     </svg>
-  );
-}
-
-/** Isaret + yazi. Ust cubukta ve kenar cubugunda birlikte kullaniliyor. */
-export function BrandLockup({ className }: BrandMarkProps) {
-  return (
-    <span className={className}>
-      <BrandMark className="text-gold size-[1.35em] shrink-0" />
-      <span className="font-semibold tracking-[-0.01em] whitespace-nowrap">
-        Vitrin <span className="text-gold">AI</span>
-      </span>
-    </span>
   );
 }

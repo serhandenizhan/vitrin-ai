@@ -123,7 +123,7 @@ export function SiteHeader() {
           href="/#top"
           className="flex h-full shrink-0 items-center gap-2 text-[1.0625rem]"
         >
-          <BrandMark className="text-gold size-[1.4rem]" />
+          <BrandMark className="text-gold h-[1.15rem] w-auto" />
           {/* Cok dar ekranda yalnizca isaret kaliyor: 320 px'te panel dugmesi
               + isaret + yazi + giris + eylem toplami 346 px'e ciktigi ve
               cubuk 41 px tastigi olculdu. Isaret tek basina markayi

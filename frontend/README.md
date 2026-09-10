@@ -445,6 +445,16 @@ Tailwind'in temel katmanı tüm görsellere `max-width: 100%` uyguluyor ve bu,
 Kâğıt rengi saf beyaz değil kırık beyaz (`#f4f1ec`): saf beyaz sayfa ekranda
 çevresindeki arayüzden parlak duruyor ve göz önce ona gidiyor.
 
+## Logo
+
+`brand-mark.tsx`, kullanıcının verdiği logonun **yazısız** hâli: yumuşak bir
+dalga ve altında tek nokta. Ekran görüntüsü değil, yeniden çizilmiş SVG — her
+ölçüde net, `currentColor` ile bulunduğu yerin rengini alıyor (üst çubukta
+altın), ayrı bir dosya indirilmiyor.
+
+**İşaret geniş (≈3.4:1), kare değil.** Kullanım yerlerinde yükseklik veriliyor
+ve genişlik `w-auto` ile geliyor; `size-*` gibi kare bir sınıf işareti ezer.
+
 ## Menü ve "Hakkında" paneli
 
 Menüde iki bağlantı var: **Deneyin** ve **Nasıl çalışır**. Önceden dört vardı
