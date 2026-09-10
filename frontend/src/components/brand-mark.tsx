@@ -35,12 +35,19 @@ export function BrandMark({ className }: BrandMarkProps) {
         Dalga: sol uctan asagi, ortada tepe, sagda tekrar asagi ve saga
         yukselerek biten tek bir cizgi. Uclar yuvarlak (`round`) — logonun
         kendisinde de uclar kesik degil yuvarlak.
+
+        Ortadaki tepenin denetim noktalari (50 ve 66) bilincli olarak birbirine
+        YAKIN. Ilk cizimde 45.5 ve 70.5 idi; aradaki 25 birimlik acikligi
+        tarayici genis ve yuvarlak bir kubbe olarak ciziyordu — isaret dalga
+        degil sisman bir tumsek gibi duruyordu. Daha da yaklastirmak (52/64) ise
+        tepede gorunur bir kose birakiyor. 16 birim, tepeyi belirgin ama yumusak
+        tutan aralik.
       */}
       <path
         d="M4 6.5
            C5.2 20.5 12.5 27.5 23 27.5
-           C36.5 27.5 45.5 6.5 58 6.5
-           C70.5 6.5 79.5 27.5 93 27.5
+           C40 27.5 50 8 58 8
+           C66 8 76 27.5 93 27.5
            C103.5 27.5 110.8 20.5 112 6.5"
         stroke="currentColor"
         strokeWidth="4.4"
