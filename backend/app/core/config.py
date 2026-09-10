@@ -55,6 +55,24 @@ class Settings(BaseSettings):
         "image/heif",
     }
     rembg_model_name: str = "birefnet-general"
+    # Faz 3: arka plan kütüphanesi. Varsayılan değer `docker-compose.yml`'deki
+    # yerel Postgres'e işaret ediyor; production'da Supabase Postgres bağlantı
+    # dizesiyle env üzerinden override edilir.
+    database_url: str = (
+        "postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai"
+    )
+    # Faz 4'te gerçek Supabase Auth + rol kontrolü gelene kadar
+    # `POST /api/admin/backgrounds` bu paylaşılan secret ile korunuyor (bkz.
+    # kök CLAUDE.md ders 8 — bilinçli geçici çözüm). Kasıtlı olarak varsayılan
+    # değeri YOK: env'de yoksa uygulama başlarken hata verir, sessizce açık
+    # bir admin endpoint'iyle üretime çıkılmaz.
+    admin_secret: str
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+    # GET /api/backgrounds içindeki presigned URL'lerin geçerlilik süresi.
+    background_url_expiry_seconds: int = 3600
 
     @property
     def max_file_size_bytes(self) -> int:

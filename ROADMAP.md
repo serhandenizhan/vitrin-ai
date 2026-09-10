@@ -108,6 +108,13 @@ Bu faz dökümü çalışan bir plandır, sabit bir sözleşme değil — gerçe
 sürükle-bırak yükleme, istemci tarafı doğrulama, bekleme ekranı, önce/sonra karşılaştırması ve
 PNG indirme tamamlandı. Ayrıntılı gerekçeler `frontend/README.md` dosyasında.
 
+**Frontend testleri eklendi (Vitest, 27 test).** Yığın tablosu Vitest'i listeliyordu ama Faz 2'nin
+ilk turunda frontend'de hiç test yoktu — backend'de Faz 1'den altı test dosyası varken. Kapsam
+bilinçli olarak saf mantık ve sunucu kodu: yükleme kısıtları ve arka plan kaldırma vekili.
+Bileşen testleri ve Playwright E2E, yol haritasının koyduğu yerde (Faz 7) bırakıldı — arayüz hâlâ
+hızla değişirken şimdi eklemek bakım yükü üretirdi. `@types/node` bu sırada 20'den 24'e çekildi;
+makinede zaten Node 24 çalışıyordu ve Vitest 5 bunu şart koşuyor.
+
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
 - **Backend'de `GET /health` eklendi** (`backend/app/api/routes/health.py`, `{"status": "ok"}`
@@ -129,6 +136,52 @@ Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
   Kök `CLAUDE.md` tek doğru kaynak olduğu için `next.config.ts` içinde `agentRules: false`
   ile kapatıldı; aksi halde iki CLAUDE.md kaçınılmaz olarak birbirinden ayrışırdı.
 
+**Sol panel, geçmiş ve ayarlar (Kaan, kullanıcı isteği) — kısmen Faz 4'ten öne alındı.**
+Kullanıcı, geçmiş çalışmaların ve ayarların görünür olduğu bir sol panel istedi. Panel, geçmiş
+listesi (küçük önizleme + tek tıkla geri açma + tek tek silme) ve ayarlar (geçmiş kaydını
+aç/kapat, hareketi azalt, tümünü sil) içeriyor.
+
+**Dikkat — bilinçli geçici çözüm:** geçmiş şu anda **tarayıcıda** (IndexedDB) tutuluyor.
+Bu fazın planında yoktu ve Faz 4 "proje geçmişi baştan sunucuda" diyor. Faz 4'ün şeması ve
+RLS'i henüz olmadığı için tek seçenek tarayıcıydı. Riski sınırlamak için:
+
+- Depo bir arayüzün arkasında (`frontend/src/lib/work-history.ts`); Faz 4'te yalnızca o
+  dosyanın gövdesi sunucu çağrılarıyla değişecek, arayüzün geri kalanı aynı kalacak.
+- Panelde kullanıcıya açıkça yazıyor: "yalnızca bu cihazda saklanıyor, hesap sistemi
+  geldiğinde hesabınıza taşınacak."
+- Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (özgün dosyalar 20 MB'a kadar
+  çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur).
+  Bunun görünür sonucu: geçmişten açılan bir çalışmada önce/sonra karşılaştırması değil
+  yalnızca sonuç gösteriliyor.
+- En fazla 20 kayıt tutuluyor.
+
+**Faz 4'te yapılacak:** `work-history.ts` sunucuya bağlanacak ve bu madde kapanacak. Var olan
+tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı ürün kararı — taşınmayacaksa kullanıcıya
+önceden bildirilmeli.
+
+**Gerçek ürün fotoğrafları ve sayfa ağırlığı (Kaan).** Açılıştaki üretilmiş yüzük yer tutucusu,
+kullanıcının sağladığı gerçek bir ürün fotoğrafıyla değiştirildi (telifi bize ait). Tek kare
+(2816×1536) ikiye bölünüp küçültülerek `atolye.webp` + `vitrin.webp` üretiliyor
+(`frontend/scripts/prepare-photos.mjs`, `sharp` zaten Next.js ile kurulu).
+
+Etiketler bilinçli olarak "Önce / Sonra" **değil**, "Atölyede / Vitrinde": sağdaki kare bu aracın
+çıktısı değil, ayrı bir çekim. "Sonra" demek kullanıcıya o sonucu bu aracın ürettiğini söylemek
+olurdu. İkisi birlikte ürünün **vaadini** anlatıyor; gerçek çıktı birkaç ekran aşağıda
+kullanıcının kendi fotoğrafıyla görülüyor.
+
+İki optimizasyon hatası bulunup düzeltildi:
+- **Kaynak JPEG `public/` altındaydı**, yani 3,6 MB'lik ham dosya olduğu gibi *yayınlanıyordu* —
+  Next.js `public/` altındaki her şeyi sunuyor ve dağıtıma dahil ediyor. `photo-source/` dizinine
+  taşındı (sunulmuyor). Bkz. `SECURITY.md` bölüm 7.
+- **Hedef genişlik 1400 px seçilmişti** ve atölye karesi 532 KB'a çıkmıştı; paneller ekranda
+  ~384 CSS px kaplıyor. 900 px'e indirildi.
+
+Ayrıca `tw-animate-css` kaldırıldı (sağladığı sınıfların hiçbiri kullanılmıyordu; sırf iskelet
+üreticisi eklemişti).
+
+**Ölçüldü — üretim derlemesi, ilk yükleme: toplam 342 KB** (JS 160 · font 131 · görsel 42 ·
+CSS 9 · belge 9). Görseller `next/image` ile 384 px sürümlerine iniyor: 31 KB + 12 KB.
+
 **Arayüz tasarım dili (Kaan, kullanıcı kararı).** Arayüz, kullanıcının referans olarak verdiği
 **apple.com/tr** ürün sayfalarından uyarlandı: tam genişlikte dönüşümlü koyu/açık bölümler,
 600 ağırlıklı ve negatif harf aralıklı büyük başlıklar, Apple'ın tipografi ölçeği (hero 64/68 px,
@@ -141,7 +194,7 @@ Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi
 tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
 için `frontend/README.md` → "Tasarım dili".
 
-### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ⏳ Planlanan
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — 🔄 Devam ediyor (backend tamamlandı)
 
 - Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
 - Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
@@ -150,10 +203,47 @@ için `frontend/README.md` → "Tasarım dili".
 - Backend boş liste dönerse (henüz gerçek zemin yoksa) editör yer tutucu (placeholder) zeminlere sessizce düşmeli, hiç kırılmamalı
 - Zemin görsellerinin R2'den gelen imzalı URL'leri süreli (örn. 1 saat) — editör uzun süre açık kalırsa yeniden fetch/refresh mekanizması gerekir (önceki iterasyonda bu atlanıp sessiz bir hata haline gelmişti, bu sefer baştan tasarlanmalı)
 
+**Sonuç (Serhan) — backend kısmı tamamlandı.** `backgrounds` tablosu (Postgres) +
+Alembic migration eklendi; `POST /api/admin/backgrounds` (dosya doğrulaması aynı
+Faz 1 katmanlarından geçiyor, R2'ye UUID tabanlı `r2_key` ile yükleniyor, geçici bir
+`X-Admin-Secret` paylaşılan secret header'ıyla korunuyor — bkz. kök `CLAUDE.md` ders 8
+ve "Açık takip maddesi") ve `GET /api/backgrounds` (herkese açık, her kayıt için
+süreli presigned URL ile döner) yazıldı. R2 depolama servisi (boto3, S3-uyumlu)
+`backend/app/services/storage.py` içinde. Şema bilinçli olarak minimal tutuldu —
+kategori/etiket alanı yok, MVP için gerek görülmedi; ihtiyaç ortaya çıkarsa ayrı bir
+migration ile eklenir. **Gerçek bir Cloudflare R2 bucket'ına karşı uçtan uca elle
+doğrulandı**: yükle (`POST /api/admin/backgrounds`) → listele (`GET /api/backgrounds`)
+→ dönen presigned URL'den gerçek dosya indirildi ve piksel/boyut olarak yüklenen
+görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici nesneler ve DB
+kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
+olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
+
+**İnceleme düzeltmeleri (Kaan).** Backend birleştirildikten sonra yapılan
+incelemede üç madde düzeltildi:
+
+1. **Admin secret karşılaştırması non-ASCII secret'larda çalışmıyordu.** Starlette
+   header baytlarını `latin-1` ile decode ediyor; karşılaştırmanın her iki tarafını
+   `utf-8` ile encode etmek gelen baytları ikinci kez kodluyordu (double-encode) ve
+   `ADMIN_SECRET` içinde Türkçe karakter varsa DOĞRU secret gönderildiğinde bile
+   kalıcı 401 üretiyordu. Mevcut test yalnızca "500 değil 401" diye baktığı için
+   bozuk sürüm de yeşil geçiyordu; doğru secret'ın 201 döndürdüğünü doğrulayan test
+   eklendi. (PR #5'te GitHub Copilot incelemesinin yakaladığı bulgu.)
+2. **`GET /api/backgrounds` artık `expires_in` alanı da dönüyor.** İmzalı URL'nin
+   ömrü sunucuda `BACKGROUND_URL_EXPIRY_SECONDS` ile yapılandırılabiliyor; bu alan
+   olmadan editörün tek seçeneği süreyi kendi tarafına sabitlemek olurdu ve sunucu
+   ayarı değiştiğinde sessizce süresi dolmuş URL'lerle çalışırdı — yukarıdaki
+   "sessiz hata" uyarısının tam olarak tarif ettiği durum.
+3. **R2 ayarları eksikken artık açıkça hata veriliyor.** Boş `R2_ACCOUNT_ID` ile
+   boto3 sessizce `https://.r2.cloudflarestorage.com` endpoint'i üretiyor ve
+   "geçerli görünen ama çalışmayan" imzalı URL'ler dönüyordu; yanlış yapılandırma
+   sunucuda değil kullanıcının tarayıcısında kırık görsel olarak ortaya çıkardı.
+   (Copilot incelemesinin ikinci bulgusu.)
+
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
-- Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (bu sefer baştan sunucuda — önceki iterasyonda geçici olarak IndexedDB'de tutulup sonra taşınması planlanmıştı, bu ihtiyaç ortadan kalkıyor çünkü DB şeması aynı anda kuruluyor)
+- **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 7)
+- Kaan: giriş/kayıt arayüzü, parola sıfırlama, kullanıcı paneli, proje geçmişi (sunucuda). **Not:** geçmiş, kullanıcı isteğiyle Faz 2'de geçici olarak tarayıcıya (IndexedDB) kondu — bkz. Faz 2 notları. Bu fazda `frontend/src/lib/work-history.ts` sunucuya bağlanacak ve geçici çözüm kalkacak; arayüzün geri kalanı değişmeyecek çünkü depo zaten bir arayüzün arkasında
 - Oturum çerezde tutulur (`@supabase/ssr`), localStorage'da değil
 - Middleware yetkilendirme sayılmaz — sadece yönlendirme kolaylığı; gerçek denetim RLS'te ve sunucu bileşenlerinde ikinci kez kontrol edilir
 - Parola sıfırlamada kullanıcı numaralandırması engellenir, callback'te açık yönlendirme kapatılır
