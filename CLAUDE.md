@@ -115,6 +115,8 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 
 VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.vscode/tasks.json`). Görev dosyası bilinçli olarak commit ediliyor — "sistemi nasıl ayağa kaldıracağım" bilgisi kişisel bir tercih değil, projenin parçası. Kişisel VS Code ayarları (`settings.json` vb.) yok sayılmaya devam ediyor.
 
+**macOS/Linux'ta terminalden: `./execute.sh`** (repo kökünde, aynı sebeple commit ediliyor). `tasks.json`'un Windows'a özgü olması nedeniyle (`.venv\Scripts\python.exe`) eklendi — tek komutla Postgres'i (Docker) ayağa kaldırır, backend sanal ortamını/migration'larını ve frontend bağımlılıklarını ilk çalıştırmada kurar, ikisini birlikte başlatır. Ctrl+C ikisini birlikte kapatır. `VITRIN_PYTHON` / `VITRIN_VENV_DIR` ile override edilebilir (ders 11: path hard-code edilmez).
+
 **Tuzak:** `.gitignore`'da dizinin kendisi (`.vscode/`) değil **içeriği** (`.vscode/*`) dışlanmalı — git, dışlanmış bir dizinin içine hiç bakmadığı için `!.vscode/tasks.json` negasyonu aksi hâlde çalışmaz.
 
 **İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
