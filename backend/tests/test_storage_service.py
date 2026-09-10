@@ -14,7 +14,7 @@ def teardown_function():
 
 
 @pytest.fixture
-def r2_yapilandirildi(monkeypatch):
+def configured_r2_settings(monkeypatch):
     # `_get_client` artık eksik R2 ayarlarında fail-fast yapıyor (bkz.
     # `_require_r2_settings`). boto3'ü mock'layan testlerin de bu kapıdan
     # geçmesi gerekiyor — ayarları doldurmak, testi gerçek çalışma koşuluna
@@ -26,7 +26,7 @@ def r2_yapilandirildi(monkeypatch):
 
 
 async def test_upload_calls_put_object_with_bucket_key_content_and_type(
-    monkeypatch, r2_yapilandirildi
+    monkeypatch, configured_r2_settings
 ):
     client_mock = MagicMock()
     monkeypatch.setattr(storage.boto3, "client", MagicMock(return_value=client_mock))
@@ -43,7 +43,7 @@ async def test_upload_calls_put_object_with_bucket_key_content_and_type(
 
 
 def test_generate_presigned_url_uses_bucket_key_and_configured_expiry(
-    monkeypatch, r2_yapilandirildi
+    monkeypatch, configured_r2_settings
 ):
     client_mock = MagicMock()
     client_mock.generate_presigned_url = MagicMock(return_value="https://signed.example/url")

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.main import app
 from app.models.background import Background
+from app.services import storage as storage_module
 
 
 def _jpeg_bytes() -> bytes:
@@ -20,7 +21,9 @@ def _jpeg_bytes() -> bytes:
     return buf.getvalue()
 
 
-def _client(db_session, storage_mock) -> TestClient:
+def _client(
+    db_session, storage_mock=None, *, raise_server_exceptions: bool = True
+) -> TestClient:
     async def _override_db_session():
         try:
             yield db_session
@@ -37,8 +40,9 @@ def _client(db_session, storage_mock) -> TestClient:
             await db_session.commit()
 
     app.dependency_overrides[get_db_session] = _override_db_session
-    app.dependency_overrides[get_storage_service] = lambda: storage_mock
-    return TestClient(app)
+    if storage_mock is not None:
+        app.dependency_overrides[get_storage_service] = lambda: storage_mock
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def teardown_function():
@@ -46,6 +50,7 @@ def teardown_function():
     # convention'la aynı: her testten sonra override'lar temizlenmezse
     # sonraki testler yanlışlıkla önceki testin mock'larını miras alabilir.
     app.dependency_overrides.clear()
+    storage_module._get_client.cache_clear()
 
 
 async def test_missing_admin_secret_returns_401(db_session):
@@ -124,6 +129,27 @@ async def test_non_ascii_admin_secret_accepts_correct_value(db_session, monkeypa
     storage_mock.upload.assert_awaited_once()
 
 
+async def test_unconfigured_r2_returns_service_unavailable_for_upload(
+    db_session, monkeypatch
+):
+    for name in storage_module.REQUIRED_R2_SETTINGS:
+        monkeypatch.setattr(settings, name, "")
+
+    client = _client(db_session, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers={"X-Admin-Secret": settings.admin_secret},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "R2 depolama yapılandırılmamış; eksik ayar(lar): "
+        "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME"
+    )
+
+
 async def test_invalid_file_returns_400(db_session):
     storage_mock = AsyncMock()
     client = _client(db_session, storage_mock)
@@ -195,6 +221,40 @@ async def test_list_backgrounds_returns_empty_list_when_none_exist(db_session):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+async def test_list_backgrounds_returns_empty_list_without_r2_configuration(
+    db_session, monkeypatch
+):
+    for name in storage_module.REQUIRED_R2_SETTINGS:
+        monkeypatch.setattr(settings, name, "")
+
+    client = _client(db_session)
+
+    response = client.get("/api/backgrounds")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_list_backgrounds_returns_service_unavailable_without_r2_configuration(
+    db_session, monkeypatch
+):
+    db_session.add(Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg", is_active=True))
+    await db_session.commit()
+
+    for name in storage_module.REQUIRED_R2_SETTINGS:
+        monkeypatch.setattr(settings, name, "")
+
+    client = _client(db_session)
+
+    response = client.get("/api/backgrounds")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "R2 depolama yapılandırılmamış; eksik ayar(lar): "
+        "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME"
+    )
 
 
 async def test_list_backgrounds_returns_only_active_with_presigned_urls(db_session):
