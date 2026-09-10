@@ -14,8 +14,15 @@
 #
 # Ortam değişkenleriyle override edilebilir (CLAUDE.md ders 11: path'ler
 # hard-code edilmez):
-#   VITRIN_PYTHON   — venv kurulumunda kullanılacak Python (varsayılan: python3.11)
-#   VITRIN_VENV_DIR — backend sanal ortamının yolu (varsayılan: backend/.venv)
+#   VITRIN_PYTHON        — venv kurulumunda kullanılacak Python (varsayılan: python3.11)
+#   VITRIN_VENV_DIR       — backend sanal ortamının yolu (varsayılan: backend/.venv)
+#   VITRIN_BACKEND_PORT   — backend portu (varsayılan: 8000)
+#   VITRIN_FRONTEND_PORT  — frontend portu (varsayılan: 3000)
+#   POSTGRES_PORT         — docker-compose.yml zaten okuyor (varsayılan: 5432)
+#
+# Port override'ları özellikle bu repoda birden fazla worktree'nin AYNI ANDA
+# çalıştığı durumlar için var — ikinci bir worktree'de varsayılan portlar
+# neredeyse her zaman doluyor olur.
 
 set -euo pipefail
 
@@ -26,6 +33,9 @@ BACKEND_DIR="$REPO_ROOT/backend"
 FRONTEND_DIR="$REPO_ROOT/frontend"
 VENV_DIR="${VITRIN_VENV_DIR:-$BACKEND_DIR/.venv}"
 PYTHON_BIN="${VITRIN_PYTHON:-python3.11}"
+BACKEND_PORT="${VITRIN_BACKEND_PORT:-8000}"
+FRONTEND_PORT="${VITRIN_FRONTEND_PORT:-3000}"
+POSTGRES_PORT_FOR_DISPLAY="${POSTGRES_PORT:-5432}"
 LOG_DIR="$REPO_ROOT/.run"
 
 mkdir -p "$LOG_DIR"
@@ -70,7 +80,26 @@ fi
 
 if [ ! -f "$BACKEND_DIR/.env" ]; then
   echo "  backend/.env yok, .env.example'dan kopyalanıyor..."
-  cp "$BACKEND_DIR/.env.example" "$BACKEND_DIR/.env"
+  # DATABASE_URL'deki port, .env.example'da SABİT 5432 yazıyor. POSTGRES_PORT
+  # override edildiyse (paralel worktree senaryosu) ve bu satır olduğu gibi
+  # kopyalansaydı, alembic/backend SESSİZCE başka bir yerdeki (ör. başka bir
+  # worktree'nin) Postgres'ine bağlanırdı — bu betiğin ilk sürümünde birebir
+  # olculdu: 5433'te Postgres başlatılmışken .env hâlâ 5432 diyordu ve migration
+  # farkında olmadan başka bir worktree'nin veritabanına karşı çalıştı (zararsız
+  # bir no-op oldu ama tesadüfen). Kopyalarken port her zaman eşitleniyor.
+  sed "s#@localhost:5432/#@localhost:${POSTGRES_PORT_FOR_DISPLAY}/#" \
+    "$BACKEND_DIR/.env.example" > "$BACKEND_DIR/.env"
+fi
+
+# Var olan bir .env, POSTGRES_PORT ile farklı bir porta işaret ediyorsa
+# (ör. bu .env varsayılan 5432 için kurulmuşken betik bu çalıştırmada
+# POSTGRES_PORT ile başka bir porta yönlendirildiyse) sessizce yanlış
+# veritabanına bağlanmak yerine açıkça uyarılıyor.
+existing_db_port="$(grep -o '@localhost:[0-9]*/' "$BACKEND_DIR/.env" 2>/dev/null | grep -o '[0-9]*' | head -1 || true)"
+if [ -n "$existing_db_port" ] && [ "$existing_db_port" != "$POSTGRES_PORT_FOR_DISPLAY" ]; then
+  echo "  UYARI: backend/.env içindeki DATABASE_URL localhost:$existing_db_port diyor," >&2
+  echo "         ama bu çalıştırmada Postgres localhost:$POSTGRES_PORT_FOR_DISPLAY üzerinde." >&2
+  echo "         Kasıtlı değilse backend/.env'i elle düzeltin." >&2
 fi
 
 echo ""
@@ -98,9 +127,9 @@ fi
 
 echo ""
 echo "== Servisler başlatılıyor =="
-echo "Backend:  http://localhost:8000   (log: .run/backend.log)"
-echo "Frontend: http://localhost:3000   (log: .run/frontend.log)"
-echo "Postgres: localhost:5432"
+echo "Backend:  http://localhost:$BACKEND_PORT   (log: .run/backend.log)"
+echo "Frontend: http://localhost:$FRONTEND_PORT   (log: .run/frontend.log)"
+echo "Postgres: localhost:$POSTGRES_PORT_FOR_DISPLAY"
 echo ""
 echo "Durdurmak için Ctrl+C — ikisi de birlikte kapanır."
 echo ""
@@ -122,12 +151,16 @@ trap cleanup EXIT INT TERM
 
 (
   cd "$BACKEND_DIR"
-  "$VENV_DIR/bin/uvicorn" app.main:app --reload --port 8000
+  "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
 ) > "$LOG_DIR/backend.log" 2>&1 &
 
 (
   cd "$FRONTEND_DIR"
-  npm run dev
+  # BACKEND_URL burada process ortamına yazılıyor: Next.js .env.local'i
+  # otomatik yüklüyor ama gerçek ortam değişkenleri her zaman onu geçersiz
+  # kılar — backend portu varsayılandan farklıysa .env.local'e hiç dokunmadan
+  # doğru adrese işaret ediyor.
+  BACKEND_URL="http://localhost:$BACKEND_PORT" npm run dev -- -p "$FRONTEND_PORT"
 ) > "$LOG_DIR/frontend.log" 2>&1 &
 
 # Her iki log'u da terminale akıtır ki VS Code görevlerindeki "ayrı panel"
