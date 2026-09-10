@@ -14,7 +14,6 @@
  */
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Download, Loader2, Printer, RotateCw } from "lucide-react";
 import type Konva from "konva";
@@ -76,8 +75,37 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
   const [baskiAcik, setBaskiAcik] = useState(false);
   const [bicimAdi, setBicimAdi] = useState<CiktiBicimAdi>("kare");
+  const [baskiDurumu, setBaskiDurumu] = useState<
+    "bos" | "hazirlaniyor" | "hazir" | string
+  >("bos");
   const [donusum, setDonusum] = useState<Donusum | null>(null);
   const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
+
+  /**
+   * Geri alma yigini.
+   *
+   * Yalnizca "kullanicinin bir sey degistirdigi" anlar kaydediliyor; surukleme
+   * SIRASINDA degil, birakildiginda. Aksi halde tek bir surukleme yuzlerce adim
+   * uretir ve Ctrl+Z pratikte ise yaramazdi.
+   *
+   * State degil REF: yigin arayuzu etkilemiyor, yalnizca Ctrl+Z aninda
+   * okunuyor. State olsaydi her adimda gereksiz bir render olurdu.
+   */
+  const gecmisRef = useRef<{ donusum: Donusum | null; gorunum: Gorunum }[]>([]);
+
+  const adimKaydet = useCallback(() => {
+    gecmisRef.current.push({ donusum, gorunum });
+    // Yigin sinirli: 50 adim, bir oturumda geri alinmak istenecek her seyi
+    // fazlasiyla kapsiyor ve bellegi buyutmuyor.
+    if (gecmisRef.current.length > 50) gecmisRef.current.shift();
+  }, [donusum, gorunum]);
+
+  const geriAl = useCallback(() => {
+    const onceki = gecmisRef.current.pop();
+    if (!onceki) return;
+    setDonusum(onceki.donusum);
+    setGorunum(onceki.gorunum);
+  }, []);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
     genislik: number;
     yukseklik: number;
@@ -121,6 +149,57 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
     return () => gozlemci.disconnect();
   }, []);
 
+  /**
+   * Klavye kisayollari.
+   *
+   * Ok tuslari urunu kaydiriyor (Shift ile 10 kat), Ctrl/Cmd+Z geri aliyor.
+   * Fareyle bir pikseli tutturmak zor; ok tuslari kesin ayar icin tek yol.
+   *
+   * Bir metin alanina yaziliyorsa hicbir sey yapilmiyor — aksi halde baslik
+   * yazarken urun kayardi.
+   */
+  useEffect(() => {
+    function tusaBasildi(olay: KeyboardEvent) {
+      const hedef = olay.target as HTMLElement | null;
+      if (
+        hedef &&
+        (hedef.tagName === "INPUT" ||
+          hedef.tagName === "TEXTAREA" ||
+          hedef.isContentEditable)
+      ) {
+        return;
+      }
+
+      if ((olay.ctrlKey || olay.metaKey) && olay.key.toLowerCase() === "z") {
+        olay.preventDefault();
+        geriAl();
+        return;
+      }
+
+      const yonler: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      const yon = yonler[olay.key];
+      if (!yon) return;
+
+      olay.preventDefault();
+      const adim = (olay.shiftKey ? 10 : 1) * (sahne.genislik / 500);
+      adimKaydet();
+      setDonusum((onceki) => ({
+        x: (onceki?.x ?? sahne.genislik / 2) + yon[0] * adim,
+        y: (onceki?.y ?? sahne.yukseklik / 2) + yon[1] * adim,
+        olcek: onceki?.olcek ?? 1,
+        aci: onceki?.aci ?? 0,
+      }));
+    }
+
+    document.addEventListener("keydown", tusaBasildi);
+    return () => document.removeEventListener("keydown", tusaBasildi);
+  }, [geriAl, adimKaydet, sahne]);
+
   // Secili zemin id ile tutuluyor, nesneyle degil: liste yenilendiginde
   // (imzali URL'ler tazelendiginde) nesne kimligi degisiyor ama id ayni
   // kaliyor, dolayisiyla kullanicinin secimi yenilemeden SAG CIKIYOR.
@@ -148,6 +227,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
 
   const ortalaVeSigdir = useCallback(() => {
     if (!kesimOlculeri) return;
+    adimKaydet();
     setDonusum(
       sahneyeSigdir(
         sahne.genislik,
@@ -156,7 +236,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         kesimOlculeri.yukseklik,
       ),
     );
-  }, [kesimOlculeri, sahne]);
+  }, [kesimOlculeri, sahne, adimKaydet]);
 
   /**
    * Bicim degistirir ve yerlesimi sifirlar.
@@ -202,10 +282,11 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const mevcutOran =
     donusum && sigdirmaOlcegi ? donusum.olcek / sigdirmaOlcegi : 1;
 
-  const disaAktar = useCallback(
-    (tur: "png" | "jpeg") => {
+  /** Sahneyi cizip veri URL'i dondurur; indirmeyi cagirana birakiyor. */
+  const sahneyiCiz = useCallback(
+    (tur: "png" | "jpeg"): string | null => {
       const stage = stageRef.current;
-      if (!stage) return;
+      if (!stage) return null;
 
       setDisaAktariliyor(true);
       try {
@@ -249,19 +330,73 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         transformerlar.forEach((node) => node.show());
         stage.draw();
 
-        const bag = document.createElement("a");
-        bag.href = veriUrl;
-        bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
-        bag.click();
+        return veriUrl;
       } finally {
         setDisaAktariliyor(false);
       }
     },
-    [dosyaAdi, sahne, bicim, bicimAdi],
+    [sahne, bicim],
+  );
+
+  /** Sahneyi indirilebilir bir dosyaya cevirir. */
+  const indir = useCallback(
+    (tur: "png" | "jpeg") => {
+      const veriUrl = sahneyiCiz(tur);
+      if (!veriUrl) return;
+      const bag = document.createElement("a");
+      bag.href = veriUrl;
+      bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
+      bag.click();
+    },
+    [sahneyiCiz, dosyaAdi, bicimAdi],
+  );
+
+  /**
+   * Baskiya uygun (CMYK) indirme.
+   *
+   * Sahne once PNG olarak ciziliyor, sonra sunucuya gonderilip hedef baski
+   * kosulunun ICC profiliyle CMYK'ya cevriliyor (bkz. app/api/cmyk/route.ts).
+   * Tarayicida yapilamaz: canvas yalnizca RGB uretir, PNG CMYK'yi desteklemez.
+   */
+  const baskiyaIndir = useCallback(
+    async (bicimTuru: "jpeg" | "tiff") => {
+      const veriUrl = sahneyiCiz("png");
+      if (!veriUrl) return;
+
+      setBaskiDurumu("hazirlaniyor");
+      try {
+        const govde = new FormData();
+        govde.append("file", await (await fetch(veriUrl)).blob(), "sahne.png");
+        govde.append("format", bicimTuru);
+
+        const yanit = await fetch("/api/cmyk", { method: "POST", body: govde });
+        if (!yanit.ok) {
+          const hata = await yanit.json().catch(() => null);
+          setBaskiDurumu(hata?.error ?? "Dönüşüm başarısız oldu.");
+          return;
+        }
+
+        const blob = await yanit.blob();
+        const url = URL.createObjectURL(blob);
+        const bag = document.createElement("a");
+        bag.href = url;
+        bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-cmyk.${bicimTuru === "tiff" ? "tif" : "jpg"}`;
+        bag.click();
+        // Iptal GECIKTIRILIYOR. `click()`'ten hemen sonra iptal etmek, tarayici
+        // blob'u okumaya baslamadan URL'i gecersiz kilabiliyor ve indirme
+        // sessizce basarisiz oluyor. Bir dakika, en yavas cihazda bile fazlasiyla
+        // yeterli; sonra bellek serbest kaliyor.
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        setBaskiDurumu("hazir");
+      } catch {
+        setBaskiDurumu("Sunucuya ulaşılamadı.");
+      }
+    },
+    [sahneyiCiz, dosyaAdi],
   );
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-8">
       {/*
         `min-w-0` sart: grid ogelerinin varsayilan `min-width: auto` degeri,
         ogenin ICERIGINDEN daha dar olmasini engelliyor. Konva sahnesi kendine
@@ -271,7 +406,16 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         kapsayicisindan tasan bir tuval. `min-w-0`, kapsayicinin gercek
         kullanilabilir genisligi bildirmesini sagliyor.
       */}
-      <div ref={kapsayiciRef} className="mx-auto w-full max-w-[35rem] min-w-0">
+      {/*
+        Telefonda tuval YAPISKAN: kullanici asagidaki ayarlari degistirirken
+        sonucu gorebilmeli. Onceden panel tuvalin altina duyuyor ve ayar
+        yapilirken tuval ekran disinda kaliyordu.
+        `top-14` ust cubugun yuksekligi kadar.
+      */}
+      <div
+        ref={kapsayiciRef}
+        className="mx-auto w-full max-w-[22rem] min-w-0 sm:max-w-[26rem] lg:sticky lg:top-20 lg:max-w-[35rem]"
+      >
         <div
           className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1"
           style={{ aspectRatio: `${bicim.ciktiGenislik} / ${bicim.ciktiYukseklik}` }}
@@ -284,7 +428,10 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             sahneYukseklik={sahne.yukseklik}
             donusum={donusum}
             gorunum={gorunum}
-            onDonusumDegisti={setDonusum}
+            onDonusumDegisti={(yeni) => {
+              adimKaydet();
+              setDonusum(yeni);
+            }}
             onKesimOlculeri={setKesimOlculeri}
             onStageHazir={stageHazir}
           />
@@ -416,6 +563,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             enCok={0.3}
             adim={0.01}
             bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
+            onBasladi={adimKaydet}
             onDegisti={(d) => setGorunum((o) => ({ ...o, parlaklik: d }))}
           />
           <Kaydirac
@@ -425,6 +573,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             enCok={40}
             adim={1}
             bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d)}`}
+            onBasladi={adimKaydet}
             onDegisti={(d) => setGorunum((o) => ({ ...o, kontrast: d }))}
           />
           <Kaydirac
@@ -434,6 +583,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             enCok={1}
             adim={0.02}
             bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
+            onBasladi={adimKaydet}
             onDegisti={(d) => setGorunum((o) => ({ ...o, doygunluk: d }))}
           />
 
@@ -492,7 +642,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         <div className="flex gap-2 px-5 pb-5">
           <Button
             type="button"
-            onClick={() => disaAktar("png")}
+            onClick={() => indir("png")}
             disabled={disaAktariliyor}
             className="press min-h-10 flex-1 rounded-full"
           >
@@ -502,7 +652,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
           <Button
             type="button"
             variant="outline"
-            onClick={() => disaAktar("jpeg")}
+            onClick={() => indir("jpeg")}
             disabled={disaAktariliyor}
             className="press min-h-10 flex-1 rounded-full bg-white"
           >
@@ -511,47 +661,76 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         </div>
 
         {/*
-          BASKIYA UYGUN CIKTI — bilincli olarak yalnizca DUGME.
+          BASKIYA UYGUN CIKTI — artik gercek.
 
-          Gercek matbaa ciktisi CMYK renk uzayina, matbaanin ICC profiliyle
-          yapilmis bir donusum ister. Bu tarayicida YAPILAMIYOR: canvas
-          yalnizca RGB uretiyor ve PNG formati CMYK'yi hic desteklemiyor.
-          Dogru cozum sunucu tarafinda (ICC profili + TIFF/PDF cikti), yani
-          yeni bir backend endpoint'i — bu da yol haritasindaki fazlari
-          etkiler. Kullanicinin sarti buydu: "fazlari etkileyecekse sadece
-          buton olarak ekle".
+          Donusum `sharp` (libvips + littleCMS) ile Next'in kendi sunucusunda
+          yapiliyor (bkz. app/api/cmyk/route.ts); Python backend'ine ve yol
+          haritasindaki hicbir faza dokunmuyor.
 
-          Dugme calisir gibi gorunup hicbir sey yapmiyor DEGIL; basilinca ne
-          oldugunu ve neden kapali oldugunu acikca soyluyor (ders 8 deseni).
-
-          Indirilen PNG'nin zaten KAYIPSIZ oldugu ayrica belirtiliyor —
-          kullanicinin "kayipsiz indirme" ihtiyacinin bir kismi bugun de
-          karsilaniyor, eksik olan yalnizca renk uzayi donusumu.
+          Tarayicida yapilamaz: canvas yalnizca RGB uretir, PNG formati
+          CMYK'yi hic desteklemez. Dort kanalli bir goruntu ve icine gomulu
+          bir cikti profili yalnizca sunucuda mumkun.
         */}
+        <BolumBasligi>
+          Baskıya uygun
+          <span className="ml-2 font-normal normal-case opacity-50">CMYK</span>
+        </BolumBasligi>
         <div className="px-5 pb-5">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => baskiyaIndir("tiff")}
+              disabled={baskiDurumu === "hazirlaniyor"}
+              className="press min-h-10 flex-1 rounded-full bg-white"
+            >
+              {baskiDurumu === "hazirlaniyor" ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Printer className="size-3.5" strokeWidth={1.75} aria-hidden />
+              )}
+              TIFF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => baskiyaIndir("jpeg")}
+              disabled={baskiDurumu === "hazirlaniyor"}
+              className="press min-h-10 flex-1 rounded-full bg-white"
+            >
+              JPEG
+            </Button>
+          </div>
+
           <button
             type="button"
             onClick={() => setBaskiAcik((a) => !a)}
             aria-expanded={baskiAcik}
-            className="press flex min-h-10 w-full items-center gap-2 rounded-full bg-white px-4 text-[0.875rem] ring-1 ring-black/10 transition-colors hover:ring-black/20"
+            className="fine-print mt-2 underline underline-offset-2 opacity-60 hover:opacity-100"
           >
-            <Printer className="size-4 opacity-70" strokeWidth={1.75} aria-hidden />
-            Baskıya uygun (CMYK)
-            <span className="ml-auto rounded-full bg-black/8 px-2 py-0.5 text-[0.625rem] font-semibold tracking-[0.04em] uppercase opacity-60">
-              Premium
-            </span>
+            Bu ne demek?
           </button>
 
           {baskiAcik ? (
-            <p className="fine-print mt-2 leading-relaxed opacity-70">
-              Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz; dosyanın
-              CMYK renk uzayına, matbaanın ICC profiliyle çevrilmiş olması
-              gerekir. Bu dönüşüm tarayıcıda yapılamadığı için sunucu tarafında
-              hazırlanıyor ve ücretli planlarda açılacak.{" "}
-              <Link href="/paketler" className="underline underline-offset-2">
-                Paketlere bakın
-              </Link>
-              .
+            <p className="fine-print mt-1.5 leading-relaxed opacity-70">
+              Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu
+              seçenek görseli, hedef baskı koşulunun ICC profiliyle CMYK renk
+              uzayına çevirip profili dosyaya gömer. Saydam alanlar beyaza
+              düzleştirilir — CMYK&apos;nin alfa kanalı yoktur. TIFF matbaanın
+              tercih ettiği biçim; JPEG daha küçük.
+            </p>
+          ) : null}
+
+          {baskiDurumu !== "bos" && baskiDurumu !== "hazirlaniyor" ? (
+            <p
+              className={
+                "fine-print mt-2 " +
+                (baskiDurumu === "hazir" ? "opacity-60" : "text-red-700")
+              }
+            >
+              {baskiDurumu === "hazir" ? "İndirildi." : baskiDurumu}
             </p>
           ) : null}
 
@@ -572,6 +751,7 @@ function Kaydirac({
   adim,
   bicimle,
   onDegisti,
+  onBasladi,
 }: {
   etiket: string;
   deger: number;
@@ -580,6 +760,10 @@ function Kaydirac({
   adim: number;
   bicimle: (deger: number) => string;
   onDegisti: (deger: number) => void;
+  /** Kaydiraca BASILDIGINDA cagriliyor — geri alma adimi burada kaydediliyor,
+      her deger degisiminde degil; aksi halde tek surukleme yuzlerce adim
+      uretirdi. */
+  onBasladi?: () => void;
 }) {
   return (
     <div>
@@ -594,6 +778,7 @@ function Kaydirac({
         step={adim}
         value={deger}
         aria-label={etiket}
+        onPointerDown={onBasladi}
         onChange={(olay) => onDegisti(Number(olay.target.value))}
         className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
       />

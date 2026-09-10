@@ -191,7 +191,20 @@ Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek b
 - **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
 - Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
 
-### 3. CORS middleware'i — sahibi: Serhan, Faz 4
+### 3. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
+
+`/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
+koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
+yok**. Geliştirmede işletim sisteminin profili kullanılıyor; üretimde bu yol
+geçersiz olacağı için endpoint açık bir mesajla 503 döner.
+
+Üretime çıkmadan önce depoya serbest lisanslı bir CMYK profili konmalı
+(ECI'nin `ISOcoated_v2_eci.icc` dosyası bu iş için serbest) ya da matbaanın
+kendi profili alınmalı. Profilsiz bir çevrim matbaada yanlış renk verir; bunu
+sessizce yapmak özelliği hiç sunmamaktan kötüdür — bu yüzden varsayılan
+konmadı.
+
+### 4. CORS middleware'i — sahibi: Serhan, Faz 4
 
 Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
 

@@ -296,14 +296,22 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   Önizleme ile çıktı **tek bir ölçü tablosundan** besleniyor; ikisi ayrı
   kodlansaydı kaçınılmaz olarak ayrışır ve "ekranda böyle görünmüyordu"
   sonucunu doğururdu.
-- **Baskıya uygun (CMYK) dışa aktarma — yalnızca düğme.** Ölçüldü ve
-  doğrulandı: gerçek matbaa çıktısı, dosyanın matbaanın ICC profiliyle CMYK'ya
-  çevrilmiş olmasını ister; bu dönüşüm **tarayıcıda yapılamıyor** (canvas
-  yalnızca RGB üretir, PNG formatı CMYK'yı hiç desteklemez). Doğru çözüm sunucu
-  tarafında yeni bir endpoint + ICC profili, yani **fazları etkiler** — bu
-  yüzden kullanıcının talimatına uyularak yalnızca düğme eklendi: basılınca ne
-  olduğunu ve neden kapalı olduğunu açıkça söylüyor. Faz 5'e (ödeme) bağlı bir
-  premium özellik olarak planlanmalı.
+- **Baskıya uygun (CMYK) dışa aktarma — GERÇEKTEN eklendi (10.09.2026).**
+  Önce yalnızca düğme olarak konmuştu; sonra ölçüldü ve fazları etkilemeden
+  yapılabileceği görüldü. Dönüşüm `sharp` (libvips + littleCMS) ile **Next'in
+  kendi sunucusunda** yapılıyor (`/api/cmyk`); Python backend'ine, veritabanına
+  ya da Serhan'ın tarafına hiç dokunmuyor.
+
+  Doğrulandı: çıktı 4 kanallı, `cmyk` renk uzayında ve hedef baskı koşulunun
+  ICC profili dosyaya gömülü — hem TIFF (matbaanın tercihi, LZW kayıpsız) hem
+  JPEG. Saydam alanlar beyaza düzleştiriliyor; CMYK'nın alfa kanalı yok.
+
+  **Açık madde:** profil yolu `CMYK_ICC_PATH` ile veriliyor ve varsayılanı yok —
+  profilsiz bir "CMYK" çevrimi matbaada yanlış renk verir, bunu sessizce yapmak
+  özelliği hiç sunmamaktan kötüdür. Geliştirmede işletim sisteminin profili
+  kullanılıyor; **üretime çıkmadan depoya serbest lisanslı bir profil konmalı**
+  (örneğin ECI'nin ISOcoated_v2_eci.icc) ya da matbaanın kendi profili
+  alınmalı.
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,

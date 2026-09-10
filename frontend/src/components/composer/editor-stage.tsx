@@ -124,6 +124,19 @@ export function EditorStage({
 
   const [secili, setSecili] = useState(true);
 
+  /**
+   * Cift parmakla yakinlastirma.
+   *
+   * Kuyumcunun asil cihazi telefon ve orada kose tutamaklarini tutturmak zor;
+   * "pinch" bu yuzden gerekli. Konva'nin kendi cok-dokunma destegi yok, iki
+   * parmagin ARASINDAKI MESAFE elle izleniyor: mesafe orani dogrudan olcek
+   * carpani oluyor.
+   *
+   * Ref'te tutuluyor cunku hareket sirasinda okunuyor; state olsaydi kapanis
+   * eski degeri gorurdu (Faz 2'de ayni tuzaga dusulmustu).
+   */
+  const dokunmaRef = useRef<{ mesafe: number; olcek: number } | null>(null);
+
   const kesim = useGorsel(kesimUrl);
   const zeminGorseli = useGorsel(zemin.tur === "sunucu" ? zemin.url : null);
 
@@ -205,7 +218,36 @@ export function EditorStage({
         if (olay.target === olay.target.getStage()) setSecili(false);
       }}
       onTouchStart={(olay) => {
+        const dokunuslar = olay.evt.touches;
+        if (dokunuslar.length === 2) {
+          // Iki parmak: yakinlastirma basliyor, secim degismiyor.
+          olay.evt.preventDefault();
+          const [a, b] = [dokunuslar[0], dokunuslar[1]];
+          dokunmaRef.current = {
+            mesafe: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+            olcek: yerlesim?.olcek ?? 1,
+          };
+          return;
+        }
         if (olay.target === olay.target.getStage()) setSecili(false);
+      }}
+      onTouchMove={(olay) => {
+        const dokunuslar = olay.evt.touches;
+        const baslangic = dokunmaRef.current;
+        if (dokunuslar.length !== 2 || !baslangic || !yerlesim) return;
+
+        olay.evt.preventDefault();
+        const [a, b] = [dokunuslar[0], dokunuslar[1]];
+        const mesafe = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        if (baslangic.mesafe === 0) return;
+
+        onDonusumDegisti({
+          ...yerlesim,
+          olcek: baslangic.olcek * (mesafe / baslangic.mesafe),
+        });
+      }}
+      onTouchEnd={() => {
+        dokunmaRef.current = null;
       }}
     >
       <Layer listening={false}>

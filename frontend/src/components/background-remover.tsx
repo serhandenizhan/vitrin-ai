@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, FileImage, Sparkles } from "lucide-react";
+import { AlertCircle, FileImage, RefreshCw, Sparkles } from "lucide-react";
 
 import { ComparisonView } from "@/components/comparison-view";
 import { ProcessingState } from "@/components/processing-state";
@@ -187,7 +187,27 @@ export function BackgroundRemover() {
         <Alert variant="destructive">
           <AlertCircle className="size-4" aria-hidden />
           <AlertTitle>İşlem tamamlanamadı</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
+          <AlertDescription>
+            {errorMessage}
+            {/*
+              Yeniden deneme dugmesi. Onceden yalnizca "tekrar deneyin" YAZIYORDU
+              ama dugme yoktu; kullanicinin fotografi bastan secmesi gerekiyordu.
+              Hatalarin cogu geciciydi (servis mesgul, ag koptu) ve dosya zaten
+              elimizde duruyor.
+            */}
+            {file ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleRemoveBackground}
+                className="press mt-3 min-h-9 rounded-full bg-white"
+              >
+                <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
+                Tekrar dene
+              </Button>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
 
