@@ -7,7 +7,10 @@ ve arka plan meta verisi Faz 3'te eklenecek.
 birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG) doğrulandı,
 Docker build başarıyla derleniyor ve container düzgün başlıyor. Faz 3'ün backend kısmı
 (arka plan kütüphanesi: yükleme + listeleme + R2 depolama) da tamamlandı — ayrıntılar
-aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde.
+aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde. **Faz 4 (backend) sürüyor:** Supabase JWT
+doğrulaması, kullanıcı projeleri API'si, `admin_users` ile gerçek yönetici yetkisi, tüm
+tablolarda RLS ve CORS yazıldı ve yerel Postgres'e karşı test edildi; gerçek Supabase
+projesi henüz kurulmadı (bkz. "Kimlik doğrulama ve yetkilendirme").
 
 ## Yerel çalıştırma (venv ile)
 
@@ -35,6 +38,22 @@ cp .env.example .env
 Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her
 test çalıştırmasında indirip inference yapmak pratik değil (ağır kaynak
 kullanımı). Gerçek modelle doğrulama ayrı ve manuel yapılır.
+
+Testler gerçek bir Postgres ister (`docker compose up -d postgres`) ve oturum
+başında `alembic upgrade head`, sonunda `alembic downgrade base` çalıştırır —
+yani bağlandıkları veritabanını **sıfırlar**. Başka bir işin veritabanına karşı
+çalıştırmayın; paralel worktree'lerde ayrı bir Postgres açıp `DATABASE_URL` ile
+yönlendirin:
+
+```bash
+POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
+DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
+```
+
+Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
+imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
+(`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
+`set local role` ile taklit ediyor (`tests/test_rls.py`).
 
 ## R2 CORS
 
@@ -78,6 +97,104 @@ Script önce tanımlı kuralı okur, sonra bucket'taki gerçek bir nesne için i
 URL üretip her origin'le GET/HEAD atar ve `Access-Control-Allow-Origin`
 yanıtını kontrol eder. Çıkış kodu 0 değilse kural eksiktir.
 
+## Kimlik doğrulama ve yetkilendirme (Faz 4)
+
+**Akış:** tarayıcı oturumu `@supabase/ssr` ile çerezde tutuyor; Next.js vekili
+isteği `Authorization: Bearer <access_token>` ile FastAPI'ye iletiyor. Backend
+token'ı Supabase'e sormadan projenin genel anahtarlarıyla (JWKS,
+`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`, ES256/RS256) doğruluyor:
+imza, `exp`/`iat`, `iss`, `aud=authenticated`, `role=authenticated`; anonim
+oturumlar reddediliyor. Kod: `app/core/auth.py`.
+
+| Durum | Yanıt |
+| --- | --- |
+| `SUPABASE_URL` boş | `503` — sessizce açık kalmaz |
+| Token yok / geçersiz / süresi dolmuş | `401` + `WWW-Authenticate: Bearer` |
+| JWKS'ye ulaşılamıyor | `503` |
+| Oturum var ama yönetici değil (admin uç noktası) | `403` |
+
+**Yönetici yetkisi** Faz 3'teki geçici `X-Admin-Secret` yerine `admin_users`
+tablosundan geliyor; her istekte veritabanından kontrol ediliyor. JWT'deki
+`user_metadata` (kullanıcı düzenleyebilir) ve `app_metadata` (token
+yenilenene kadar bayat) bilinçli olarak kullanılmadı. İlk yönetici Supabase SQL
+editöründen eklenir:
+
+```sql
+insert into public.admin_users (user_id)
+select id from auth.users where email = '<e-posta>';
+```
+
+### Kullanıcı projeleri (geçmiş çalışmalar)
+
+`frontend/src/lib/work-history.ts`'in dört fonksiyonunun sunucu karşılığı:
+
+| Uç nokta | İş |
+| --- | --- |
+| `GET /api/projects?limit=50` | Kullanıcının projeleri, en yeni önce (en fazla 100) |
+| `POST /api/projects` | Multipart: `result` (PNG), `thumbnail` (PNG/JPEG/WebP, ≤512 KB), `file_name`, `is_mocked`, `duration_seconds` → `201` |
+| `GET /api/projects/{id}` | Tek proje |
+| `DELETE /api/projects/{id}` | `204` |
+| `DELETE /api/projects` | Kullanıcının tüm projeleri, `204` |
+
+Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
+`expires_in` = `PROJECT_URL_EXPIRY_SECONDS`).
+
+- **IDOR:** her sorgu `user_id = <token'daki kullanıcı>` filtresi taşıyor;
+  başkasının projesi için `403` değil `404` dönüyor (varlığını doğrulamamak için).
+- **R2 anahtarı:** `projects/<user_id>/<uuid>/result.png` — kullanıcının verdiği
+  dosya adı anahtara hiç girmiyor (path traversal koruması), yalnızca
+  görüntüleme metni olarak saklanıyor.
+- **Sıra:** önce R2, sonra veritabanı; ikinci yükleme patlarsa ilki geri
+  siliniyor. Silmede önce satır siliniyor, R2 silmesi başarısız olursa nesne
+  yetim kalıyor ve log'a yazılıyor (kullanıcıya hata dönmüyor).
+- **Bilinen sınır:** sonuç PNG'si `MAX_FILE_SIZE_MB` (20 MB) ile sınırlı ve tüm
+  istek `MAX_REQUEST_BODY_BYTES` içinde kalmalı. 20 MB'lık bir JPEG'den çıkan
+  saydam PNG bundan büyük olabilir; bu durumda `413` döner.
+- **KVKK:** kullanıcı Supabase'den silinince `projects` ve `admin_users`
+  satırları `ON DELETE CASCADE` ile gidiyor, ama **R2 nesneleri gitmiyor** —
+  önek `projects/<user_id>/` olduğu için tek komutla silinebilir; otomatik
+  temizlik henüz yok.
+
+### Veritabanı erişim modeli ve RLS
+
+Backend Postgres'e tablo **sahibi** olarak bağlanıyor ve RLS onu etkilemiyor;
+kullanıcı verisinin birinci koruması yukarıdaki sahiplik filtresi. RLS ikinci
+katman: Supabase'in `anon` anahtarı herkese açık ve Data API (PostgREST)
+tablolara ulaşabiliyor. Bu yüzden (migration 0003):
+
+- `public` şemasındaki **her** tabloda RLS açık — `alembic_version` dahil
+  (varsayılan grant'lerin olduğu bir projede `anon` ona yazabilirdi).
+- `anon` ve `authenticated` rollerinin hiçbir tabloda yetkisi yok (`revoke all`).
+  Supabase 28.04.2026'dan beri yeni tabloları Data API'ye otomatik açmıyor;
+  eski projelerdeki varsayılan grant'lere karşı yine de açıkça geri alınıyor.
+- `projects` için yalnızca "kendi satırını oku/sil" politikaları var (tablo
+  ileride Data API'ye açılırsa geçerli olacak kurallar). **INSERT/UPDATE
+  politikası bilinçli olarak yok:** istemci kendi satırına başka birinin R2
+  anahtarını yazabilir ve backend o görsel için imzalı URL üretirdi.
+- `admin_users` ve `backgrounds` için politika yok — tam ret.
+- `tests/test_rls.py`, `public`'teki her tablonun RLS'li olduğunu ve istemci
+  rollerinin hiçbir yetkisi olmadığını genel olarak doğruluyor: RLS'siz yeni
+  bir tablo eklenirse test kırmızı yanar.
+
+**Yerel uyumluluk katmanı (migration 0002):** düz Postgres'te Supabase'in
+`auth` şeması, `auth.uid()` ve `anon`/`authenticated` rolleri yok. 0002 bunları
+yalnızca YOKSA oluşturuyor; Supabase'de hiçbir şey yapmıyor. Downgrade yalnızca
+kendi işaretlediği şemayı siliyor, Supabase'in `auth` şemasına dokunmuyor.
+
+**Supabase'e bağlanırken:** `DATABASE_URL` için doğrudan bağlantıyı ya da
+**session** pooler'ı (5432) kullanın; transaction pooler (6543) asyncpg'nin
+prepared statement'larıyla uyumsuz.
+
+### CORS
+
+`CORS_ALLOWED_ORIGINS` (virgülle ayrılmış) dışındaki origin'lere izin
+verilmiyor; `*` ve yol içeren değerler uygulama başlarken reddediliyor
+(`SECURITY.md` 2.2). Yöntemler `GET/POST/DELETE`, başlıklar
+`Authorization/Content-Type`; kimlik çerezle değil başlıkla taşındığı için
+`allow_credentials` kapalı. Bugünkü asıl istemci Next.js vekili (sunucudan
+sunucuya, CORS gerektirmez); bu katman tarayıcıdan doğrudan erişilen her durum
+için sınırı baştan çiziyor.
+
 ## Docker
 
 ```bash
@@ -114,7 +231,11 @@ sunucu/instance seçin.
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
-| `ADMIN_SECRET` | yok (zorunlu) | `POST /api/admin/backgrounds` için geçici paylaşılan secret — Faz 4'te gerçek Supabase Auth ile değişecek |
+| `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
+| `SUPABASE_JWT_AUDIENCE` | `authenticated` | Beklenen `aud` değeri |
+| `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
+| `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir — boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmadığı için R2'siz yerel geliştirme çalışmaya devam eder |
 | `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi. Aynı değer yanıtta `expires_in` alanı olarak da dönüyor — istemci yenileme zamanını buradan öğrenir, kendi tarafına sabitlemez |
 
@@ -127,9 +248,11 @@ Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
 
 ## Kaynak tüketimi korumaları
 
-`POST /api/remove-background` şu anda auth/kota kontrolü olmadan herkese açık
-(kimlik doğrulama Faz 4'te Supabase Auth ile gelecek — bkz. kök `ROADMAP.md`).
-Bu ara dönemde kaynak tüketimini sınırlayan üç bağımsız katman var:
+`POST /api/remove-background` şu anda auth/kota kontrolü olmadan herkese açık.
+Faz 4'te kimlik doğrulama geldi ama bu uç noktaya **bilinçli olarak
+bağlanmadı**: arayüzdeki "Deneyin" akışı oturum açmadan çalışıyor ve bunu
+kapatmak bir ürün kararı (kredi sistemi Faz 5'te; kota muhtemelen oraya
+bağlanacak). Bu ara dönemde kaynak tüketimini sınırlayan üç bağımsız katman var:
 
 1. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf
    ASGI middleware, `receive()` akışını sararak toplam istek gövdesi

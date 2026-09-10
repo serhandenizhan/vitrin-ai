@@ -17,3 +17,8 @@ greenlet==3.5.5
 asyncpg==0.30.0
 alembic==1.14.0
 boto3==1.34.162
+# Faz 4: Supabase access token doğrulaması (ES256/RS256 + JWKS). `[crypto]`
+# eki asimetrik algoritmalar için `cryptography`'yi getiriyor; o da ayrıca
+# pinleniyor ki kurulum makineden makineye değişmesin.
+pyjwt[crypto]==2.13.0
+cryptography==50.0.1

@@ -367,7 +367,7 @@ incelemede üç madde düzeltildi:
    sunucuda değil kullanıcının tarayıcısında kırık görsel olarak ortaya çıkardı.
    (Copilot incelemesinin ikinci bulgusu.)
 
-### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
+### Faz 4 — Veritabanı ve kullanıcı hesapları — 🔄 Sürüyor (Serhan'ın backend kodu yazıldı; Supabase projesi ve Kaan'ın arayüzü bekliyor)
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
 - **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 7)
@@ -382,6 +382,59 @@ incelemede üç madde düzeltildi:
 - Her endpoint'te IDOR koruması: kaynağın gerçekten `current_user`'a ait olduğu DB seviyesinde doğrulanır
 - Session/JWT tasarımı kısa ömürlü access + refresh token deseniyle yapılır
 - CORS middleware'i bu fazda mutlaka eklenir
+
+**Ara sonuç (Serhan, 10.09.2026) — backend kodu yazıldı, gerçek Supabase projesi
+yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md` →
+"Kimlik doğrulama ve yetkilendirme".
+
+- **JWT doğrulaması:** Supabase access token'ı projenin JWKS'iyle (ES256/RS256)
+  yerelde doğrulanıyor; `iss`, `aud=authenticated`, `role=authenticated`, süre ve
+  imza kontrol ediliyor, anonim oturumlar reddediliyor. HS256 yalnızca açıkça
+  verilen legacy secret'la. Algoritma karıştırma saldırısı (genel anahtarı HMAC
+  secret'ı gibi kullanmak) için ayrı test var. `SUPABASE_URL` boşsa oturum
+  gerektiren uç noktalar 503 döner — sessizce açık kalmaz.
+- **Şema (migration 0003):** `projects` (geçmiş çalışmalar — `work-history.ts`'in
+  `WorkRecord` alanlarıyla birebir) ve `admin_users`. `auth.users`'a
+  `ON DELETE CASCADE` FK. Kullanıcıya göre listeleme, RLS ve cascade'i tek
+  bileşik indeks karşılıyor.
+- **RLS:** `public`'teki **her** tabloda açık — `backgrounds` (yukarıdaki not) ve
+  gözden kaçabilecek `alembic_version` dahil. `anon`/`authenticated`'ın hiçbir
+  tabloda yetkisi yok. `projects` için yalnızca "kendi satırını oku/sil"
+  politikası var; INSERT/UPDATE politikası bilinçli olarak yok (istemci başka
+  birinin R2 anahtarını kendi satırına yazıp imzalı URL'sini alabilirdi).
+  Supabase 28.04.2026'dan beri yeni tabloları Data API'ye otomatik açmıyor, ama
+  eski projelerin varsayılan grant'lerine karşı yine de açıkça geri alınıyor.
+- **IDOR:** backend tablo sahibi olarak bağlandığı için RLS onu etkilemiyor;
+  birinci katman her sorgudaki `user_id` filtresi. Başkasının projesi 404
+  (403 değil — varlığını doğrulamamak için). Testlerin gerçekten iş gördüğü
+  mutasyonla kanıtlandı: sahiplik filtresi sökülünce IDOR testleri kırmızı yandı.
+- **Yerel uyumluluk (migration 0002):** düz Postgres'te Supabase'in `auth`
+  şeması, `auth.uid()` ve rolleri yok; 0002 bunları yalnızca yoksa oluşturuyor,
+  Supabase'de no-op. RLS politikaları böylece yerelde ve testlerde de sınanıyor.
+- **Yönetici yetkisi:** Faz 3'teki geçici `X-Admin-Secret` (kök `CLAUDE.md` ders
+  8) **kaldırıldı**; `POST /api/admin/backgrounds` artık Supabase oturumu +
+  `admin_users` kaydı istiyor. JWT'deki `app_metadata` bilinçli olarak
+  kullanılmadı (token yenilenene kadar bayat — yetkisi alınan yönetici token
+  süresince yönetici kalırdı). `ROADMAP` Faz 6'daki admin paneli bu tabloyu
+  kullanacak.
+- **Projeler API'si:** `GET/POST /api/projects`, `GET/DELETE /api/projects/{id}`,
+  `DELETE /api/projects` — `work-history.ts`'in dört fonksiyonuyla birebir.
+  R2 anahtarı `projects/<user_id>/<uuid>/…`; kullanıcının dosya adı anahtara
+  girmiyor. Görseller Faz 1 doğrulamasından (magic-byte + piksel) geçiyor.
+- **CORS:** `CORSMiddleware`, `CORS_ALLOWED_ORIGINS` ile; `*` ve yollu değerler
+  başlangıçta reddediliyor, `allow_credentials` kapalı.
+
+**Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
+- Supabase projesinin kurulması, migration'ların uygulanması, ilk yöneticinin
+  eklenmesi (adımlar kök `CLAUDE.md` açık takip maddesi 4'te).
+- Ürün kararları: tarayıcıdaki eski kayıtlar hesaba taşınacak mı; sunucuda özgün
+  fotoğraf da saklanacak mı; `POST /api/remove-background` oturum isteyecek mi
+  (şu an bilinçli olarak herkese açık — kota Faz 5'e bağlanabilir).
+- Kaan: giriş/kayıt arayüzü, vekilin `Authorization` başlığını iletmesi,
+  `work-history.ts`'in `/api/projects`'e bağlanması.
+- Bilinen sınır: kullanıcı silinince veritabanı kayıtları cascade ile gidiyor ama
+  R2'deki proje görselleri gitmiyor (önek `projects/<user_id>/`, tek komutla
+  silinebilir; otomatik temizlik yok).
 
 ### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
 

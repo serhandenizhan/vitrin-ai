@@ -54,6 +54,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 2.2 CORS
 - Backend CORS ayarı sadece bilinen frontend origin'lerine (`localhost:3000` dev,
   production domain) izin vermeli. `allow_origins=["*"]` production'da asla kullanılmaz.
+- **Uygulandı (Faz 4):** `CORSMiddleware`, liste `CORS_ALLOWED_ORIGINS` env değişkeninden.
+  `*`, yol içeren ya da şemasız değerler uygulama başlarken reddediliyor (sessizce hiçbir
+  isteğe uymayan bir liste yazılamıyor); `allow_credentials` kapalı çünkü kimlik çerezle
+  değil `Authorization` başlığıyla taşınıyor. Production alan adı belli olunca eklenmeli.
 
 ### 2.3 DDoS / Firewall katmanı
 - Cloudflare (proxy modu) önerilir: DDoS koruması, bot filtreleme, ve WAF (Web Application
@@ -182,11 +186,18 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`), bucket CORS
   kuralının yalnızca bilinen origin'lere GET/HEAD vermesi (gerçek bucket doğrulaması açık —
   bkz. `CLAUDE.md` açık takip maddesi 5).
-  `POST /api/admin/backgrounds` geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
-  korunuyor — bu bilinçli bir geçici çözüm (bkz. kök `CLAUDE.md` ders 8), Faz 4'te
-  gerçek Supabase Auth + rol kontrolüyle değiştirilecek.
+  `POST /api/admin/backgrounds` Faz 3'te geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
+  korunuyordu (bkz. kök `CLAUDE.md` ders 8); **Faz 4'te kaldırıldı**, yerini Supabase
+  oturumu + `admin_users` tablosu aldı.
 - **Faz 4:** Şifre hash'leme, JWT/session tasarımı, IDOR koruması (bu fazda en kritik —
-  şema yanlış tasarlanırsa sonradan düzeltmek pahalı)
+  şema yanlış tasarlanırsa sonradan düzeltmek pahalı). **Backend'de yapılanlar:** JWKS ile
+  JWT doğrulaması (algoritma karıştırmaya karşı izin listesi, anonim oturum reddi),
+  `public`'teki her tabloda RLS + `anon`/`authenticated` yetkilerinin geri alınması
+  (`alembic_version` dahil), her sorguda sahiplik filtresi ve 404 ile IDOR koruması,
+  CORS (2.2), yönetici yetkisinin kullanıcı tarafından değiştirilemeyen bir tabloda
+  tutulması. **Bekleyen:** Supabase'de kısa access token süresi (3.1) ve parola
+  sıfırlama ayarları proje kurulunca yapılacak; R2'deki proje görsellerinin kullanıcı
+  silinince temizlenmesi henüz otomatik değil (KVKK, bölüm 6).
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency
 - **Faz 6:** Admin rol kontrolü backend seviyesinde
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, rate limiting'in tamamı, dependency
