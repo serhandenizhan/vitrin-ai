@@ -22,15 +22,18 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-konva": "^19.2.7",
-    "shadcn": "^4.21.0"
+    "shadcn": "^4.21.0",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.0"

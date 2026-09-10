@@ -19,7 +19,7 @@ import { Crosshair, Download, Loader2, Printer, RotateCw } from "lucide-react";
 import type Konva from "konva";
 
 import { Button } from "@/components/ui/button";
-import { useZeminler } from "@/components/composer/use-zeminler";
+import { useBackgrounds } from "@/components/composer/use-zeminler";
 import {
   CIKTI_BICIMLERI,
   type CiktiBicimAdi,
@@ -31,7 +31,7 @@ import {
   mantiksalOlcu,
   sahneyeSigdir,
 } from "@/lib/composition";
-import type { Zemin } from "@/lib/backgrounds";
+import type { Background } from "@/lib/backgrounds";
 
 const EditorStage = dynamic(
   () => import("@/components/composer/editor-stage").then((m) => m.EditorStage),
@@ -47,9 +47,9 @@ const EditorStage = dynamic(
 
 export type CompositionEditorProps = {
   /** Arka plani kaldirilmis urunun object URL'i. */
-  kesimUrl: string;
+  cutoutUrl: string;
   /** Indirilen dosyanin adinda kullanilir. */
-  dosyaAdi: string;
+  fileName: string;
 };
 
 /** Sahnenin ekrandaki ust siniri — daha buyugu masaustunde sayfayi tasiyor. */
@@ -68,8 +68,8 @@ const BASLANGIC_EKRAN_OLCUSU = 240;
 const EN_KUCUK_OLCEK_ORANI = 0.25;
 const EN_BUYUK_OLCEK_ORANI = 2.5;
 
-export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps) {
-  const { zeminler, sunucuZeminiVar, yukleniyor } = useZeminler();
+export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProps) {
+  const { backgrounds, hasServerBackground, isLoading } = useBackgrounds();
   const [seciliZeminId, setSeciliZeminId] = useState<string | null>(null);
   const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
@@ -204,8 +204,8 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   // (imzali URL'ler tazelendiginde) nesne kimligi degisiyor ama id ayni
   // kaliyor, dolayisiyla kullanicinin secimi yenilemeden SAG CIKIYOR.
   // Nesneyi saklasaydik her yenilemede secim ilk zemine donerdi.
-  const seciliZemin: Zemin =
-    zeminler.find((zemin) => zemin.id === seciliZeminId) ?? zeminler[0];
+  const seciliZemin: Background =
+    backgrounds.find((zemin) => zemin.id === seciliZeminId) ?? backgrounds[0];
 
   const stageHazir = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -345,10 +345,10 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
       if (!veriUrl) return;
       const bag = document.createElement("a");
       bag.href = veriUrl;
-      bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
+      bag.download = `${fileName.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
       bag.click();
     },
-    [sahneyiCiz, dosyaAdi, bicimAdi],
+    [sahneyiCiz, fileName, bicimAdi],
   );
 
   /**
@@ -380,7 +380,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         const url = URL.createObjectURL(blob);
         const bag = document.createElement("a");
         bag.href = url;
-        bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-cmyk.${bicimTuru === "tiff" ? "tif" : "jpg"}`;
+        bag.download = `${fileName.replace(/\.[^.]+$/, "")}-cmyk.${bicimTuru === "tiff" ? "tif" : "jpg"}`;
         bag.click();
         // Iptal GECIKTIRILIYOR. `click()`'ten hemen sonra iptal etmek, tarayici
         // blob'u okumaya baslamadan URL'i gecersiz kilabiliyor ve indirme
@@ -392,7 +392,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         setBaskiDurumu("Sunucuya ulaşılamadı.");
       }
     },
-    [sahneyiCiz, dosyaAdi],
+    [sahneyiCiz, fileName],
   );
 
   return (
@@ -421,7 +421,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
           style={{ aspectRatio: `${bicim.ciktiGenislik} / ${bicim.ciktiYukseklik}` }}
         >
           <EditorStage
-            kesimUrl={kesimUrl}
+            kesimUrl={cutoutUrl}
             zemin={seciliZemin}
             ekranOlcusu={ekranOlcusu}
             sahneGenislik={sahne.genislik}
@@ -446,15 +446,15 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         <BolumBasligi>Zemin</BolumBasligi>
         <div className="px-5 pb-5">
           <div className="grid grid-cols-6 gap-2 lg:grid-cols-4">
-            {zeminler.map((zemin) => {
+            {backgrounds.map((zemin) => {
               const aktif = zemin.id === seciliZemin.id;
               return (
                 <button
                   key={zemin.id}
                   type="button"
                   onClick={() => setSeciliZeminId(zemin.id)}
-                  title={zemin.ad}
-                  aria-label={zemin.ad}
+                  title={zemin.name}
+                  aria-label={zemin.name}
                   aria-pressed={aktif}
                   // Secili halka `ring` yardimcilariyla veriliyor, keyfi bir
                   // `shadow-[...]` ile degil: keyfi coklu golge denendiginde
@@ -469,8 +469,8 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
                       : "ring-1 ring-black/15 hover:scale-105")
                   }
                   style={
-                    zemin.tur === "yer-tutucu"
-                      ? { background: gradyanCss(zemin.gradyan) }
+                    zemin.type === "yer-tutucu"
+                      ? { background: gradyanCss(zemin.gradient) }
                       : {
                           backgroundImage: `url(${zemin.url})`,
                           backgroundSize: "cover",
@@ -488,7 +488,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
             yanlis bilgilendirilmesini degil: gercek zemin kutuphanesi henuz
             yokken "iste zeminleriniz" demek yanlis olurdu.
           */}
-          {!yukleniyor && !sunucuZeminiVar ? (
+          {!isLoading && !hasServerBackground ? (
             <p className="fine-print mt-3 opacity-60">
               Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
             </p>

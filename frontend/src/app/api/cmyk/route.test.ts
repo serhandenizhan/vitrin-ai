@@ -21,4 +21,23 @@ describe("POST /api/cmyk", () => {
 
     expect(response.status).toBe(503);
   });
+
+  it("rejects an oversized chunked request before parsing multipart data", async () => {
+    const chunk = new Uint8Array(30 * 1024 * 1024 + 1);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const response = await POST(
+      new Request("http://localhost/api/cmyk", {
+        method: "POST",
+        body,
+        duplex: "half",
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+  });
 });

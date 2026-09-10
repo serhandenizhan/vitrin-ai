@@ -29,51 +29,51 @@
  * andiran koyu/notr tonlar + altin vurgu). Gercek zeminler geldiginde bunlar
  * kaybolmuyor: kullanici yine de sade bir zemin isteyebilir.
  */
-export type YerTutucuZemin = {
-  tur: "yer-tutucu";
+export type PlaceholderBackground = {
+  type: "yer-tutucu";
   id: string;
-  ad: string;
+  name: string;
   /** Konva `fillLinearGradientColorStops` formatinda: [oran, renk, ...]. */
-  gradyan: (number | string)[];
+  gradient: (number | string)[];
 };
 
-export type SunucuZemini = {
-  tur: "sunucu";
+export type ServerBackground = {
+  type: "sunucu";
   id: string;
-  ad: string;
+  name: string;
   url: string;
   /** Bu URL'in uretildigi andan itibaren gecerli kalacagi sure (saniye). */
-  gecerlilikSaniye: number;
+  expiresInSeconds: number;
   /** URL'in alindigi an (ms, `Date.now()`). Yenileme hesabi buna dayaniyor. */
-  alinmaZamani: number;
+  fetchedAt: number;
 };
 
-export type Zemin = YerTutucuZemin | SunucuZemini;
+export type Background = PlaceholderBackground | ServerBackground;
 
-export const YER_TUTUCU_ZEMINLER: YerTutucuZemin[] = [
+export const PLACEHOLDER_BACKGROUNDS: PlaceholderBackground[] = [
   {
-    tur: "yer-tutucu",
+    type: "yer-tutucu",
     id: "yer-tutucu-kadife",
-    ad: "Kadife siyah",
-    gradyan: [0, "#1d1d1f", 1, "#000000"],
+    name: "Kadife siyah",
+    gradient: [0, "#1d1d1f", 1, "#000000"],
   },
   {
-    tur: "yer-tutucu",
+    type: "yer-tutucu",
     id: "yer-tutucu-sis",
-    ad: "Sis beyazı",
-    gradyan: [0, "#ffffff", 1, "#f5f5f7"],
+    name: "Sis beyazı",
+    gradient: [0, "#ffffff", 1, "#f5f5f7"],
   },
   {
-    tur: "yer-tutucu",
+    type: "yer-tutucu",
     id: "yer-tutucu-altin",
-    ad: "Altın hale",
-    gradyan: [0, "#3a2f1c", 0.55, "#7a6231", 1, "#241d12"],
+    name: "Altın hale",
+    gradient: [0, "#3a2f1c", 0.55, "#7a6231", 1, "#241d12"],
   },
   {
-    tur: "yer-tutucu",
+    type: "yer-tutucu",
     id: "yer-tutucu-sicak-gri",
-    ad: "Sıcak gri",
-    gradyan: [0, "#d8d4cf", 1, "#a8a29b"],
+    name: "Sıcak gri",
+    gradient: [0, "#d8d4cf", 1, "#a8a29b"],
   },
 ];
 
@@ -85,7 +85,7 @@ export const YER_TUTUCU_ZEMINLER: YerTutucuZemin[] = [
  * URL, kullanicinin ekraninda sessizce kirik bir zemin olarak gorunurdu ve
  * kullanici bunu kendi hatasi sanirdi. Ucuz olan tarafta hata yapiyoruz.
  */
-export const YENILEME_ORANI = 0.75;
+export const REFRESH_RATIO = 0.75;
 
 /**
  * Bir zemin listesinin ne kadar sonra yenilenmesi gerektigi (ms).
@@ -95,19 +95,19 @@ export const YENILEME_ORANI = 0.75;
  * (sunucudan gelen zemin yok, yalnizca yer tutucular var; onlarin suresi
  * dolmaz).
  */
-export function yenilemeGecikmesiHesapla(
-  zeminler: Zemin[],
+export function calculateRefreshDelay(
+  zeminler: Background[],
   simdi: number = Date.now(),
 ): number | null {
   const sunucuZeminleri = zeminler.filter(
-    (zemin): zemin is SunucuZemini => zemin.tur === "sunucu",
+    (zemin): zemin is ServerBackground => zemin.type === "sunucu",
   );
   if (sunucuZeminleri.length === 0) return null;
 
   const gecikmeler = sunucuZeminleri.map((zemin) => {
-    const gecen = simdi - zemin.alinmaZamani;
-    const omurMs = zemin.gecerlilikSaniye * 1000;
-    return omurMs * YENILEME_ORANI - gecen;
+    const gecen = simdi - zemin.fetchedAt;
+    const omurMs = zemin.expiresInSeconds * 1000;
+    return omurMs * REFRESH_RATIO - gecen;
   });
 
   // Gecikme negatif cikabilir (sekme uzun sure arka planda kalip zamanlayici
@@ -129,9 +129,9 @@ type HamArkaPlan = {
  * donuyor; burada ag hatasi/bozuk govde de ayni sekilde bos listeye dusuyor.
  * Cagiran taraf icin tek bir durum var: "gelen sunucu zemini sayisi".
  */
-export async function zeminleriGetir(
+export async function fetchBackgrounds(
   fetchFn: typeof fetch = fetch,
-): Promise<SunucuZemini[]> {
+): Promise<ServerBackground[]> {
   try {
     const yanit = await fetchFn("/api/backgrounds", { cache: "no-store" });
     if (!yanit.ok) return [];
@@ -149,15 +149,15 @@ export async function zeminleriGetir(
           typeof (kayit as HamArkaPlan).url === "string",
       )
       .map((kayit, sira) => ({
-        tur: "sunucu" as const,
+        type: "sunucu" as const,
         id: kayit.id,
-        ad: `Zemin ${sira + 1}`,
+        name: `Zemin ${sira + 1}`,
         url: kayit.url,
-        gecerlilikSaniye:
+        expiresInSeconds:
           typeof kayit.expiresIn === "number" && kayit.expiresIn > 0
             ? kayit.expiresIn
             : 600,
-        alinmaZamani,
+        fetchedAt: alinmaZamani,
       }));
   } catch {
     return [];
@@ -172,6 +172,6 @@ export async function zeminleriGetir(
  * Boylece "zemin listesi bos" diye bir durum olusmuyor ve editor bu ihtimali
  * hic ele almak zorunda kalmiyor.
  */
-export function zeminListesiOlustur(sunucuZeminleri: SunucuZemini[]): Zemin[] {
-  return [...sunucuZeminleri, ...YER_TUTUCU_ZEMINLER];
+export function createBackgroundList(sunucuZeminleri: ServerBackground[]): Background[] {
+  return [...sunucuZeminleri, ...PLACEHOLDER_BACKGROUNDS];
 }

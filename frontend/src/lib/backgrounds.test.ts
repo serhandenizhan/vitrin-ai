@@ -1,24 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  YENILEME_ORANI,
-  YER_TUTUCU_ZEMINLER,
-  type SunucuZemini,
-  yenilemeGecikmesiHesapla,
-  zeminListesiOlustur,
-  zeminleriGetir,
+  REFRESH_RATIO,
+  PLACEHOLDER_BACKGROUNDS,
+  type ServerBackground,
+  calculateRefreshDelay,
+  createBackgroundList,
+  fetchBackgrounds,
 } from "@/lib/backgrounds";
 
 function sunucuZemini(
-  ozellikler: Partial<SunucuZemini> = {},
-): SunucuZemini {
+  ozellikler: Partial<ServerBackground> = {},
+): ServerBackground {
   return {
-    tur: "sunucu",
+    type: "sunucu",
     id: "z1",
-    ad: "Zemin 1",
+    name: "Zemin 1",
     url: "https://imzali.example/z1",
-    gecerlilikSaniye: 3600,
-    alinmaZamani: 1_000_000,
+    expiresInSeconds: 3600,
+    fetchedAt: 1_000_000,
     ...ozellikler,
   };
 }
@@ -32,24 +32,24 @@ function yanitOlustur(govde: unknown, ok = true): Response {
 
 describe("yenilemeGecikmesiHesapla", () => {
   it("sunucu zemini yoksa yenileme planlamaz", () => {
-    expect(yenilemeGecikmesiHesapla(YER_TUTUCU_ZEMINLER)).toBeNull();
+    expect(calculateRefreshDelay(PLACEHOLDER_BACKGROUNDS)).toBeNull();
   });
 
   it("omrun %75'inde yeniler", () => {
-    const zemin = sunucuZemini({ gecerlilikSaniye: 3600, alinmaZamani: 0 });
+    const zemin = sunucuZemini({ expiresInSeconds: 3600, fetchedAt: 0 });
 
     // Saat 0'da alindi, omur 1 saat -> 45. dakikada yenilenmeli.
-    expect(yenilemeGecikmesiHesapla([zemin], 0)).toBe(
-      3600 * 1000 * YENILEME_ORANI,
+    expect(calculateRefreshDelay([zemin], 0)).toBe(
+      3600 * 1000 * REFRESH_RATIO,
     );
   });
 
   it("gecen sureyi dusuyor", () => {
-    const zemin = sunucuZemini({ gecerlilikSaniye: 3600, alinmaZamani: 0 });
+    const zemin = sunucuZemini({ expiresInSeconds: 3600, fetchedAt: 0 });
     const onDakika = 10 * 60 * 1000;
 
-    expect(yenilemeGecikmesiHesapla([zemin], onDakika)).toBe(
-      3600 * 1000 * YENILEME_ORANI - onDakika,
+    expect(calculateRefreshDelay([zemin], onDakika)).toBe(
+      3600 * 1000 * REFRESH_RATIO - onDakika,
     );
   });
 
@@ -57,43 +57,43 @@ describe("yenilemeGecikmesiHesapla", () => {
     // Liste tek seferde yenilendigi icin en kisa omurlu kayit hepsini birden
     // tetiklemeli; aksi halde kisa omurlu zemin, uzun omurlunun yenilenmesini
     // beklerken oluyordu.
-    const uzun = sunucuZemini({ id: "uzun", gecerlilikSaniye: 3600, alinmaZamani: 0 });
-    const kisa = sunucuZemini({ id: "kisa", gecerlilikSaniye: 600, alinmaZamani: 0 });
+    const uzun = sunucuZemini({ id: "uzun", expiresInSeconds: 3600, fetchedAt: 0 });
+    const kisa = sunucuZemini({ id: "kisa", expiresInSeconds: 600, fetchedAt: 0 });
 
-    expect(yenilemeGecikmesiHesapla([uzun, kisa], 0)).toBe(
-      600 * 1000 * YENILEME_ORANI,
+    expect(calculateRefreshDelay([uzun, kisa], 0)).toBe(
+      600 * 1000 * REFRESH_RATIO,
     );
   });
 
   it("kisa omurlu URL'i suresi dolmadan yeniler", () => {
-    const zemin = sunucuZemini({ gecerlilikSaniye: 10, alinmaZamani: 0 });
+    const zemin = sunucuZemini({ expiresInSeconds: 10, fetchedAt: 0 });
 
-    expect(yenilemeGecikmesiHesapla([zemin], 0)).toBe(7_500);
+    expect(calculateRefreshDelay([zemin], 0)).toBe(7_500);
   });
 
   it("sure zaten dolmussa hemen yeniler, negatif dondurmez", () => {
     // Sekme uzun sure arka planda kalip zamanlayici gec calistiginda olusan
     // durum. Negatif bir gecikme `setTimeout`'ta hemen tetiklenir ve arka arkaya
     // yenileme dongusu riski dogurur.
-    const zemin = sunucuZemini({ gecerlilikSaniye: 60, alinmaZamani: 0 });
+    const zemin = sunucuZemini({ expiresInSeconds: 60, fetchedAt: 0 });
     const birSaatSonra = 3600 * 1000;
 
-    expect(yenilemeGecikmesiHesapla([zemin], birSaatSonra)).toBe(0);
+    expect(calculateRefreshDelay([zemin], birSaatSonra)).toBe(0);
   });
 });
 
 describe("zeminListesiOlustur", () => {
   it("yer tutucular sunucu zeminleri gelse de listede kalir", () => {
-    const liste = zeminListesiOlustur([sunucuZemini()]);
+    const liste = createBackgroundList([sunucuZemini()]);
 
-    expect(liste).toHaveLength(1 + YER_TUTUCU_ZEMINLER.length);
-    expect(liste[0].tur).toBe("sunucu");
+    expect(liste).toHaveLength(1 + PLACEHOLDER_BACKGROUNDS.length);
+    expect(liste[0].type).toBe("sunucu");
   });
 
   it("sunucu zemini yokken bile liste bos degil", () => {
     // Yol haritasi: "backend bos liste donerse editor yer tutucu zeminlere
     // sessizce dusmeli, hic kirilmamali."
-    expect(zeminListesiOlustur([]).length).toBeGreaterThan(0);
+    expect(createBackgroundList([]).length).toBeGreaterThan(0);
   });
 });
 
@@ -105,11 +105,11 @@ describe("zeminleriGetir", () => {
         yanitOlustur([{ id: "a", url: "https://x/a", expiresIn: 900 }]),
       );
 
-    const zeminler = await zeminleriGetir(fetchMock as unknown as typeof fetch);
+    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(zeminler).toHaveLength(1);
     expect(zeminler[0].id).toBe("a");
-    expect(zeminler[0].gecerlilikSaniye).toBe(900);
+    expect(zeminler[0].expiresInSeconds).toBe(900);
   });
 
   it("expires_in yoksa varsayilan sureye duser", async () => {
@@ -119,16 +119,16 @@ describe("zeminleriGetir", () => {
       .fn()
       .mockResolvedValue(yanitOlustur([{ id: "a", url: "https://x/a" }]));
 
-    const zeminler = await zeminleriGetir(fetchMock as unknown as typeof fetch);
+    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
-    expect(zeminler[0].gecerlilikSaniye).toBeGreaterThan(0);
+    expect(zeminler[0].expiresInSeconds).toBeGreaterThan(0);
   });
 
   it("ag hatasinda firlatmaz, bos liste doner", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("ag yok"));
 
     await expect(
-      zeminleriGetir(fetchMock as unknown as typeof fetch),
+      fetchBackgrounds(fetchMock as unknown as typeof fetch),
     ).resolves.toEqual([]);
   });
 
@@ -138,7 +138,7 @@ describe("zeminleriGetir", () => {
       .mockResolvedValue(yanitOlustur({ hata: "beklenmedik" }));
 
     await expect(
-      zeminleriGetir(fetchMock as unknown as typeof fetch),
+      fetchBackgrounds(fetchMock as unknown as typeof fetch),
     ).resolves.toEqual([]);
   });
 
@@ -151,7 +151,7 @@ describe("zeminleriGetir", () => {
       ]),
     );
 
-    const zeminler = await zeminleriGetir(fetchMock as unknown as typeof fetch);
+    const zeminler = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(zeminler).toHaveLength(1);
     expect(zeminler[0].id).toBe("iyi");

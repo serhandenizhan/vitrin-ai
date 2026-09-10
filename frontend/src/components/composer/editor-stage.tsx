@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from "react-konva";
 import Konva from "konva";
 
-import type { Zemin } from "@/lib/backgrounds";
+import type { Background } from "@/lib/backgrounds";
 // Saf geometri `@/lib/composition` icinde: Konva/React'ten bagimsiz oldugu icin
 // Node ortaminda canvas yuklemeden test edilebiliyor.
 import {
@@ -47,7 +47,7 @@ export type { Donusum };
 
 export type EditorStageProps = {
   kesimUrl: string;
-  zemin: Zemin;
+  zemin: Background;
   /** Sahnenin ekrandaki GENISLIGI; yukseklik mantiksal orandan turetiliyor. */
   ekranOlcusu: number;
   sahneGenislik: number;
@@ -138,7 +138,7 @@ export function EditorStage({
   const dokunmaRef = useRef<{ mesafe: number; olcek: number } | null>(null);
 
   const kesim = useGorsel(kesimUrl);
-  const zeminGorseli = useGorsel(zemin.tur === "sunucu" ? zemin.url : null);
+  const zeminGorseli = useGorsel(zemin.type === "sunucu" ? zemin.url : null);
 
   useEffect(() => {
     onStageHazir(stageRef.current);
@@ -264,8 +264,8 @@ export function EditorStage({
             fillLinearGradientStartPoint={{ x: 0, y: 0 }}
             fillLinearGradientEndPoint={{ x: sahneGenislik, y: sahneYukseklik }}
             fillLinearGradientColorStops={
-              zemin.tur === "yer-tutucu"
-                ? zemin.gradyan
+              zemin.type === "yer-tutucu"
+                ? zemin.gradient
                 : [0, "#1d1d1f", 1, "#000000"]
             }
           />

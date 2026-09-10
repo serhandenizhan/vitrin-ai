@@ -11,24 +11,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  type SunucuZemini,
-  type Zemin,
-  YER_TUTUCU_ZEMINLER,
-  yenilemeGecikmesiHesapla,
-  zeminListesiOlustur,
-  zeminleriGetir,
+  type ServerBackground,
+  type Background,
+  PLACEHOLDER_BACKGROUNDS,
+  calculateRefreshDelay,
+  createBackgroundList,
+  fetchBackgrounds,
 } from "@/lib/backgrounds";
 
-export type ZeminDurumu = {
-  zeminler: Zemin[];
+export type BackgroundState = {
+  backgrounds: Background[];
   /** Sunucudan gercek zemin geldi mi — arayuzde bilgilendirme icin. */
-  sunucuZeminiVar: boolean;
-  yukleniyor: boolean;
+  hasServerBackground: boolean;
+  isLoading: boolean;
 };
 
-export function useZeminler(): ZeminDurumu {
-  const [sunucuZeminleri, setSunucuZeminleri] = useState<SunucuZemini[]>([]);
-  const [yukleniyor, setYukleniyor] = useState(true);
+export function useBackgrounds(): BackgroundState {
+  const [serverBackgrounds, setServerBackgrounds] = useState<ServerBackground[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Zamanlayici id'si ref'te: her yenilemede yenisi kuruluyor, eskisi
   // temizleniyor. State'te tutmak gereksiz bir render turu acardi.
@@ -37,10 +37,10 @@ export function useZeminler(): ZeminDurumu {
   const canliRef = useRef(true);
 
   const yenile = useCallback(async () => {
-    const gelen = await zeminleriGetir();
+    const gelen = await fetchBackgrounds();
     if (!canliRef.current) return;
-    setSunucuZeminleri(gelen);
-    setYukleniyor(false);
+    setServerBackgrounds(gelen);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export function useZeminler(): ZeminDurumu {
   useEffect(() => {
     if (zamanlayiciRef.current !== null) clearTimeout(zamanlayiciRef.current);
 
-    const gecikme = yenilemeGecikmesiHesapla(sunucuZeminleri);
+    const gecikme = calculateRefreshDelay(serverBackgrounds);
     if (gecikme === null) return;
 
     zamanlayiciRef.current = setTimeout(() => {
@@ -67,7 +67,7 @@ export function useZeminler(): ZeminDurumu {
     return () => {
       if (zamanlayiciRef.current !== null) clearTimeout(zamanlayiciRef.current);
     };
-  }, [sunucuZeminleri, yenile]);
+  }, [serverBackgrounds, yenile]);
 
   // Sekme uzun sure arka planda kalirsa tarayici zamanlayiciyi kisabiliyor ya da
   // erteleyebiliyor; kullanici geri dondugunde URL'ler olmus olabilir. Gorunur
@@ -82,14 +82,14 @@ export function useZeminler(): ZeminDurumu {
       document.removeEventListener("visibilitychange", gorunurlukDegisti);
   }, [yenile]);
 
-  const zeminler = useMemo(
-    () => zeminListesiOlustur(sunucuZeminleri),
-    [sunucuZeminleri],
+  const backgrounds = useMemo(
+    () => createBackgroundList(serverBackgrounds),
+    [serverBackgrounds],
   );
 
   return {
-    zeminler: zeminler.length > 0 ? zeminler : YER_TUTUCU_ZEMINLER,
-    sunucuZeminiVar: sunucuZeminleri.length > 0,
-    yukleniyor,
+    backgrounds: backgrounds.length > 0 ? backgrounds : PLACEHOLDER_BACKGROUNDS,
+    hasServerBackground: serverBackgrounds.length > 0,
+    isLoading,
   };
 }
