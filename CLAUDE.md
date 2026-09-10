@@ -107,7 +107,7 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Backend HEIC'i işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — arayüz bu formatta önizleme yerine bilgilendirici bir kart gösteriyor.
 - **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
-- **Backend'de `/health` endpoint'i yok**, bu yüzden arayüzde "servis ayakta mı" göstergesi bulunmuyor — uydurma bir gösterge yanlış bilgi verirdi. Böyle bir gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmeli (Serhan).
+- **Backend'de `GET /health` var** (`backend/app/api/routes/health.py`) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
 ## Arayüz tasarım dili (kilitli karar — Faz 2)

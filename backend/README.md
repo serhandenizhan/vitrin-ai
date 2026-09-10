@@ -5,7 +5,9 @@ ve arka plan meta verisi Faz 3'te eklenecek.
 
 **Durum:** Faz 1 tamamlandı — `POST /api/remove-background` endpoint'i çalışıyor,
 birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG) doğrulandı,
-Docker build başarıyla derleniyor ve container düzgün başlıyor.
+Docker build başarıyla derleniyor ve container düzgün başlıyor. Ayrıca `GET /health`
+endpoint'i var — sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz (model
+ilk çağrıda gecikmeli yüklenir, health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi).
 
 ## Yerel çalıştırma (venv ile)
 

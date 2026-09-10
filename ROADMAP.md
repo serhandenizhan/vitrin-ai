@@ -110,10 +110,11 @@ PNG indirme tamamlandı. Ayrıntılı gerekçeler `frontend/README.md` dosyasın
 
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
-- **Backend'de `/health` endpoint'i yok.** Arayüzde "backend ayakta mı" göstergesi bu yüzden
-  yapılmadı — uydurma bir gösterge yanlış bilgi verirdi. Servisin kapalı olduğu, ilk gerçek
-  istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı"). Böyle bir
-  gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmesi gerekir (Serhan).
+- **Backend'de `GET /health` eklendi** (`backend/app/api/routes/health.py`, `{"status": "ok"}`
+  döner). Sadece süreç canlılığını doğrular — model ilk çağrıda gecikmeli yüklendiği için model
+  durumunu kontrol etmiyor, aksi halde ilk sağlık kontrolü ~30-35sn sürerdi. Arayüzde bunu
+  kullanan bir "backend ayakta mı" göstergesi henüz yok; servisin kapalı olduğu hâlâ ilk gerçek
+  istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı").
 - **Eşzamanlılık sınırı arayüze yansıtıldı.** Backend `MAX_CONCURRENT_INFERENCES=1` ile aynı anda
   tek inference'a izin veriyor ve kapasite dolunca 503 dönüyor. Bu bir hata değil geçici bir
   durum olduğu için ayrı ve açık bir mesajla gösteriliyor ("Sistem şu anda meşgul… birkaç saniye
