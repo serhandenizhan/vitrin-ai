@@ -34,12 +34,25 @@ def _require_admin_secret(x_admin_secret: str = Header(default="")) -> None:
     # saldırılarına karşı `secrets.compare_digest` ile sabit-zamanlı karşılaştırma.
     # `secrets.compare_digest`, `str` argümanlarında YALNIZCA ASCII karakterlere
     # izin verir; aksi halde `TypeError` fırlatır (FastAPI bunu 401 değil,
-    # yakalanmamış bir 500'e çevirir). `ADMIN_SECRET` içinde ASCII-dışı bir
-    # karakter (ör. "çokgizli") olursa DOĞRU secret gönderilse bile her istek
-    # 500 alırdı. UTF-8 baytlara çevirerek bu kısıtı kaldırıyoruz, sabit-zamanlı
-    # karşılaştırma özelliği korunuyor.
+    # yakalanmamış bir 500'e çevirir). Bu yüzden karşılaştırma `str` üzerinde
+    # değil, BAYTLAR üzerinde yapılıyor — ama iki tarafın codec'i AYNI değil:
+    #
+    #  - Sol taraf: Starlette, ASGI header baytlarını `latin-1` ile decode edip
+    #    `str` yapar (HTTP/1.1'in header konvansiyonu). Yani `x_admin_secret`,
+    #    telden gelen baytların latin-1 yorumudur. Ham baytları geri elde etmenin
+    #    yolu `latin-1` ile ENCODE etmektir — `utf-8` ile encode etmek baytları
+    #    ikinci kez kodlar (double-encode) ve istemci doğru secret'ı UTF-8 olarak
+    #    göndermiş olsa bile karşılaştırma asla tutmaz (sessizce kalıcı 401).
+    #  - Sağ taraf: `settings.admin_secret` `.env`/ortam değişkeninden UTF-8
+    #    olarak okunmuş gerçek bir metindir; ham baytları `utf-8` encode'dur.
+    #
+    # `latin-1` encode her zaman güvenlidir: latin-1 ile decode edilmiş bir `str`
+    # tanım gereği latin-1 ile yeniden encode edilebilir.
+    #
+    # Bu, PR #5'te Copilot incelemesinin yakaladığı bir hatanın düzeltmesidir;
+    # önceki hâli her iki tarafı da `utf-8` ile encode ediyordu.
     if not secrets.compare_digest(
-        x_admin_secret.encode("utf-8"), settings.admin_secret.encode("utf-8")
+        x_admin_secret.encode("latin-1"), settings.admin_secret.encode("utf-8")
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz admin secret."
@@ -105,14 +118,29 @@ async def create_background(
 async def list_backgrounds(
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | int]]:
     result = await db.execute(
         select(Background)
         .where(Background.is_active.is_(True))
         .order_by(Background.created_at)
     )
     backgrounds = result.scalars().all()
+    # `expires_in` (saniye) bilinçli olarak yanıtın parçası: dönen URL'ler
+    # süreli imzalı R2 URL'leri ve süre `BACKGROUND_URL_EXPIRY_SECONDS` ile
+    # sunucu tarafında yapılandırılabiliyor. Bu alan olmadan istemcinin tek
+    # seçeneği süreyi kendi tarafına sabitlemek olurdu; sunucudaki ayar
+    # değiştiği anda editör, süresi dolmuş URL'lerle SESSİZCE kırılırdı.
+    # `ROADMAP.md` Faz 3 bunu açıkça uyarıyor ("önceki iterasyonda bu atlanıp
+    # sessiz bir hata haline gelmişti, bu sefer baştan tasarlanmalı") — yenileme
+    # zamanlamasının tek doğru kaynağı sunucu.
+    #
+    # Saniye cinsinden göreli süre tercih edildi (mutlak zaman damgası değil):
+    # istemci saatinin sunucu saatiyle uyumlu olmasını gerektirmiyor.
     return [
-        {"id": str(bg.id), "url": storage.generate_presigned_url(bg.r2_key)}
+        {
+            "id": str(bg.id),
+            "url": storage.generate_presigned_url(bg.r2_key),
+            "expires_in": settings.background_url_expiry_seconds,
+        }
         for bg in backgrounds
     ]
