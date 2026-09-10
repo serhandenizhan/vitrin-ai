@@ -193,7 +193,7 @@ Yapısal fark: Apple'da ürün bir fotoğraf, bizde **çalışan aracın kendisi
 tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu. Ayrıntı ve ölçüm tablosu
 için `frontend/README.md` → "Tasarım dili".
 
-### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — 🔄 Devam ediyor (backend tamamlandı)
+### Faz 3 — Arka plan kütüphanesi ve kompozisyon editörü — ✅ Tamamlandı
 
 - Serhan: arka plan meta veri modeli (Postgres + Alembic), yükleme API'si (`POST /api/admin/backgrounds`, `GET /api/backgrounds`), R2 depolama entegrasyonu (boto3, S3-uyumlu, presigned URL — **public-read değil**)
 - Kaan: Konva.js tabanlı editör — arka plan seç, kesilmiş ürünü sürükle/ölçekle/döndür, PNG/JPEG (2000×2000) olarak dışa aktar
@@ -214,8 +214,137 @@ migration ile eklenir. **Gerçek bir Cloudflare R2 bucket'ına karşı uçtan uc
 doğrulandı**: yükle (`POST /api/admin/backgrounds`) → listele (`GET /api/backgrounds`)
 → dönen presigned URL'den gerçek dosya indirildi ve piksel/boyut olarak yüklenen
 görselle birebir eşleştiği doğrulandı. Test sırasında oluşan geçici nesneler ve DB
-kaydı temizlendi. Kaan'ın Konva.js tabanlı kompozisyon editörü ayrı bir iş parçası
-olarak sürüyor; Faz 3 bu editör de bitene kadar tam tamamlanmış sayılmaz.
+kaydı temizlendi. **Sonuç (Kaan) — kompozisyon editörü tamamlandı.** Kesim hazır olduktan sonra
+aynı ekranda açılan Konva.js sahnesi: zemin seç, ürünü sürükle/ölçekle/döndür,
+2000×2000 PNG veya JPEG olarak indir. Yol haritasının işaretlediği iki tuzak
+baştan çözüldü:
+
+- **Boş liste / backend yok.** `GET /api/backgrounds` vekili (`frontend/src/app/api/backgrounds/route.ts`)
+  hiçbir koşulda 5xx dönmüyor; backend kapalıysa da 200 + boş liste dönüyor ve
+  `X-Backgrounds-Source` başlığıyla verinin nereden geldiğini söylüyor. Editör
+  tek bir yolu (boş liste) ele alıyor, iki ayrı hata dalını değil. Yer tutucu
+  zeminler listeden hiç çıkmıyor, dolayısıyla "zemin listesi boş" diye bir durum
+  hiç oluşmuyor. Yer tutucular dosya değil, kod içinde gradyan tanımı — kaynağı
+  olmayan ikili dosya commit edilmiyor (bkz. kök `CLAUDE.md`).
+- **İmzalı URL süresi.** Liste, backend'in `expires_in` alanına göre ömrünün
+  %75'inde yenileniyor; hesap listedeki **en erken ölen** URL'e göre yapılıyor.
+  Sekme uzun süre arka planda kalırsa zamanlayıcı kısılabildiği için
+  `visibilitychange` ikinci bir tetikleyici. Seçili zemin nesneyle değil **id**
+  ile tutuluyor; böylece yenileme kullanıcının seçimini sıfırlamıyor.
+
+Doğrulama sırasında dört hata bulunup düzeltildi (dördüncüsü: stüdyo katmanı
+site başlığıyla aynı `z-index`'teydi ve DOM'da ondan önce geldiği için üst 56
+px'teki "Geri"/"Ana menü" düğmeleri görünüyor ama basılamıyordu — ders 13'ün
+aynı sınıfı, eşitlikte kazananı sıra belirler); kesirli `pixelRatio` yüzünden
+çıktının 2000 yerine 1999 px olması, ölçümün `ResizeObserver`'a bırakılması
+(kare üretmeyen bir bağlamda hiç tetiklenmiyor) ve grid öğesinin `min-width: auto`
+yüzünden kendi içeriğini ölçmesi. Üçü de kalıcı ders olarak `CLAUDE.md`'ye
+eklenecek (PR #7 birleştikten sonra, ders numaraları çakışmasın diye).
+
+Editörün arayüzü ayrıca cilalandı: seçim çerçevesi Konva'nın kalın varsayılanı
+yerine 1 px kesikli altın çizgi + 9 px yuvarlak tutamak, döndürme 15° kademelerine
+yakınsıyor, yan panelde boyut kaydıracı ile "Ortala" ve "15°" düğmeleri var.
+Dönüşüm durumu sahnede değil editörde tutuluyor ki kontroller ile tuval aynı
+veriyi paylaşsın.
+
+**Öne alınan iş — kullanıcı kararı (09.09.2026).** Kaan, editöre ürün üzerinde
+ton ayarları ve basit efektler istedi. Bu özellikler `ROADMAP.md`'de **hiçbir fazda
+yoktu** (Faz 5 ödemeler, Faz 6 admin, Faz 7 test/optimizasyon, Faz 8 mobil) — yani
+ertelenmiş değil, hiç planlanmamış yeni özelliklerdi. Kural 6 gereği önce uyarıldı;
+Kaan isteği yineledi ve iş Faz 3'e alındı. Eklenenler:
+
+- **Görünüm ayarları:** parlaklık, kontrast, doygunluk (Konva'nın kendi filtreleri,
+  node `cache()`'lenerek), ürün altına gölge, zemine ışık havuzu
+- **Ayrı çalışma alanı (stüdyo):** kompozisyon artık ana sayfanın içinde değil, tam
+  ekran bir katmanda — solda tuval, sağda özellikler. Ayrı bir rota değil çünkü
+  girdisi bellekteki bir `blob:` URL; rota değişimi bunu taşımak için IndexedDB ya
+  da global bir depo gerektirirdi
+- **İnceleme ekranı:** kesim hazır olduğunda önce/sonra sürgüsü (aynı pikselde
+  karşılaştırma), kesim detayları (çözünürlük, format, süre) ve "Arka plan ekle"
+  düğmesiyle stüdyoya geçiş
+- **Bekleme ekranı:** bulanık önizleme üzerinde tarama ışığı ve gerçek aşama
+  metinleri. Yüzde göstergesi bilinçli olarak YOK — backend ara ilerleme
+  bildirmiyor, uydurma bir çubuk hiçbir şey göstermemekten kötü
+- **"Vitrin AI" düğmesi:** özellik henüz yok, düğme açıkça "yakında" diyor ve
+  basılınca ne yapacağını anlatıyor (ders 8 deseni)
+
+Ayrıca kullanıcı isteğiyle ana sayfaya iki tanıtım bölümü eklendi (10.09.2026):
+**uygulama turu** (yatay kayan, uygulamanın kendi arayüzünün DOM ile kurulmuş
+dört ekranı — bitmap ekran görüntüsü değil, böylece arayüz değiştiğinde sessizce
+eskimiyor) ve **misyon/vizyon**. İkisi de sunucu bileşeni, istemciye hiç inmiyor.
+Kaydırmaya bağlı animasyon `animation-timeline: view()` ile, JavaScript'siz;
+desteklemeyen tarayıcıda kartlar düz duruyor, hiçbir şey kaybolmuyor. Bu ekleme
+`CLAUDE.md`'deki "araç açılıştan hemen sonra" kilitli kararını revize ediyor;
+karar orada da kayıtlı.
+
+Kullanıcının kendi zeminini yüklemesi ve dışa aktarma ölçü seçenekleri **eklenmedi**:
+zemin yönetimi Faz 6'da, çıktı ölçüsü yol haritasında `2000×2000` olarak sayıyla
+sabit.
+
+**İkinci öne alınan iş — kullanıcı kararı (10.09.2026).** Ana sayfa dışında iki
+sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
+
+- **`/paketler`** — üç plan (Deneme / Atölye / Mağaza). **Fiyat yok**: ödeme
+  sistemi Faz 5'te, buraya sayı yazmak karşılığı olmayan bir taahhüt olurdu.
+  Paketlerin ne içereceği yazılı, fiyat "belirleniyor" olarak işaretli. Faz 5
+  geldiğinde ödeme akışı bu sayfaya bağlanacak.
+- **`/katalog`** — hazırlanan görselleri iki şablona (İkili vitrin, Kapak)
+  yerleştirip A4 oranında (1240×1754, 150 dpi) PNG indirme. **Tamamen istemci
+  tarafında**: backend'e, veritabanına ya da herhangi bir faza dokunmuyor,
+  girdisini var olan çalışma geçmişinden (IndexedDB) veya dosya seçiminden
+  alıyor. Bu yüzden projenin seyrini değiştirmiyor — kullanıcının şartı buydu.
+  Önizleme ile çıktı **tek bir ölçü tablosundan** besleniyor; ikisi ayrı
+  kodlansaydı kaçınılmaz olarak ayrışır ve "ekranda böyle görünmüyordu"
+  sonucunu doğururdu.
+- **Baskıya uygun (CMYK) dışa aktarma — GERÇEKTEN eklendi (10.09.2026).**
+  Önce yalnızca düğme olarak konmuştu; sonra ölçüldü ve fazları etkilemeden
+  yapılabileceği görüldü. Dönüşüm `sharp` (libvips + littleCMS) ile **Next'in
+  kendi sunucusunda** yapılıyor (`/api/cmyk`); Python backend'ine, veritabanına
+  ya da Serhan'ın tarafına hiç dokunmuyor.
+
+  Doğrulandı: çıktı 4 kanallı, `cmyk` renk uzayında ve hedef baskı koşulunun
+  ICC profili dosyaya gömülü — hem TIFF (matbaanın tercihi, LZW kayıpsız) hem
+  JPEG. Saydam alanlar beyaza düzleştiriliyor; CMYK'nın alfa kanalı yok.
+
+  **Ertelenmiş açık madde — sahibi: Kaan.** Profil yolu `CMYK_ICC_PATH` ile
+  veriliyor ve varsayılanı yok. Profilsiz bir "CMYK" çevrimi matbaada yanlış
+  renk verir, bunu sessizce yapmak özelliği hiç sunmamaktan kötüdür.
+  Geliştirmede işletim sisteminin profili kullanılıyor; **üretime çıkmadan
+  depoya serbest lisanslı bir profil konmalı** (örneğin ECI'nin
+  `ISOcoated_v2_eci.icc`) ya da matbaanın kendi profili alınmalı. Bu iş
+  mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
+  baskı koşulu doğrulanarak tamamlanacak.
+
+  **Kod standardı — Türkçe identifierlar İngilizceye taşındı (10.09.2026).**
+  Kompozisyon editörü, katalog, zemin kaynağı ve stüdyo sözleşmesindeki
+  değişken, tip, alan ve bileşen adları `CLAUDE.md` dil kuralına uyduruldu;
+  kullanıcı metinleri ve Türkçe yorumlar değişmedi. İndirilen dosya adları
+  kullanıcıya göründüğü için Türkçe kaldı (`fileSlug`: `yuzuk-kare.png`,
+  `katalog-ikili.png`). `/katalog` rotası bir URL olduğu için değişmedi.
+
+  **Dışa aktarma hatası artık sessiz değil (10.09.2026).** `toDataURL` hata
+  atarsa sahne boyutu/ölçeği ve Transformer'lar `finally` ile geri yükleniyor
+  ve kullanıcıya mesaj gösteriliyor. Gerçek tarayıcıda ölçülen tuzak: Konva
+  "tainted" tuvalde hatayı fırlatmıyor, boş string döndürüyor — bu da hata
+  sayılıyor. İkisi için de regression testi var.
+
+  **R2 CORS — kısmen doğrulandı, sahibi: Serhan.** Sahte bir CORS'lu ve bir
+  CORS'suz origin'le gerçek tarayıcıda smoke test yapıldı: kural varken
+  2000×2000 çıktı zeminle birlikte doğru; kural yokken zemin sessizce
+  gradyana düşüyor. Gerçek bucket'a karşı doğrulama R2 kimlik bilgileri
+  olmadığı için yapılmadı; `backend/scripts/check_r2_cors.py` ve kural şablonu
+  (`backend/README.md` → "R2 CORS") hazır. Production alan adı belirlenince
+  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 5).
+
+**Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
+artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
+Instagram gönderi 1080×1080 ve hikâye 1080×1920. Yol haritası çıktıyı
+`2000×2000` diye sabitlemişti; bu, o sayının **genişletilmesi** — kare biçim
+varsayılan ve değişmedi. Sahnenin mantıksal ölçüsü her biçimde çıktının tam
+yarısı tutuluyor ki dışa aktarma oranı tam 2 kalsın (kesirli oran bir piksel
+kaybına yol açıyor, bkz. yukarıdaki 1999 px hatası).
+
+Faz 3 bu iş parçasıyla tamamlandı.
 
 **İnceleme düzeltmeleri (Kaan).** Backend birleştirildikten sonra yapılan
 incelemede üç madde düzeltildi:

@@ -77,6 +77,76 @@ type WorkspaceValue = {
 
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
+
+  /**
+   * Studyo — kompozisyon icin acilan tam ekran calisma alani.
+   *
+   * Neden ayri bir ROTA degil de tam ekran katman: studyonun girdisi bellekteki
+   * bir `blob:` URL (kesim). Rota degistirmek bu URL'i tasimak icin ya
+   * IndexedDB'ye yazip geri okumayi ya da global bir depo kurmayi gerektirirdi;
+   * ikisi de kullanicinin gormedigi bir karmasiklik. Katman, sayfanin tamamini
+   * kapatiyor — kullanici icin "baska bir alana gecmis" oluyor — ama arkadaki
+   * durum korunuyor, geri donunce inceleme ekrani oldugu gibi duruyor.
+   */
+  studio: StudioData | null;
+  openStudio: (veri: StudioData) => void;
+  closeStudio: () => void;
+
+  /**
+   * Basa don: studyoyu kapatir, araci bos duruma alir ve sayfanin basina
+   * kaydirir.
+   *
+   * Akisin sonunda (gorsel indirildikten sonra) kullanicinin elinde yalnizca
+   * "Geri" vardi ve o da inceleme ekranina donduruyordu — is bitmisken ayni
+   * fotografin sonucuna donmek bir cikmaz. Bu, akisi bastan baslatan tek
+   * dugme.
+   *
+   * Sifirlama `subscribeToReset` ile OLAY olarak yayiliyor, state olarak
+   * degil: aracin sifirlanmasi bir an, kalici bir durum degil. State
+   * tutulsaydi arac bunu bir efektin govdesinde okuyup setState cagirmak
+   * zorunda kalirdi ki `react-hooks/set-state-in-effect` bunu hakli olarak
+   * reddediyor (ayni gerekce: `subscribeToOpenWork`).
+   */
+  returnToStart: () => void;
+  subscribeToReset: (listener: () => void) => () => void;
+};
+
+/**
+ * Arac bolumune gecerken kullanilan kaydirma ayari.
+ *
+ * `behavior: "instant"` — "auto" DEGIL. `globals.css` icinde
+ * `html { scroll-behavior: smooth }` tanimli ve spesifikasyona gore `"auto"`,
+ * CSS'teki bu degeri kullanmak demek; yani "auto" da yumusak kaydiriyor.
+ * Yumusak kaydirma kare uretimine bagli ve gorunmeyen bir baglamda hic
+ * ilerlemiyor (bkz. kok CLAUDE.md ders 13 ortam artefakti) — ama asil sebep
+ * urunle ilgili: kullanici panelden bir calismaya tikladiginda ya da studyodan
+ * ciktiginda hedefe DOGRUDAN gitmeyi bekliyor, sayfanin uzun bir yolu
+ * suzulerek gecmesini degil.
+ */
+const KAYDIRMA: ScrollIntoViewOptions = {
+  block: "start",
+  behavior: "instant",
+};
+
+/**
+ * Arac bolumunu goruse getirir.
+ *
+ * `setTimeout(..., 0)` — `requestAnimationFrame` DEGIL. Kaydirma, React durumu
+ * islendikten (panel/katman kapandiktan) sonra yapilmali; ama rAF kare
+ * uretimine bagli ve kare uretmeyen bir baglamda (gorunmez sekme/panel) HIC
+ * calismiyor — bu dogrulama sirasinda birebir gozlendi, rAF geri cagrisi
+ * saniyelerce tetiklenmedi. Sifir gecikmeli zamanlayici kare uretiminden
+ * bagimsiz calisiyor ve ayni sonucu veriyor.
+ */
+function aracaKaydir(): void {
+  setTimeout(() => {
+    document.getElementById("dene")?.scrollIntoView(KAYDIRMA);
+  }, 0);
+}
+
+export type StudioData = {
+  cutoutUrl: string;
+  fileName: string;
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -92,6 +162,7 @@ export function useWorkspace(): WorkspaceValue {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSignInOpen, setSignInOpen] = useState(false);
+  const [studio, setStudio] = useState<StudioData | null>(null);
   const [works, setWorks] = useState<WorkRecord[]>([]);
   const [isHistoryLoaded, setHistoryLoaded] = useState(false);
 
@@ -156,6 +227,32 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const openWork = useCallback((work: WorkRecord) => {
     for (const listener of openListenersRef.current) listener(work);
     setSidebarOpen(false);
+    // Calisma aciliyordu ama kullanici sayfanin kaldigi yerde kaliyordu —
+    // panelden bir ise tikladiginda ekranda hicbir sey degismiyor gibi
+    // gorunuyordu. `requestAnimationFrame`: panel ayni karede kapaniyor,
+    // kaydirma ondan SONRA yapilmali; aksi halde hedefin konumu panel hala
+    // acikken olculuyor.
+    aracaKaydir();
+  }, []);
+
+  // "Basa don" olayinin dinleyicileri.
+  const resetListenersRef = useRef(new Set<() => void>());
+
+  const subscribeToReset = useCallback((listener: () => void) => {
+    const listeners = resetListenersRef.current;
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+
+  const returnToStart = useCallback(() => {
+    setStudio(null);
+    setSidebarOpen(false);
+    for (const listener of resetListenersRef.current) listener();
+    // `auto`: kullanici "basa don" dedi, yumusak kaydirma burada bekleme
+    // hissi veriyor — sayfa zaten tamamen degisti.
+    window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
   const subscribeToOpenWork = useCallback(
@@ -190,6 +287,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeSignIn: () => setSignInOpen(false),
       settings,
       updateSettings,
+      returnToStart,
+      subscribeToReset,
+      studio,
+      openStudio: (veri: StudioData) => {
+        setStudio(veri);
+        // Studyo tam ekran; acik kalan kenar cubugu altinda gorunmez bir
+        // sekilde durup geri donuldugunde sasirtici bicimde aciliyordu.
+        setSidebarOpen(false);
+      },
+      closeStudio: () => {
+        setStudio(null);
+        // Studyo kapaninca kullanici sayfanin kaldigi yerde kaliyordu ve bu
+        // genellikle tanitim bolumlerinin ortasiydi — sonuc ekrani ekranin
+        // 1600 px altinda kaliyor, kullanici "geri gelemedim" saniyordu.
+        // Aracin bolumunu goruse getiriyoruz.
+        //
+        // `requestAnimationFrame`: katman ayni karede kaldiriliyor, kaydirma
+        // ondan SONRA yapilmali; aksi halde hedefin konumu katman hala
+        // yerindeyken olculuyor.
+        aracaKaydir();
+      },
     }),
     [
       isSidebarOpen,
@@ -203,6 +321,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isSignInOpen,
       settings,
       updateSettings,
+      studio,
+      returnToStart,
+      subscribeToReset,
     ],
   );
 

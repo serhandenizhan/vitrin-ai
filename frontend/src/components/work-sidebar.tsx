@@ -83,7 +83,7 @@ export function WorkSidebar() {
       >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
           <span className="flex items-center gap-2 text-[1.0625rem]">
-            <BrandMark className="text-gold size-[1.4rem]" />
+            <BrandMark className="text-gold h-[1.45rem] w-auto" />
             <span className="font-semibold tracking-[-0.01em]">
               Vitrin <span className="text-gold">AI</span>
             </span>

@@ -36,6 +36,48 @@ Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her
 test çalıştırmasında indirip inference yapmak pratik değil (ağır kaynak
 kullanımı). Gerçek modelle doğrulama ayrı ve manuel yapılır.
 
+## R2 CORS
+
+Kompozisyon editörü zemin görsellerini tarayıcıda `crossOrigin="anonymous"`
+ile yüklüyor; bucket her frontend origin'i için **GET ve HEAD** izni vermeli.
+Kural eksikse hata vermez: editör sessizce gradyan zemine düşer ve dışa
+aktarılan görsel zeminsiz iner. Bucket yine public-read değil — CORS yalnızca
+tarayıcının imzalı URL yanıtını okuyabilmesini sağlıyor, yetki vermiyor.
+
+**Şu an henüz bir production alan adı yok (10.09.2026 itibarıyla), bu yüzden
+kural bilinçli olarak yalnızca `localhost:3000` içeriyor:**
+
+Cloudflare dashboard → R2 → bucket → Settings → CORS Policy:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3000"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": [],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+**⚠️ PRODUCTION'A DEPLOY EDERKEN:** asıl alan adı belirlendiğinde
+`AllowedOrigins` listesine mutlaka eklenmeli
+(`["https://<production-alan-adi>", "http://localhost:3000"]`). Eklenmezse
+canlıda hata VERMEZ — editör sessizce gradyan zemine düşer ve her kompozisyon
+zeminsiz iner; yerelde fark edilmez çünkü `localhost:3000` zaten kuralda.
+
+Doğrulama (gerçek bucket'a karşı, `.env` içindeki R2_* ile):
+
+```bash
+.venv/bin/python scripts/check_r2_cors.py http://localhost:3000
+# production'a geçince:
+.venv/bin/python scripts/check_r2_cors.py https://<production-alan-adi> http://localhost:3000
+```
+
+Script önce tanımlı kuralı okur, sonra bucket'taki gerçek bir nesne için imzalı
+URL üretip her origin'le GET/HEAD atar ve `Access-Control-Allow-Origin`
+yanıtını kontrol eder. Çıkış kodu 0 değilse kural eksiktir.
+
 ## Docker
 
 ```bash

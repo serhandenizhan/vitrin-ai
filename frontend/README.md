@@ -200,13 +200,25 @@ npm test          # tek sefer
 npm run test:watch
 ```
 
-Vitest. Kapsam bilinçli olarak **saf mantık ve sunucu kodu**: yükleme
-kısıtları (`upload-constraints`) ve arka plan kaldırma vekili (`route.ts`).
-İkisi de projenin en kolay sessizce bozulabilecek yerleri — biri backend ile
-elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
-çevrildiği yer.
+Vitest. Kapsam saf mantık ve sunucu koduna ek olarak kritik React bileşen
+senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin seçiminin
+liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
+geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-27 test var. Özellikle korunanlar:
+68 test sekiz dosyaya dağılmış:
+
+| dosya | kapsam |
+| --- | --- |
+| `lib/upload-constraints.test.ts` | Yükleme kısıtları — backend ile elle senkron tutulan sabitler |
+| `app/api/remove-background/route.test.ts` | Arka plan kaldırma vekili — backend yanıtlarının kullanıcıya çevrildiği yer |
+| `app/api/backgrounds/route.test.ts` | Zemin vekili — hiç 5xx dönmemesi, bozuk kayıt eleme, `expires_in` yokluğu |
+| `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
+| `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
+| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
+| `components/composer/use-backgrounds.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
+| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması |
+
+Özellikle korunanlar:
 
 - **HEIC yolu.** Windows'ta tarayıcı `.heic` için boş content-type bildiriyor
   ve backend beyan edilen türü şart koşuyor; bu düzeltme sessizce bozulursa
@@ -219,9 +231,9 @@ elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
   bu başlık olmadan arayüz sahte sonucu gerçek sanar.
 - **Sınır üstü dosyanın backend'e hiç gönderilmemesi.**
 
-Bileşen testleri (React Testing Library) ve E2E (Playwright) bilinçli olarak
-ertelendi; yol haritası ikisini de Faz 7'ye koyuyor ve arayüz hâlâ hızla
-değişirken şimdi eklemek bakım yükü üretirdi.
+React Testing Library ile R2 yenileme/seçim davranışını koruyan iki bileşen
+testi öne alındı. Daha geniş bileşen kapsamı ve Playwright E2E, Faz 7'de
+planlandığı gibi devam ediyor.
 
 **Bir tuzak:** testte dosya boyutunu `Object.defineProperty` ile sahtelemek
 işe yaramıyor — dosya `FormData` + `Request` üzerinden geçerken yeniden
@@ -357,15 +369,22 @@ kullanılmayan çözünürlük için ödenen bayt.
 
 | | |
 | --- | --- |
-| **Toplam aktarılan** | **342 KB** |
-| JavaScript | 160 KB |
+| **Toplam aktarılan** | **386 KB** |
+| JavaScript | 176 KB |
 | Font (Inter, latin + latin-ext) | 131 KB |
-| Görseller | 42 KB |
-| CSS | 9 KB |
-| Belge | 9 KB |
+| Görseller | 56 KB |
+| CSS | 12 KB |
+| Belge | 11 KB |
 
 Görseller `next/image` ile 384 px sürümlerine iniyor: 900 px'lik kaynaklar
 ekranda 31 KB + 12 KB olarak servis ediliyor.
+
+**Konva (312 KB) bu tablonun içinde değil ve olmamalı.** Editör
+`next/dynamic` + `ssr: false` ile ayrı bir parçada; ana sayfayı açan ziyaretçi
+onu indirmiyor, yalnızca stüdyoyu açan indiriyor. Ölçülerek doğrulandı: ilk
+yüklemenin kaynak listesinde Konva yok. Faz 3'te sayfa ağırlığının 342'den
+386 KB'a çıkması bu kütüphaneden değil, yeni bölümlerin görselleri ve
+CSS'inden geliyor.
 
 `tw-animate-css` kaldırıldı — sağladığı sınıfların (`animate-in`, `fade-in`,
 `slide-in-*`, `zoom-in`) hiçbiri kullanılmıyordu; sırf iskelet üreticisi
@@ -416,3 +435,195 @@ bırakırdı.
 ~15 saniye (bkz. kök `CLAUDE.md` "Bilinen kısıt"). Bekleme ekranı geçen süreyi
 sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
+
+## Katalog (`/katalog`)
+
+Şablon galerisi → çalışma alanı. Üç şablon: İkili vitrin, Kapak, Üçlü ızgara.
+"Örnek ile başlayın" hazır bir sayfa açıyor — boş sayfayla karşılaşmak fikri
+anlatmıyor.
+
+**Her şablon yalnızca KUTULARDAN oluşuyor** (`src/lib/catalog-templates.ts`),
+0–1 arası oranlarla. Önizleme bu oranları yüzdeye, dışa aktarma aynı oranları
+piksele çeviriyor. Önceki sürümde her şablonun iki ayrı uygulaması vardı (JSX
+yerleşimi + canvas fonksiyonu) ve ikisinin aynı kalacağını hiçbir şey garanti
+etmiyordu; yerleşim değiştiğinde birini güncelleyip diğerini unutmak an
+meselesiydi.
+
+**Görseller kendi kutularında kırpılıyor.** Kullanıcı görseli büyüttüğünde
+metin bandına taşması mümkün değil — önceki sürümde yerleşim akışa bırakıldığı
+için büyük bir görsel başlığı aşağı itebiliyordu.
+
+**Boyut ve konum kaydıraçları** yuvanın kendi kutusuna göre oran veriyor;
+`slotPlacement()` hem önizlemede hem dışa aktarmada aynı fonksiyon.
+
+**Tuzak:** yuvadaki `<img>` etiketine `max-width: none` verilmesi zorunlu.
+Tailwind'in temel katmanı tüm görsellere `max-width: 100%` uyguluyor ve bu,
+%100'ün üzerindeki her ölçeği **sessizce** kırpıyordu: kaydıraç değeri ve
+`style.width` doğru güncelleniyor, görsel büyümüyordu.
+
+Kâğıt rengi saf beyaz değil kırık beyaz (`#f4f1ec`): saf beyaz sayfa ekranda
+çevresindeki arayüzden parlak duruyor ve göz önce ona gidiyor.
+
+## Logo
+
+`brand-mark.tsx`, kullanıcının verdiği logonun **yazısız** hâli. Dalga rastgele
+bir süs değil, markanın adını yazıyor:
+
+| parça | harf |
+| --- | --- |
+| baştaki iniş ve çıkış | **V** |
+| ortadaki yüksek tepe | **A** |
+| sondaki kısa yükseliş | **ı** |
+| soldaki ayrı nokta | **İ**'nin noktası |
+
+Bu yüzden oranlar keyfi değil: ortadaki tepe belirgin şekilde daha **yüksek**
+(harf olarak okunması buna bağlı), soldaki vadi derin ve dar, sağdaki daha
+kısa. Bunları eşitlemek işareti anlamsız bir dalgaya çevirir. Nokta çizgiye
+**değmemeli** — değdiği anda ayrı bir harf işareti olmaktan çıkıp çizginin
+parçası gibi okunuyor.
+
+Ekran görüntüsü değil, yeniden çizilmiş SVG — her ölçüde net, `currentColor`
+ile bulunduğu yerin rengini alıyor (üst çubukta altın), ayrı bir dosya
+indirilmiyor.
+
+**İşaret geniş (≈1.5:1), kare değil.** Kullanım yerlerinde yükseklik veriliyor
+ve genişlik `w-auto` ile geliyor; `size-*` gibi kare bir sınıf işareti ezer.
+
+## Menü ve "Hakkında" paneli
+
+Menüde iki bağlantı var: **Deneyin** ve **Nasıl çalışır**. Önceden dört vardı
+(Öne çıkanlar ve Teknik bilgiler de) ama dördü de aynı sayfanın alt alta duran
+bölümlerine gidiyordu — menü bir *seçim* sunmuyor, sayfanın içindekilerini
+tekrar ediyordu. Kalan iki bağlantı gerçekten ayrı iki niyete karşılık geliyor:
+"denemek istiyorum" ve "önce nasıl çalıştığını anlamak istiyorum". Diğer
+bölümler sayfada duruyor, kaydırınca geliniyor.
+
+**Amaç, misyon ve vizyon sayfa bölümü değil, üst çubuktan açılan bir panel**
+(`about-panel.tsx`). Bu üç metin aracı kullanmak için gerekli değil; sayfaya
+bölüm olarak konduklarında ziyaretçinin araca ulaşması bir ekran gecikiyordu.
+Panel, isteyen için bir tıklama uzakta; istemeyen için hiç yok. Escape ile ve
+dışına tıklayarak kapanıyor.
+
+## Tanıtım görselleri gerçek çıktı
+
+`scripts/prepare-showcase.mjs`, `public/photos/vitrin.webp`'i **çalışan
+backend'e gönderip** kesimi üretiyor ve altın zemin üzerine yerleştiriyor
+(`public/showcase/`). Yani turda "işte sonuç" derken gösterilen şey stok
+fotoğraf ya da elle rötuşlanmış bir temsilî görsel değil, kullanıcının alacağı
+şeyin ta kendisi.
+
+Kaynak olarak ham `photo-source/urun-foto.jpg` **kullanılmıyor**: o karede
+ürünün yanında kuyumcu testeresi ve serbest bir zincir de var, BiRefNet salient
+object segmentasyonu yaptığı için onları da koruyor ve kesimde havada duran bir
+testere kalıyor (kök `CLAUDE.md`'deki bilinen sınırlama). Tek konulu kare
+kullanıldığında sonuç temiz.
+
+Çalıştırmak (backend :8000'de ayakta olmalı):
+
+```bash
+npm run gorselleri-hazirla
+```
+
+## Akış: inceleme → stüdyo (Faz 3)
+
+Arka plan kaldırıldıktan sonra **inceleme ekranı** açılıyor: önce/sonra sürgüsü
+(iki görsel üst üste, üstteki `clip-path` ile soldan kırpılıyor — genişlik
+değiştirmek görseli yeniden ölçekler ve aynı pikselde karşılaştırma imkânsız
+olurdu), kesim detayları ve üç eylem. Birincil eylem indirme değil **"Arka plan
+ekle"**: ürünün asıl vaadi satışa hazır görsel, saydam bir PNG değil.
+
+**"Vitrin AI" düğmesi inceleme ekranında**, kesim biter bitmez: kullanıcının
+"şimdi ne yapayım" diye düşündüğü an tam bu an. Önce stüdyonun içindeydi, ama
+orada kullanıcı zaten elle bir sahne kurmaya başlamış oluyor — teklif geç
+kalıyordu. Özellik henüz yok; düğme açıkça "yakında" diyor ve basılınca ne
+yapacağını anlatıyor.
+
+**Akışın sonunda "Ana menü"** — stüdyo başlığında. "Geri" inceleme ekranına
+dönüyor; iş bittiğinde (görsel indirildikten sonra) oraya dönmek bir çıkmaz,
+aynı fotoğrafın sonucu. "Ana menü" stüdyoyu kapatıyor, aracı boş duruma alıyor
+ve sayfayı başa kaydırıyor. Sıfırlama olay olarak yayılıyor (`subscribeToReset`),
+state olarak değil — sıfırlanma bir an, kalıcı bir durum değil; state tutulsaydı
+araç bunu bir efektin gövdesinde okuyup `setState` çağırmak zorunda kalırdı.
+
+Kompozisyon **ayrı bir alanda** — tam ekran stüdyo katmanı. Ayrı bir rota değil
+çünkü girdisi bellekteki bir `blob:` URL; rota değişimi bunu taşımak için
+IndexedDB'ye yazıp geri okumayı ya da global bir depo kurmayı gerektirirdi.
+Katman sayfanın tamamını kapatıyor (kullanıcı için "başka bir alan"), arkadaki
+durum korunuyor, `Escape` ve "Geri" ile çıkılıyor.
+
+**Bekleme ekranında yüzde göstergesi yok.** Backend ara ilerleme bildirmiyor,
+dolayısıyla bir yüzde çubuğu uydurma olurdu — %80'de donan bir çubuk hiçbir şey
+göstermemekten kötü. Onun yerine kullanıcının fotoğrafı bulanık bir önizleme
+olarak duruyor ve üzerinden tarama ışığı geçiyor; aşama metinleri backend'in
+gerçekten yaptığı sırayı anlatıyor.
+
+## Kompozisyon editörü (Faz 3)
+
+Kesim hazır olduktan sonra aynı ekranda açılıyor (`src/components/composer/`).
+Konva.js sahnesi; zemin seçimi, sürükle/ölçekle/döndür ve 2000×2000 dışa aktarma.
+
+**Sahne her zaman kare ve mantıksal ölçüsü sabit (1000).** Ekranda kapsayıcısına
+sığacak kadar küçük çiziliyor, ama tüm koordinatlar mantıksal ölçü üzerinden
+tutulup Konva'nın kendi `scale`'i ile küçültülüyor. İki faydası var: kullanıcının
+yerleşimi ekran boyutundan bağımsız (telefonda konumlandırılan ürün masaüstünde
+aynı yerde), ve dışa aktarma sırasında oran tam sayı oluyor.
+
+**Dışa aktarma sırasında sahne geçici olarak mantıksal ölçüsüne alınıyor**
+(`scale = 1`), böylece oran `2000 / 1000 = 2`. Doğrudan `2000 / ekranGenişliği`
+kullanıldığında ekran genişliği yuvarlak olmadığı için (ör. 434 px) sonuç
+2000 değil **1999** px çıkıyordu — bu, elle ölçülmeden fark edilmeyen bir hata.
+Transformer tutamakları dışa aktarmadan önce gizleniyor, sonra geri alınıyor.
+
+**Dönüşüm durumu (konum/ölçek/açı) sahnede değil, `CompositionEditor`'da**
+tutuluyor. Sahne `donusum` prop'unu çizip kullanıcı sürükledikçe geri bildiriyor.
+Böylece yandaki kontroller (boyut kaydıracı, "Ortala", "15°") ile tuvalin kendisi
+aynı veriyi paylaşıyor — kaydıracın gösterdiği yüzde ile tuvaldeki gerçek ölçek
+sessizce ayrışamıyor. Konva örneğini dışarı açıp imperative çağırmak mümkündü ama
+o zaman iki ayrı doğruluk kaynağı olurdu.
+
+**Seçim çerçevesi bilinçli olarak hafif:** 1 px kesikli altın çizgi ve 9 px
+yuvarlak tutamaklar. Konva'nın varsayılanı (kalın, parlak mavi, kare tutamaklı)
+ürünün önüne geçiyor; kullanıcı sonucu değerlendirmeye çalışırken gözü önce seçim
+kutusuna takılıyordu. Çizgi ve tutamak ölçüleri sahne ölçeğine bölünüyor ki her
+ekran genişliğinde aynı kalınlıkta görünsünler. Döndürme 15° kademelerine
+yakınsıyor (`rotationSnaps`) — serbest açı hâlâ mümkün, ama düz durması istenen
+bir ürünü elle tam 0'a getirmek zor bir istekti.
+
+**Geometri `src/lib/composition.ts` içinde**, Konva ve React'ten bağımsız: sığdırma
+hesabı, açı normalizasyonu ve dışa aktarma oranı orada. `editor-stage.tsx` içinde
+kalsalardı test etmek Node ortamında `konva` + canvas yüklemeyi gerektirirdi.
+
+**Görünüm ayarları** Konva'nın kendi filtreleriyle (`Brighten`, `Contrast`,
+`HSL`). Filtreler yalnızca `cache()`'lenmiş bir node üzerinde çalışıyor; cache bir
+kez kuruluyor (görsel değiştiğinde), filtre parametreleri değiştiğinde Konva
+önbelleği kendisi yeniden işliyor — her kaydırac hareketinde `cache()` çağırmak
+büyük görsellerde gözle görülür takılma yaratırdı.
+
+**Gölge ve ışık havuzu** ölçüleri sahne koordinatında (1000 birim) veriliyor,
+sabit piksel değil: ürün büyüdükçe gölge de büyüyor. Işık havuzu ürünün değil
+**zeminin** üstünde — ürüne düşen bir vinyet onu soluklaştırırdı.
+
+**Merkeze yakalama:** sürüklerken merkeze 12 birimden yakınsa değer tam merkeze
+çekiliyor. Fareyle tam ortayı tutturmak neredeyse imkânsız ve 1-2 piksellik kayma
+2000 px'e büyütülmüş çıktıda göze batıyor.
+
+**Zeminler** (`src/lib/backgrounds.ts`):
+
+- Yer tutucular kod içinde gradyan tanımı, dosya değil — kaynağı olmayan ikili
+  dosya commit edilmiyor ve dört zemin sıfır bayt ediyor.
+- Sunucudan gelen zeminler `/api/backgrounds` vekilinden. Vekil **hiç 5xx
+  dönmüyor**: backend kapalıysa da 200 + boş liste dönüyor, `X-Backgrounds-Source`
+  başlığı (`backend` / `unavailable`) verinin nereden geldiğini söylüyor. Editör
+  tek bir yolu ele alıyor, iki ayrı hata dalını değil.
+- İmzalı URL'ler süreli. Liste, backend'in `expires_in` alanına göre ömrünün
+  **%75'inde** yenileniyor; hesap listedeki en erken ölen URL'e göre yapılıyor.
+  Sekme arka planda kalırsa zamanlayıcı kısılabildiği için `visibilitychange`
+  ikinci bir tetikleyici. Seçili zemin **id** ile tutuluyor, nesneyle değil —
+  yenileme kullanıcının seçimini sıfırlamıyor.
+
+**İlk boyut ölçümü `ResizeObserver`'a bırakılmıyor**, `getBoundingClientRect()`
+ile senkron yapılıyor: observer geri çağrıları "update the rendering" adımının
+parçası ve kare üretmeyen bir bağlamda (gizli sekme) hiç teslim edilmeyebiliyor.
+Ölçülen kapsayıcıya `min-w-0` verilmesi de şart — yoksa grid öğesinin
+`min-width: auto` değeri yüzünden ölçüm kullanılabilir alanı değil kendi
+içeriğini ölçüyor ve sahne kapsayıcısından taşıyor.

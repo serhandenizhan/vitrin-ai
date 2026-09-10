@@ -21,27 +21,69 @@
  * yuksekligini kapliyor (`flex h-full items-center`).
  */
 
-import { LogIn, PanelLeft } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import { ChevronDown, LogIn, PanelLeft } from "lucide-react";
 
+import { NavPanel } from "@/components/nav-panel";
+import {
+  HakkindaIcerik,
+  NasilCalisirIcerik,
+} from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
+/*
+ * Menudeki her oge ya bir YERE goturuyor ya bir sey ACIYOR — ikisi karisik
+ * degil. Tek baglanti "Deneyin"; digerleri panel aciyor ve yanlarindaki ok
+ * bunu onceden soyluyor.
+ *
+ * Panel iceriklerinin ortak yani: hicbiri araci KULLANMAK icin gerekli degil.
+ * Sayfaya bolum olarak konduklarinda ziyaretcinin araca ulasmasi her biri icin
+ * bir ekran geciktiriyordu.
+ *
+ * Menu bilincli olarak KISA.
+ *
+ * Onceden dort baglanti vardi: Deneyin / One cikanlar / Nasil calisir /
+ * Teknik bilgiler. Dordu de sayfanin ayni akisinda ust uste duran bolumlere
+ * gidiyordu, yani menu kullaniciya bir SECIM sunmuyor, yalnizca ayni sayfanin
+ * icindekilerini tekrar ediyordu — ve hangisinin gerekli oldugu belirsizdi.
+ *
+ * Kalan iki baglanti gercekten ayri iki niyete karsilik geliyor: "denemek
+ * istiyorum" ve "once nasil calistigini anlamak istiyorum". One cikanlar ve
+ * teknik bilgiler sayfada duruyor, kaydirinca geliniyor; menude yer kaplamiyor.
+ */
 const LINKS = [
-  { href: "#dene", label: "Deneyin" },
-  { href: "#ozellikler", label: "Öne çıkanlar" },
-  { href: "#nasil", label: "Nasıl çalışır" },
-  { href: "#teknik", label: "Teknik bilgiler" },
+  { href: "/#dene", label: "Deneyin" },
+  { href: "/katalog", label: "Katalog" },
+  { href: "/paketler", label: "Paketler" },
 ];
+
+/** Panel aciyor; sirasi menudeki gorunum sirasi.
+ *
+ * "Paketler" buradan CIKARILDI: kendi sayfasina tasindi (10.09.2026). Odeme
+ * akisi geldiginde (Faz 5) orada paket secimi, fatura bilgisi ve odeme adimi
+ * olacak; bunlar bir panele sigmaz ve paylasilabilir bir adres ister. */
+const PANELLER = [
+  { ad: "nasil", etiket: "Nasıl çalışır" },
+  { ad: "hakkinda", etiket: "Hakkında" },
+] as const;
+
+type PanelAdi = (typeof PANELLER)[number]["ad"];
 
 export function SiteHeader() {
   const { isSidebarOpen, toggleSidebar, works, openSignIn } = useWorkspace();
+  // Ayni anda tek panel: iki panelin ust uste binmesi ya da biri acikken
+  // digerinin arkasinda kalmasi mumkun olmasin.
+  const [acikPanel, setAcikPanel] = useState<PanelAdi | null>(null);
 
   return (
+    <>
     <header
       className={cn(
         "sticky top-0 z-50 h-14 border-b border-white/10",
-        "bg-black/70 text-[#f5f5f7] backdrop-blur-xl backdrop-saturate-150",
+        "bg-black/70 text-[#f3f0eb] backdrop-blur-xl backdrop-saturate-150",
       )}
     >
       <nav
@@ -62,8 +104,8 @@ export function SiteHeader() {
           className={cn(
             "relative flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors",
             isSidebarOpen
-              ? "bg-white/15 text-[#f5f5f7]"
-              : "text-[#f5f5f7]/85 hover:bg-white/10 hover:text-[#f5f5f7]",
+              ? "bg-white/15 text-[#f3f0eb]"
+              : "text-[#f3f0eb]/85 hover:bg-white/10 hover:text-[#f3f0eb]",
           )}
         >
           <PanelLeft className="size-[1.15rem]" strokeWidth={1.75} aria-hidden />
@@ -77,11 +119,11 @@ export function SiteHeader() {
           ) : null}
         </button>
 
-        <a
-          href="#top"
+        <Link
+          href="/#top"
           className="flex h-full shrink-0 items-center gap-2 text-[1.0625rem]"
         >
-          <BrandMark className="text-gold size-[1.4rem]" />
+          <BrandMark className="text-gold h-[1.45rem] w-auto" />
           {/* Cok dar ekranda yalnizca isaret kaliyor: 320 px'te panel dugmesi
               + isaret + yazi + giris + eylem toplami 346 px'e ciktigi ve
               cubuk 41 px tastigi olculdu. Isaret tek basina markayi
@@ -89,42 +131,90 @@ export function SiteHeader() {
           <span className="hidden font-semibold tracking-[-0.01em] whitespace-nowrap min-[380px]:inline">
             Vitrin <span className="text-gold">AI</span>
           </span>
-        </a>
+        </Link>
 
         {/* Baglantilar markanin hemen devaminda, ortada degil — ortalanmis bir
             menu genis ekranda savruk duruyor. */}
         <ul className="ml-4 hidden h-full items-stretch gap-1 lg:flex">
           {LINKS.map((link) => (
             <li key={link.href} className="flex">
-              <a
+              <Link
                 href={link.href}
-                className="flex h-full items-center rounded-md px-3 text-[0.875rem] text-[#f5f5f7]/75 transition-colors hover:bg-white/8 hover:text-[#f5f5f7]"
+                className="flex h-full items-center rounded-md px-3 text-[0.875rem] text-[#f3f0eb]/75 transition-colors hover:bg-white/8 hover:text-[#f3f0eb]"
               >
                 {link.label}
-              </a>
+              </Link>
             </li>
           ))}
+
+          {PANELLER.map((panel) => {
+            const acik = acikPanel === panel.ad;
+            return (
+              <li key={panel.ad} className="flex">
+                <button
+                  type="button"
+                  onClick={() => setAcikPanel(acik ? null : panel.ad)}
+                  aria-expanded={acik}
+                  className={cn(
+                    "flex h-full items-center gap-1 rounded-md px-3 text-[0.875rem] transition-colors",
+                    acik
+                      ? "bg-white/12 text-[#f3f0eb]"
+                      : "text-[#f3f0eb]/75 hover:bg-white/8 hover:text-[#f3f0eb]",
+                  )}
+                >
+                  {panel.etiket}
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 transition-transform duration-300",
+                      acik && "rotate-180",
+                    )}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                </button>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="ml-auto flex h-full items-center gap-1.5 sm:gap-2.5">
           <button
             type="button"
             onClick={openSignIn}
-            className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f5f5f7]/85 transition-colors hover:bg-white/10 hover:text-[#f5f5f7]"
+            className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/85 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
           >
             <LogIn className="size-4" strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Giriş yap</span>
           </button>
 
-          <a
-            href="#dene"
+          <Link
+            href="/#dene"
             className="press bg-gold hover:bg-gold-soft flex min-h-9 items-center rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap text-black transition-colors"
           >
             <span className="sm:hidden">Deneyin</span>
             <span className="hidden sm:inline">Hemen deneyin</span>
-          </a>
+          </Link>
         </div>
       </nav>
     </header>
+
+    <NavPanel
+      acik={acikPanel === "nasil"}
+      onKapat={() => setAcikPanel(null)}
+      etiket="Nasıl çalışır"
+      ustBaslik="Nasıl çalışır"
+    >
+      <NasilCalisirIcerik />
+    </NavPanel>
+
+    <NavPanel
+      acik={acikPanel === "hakkinda"}
+      onKapat={() => setAcikPanel(null)}
+      etiket="Vitrin AI hakkında"
+      ustBaslik="Vitrin AI hakkında"
+    >
+      <HakkindaIcerik />
+    </NavPanel>
+    </>
   );
 }

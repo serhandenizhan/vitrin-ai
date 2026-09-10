@@ -118,6 +118,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   kütüphanelerinde RCE (remote code execution) açıkları çıkmıştır.
 - R2 bucket'ları **public-read değil**, imzalı URL (presigned URL) ile süreli erişim
   sağlanmalı — özellikle kullanıcı henüz ödeme yapmadan/kredi harcamadan üretilen görseller.
+- R2 bucket CORS kuralı yalnızca bilinen frontend origin'lerine (production alan adı +
+  `localhost:3000`) ve yalnızca `GET`/`HEAD`'e izin verir; production'da `AllowedOrigins: ["*"]`
+  kullanılmaz. CORS yetki vermez — erişim hâlâ imzalı URL'e bağlı — ama editörün tuvale
+  çizebilmesi için gerekli. Doğrulama: `backend/scripts/check_r2_cors.py`.
 
 ---
 
@@ -175,7 +179,9 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   kısıtları (tür + boyut) vekilde de tekrar uygulanır. Bu, güvenlik sınırının kendisi
   değildir (asıl sınır backend'dir), ama Faz 4/5'te auth ve ödeme anahtarları
   devreye girdiğinde bunların tarayıcıya sızmasını engelleyecek katmanı şimdiden kurar.
-- **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`).
+- **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`), bucket CORS
+  kuralının yalnızca bilinen origin'lere GET/HEAD vermesi (gerçek bucket doğrulaması açık —
+  bkz. `CLAUDE.md` açık takip maddesi 5).
   `POST /api/admin/backgrounds` geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
   korunuyor — bu bilinçli bir geçici çözüm (bkz. kök `CLAUDE.md` ders 8), Faz 4'te
   gerçek Supabase Auth + rol kontrolüyle değiştirilecek.

@@ -14,27 +14,17 @@
  */
 
 import { BackgroundRemover } from "@/components/background-remover";
+import { BackgroundsShowcase } from "@/components/marketing/backgrounds-showcase";
 import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
-import { SignInNotice } from "@/components/sign-in-notice";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
-import { WorkSidebar } from "@/components/work-sidebar";
-import { WorkspaceProvider } from "@/components/workspace-provider";
+import { SiteShell } from "@/components/site-shell";
 
 export default function HomePage() {
   return (
-    /* Saglayici cocuklarini prop olarak aldigi icin asagidaki tanitim
-       bolumleri sunucu bileseni olarak kalmaya devam ediyor. */
-    <WorkspaceProvider>
-      <WorkSidebar />
-      <SignInNotice />
-      <SiteHeader />
-
-      <main className="flex-1">
+    <SiteShell>
         <Hero />
 
         <section id="dene" className="surface-mist section-rhythm">
@@ -42,7 +32,7 @@ export default function HomePage() {
             <Reveal>
               <div className="mb-9 text-center">
                 <h2 className="display-section text-balance">
-                  Kendi fotoğrafınızla deneyin.
+                  Kendi fotoğrafınızla deneyin
                 </h2>
                 <p className="lede on-light-muted mx-auto mt-3 max-w-lg text-pretty">
                   Kayıt gerekmiyor. Fotoğrafınızı yükleyin, sonucu saniyeler
@@ -57,12 +47,14 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Zemin galerisi araci HEMEN takip ediyor: kullanici kendi
+            fotografini denedikten sonra "peki baska ne yapabilirim"
+            sorusunun cevabi bu. */}
+        <BackgroundsShowcase />
+
         <Highlights />
         <HowItWorks />
         <Specs />
-      </main>
-
-      <SiteFooter />
-    </WorkspaceProvider>
+    </SiteShell>
   );
 }
