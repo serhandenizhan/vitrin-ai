@@ -42,12 +42,15 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | --- | --- |
 | BiRefNet CPU inference | ~15 sn/fotoğraf, ilk istekte ~30-35 sn (model yükleme) |
 | BiRefNet tepe RAM | **12–14 GB** — 8 GB'lık sunucu bu modeli kaldırmaz |
-| Arayüz ilk yükleme | **342 KB** (JS 160 · font 131 · görsel 42 · CSS 9) |
+| Arayüz ilk yükleme | **386 KB** (JS 176 · font 131 · görsel 56 · CSS 12 · HTML 11) |
+| Editör (Konva) | **312 KB, ayrı parça** — ilk yüklemede inmiyor, stüdyo açılınca geliyor |
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
-| Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
+| Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
 | Testler | backend 66 test (pytest) · frontend 58 test (Vitest) |
-| Kompozisyon çıktısı | 2000×2000 PNG/JPEG (ölçü doğrulandı) |
+| Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü de ölçülerek doğrulandı) |
+| Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
+| Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
 
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
 ölçümleri için `frontend/README.md`.

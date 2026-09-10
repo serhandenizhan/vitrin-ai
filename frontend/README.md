@@ -206,7 +206,17 @@ kısıtları (`upload-constraints`) ve arka plan kaldırma vekili (`route.ts`).
 elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
 çevrildiği yer.
 
-27 test var. Özellikle korunanlar:
+58 test var; beş dosyaya dağılmış:
+
+| dosya | kapsam |
+| --- | --- |
+| `lib/upload-constraints.test.ts` | Yükleme kısıtları — backend ile elle senkron tutulan sabitler |
+| `app/api/remove-background/route.test.ts` | Arka plan kaldırma vekili — backend yanıtlarının kullanıcıya çevrildiği yer |
+| `app/api/backgrounds/route.test.ts` | Zemin vekili — hiç 5xx dönmemesi, bozuk kayıt eleme, `expires_in` yokluğu |
+| `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
+| `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
+
+Özellikle korunanlar:
 
 - **HEIC yolu.** Windows'ta tarayıcı `.heic` için boş content-type bildiriyor
   ve backend beyan edilen türü şart koşuyor; bu düzeltme sessizce bozulursa
@@ -357,15 +367,22 @@ kullanılmayan çözünürlük için ödenen bayt.
 
 | | |
 | --- | --- |
-| **Toplam aktarılan** | **342 KB** |
-| JavaScript | 160 KB |
+| **Toplam aktarılan** | **386 KB** |
+| JavaScript | 176 KB |
 | Font (Inter, latin + latin-ext) | 131 KB |
-| Görseller | 42 KB |
-| CSS | 9 KB |
-| Belge | 9 KB |
+| Görseller | 56 KB |
+| CSS | 12 KB |
+| Belge | 11 KB |
 
 Görseller `next/image` ile 384 px sürümlerine iniyor: 900 px'lik kaynaklar
 ekranda 31 KB + 12 KB olarak servis ediliyor.
+
+**Konva (312 KB) bu tablonun içinde değil ve olmamalı.** Editör
+`next/dynamic` + `ssr: false` ile ayrı bir parçada; ana sayfayı açan ziyaretçi
+onu indirmiyor, yalnızca stüdyoyu açan indiriyor. Ölçülerek doğrulandı: ilk
+yüklemenin kaynak listesinde Konva yok. Faz 3'te sayfa ağırlığının 342'den
+386 KB'a çıkması bu kütüphaneden değil, yeni bölümlerin görselleri ve
+CSS'inden geliyor.
 
 `tw-animate-css` kaldırıldı — sağladığı sınıfların (`animate-in`, `fade-in`,
 `slide-in-*`, `zoom-in`) hiçbiri kullanılmıyordu; sırf iskelet üreticisi
