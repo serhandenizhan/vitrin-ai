@@ -305,6 +305,14 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   olduğunu ve neden kapalı olduğunu açıkça söylüyor. Faz 5'e (ödeme) bağlı bir
   premium özellik olarak planlanmalı.
 
+**Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
+artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
+Instagram gönderi 1080×1080 ve hikâye 1080×1920. Yol haritası çıktıyı
+`2000×2000` diye sabitlemişti; bu, o sayının **genişletilmesi** — kare biçim
+varsayılan ve değişmedi. Sahnenin mantıksal ölçüsü her biçimde çıktının tam
+yarısı tutuluyor ki dışa aktarma oranı tam 2 kalsın (kesirli oran bir piksel
+kaybına yol açıyor, bkz. yukarıdaki 1999 px hatası).
+
 Faz 3 bu iş parçasıyla tamamlandı.
 
 ### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan

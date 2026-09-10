@@ -116,3 +116,86 @@ export const MERKEZ_YAKALAMA_TOLERANSI = 12;
 export function merkezeYakala(deger: number, merkez: number): number {
   return Math.abs(deger - merkez) <= MERKEZ_YAKALAMA_TOLERANSI ? merkez : deger;
 }
+
+/**
+ * Cikti bicimleri.
+ *
+ * MANTIKSAL olcu her zaman ciktinin YARISI. Bu bilincli: disa aktarma orani
+ * boylece her bicimde tam olarak 2 kaliyor. Kesirli bir oran, Konva'nin ic
+ * hesabinda bir piksel kaybina yol aciyor — 2000 yerine 1999 px'lik tuval
+ * uretildigi birebir olculdu (bkz. DISA_AKTARMA_ORANI gerekcesi).
+ *
+ * "Katalog" bicimi, `/katalog` sayfasindaki sablon yuvalarina birebir oturmasi
+ * icin A4 orani (1:1.414). Instagram olculeri platformun kendi onerdikleri:
+ * gonderi 1080x1080, hikaye 1080x1920.
+ */
+export type CiktiBicimi = {
+  ad: string;
+  ozet: string;
+  ciktiGenislik: number;
+  ciktiYukseklik: number;
+};
+
+export const CIKTI_BICIMLERI = {
+  kare: {
+    ad: "Kare",
+    ozet: "2000×2000",
+    ciktiGenislik: 2000,
+    ciktiYukseklik: 2000,
+  },
+  katalog: {
+    ad: "Katalog",
+    ozet: "A4 oranı",
+    ciktiGenislik: 1240,
+    ciktiYukseklik: 1754,
+  },
+  gonderi: {
+    ad: "Instagram gönderi",
+    ozet: "1080×1080",
+    ciktiGenislik: 1080,
+    ciktiYukseklik: 1080,
+  },
+  hikaye: {
+    ad: "Instagram hikâye",
+    ozet: "1080×1920",
+    ciktiGenislik: 1080,
+    ciktiYukseklik: 1920,
+  },
+} as const satisfies Record<string, CiktiBicimi>;
+
+export type CiktiBicimAdi = keyof typeof CIKTI_BICIMLERI;
+
+/** Bir bicimin sahnedeki mantiksal olcusu — cikti olcusunun yarisi. */
+export function mantiksalOlcu(bicim: CiktiBicimi): {
+  genislik: number;
+  yukseklik: number;
+} {
+  return {
+    genislik: bicim.ciktiGenislik / 2,
+    yukseklik: bicim.ciktiYukseklik / 2,
+  };
+}
+
+/**
+ * Bir gorseli verilen mantiksal sahneye ortalayip sigdiran donusum.
+ *
+ * `sigdirmaDonusumu`nun kare olmayan sahneler icin genellestirilmis hali;
+ * kare sahnede ikisi ayni sonucu veriyor.
+ */
+export function sahneyeSigdir(
+  sahneGenislik: number,
+  sahneYukseklik: number,
+  kesimGenislik: number,
+  kesimYukseklik: number,
+): Donusum {
+  const olcek = Math.min(
+    (sahneGenislik * SIGDIRMA_PAYI) / kesimGenislik,
+    (sahneYukseklik * SIGDIRMA_PAYI) / kesimYukseklik,
+  );
+  return {
+    x: sahneGenislik / 2,
+    y: sahneYukseklik / 2,
+    olcek,
+    aci: 0,
+  };
+}

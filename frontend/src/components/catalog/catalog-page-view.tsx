@@ -8,9 +8,13 @@
  * (`catalog-export.ts`), dolayisiyla ekranda gorulen ile inen dosya ayrisamaz.
  */
 
-import type { CSSProperties } from "react";
+import { type CSSProperties, useCallback, useRef } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
+import {
+  CIKTI_GENISLIK,
+  CIKTI_YUKSEKLIK,
+} from "@/lib/catalog-export";
 import {
   type Kutu,
   type Sablon,
@@ -35,6 +39,10 @@ export type CatalogPageViewProps = {
   seciliYuva?: number | null;
   onYuvaSecildi?: (yuva: number) => void;
   onYuvaBosaltildi?: (yuva: number) => void;
+  /** Imlecle surukleme: kaydirma degerlerini gunceller. */
+  onYuvaTasindi?: (yuva: number, x: number, y: number) => void;
+  /** Tekerlekle olcek: carpani gunceller. */
+  onYuvaOlceklendi?: (yuva: number, olcek: number) => void;
 };
 
 /** 0-1 orani -> yuzde CSS'i. */
@@ -56,6 +64,8 @@ export function CatalogPageView({
   seciliYuva = null,
   onYuvaSecildi,
   onYuvaBosaltildi,
+  onYuvaTasindi,
+  onYuvaOlceklendi,
 }: CatalogPageViewProps) {
   const renk = (ad: "vurgu" | "murekkep" | "solgun") =>
     ad === "vurgu"
@@ -96,10 +106,13 @@ export function CatalogPageView({
             {icerik ? (
               <YuvaGorseli
                 icerik={icerik}
+                kutu={kutu}
                 duzenlenebilir={duzenlenebilir}
                 secili={secili}
                 onSec={() => onYuvaSecildi?.(sira)}
                 onSil={() => onYuvaBosaltildi?.(sira)}
+                onTasindi={(x, y) => onYuvaTasindi?.(sira, x, y)}
+                onOlceklendi={(o) => onYuvaOlceklendi?.(sira, o)}
               />
             ) : duzenlenebilir ? (
               <button
@@ -154,27 +167,118 @@ export function CatalogPageView({
 
 function YuvaGorseli({
   icerik,
+  kutu,
   duzenlenebilir,
   secili,
   onSec,
   onSil,
+  onTasindi,
+  onOlceklendi,
 }: {
   icerik: NonNullable<YuvaIcerigi>;
+  kutu: Kutu;
   duzenlenebilir: boolean;
   secili: boolean;
   onSec: () => void;
   onSil: () => void;
+  onTasindi: (x: number, y: number) => void;
+  onOlceklendi: (olcek: number) => void;
 }) {
-  // Yerlesim, disa aktarmayla AYNI fonksiyondan geliyor; burada kutu 1x1
-  // birim kabul edilip yuzdeye ceviriliyor.
-  const yer = yuvaYerlesimi(
-    { g: 1, y2: 1 },
+  // Yerlesim, disa aktarmayla AYNI fonksiyondan geliyor.
+  //
+  // Kutu, SAYFA BIRIMINDE veriliyor (oranlar x cikti olculeri) — daha once
+  // 1x1 birim kutu geciliyordu ve bu, yuvanin gercek en-boy oranini yok
+  // ediyordu: dar/uzun bir yuvada gorsel yuvaya BIREBIR geriliyor, yani
+  // eziliyordu (tarayicida olculerek yakalandi: 900x900 kare bir gorsel
+  // 190x349'luk yuvada 190x349 olarak ciziliyordu).
+  const kutuBirim = {
+    g: kutu.g * CIKTI_GENISLIK,
+    y2: kutu.y2 * CIKTI_YUKSEKLIK,
+  };
+  const yerBirim = yuvaYerlesimi(
+    kutuBirim,
     { genislik: icerik.genislik, yukseklik: icerik.yukseklik },
     icerik.donusum,
   );
+  // Sonuc yuvanin KENDI olcusune gore yuzdeye ceviriliyor.
+  const yer = {
+    x: yerBirim.x / kutuBirim.g,
+    y: yerBirim.y / kutuBirim.y2,
+    g: yerBirim.g / kutuBirim.g,
+    y2: yerBirim.y2 / kutuBirim.y2,
+  };
+
+  const kapsayiciRef = useRef<HTMLDivElement | null>(null);
+  // Surukleme durumu REF'te: `pointermove` icinde state okunsaydi kapanis eski
+  // degeri gorur ve ilk hareket yutulurdu (Faz 2'de ayni tuzaga dusulmustu).
+  const suruklemeRef = useRef<{
+    baslangicX: number;
+    baslangicY: number;
+    ilkX: number;
+    ilkY: number;
+  } | null>(null);
+
+  const basladi = useCallback(
+    (olay: React.PointerEvent<HTMLDivElement>) => {
+      if (!duzenlenebilir) return;
+      onSec();
+      suruklemeRef.current = {
+        baslangicX: olay.clientX,
+        baslangicY: olay.clientY,
+        ilkX: icerik.donusum.x,
+        ilkY: icerik.donusum.y,
+      };
+      try {
+        olay.currentTarget.setPointerCapture(olay.pointerId);
+      } catch {
+        // Pointer capture bazi tarayici/girdi kombinasyonlarinda reddediliyor;
+        // yakalama olmadan da surukleme calisiyor.
+      }
+    },
+    [duzenlenebilir, icerik.donusum.x, icerik.donusum.y, onSec],
+  );
+
+  const hareket = useCallback(
+    (olay: React.PointerEvent<HTMLDivElement>) => {
+      const surukleme = suruklemeRef.current;
+      const kapsayici = kapsayiciRef.current;
+      if (!surukleme || !kapsayici) return;
+
+      // Kaydirma degerleri yuva kutusunun ORANI cinsinden tutuluyor, piksel
+      // degil: onizleme kucuk, cikti 1240 px genisliginde ve ikisi ayni sayiyi
+      // paylasmali. Piksel kullanilsaydi ekran boyutuna gore kayardi.
+      const kutu = kapsayici.getBoundingClientRect();
+      onTasindi(
+        surukleme.ilkX + (olay.clientX - surukleme.baslangicX) / kutu.width,
+        surukleme.ilkY + (olay.clientY - surukleme.baslangicY) / kutu.height,
+      );
+    },
+    [onTasindi],
+  );
+
+  const bitti = useCallback(() => {
+    suruklemeRef.current = null;
+  }, []);
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      ref={kapsayiciRef}
+      className={
+        "relative h-full w-full " +
+        (duzenlenebilir ? "cursor-grab touch-none active:cursor-grabbing" : "")
+      }
+      onPointerDown={basladi}
+      onPointerMove={hareket}
+      onPointerUp={bitti}
+      onPointerCancel={bitti}
+      onWheel={(olay) => {
+        if (!duzenlenebilir) return;
+        // Tekerlekle olcek: yerlestirmenin en dogal ikinci hareketi.
+        // `deltaY` yukari negatif; buyutme yonu bu yuzden ters cevriliyor.
+        const adim = olay.deltaY > 0 ? 0.94 : 1.06;
+        onOlceklendi(icerik.donusum.olcek * adim);
+      }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={icerik.url}
@@ -187,6 +291,7 @@ function YuvaGorseli({
           width: `${yer.g * 100}%`,
           height: `${yer.y2 * 100}%`,
           objectFit: "fill",
+          transform: `rotate(${icerik.donusum.aci}deg)`,
           // `max-width/height: none` ZORUNLU: Tailwind'in temel katmani tum
           // gorsellere `max-width: 100%` veriyor ve bu, %100'un uzerindeki
           // her olcegi SESSIZCE kirpiyordu — kaydirac degeri ve `style.width`
@@ -200,17 +305,18 @@ function YuvaGorseli({
 
       {duzenlenebilir ? (
         <>
-          <button
-            type="button"
-            onClick={onSec}
-            aria-label="Bu görseli seç"
+          {/* Secim cercevesi; tiklamayi yutmuyor ki surukleme kesintisiz
+              calissin (`pointer-events-none`). */}
+          <span
+            aria-hidden
             className={
-              "absolute inset-0 rounded-md transition-shadow " +
-              (secili ? "ring-gold ring-2 ring-inset" : "hover:ring-1 hover:ring-inset hover:ring-black/20")
+              "pointer-events-none absolute inset-0 rounded-md " +
+              (secili ? "ring-gold ring-2 ring-inset" : "")
             }
           />
           <button
             type="button"
+            onPointerDown={(olay) => olay.stopPropagation()}
             onClick={(olay) => {
               olay.stopPropagation();
               onSil();

@@ -38,6 +38,7 @@ import {
   SAHNE_OLCUSU,
   SIGDIRMA_PAYI,
   merkezeYakala,
+  sahneyeSigdir,
   sigdirmaDonusumu,
 } from "@/lib/composition";
 
@@ -47,7 +48,10 @@ export type { Donusum };
 export type EditorStageProps = {
   kesimUrl: string;
   zemin: Zemin;
+  /** Sahnenin ekrandaki GENISLIGI; yukseklik mantiksal orandan turetiliyor. */
   ekranOlcusu: number;
+  sahneGenislik: number;
+  sahneYukseklik: number;
   /** `null` iken sahne kesim yuklenince kendi baslangic yerlesimini hesaplar. */
   donusum: Donusum | null;
   gorunum: Gorunum;
@@ -106,6 +110,8 @@ export function EditorStage({
   kesimUrl,
   zemin,
   ekranOlcusu,
+  sahneGenislik,
+  sahneYukseklik,
   donusum,
   gorunum,
   onDonusumDegisti,
@@ -145,7 +151,8 @@ export function EditorStage({
     transformer.getLayer()?.batchDraw();
   }, [secili, kesim, donusum]);
 
-  const ekranOlcegi = ekranOlcusu / SAHNE_OLCUSU;
+  const ekranOlcegi = ekranOlcusu / sahneGenislik;
+  const ekranYuksekligi = sahneYukseklik * ekranOlcegi;
 
   // Sahne kucultulmus ciziliyor; cizgi ve tutamak olculeri bu olcege BOLUNUYOR
   // ki ekranda her zaman ayni kalinlikta gorunsunler. Bolunmezse tutamaklar
@@ -182,14 +189,14 @@ export function EditorStage({
   const yerlesim = useMemo(() => {
     if (donusum) return donusum;
     if (!kesim) return null;
-    return sigdirmaDonusumu(kesim.width, kesim.height);
-  }, [donusum, kesim]);
+    return sahneyeSigdir(sahneGenislik, sahneYukseklik, kesim.width, kesim.height);
+  }, [donusum, kesim, sahneGenislik, sahneYukseklik]);
 
   return (
     <Stage
       ref={stageRef}
       width={ekranOlcusu}
-      height={ekranOlcusu}
+      height={ekranYuksekligi}
       scaleX={ekranOlcegi}
       scaleY={ekranOlcegi}
       onMouseDown={(olay) => {
@@ -205,15 +212,15 @@ export function EditorStage({
         {zeminGorseli ? (
           <KonvaImage
             image={zeminGorseli}
-            width={SAHNE_OLCUSU}
-            height={SAHNE_OLCUSU}
+            width={sahneGenislik}
+            height={sahneYukseklik}
           />
         ) : (
           <Rect
-            width={SAHNE_OLCUSU}
-            height={SAHNE_OLCUSU}
+            width={sahneGenislik}
+            height={sahneYukseklik}
             fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-            fillLinearGradientEndPoint={{ x: SAHNE_OLCUSU, y: SAHNE_OLCUSU }}
+            fillLinearGradientEndPoint={{ x: sahneGenislik, y: sahneYukseklik }}
             fillLinearGradientColorStops={
               zemin.tur === "yer-tutucu"
                 ? zemin.gradyan
@@ -230,12 +237,12 @@ export function EditorStage({
         */}
         {gorunum.isikHavuzu ? (
           <Rect
-            width={SAHNE_OLCUSU}
-            height={SAHNE_OLCUSU}
-            fillRadialGradientStartPoint={{ x: SAHNE_OLCUSU / 2, y: SAHNE_OLCUSU / 2 }}
-            fillRadialGradientEndPoint={{ x: SAHNE_OLCUSU / 2, y: SAHNE_OLCUSU / 2 }}
+            width={sahneGenislik}
+            height={sahneYukseklik}
+            fillRadialGradientStartPoint={{ x: sahneGenislik / 2, y: sahneYukseklik / 2 }}
+            fillRadialGradientEndPoint={{ x: sahneGenislik / 2, y: sahneYukseklik / 2 }}
             fillRadialGradientStartRadius={0}
-            fillRadialGradientEndRadius={SAHNE_OLCUSU * 0.62}
+            fillRadialGradientEndRadius={Math.max(sahneGenislik, sahneYukseklik) * 0.62}
             fillRadialGradientColorStops={[
               0,
               "rgba(255,255,255,0.30)",
@@ -285,11 +292,9 @@ export function EditorStage({
               // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
               // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
               // olcegiyle carpip boluyoruz.
-              const olcek = ekranOlcusu / SAHNE_OLCUSU;
-              const merkez = (SAHNE_OLCUSU / 2) * olcek;
               return {
-                x: merkezeYakala(konum.x, merkez),
-                y: merkezeYakala(konum.y, merkez),
+                x: merkezeYakala(konum.x, (sahneGenislik / 2) * ekranOlcegi),
+                y: merkezeYakala(konum.y, (sahneYukseklik / 2) * ekranOlcegi),
               };
             }}
             onMouseDown={() => setSecili(true)}

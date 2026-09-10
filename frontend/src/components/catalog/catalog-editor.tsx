@@ -41,6 +41,7 @@ import {
   SABLONLAR,
   type SablonAdi,
   VARSAYILAN_DONUSUM,
+  type YuvaDonusumu,
 } from "@/lib/catalog-templates";
 import { validateFile } from "@/lib/upload-constraints";
 
@@ -148,7 +149,7 @@ export function CatalogEditor() {
   }, [icerikKur]);
 
   const donusumuGuncelle = useCallback(
-    (sira: number, yama: Partial<{ olcek: number; x: number; y: number }>) => {
+    (sira: number, yama: Partial<YuvaDonusumu>) => {
       setYuvalar((onceki) => {
         const yeni = [...onceki];
         const mevcut = yeni[sira];
@@ -252,6 +253,20 @@ export function CatalogEditor() {
             duzenlenebilir
             seciliYuva={seciliYuva}
             onYuvaSecildi={setSeciliYuva}
+            onYuvaTasindi={(sira, x, y) =>
+              donusumuGuncelle(sira, {
+                // Sinir: gorsel tamamen kutunun disina surukleneemesin, aksi
+                // halde kullanici gorseli "kaybediyor" ve geri getirmenin tek
+                // yolu sifirlama oluyor.
+                x: Math.max(-1, Math.min(1, x)),
+                y: Math.max(-1, Math.min(1, y)),
+              })
+            }
+            onYuvaOlceklendi={(sira, olcek) =>
+              donusumuGuncelle(sira, {
+                olcek: Math.max(EN_KUCUK_OLCEK, Math.min(EN_BUYUK_OLCEK, olcek)),
+              })
+            }
             onYuvaBosaltildi={(sira) => {
               setYuvalar((onceki) => {
                 const yeni = [...onceki];
@@ -315,8 +330,7 @@ export function CatalogEditor() {
         <div className="space-y-3 px-5 pb-5">
           {seciliYuva === null ? (
             <p className="fine-print opacity-60">
-              Sayfadaki bir alana dokunun; görsel ekleyip boyutunu ve yerini
-              buradan ayarlayın.
+              Sayfadaki bir alana dokunun; görsel ekleyip yerleştirin.
             </p>
           ) : (
             <>
@@ -346,10 +360,19 @@ export function CatalogEditor() {
                     onDegisti={(d) => donusumuGuncelle(seciliYuva, { olcek: d })}
                   />
                   <Kaydirac
+                    etiket="Döndür"
+                    deger={secili.donusum.aci}
+                    enAz={-45}
+                    enCok={45}
+                    adim={1}
+                    bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d)}°`}
+                    onDegisti={(d) => donusumuGuncelle(seciliYuva, { aci: d })}
+                  />
+                  <Kaydirac
                     etiket="Yatay"
                     deger={secili.donusum.x}
-                    enAz={-0.5}
-                    enCok={0.5}
+                    enAz={-1}
+                    enCok={1}
                     adim={0.01}
                     bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
                     onDegisti={(d) => donusumuGuncelle(seciliYuva, { x: d })}
@@ -357,12 +380,43 @@ export function CatalogEditor() {
                   <Kaydirac
                     etiket="Dikey"
                     deger={secili.donusum.y}
-                    enAz={-0.5}
-                    enCok={0.5}
+                    enAz={-1}
+                    enCok={1}
                     adim={0.01}
                     bicimle={(d) => `${d > 0 ? "+" : ""}${Math.round(d * 100)}`}
                     onDegisti={(d) => donusumuGuncelle(seciliYuva, { y: d })}
                   />
+                  <div className="flex gap-2 pt-0.5">
+                    {/*
+                      "Doldur" varsayilan: dar/uzun bir yuvaya kare bir gorsel
+                      konuldugunda sigdirma modu gorseli kucultup cevresinde
+                      bos bant birakiyordu — katalogda bu "daralmis" duruyor.
+                      "Sigdir", urunun tamamini gormek isteyen icin duruyor.
+                    */}
+                    {([
+                      ["Doldur", true],
+                      ["Sığdır", false],
+                    ] as const).map(([etiket, deger]) => (
+                      <button
+                        key={etiket}
+                        type="button"
+                        role="switch"
+                        aria-checked={secili.donusum.doldur === deger}
+                        onClick={() =>
+                          donusumuGuncelle(seciliYuva, { doldur: deger })
+                        }
+                        className={
+                          "press min-h-8 flex-1 rounded-full text-[0.8125rem] transition-colors " +
+                          (secili.donusum.doldur === deger
+                            ? "bg-black text-white"
+                            : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+                        }
+                      >
+                        {etiket}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() =>

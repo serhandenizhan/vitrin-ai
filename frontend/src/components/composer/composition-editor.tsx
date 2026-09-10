@@ -22,14 +22,15 @@ import type Konva from "konva";
 import { Button } from "@/components/ui/button";
 import { useZeminler } from "@/components/composer/use-zeminler";
 import {
-  CIKTI_OLCUSU,
+  CIKTI_BICIMLERI,
+  type CiktiBicimAdi,
   type Donusum,
   type Gorunum,
-  SAHNE_OLCUSU,
   VARSAYILAN_GORUNUM,
   aciyiNormalize,
   gorunumVarsayilanMi,
-  sigdirmaDonusumu,
+  mantiksalOlcu,
+  sahneyeSigdir,
 } from "@/lib/composition";
 import type { Zemin } from "@/lib/backgrounds";
 
@@ -74,6 +75,7 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const [ekranOlcusu, setEkranOlcusu] = useState(BASLANGIC_EKRAN_OLCUSU);
   const [disaAktariliyor, setDisaAktariliyor] = useState(false);
   const [baskiAcik, setBaskiAcik] = useState(false);
+  const [bicimAdi, setBicimAdi] = useState<CiktiBicimAdi>("kare");
   const [donusum, setDonusum] = useState<Donusum | null>(null);
   const [gorunum, setGorunum] = useState<Gorunum>(VARSAYILAN_GORUNUM);
   const [kesimOlculeri, setKesimOlculeri] = useState<{
@@ -83,6 +85,9 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const kapsayiciRef = useRef<HTMLDivElement | null>(null);
+
+  const bicim = CIKTI_BICIMLERI[bicimAdi];
+  const sahne = useMemo(() => mantiksalOlcu(bicim), [bicim]);
 
   // Sahne kare ve kapsayicisina sigmali. `ResizeObserver`, `window.resize`
   // yerine kullaniliyor: kapsayici, pencere degismeden de (panel acilip
@@ -131,45 +136,74 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
   const sigdirmaOlcegi = useMemo(
     () =>
       kesimOlculeri
-        ? sigdirmaDonusumu(kesimOlculeri.genislik, kesimOlculeri.yukseklik).olcek
+        ? sahneyeSigdir(
+            sahne.genislik,
+            sahne.yukseklik,
+            kesimOlculeri.genislik,
+            kesimOlculeri.yukseklik,
+          ).olcek
         : null,
-    [kesimOlculeri],
+    [kesimOlculeri, sahne],
   );
 
   const ortalaVeSigdir = useCallback(() => {
     if (!kesimOlculeri) return;
     setDonusum(
-      sigdirmaDonusumu(kesimOlculeri.genislik, kesimOlculeri.yukseklik),
+      sahneyeSigdir(
+        sahne.genislik,
+        sahne.yukseklik,
+        kesimOlculeri.genislik,
+        kesimOlculeri.yukseklik,
+      ),
     );
-  }, [kesimOlculeri]);
+  }, [kesimOlculeri, sahne]);
+
+  /**
+   * Bicim degistirir ve yerlesimi sifirlar.
+   *
+   * Sifirlama bir EFEKTTE degil burada: bicim degisimi bir OLAY. Efekte
+   * konsaydi hem fazladan bir render turu olusurdu hem de React Compiler
+   * bunu hakli olarak reddediyor (`react-hooks/set-state-in-effect`).
+   *
+   * Neden sifirlaniyor: donusum koordinatlari eski sahnenin olculerine gore
+   * tutuluyor; yeni sahnede anlamsiz bir yerde kalirlardi. `null`, sahneye
+   * "kendi baslangic yerlesimini hesapla" demek.
+   */
+  const bicimiDegistir = useCallback((ad: CiktiBicimAdi) => {
+    setBicimAdi(ad);
+    setDonusum(null);
+  }, []);
 
   const olcekAyarla = useCallback(
     (oran: number) => {
       if (!sigdirmaOlcegi) return;
       setDonusum((onceki) => ({
-        x: onceki?.x ?? SAHNE_OLCUSU / 2,
-        y: onceki?.y ?? SAHNE_OLCUSU / 2,
+        x: onceki?.x ?? sahne.genislik / 2,
+        y: onceki?.y ?? sahne.yukseklik / 2,
         aci: onceki?.aci ?? 0,
         olcek: sigdirmaOlcegi * oran,
       }));
     },
-    [sigdirmaOlcegi],
+    [sigdirmaOlcegi, sahne],
   );
 
-  const dondur = useCallback((derece: number) => {
-    setDonusum((onceki) => ({
-      x: onceki?.x ?? SAHNE_OLCUSU / 2,
-      y: onceki?.y ?? SAHNE_OLCUSU / 2,
-      olcek: onceki?.olcek ?? 1,
-      aci: aciyiNormalize((onceki?.aci ?? 0) + derece),
-    }));
-  }, []);
+  const dondur = useCallback(
+    (derece: number) => {
+      setDonusum((onceki) => ({
+        x: onceki?.x ?? sahne.genislik / 2,
+        y: onceki?.y ?? sahne.yukseklik / 2,
+        olcek: onceki?.olcek ?? 1,
+        aci: aciyiNormalize((onceki?.aci ?? 0) + derece),
+      }));
+    },
+    [sahne],
+  );
 
   const mevcutOran =
     donusum && sigdirmaOlcegi ? donusum.olcek / sigdirmaOlcegi : 1;
 
   const disaAktar = useCallback(
-    (bicim: "png" | "jpeg") => {
+    (tur: "png" | "jpeg") => {
       const stage = stageRef.current;
       if (!stage) return;
 
@@ -198,14 +232,15 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         const oncekiYukseklik = stage.height();
         const oncekiOlcek = { x: stage.scaleX(), y: stage.scaleY() };
 
-        stage.width(SAHNE_OLCUSU);
-        stage.height(SAHNE_OLCUSU);
+        stage.width(sahne.genislik);
+        stage.height(sahne.yukseklik);
         stage.scale({ x: 1, y: 1 });
 
         const veriUrl = stage.toDataURL({
-          mimeType: bicim === "png" ? "image/png" : "image/jpeg",
+          mimeType: tur === "png" ? "image/png" : "image/jpeg",
           quality: 0.92,
-          pixelRatio: CIKTI_OLCUSU / SAHNE_OLCUSU,
+          // Mantiksal olcu her zaman ciktinin yarisi oldugu icin oran tam 2.
+          pixelRatio: bicim.ciktiGenislik / sahne.genislik,
         });
 
         stage.width(oncekiGenislik);
@@ -216,13 +251,13 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
 
         const bag = document.createElement("a");
         bag.href = veriUrl;
-        bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-vitrin.${bicim === "jpeg" ? "jpg" : "png"}`;
+        bag.download = `${dosyaAdi.replace(/\.[^.]+$/, "")}-${bicimAdi}.${tur === "jpeg" ? "jpg" : "png"}`;
         bag.click();
       } finally {
         setDisaAktariliyor(false);
       }
     },
-    [dosyaAdi],
+    [dosyaAdi, sahne, bicim, bicimAdi],
   );
 
   return (
@@ -237,11 +272,16 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
         kullanilabilir genisligi bildirmesini sagliyor.
       */}
       <div ref={kapsayiciRef} className="mx-auto w-full max-w-[35rem] min-w-0">
-        <div className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1">
+        <div
+          className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1"
+          style={{ aspectRatio: `${bicim.ciktiGenislik} / ${bicim.ciktiYukseklik}` }}
+        >
           <EditorStage
             kesimUrl={kesimUrl}
             zemin={seciliZemin}
             ekranOlcusu={ekranOlcusu}
+            sahneGenislik={sahne.genislik}
+            sahneYukseklik={sahne.yukseklik}
             donusum={donusum}
             gorunum={gorunum}
             onDonusumDegisti={setDonusum}
@@ -411,10 +451,42 @@ export function CompositionEditor({ kesimUrl, dosyaAdi }: CompositionEditorProps
           </div>
         </div>
 
+        {/*
+          Cikti bicimleri. Mantiksal sahne olcusu her bicimde ciktinin YARISI
+          oldugu icin disa aktarma orani tam 2 kaliyor — kesirli bir oran
+          Konva'nin ic hesabinda bir piksel kaybina yol aciyor (2000 yerine
+          1999 px uretildigi birebir olculdu).
+        */}
+        <BolumBasligi>Çıktı boyutu</BolumBasligi>
+        <div className="grid grid-cols-2 gap-2 px-5 pb-5">
+          {(
+            Object.entries(CIKTI_BICIMLERI) as [
+              CiktiBicimAdi,
+              (typeof CIKTI_BICIMLERI)[CiktiBicimAdi],
+            ][]
+          ).map(([ad, b]) => (
+            <button
+              key={ad}
+              type="button"
+              onClick={() => bicimiDegistir(ad)}
+              aria-pressed={bicimAdi === ad}
+              className={
+                "press rounded-xl px-3 py-2 text-left transition-shadow " +
+                (bicimAdi === ad
+                  ? "ring-gold bg-white ring-2"
+                  : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
+              }
+            >
+              <span className="block text-[0.8125rem] font-medium">{b.ad}</span>
+              <span className="fine-print block opacity-55">{b.ozet}</span>
+            </button>
+          ))}
+        </div>
+
         <BolumBasligi>
           Dışa aktar
           <span className="ml-2 font-normal normal-case opacity-50">
-            {CIKTI_OLCUSU}×{CIKTI_OLCUSU}
+            {bicim.ciktiGenislik}×{bicim.ciktiYukseklik}
           </span>
         </BolumBasligi>
         <div className="flex gap-2 px-5 pb-5">

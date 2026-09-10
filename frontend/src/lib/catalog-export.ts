@@ -103,7 +103,16 @@ export async function katalogCiz(icerik: CizimIcerigi): Promise<string> {
     ctx.beginPath();
     ctx.rect(kutuPx.x, kutuPx.y, kutuPx.g, kutuPx.y2);
     ctx.clip();
-    ctx.drawImage(img, kutuPx.x + yer.x, kutuPx.y + yer.y, yer.g, yer.y2);
+
+    // Dondurme, gorselin KENDI merkezi etrafinda — onizlemedeki
+    // `transform: rotate(...)` ile ayni davranis (CSS'in varsayilan
+    // `transform-origin` degeri de merkezdir). Baska bir nokta secilseydi
+    // ekran ile cikti ayrisirdi.
+    const merkezX = kutuPx.x + yer.x + yer.g / 2;
+    const merkezY = kutuPx.y + yer.y + yer.y2 / 2;
+    ctx.translate(merkezX, merkezY);
+    ctx.rotate((yuva.donusum.aci * Math.PI) / 180);
+    ctx.drawImage(img, -yer.g / 2, -yer.y2 / 2, yer.g, yer.y2);
     ctx.restore();
   }
 

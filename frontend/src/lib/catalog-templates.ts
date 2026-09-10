@@ -203,38 +203,64 @@ export const SABLONLAR: Record<SablonAdi, Sablon> = {
    -------------------------------------------------------------------------- */
 
 export type YuvaDonusumu = {
-  /** 1 = kutuya tam sigar. */
+  /** Taban yerlesimin carpani; 1 = tabanin kendisi. */
   olcek: number;
-  /** Kutu genisligi/yuksekliginin orani olarak kaydirma (-0.5 .. 0.5). */
+  /** Kutu genisligi/yuksekliginin orani olarak kaydirma. */
   x: number;
   y: number;
+  /** Derece cinsinden dondurme. */
+  aci: number;
+  /**
+   * Taban yerlesim: `true` ise kutuyu DOLDURUR (cover), `false` ise kutuya
+   * SIGAR (contain).
+   *
+   * Varsayilan `true` ve bu bilincli bir degisiklik. Onceden contain'di ve
+   * dar/uzun bir yuvaya kare bir gorsel konuldugunda gorsel kuculuyor,
+   * cevresinde bos bant kaliyordu — katalog sayfasinda bu "daralmis" duruyor.
+   * Doldurma, cerceveyi tam kaplar; disarda kalan kisim kirpilir ve kullanici
+   * isterse olcegi kucultup tamamini gorebilir. Karar kullanicida kaliyor.
+   */
+  doldur: boolean;
 };
 
-export const VARSAYILAN_DONUSUM: YuvaDonusumu = { olcek: 1, x: 0, y: 0 };
+export const VARSAYILAN_DONUSUM: YuvaDonusumu = {
+  olcek: 1,
+  x: 0,
+  y: 0,
+  aci: 0,
+  doldur: true,
+};
 
-export const EN_KUCUK_OLCEK = 0.4;
-export const EN_BUYUK_OLCEK = 2.5;
+export const EN_KUCUK_OLCEK = 0.3;
+export const EN_BUYUK_OLCEK = 3;
 
 /**
  * Bir gorselin kutu icindeki YERLESIMINI hesaplar.
  *
- * `contain` mantigi: gorsel kutuya sigdirilir, kirpilmaz — bir mucevher
- * fotografinin kenarindan kirpmak urunun bir parcasini kesmek demek.
- * Kullanicinin olcegi bunun uzerine bir CARPAN; 1'in ustune ciktiginda gorsel
- * kutudan tasar ve kutu sinirinda kirpilir (kullanicinin bilincli tercihi).
+ * Taban yerlesim `doldur` bayragina gore `cover` ya da `contain`; kullanicinin
+ * olcegi bunun uzerine bir CARPAN. Gorselin EN-BOY ORANI her durumda korunuyor
+ * — genislik ve yukseklik ayni katsayiyla carpiliyor, dolayisiyla gorsel
+ * hicbir kosulda ezilmiyor/gerilmiyor. Kutu disinda kalan kisim cagiran taraf
+ * tarafindan kirpiliyor.
  *
- * Hem onizleme hem disa aktarma bu fonksiyonu kullaniyor.
+ * Hem onizleme hem disa aktarma bu fonksiyonu kullaniyor; ayrismalari mumkun
+ * degil.
  */
 export function yuvaYerlesimi(
   kutu: { g: number; y2: number },
   gorsel: { genislik: number; yukseklik: number },
   donusum: YuvaDonusumu,
 ): { x: number; y: number; g: number; y2: number } {
-  const sigdirma = Math.min(
+  const enBoyOrani = [
     kutu.g / gorsel.genislik,
     kutu.y2 / gorsel.yukseklik,
-  );
-  const olcek = sigdirma * donusum.olcek;
+  ] as const;
+
+  const taban = donusum.doldur
+    ? Math.max(enBoyOrani[0], enBoyOrani[1])
+    : Math.min(enBoyOrani[0], enBoyOrani[1]);
+
+  const olcek = taban * donusum.olcek;
   const g = gorsel.genislik * olcek;
   const y2 = gorsel.yukseklik * olcek;
 
