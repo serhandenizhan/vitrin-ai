@@ -210,8 +210,8 @@ Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı
 
 `POST /api/admin/backgrounds` (Faz 3) şu anda gerçek bir admin auth yerine geçici bir `X-Admin-Secret` paylaşılan secret header'ıyla korunuyor (`ADMIN_SECRET` env değişkeni). Bu, ders 8'de anlatılan deseninin ikinci tekrarı — bilinçli, kullanıcı onaylı bir geçici çözüm. Faz 4'te gerçek Supabase Auth + rol kontrolü (`is_admin`) devreye girdiğinde bu header tamamen kaldırılıp yerine gerçek yetkilendirme konulacak.
 
-### 5. R2 bucket CORS kuralı gerçek bucket'ta doğrulanmadı — sahibi: Serhan (R2 hesabı)
+### 5. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
 Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
 
-Gerçek bucket'a karşı doğrulama **yapılmadı**: geliştirme makinesinde R2 kimlik bilgileri yok. Yapılacak: bucket'a production + `http://localhost:3000` için GET/HEAD kuralı eklenmeli (şablon `backend/README.md` → "R2 CORS") ve `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli. Production alan adı henüz belirlenmediği için kural onsuz yazılamaz.
+**Bilinçli karar (10.09.2026, kullanıcı onayı):** henüz bir production alan adı yok, bu yüzden bucket'a şimdilik yalnızca `http://localhost:3000` için GET/HEAD kuralı eklenecek (şablon `backend/README.md` → "R2 CORS"). **Deploy anında bu maddeye mutlaka geri dönülmeli** — asıl production alan adı belirlendiğinde kurala eklenmezse, canlıda çıkan her kompozisyon sessizce zeminsiz iner (yerelde fark edilmeyen bir hata modu, çünkü localhost zaten kuralda var). Doğrulama: `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli.

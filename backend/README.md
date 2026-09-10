@@ -44,12 +44,15 @@ Kural eksikse hata vermez: editör sessizce gradyan zemine düşer ve dışa
 aktarılan görsel zeminsiz iner. Bucket yine public-read değil — CORS yalnızca
 tarayıcının imzalı URL yanıtını okuyabilmesini sağlıyor, yetki vermiyor.
 
+**Şu an henüz bir production alan adı yok (10.09.2026 itibarıyla), bu yüzden
+kural bilinçli olarak yalnızca `localhost:3000` içeriyor:**
+
 Cloudflare dashboard → R2 → bucket → Settings → CORS Policy:
 
 ```json
 [
   {
-    "AllowedOrigins": ["https://<production-alan-adi>", "http://localhost:3000"],
+    "AllowedOrigins": ["http://localhost:3000"],
     "AllowedMethods": ["GET", "HEAD"],
     "AllowedHeaders": [],
     "MaxAgeSeconds": 3600
@@ -57,9 +60,17 @@ Cloudflare dashboard → R2 → bucket → Settings → CORS Policy:
 ]
 ```
 
+**⚠️ PRODUCTION'A DEPLOY EDERKEN:** asıl alan adı belirlendiğinde
+`AllowedOrigins` listesine mutlaka eklenmeli
+(`["https://<production-alan-adi>", "http://localhost:3000"]`). Eklenmezse
+canlıda hata VERMEZ — editör sessizce gradyan zemine düşer ve her kompozisyon
+zeminsiz iner; yerelde fark edilmez çünkü `localhost:3000` zaten kuralda.
+
 Doğrulama (gerçek bucket'a karşı, `.env` içindeki R2_* ile):
 
 ```bash
+.venv/bin/python scripts/check_r2_cors.py http://localhost:3000
+# production'a geçince:
 .venv/bin/python scripts/check_r2_cors.py https://<production-alan-adi> http://localhost:3000
 ```
 
