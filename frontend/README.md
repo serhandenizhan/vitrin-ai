@@ -417,6 +417,34 @@ bırakırdı.
 sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
 
+## Katalog (`/katalog`)
+
+Şablon galerisi → çalışma alanı. Üç şablon: İkili vitrin, Kapak, Üçlü ızgara.
+"Örnek ile başlayın" hazır bir sayfa açıyor — boş sayfayla karşılaşmak fikri
+anlatmıyor.
+
+**Her şablon yalnızca KUTULARDAN oluşuyor** (`src/lib/catalog-templates.ts`),
+0–1 arası oranlarla. Önizleme bu oranları yüzdeye, dışa aktarma aynı oranları
+piksele çeviriyor. Önceki sürümde her şablonun iki ayrı uygulaması vardı (JSX
+yerleşimi + canvas fonksiyonu) ve ikisinin aynı kalacağını hiçbir şey garanti
+etmiyordu; yerleşim değiştiğinde birini güncelleyip diğerini unutmak an
+meselesiydi.
+
+**Görseller kendi kutularında kırpılıyor.** Kullanıcı görseli büyüttüğünde
+metin bandına taşması mümkün değil — önceki sürümde yerleşim akışa bırakıldığı
+için büyük bir görsel başlığı aşağı itebiliyordu.
+
+**Boyut ve konum kaydıraçları** yuvanın kendi kutusuna göre oran veriyor;
+`yuvaYerlesimi()` hem önizlemede hem dışa aktarmada aynı fonksiyon.
+
+**Tuzak:** yuvadaki `<img>` etiketine `max-width: none` verilmesi zorunlu.
+Tailwind'in temel katmanı tüm görsellere `max-width: 100%` uyguluyor ve bu,
+%100'ün üzerindeki her ölçeği **sessizce** kırpıyordu: kaydıraç değeri ve
+`style.width` doğru güncelleniyor, görsel büyümüyordu.
+
+Kâğıt rengi saf beyaz değil kırık beyaz (`#f4f1ec`): saf beyaz sayfa ekranda
+çevresindeki arayüzden parlak duruyor ve göz önce ona gidiyor.
+
 ## Menü ve "Hakkında" paneli
 
 Menüde iki bağlantı var: **Deneyin** ve **Nasıl çalışır**. Önceden dört vardı

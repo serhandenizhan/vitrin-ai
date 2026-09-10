@@ -607,3 +607,13 @@ html.reduce-motion {
     transition-duration: 0s;
   }
 }
+
+/* Katalog sayfasi onizlemesi.
+
+   `container-type: inline-size`: sablonlardaki punto degerleri sayfa
+   GENISLIGININ orani olarak veriliyor (`cqw`). Boylece ekrandaki kucuk
+   onizleme ile 1240 px'lik cikti ayni orantiyi paylasiyor — vw kullanilsaydi
+   punto ekran genisligine baglanir ve onizleme ile cikti ayrisirdi. */
+.catalog-kap {
+  container-type: inline-size;
+}

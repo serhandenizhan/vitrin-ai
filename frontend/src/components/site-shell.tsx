@@ -12,6 +12,7 @@
  */
 
 import { Studio } from "@/components/composer/studio";
+import { ScrollToTop } from "@/components/scroll-to-top";
 import { SignInNotice } from "@/components/sign-in-notice";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -21,6 +22,7 @@ import { WorkspaceProvider } from "@/components/workspace-provider";
 export function SiteShell({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
+      <ScrollToTop />
       <WorkSidebar />
       <SignInNotice />
       {/* Tam ekran calisma alani; yalnizca acikken bir sey ciziyor. */}
