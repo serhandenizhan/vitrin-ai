@@ -200,13 +200,11 @@ npm test          # tek sefer
 npm run test:watch
 ```
 
-Vitest. Kapsam bilinçli olarak **saf mantık ve sunucu kodu**: yükleme
-kısıtları (`upload-constraints`) ve arka plan kaldırma vekili (`route.ts`).
-İkisi de projenin en kolay sessizce bozulabilecek yerleri — biri backend ile
-elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
-çevrildiği yer.
+Vitest. Kapsam saf mantık ve sunucu koduna ek olarak iki kritik React bileşen
+senaryosunu da içerir: R2 imzalı URL yenilemesi ve kullanıcının zemin seçiminin
+liste yenilendikten sonra korunması.
 
-58 test var; beş dosyaya dağılmış:
+65 test sekiz dosyaya dağılmış:
 
 | dosya | kapsam |
 | --- | --- |
@@ -215,6 +213,9 @@ elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
 | `app/api/backgrounds/route.test.ts` | Zemin vekili — hiç 5xx dönmemesi, bozuk kayıt eleme, `expires_in` yokluğu |
 | `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
 | `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
+| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
+| `components/composer/use-zeminler.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
+| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması |
 
 Özellikle korunanlar:
 
@@ -229,9 +230,9 @@ elle senkron tutulan sabitler, diğeri backend yanıtlarının kullanıcıya
   bu başlık olmadan arayüz sahte sonucu gerçek sanar.
 - **Sınır üstü dosyanın backend'e hiç gönderilmemesi.**
 
-Bileşen testleri (React Testing Library) ve E2E (Playwright) bilinçli olarak
-ertelendi; yol haritası ikisini de Faz 7'ye koyuyor ve arayüz hâlâ hızla
-değişirken şimdi eklemek bakım yükü üretirdi.
+React Testing Library ile R2 yenileme/seçim davranışını koruyan iki bileşen
+testi öne alındı. Daha geniş bileşen kapsamı ve Playwright E2E, Faz 7'de
+planlandığı gibi devam ediyor.
 
 **Bir tuzak:** testte dosya boyutunu `Object.defineProperty` ile sahtelemek
 işe yaramıyor — dosya `FormData` + `Request` üzerinden geçerken yeniden

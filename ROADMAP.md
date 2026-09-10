@@ -315,6 +315,11 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
   baskı koşulu doğrulanarak tamamlanacak.
 
+  **Kod standardı takip maddesi — Claude.** Faz 3 kaynak kodunda kalan Türkçe
+  identifierlar (değişkenler, tipler ve alanlar) `CLAUDE.md` dil kuralına uygun
+  biçimde İngilizceye taşınacak. Kullanıcı metinleri ve Türkçe yorumlar
+  değişmeyecek; dönüşüm TypeScript referanslarıyla güvenli biçimde yapılacak.
+
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
 Instagram gönderi 1080×1080 ve hikâye 1080×1920. Yol haritası çıktıyı

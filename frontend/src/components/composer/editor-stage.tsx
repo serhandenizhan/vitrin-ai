@@ -69,6 +69,9 @@ export type EditorStageProps = {
  * R2'den gelen imzali URL'ler farkli bir kaynaktan geliyor ve `crossOrigin`
  * ayarlanmazsa canvas "tainted" hale gelir, `toDataURL` sessizce SecurityError
  * firlatir. Bu, tam olarak disa aktarma aninda ortaya cikan bir hata olurdu.
+ * TODO(Claude): R2 bucket'in production ve localhost originleri icin GET/HEAD
+ * CORS kurali gercek ortamda doğrulanmali; imzali URL ile tarayici export smoke
+ * testi kayda gecmeli.
  */
 function useGorsel(url: string | null): HTMLImageElement | null {
   // Yuklenen gorsel, GELDIGI URL ile birlikte saklaniyor. Yalnizca gorseli

@@ -283,6 +283,9 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
     donusum && sigdirmaOlcegi ? donusum.olcek / sigdirmaOlcegi : 1;
 
   /** Sahneyi cizip veri URL'i dondurur; indirmeyi cagirana birakiyor. */
+  // TODO(Claude): `toDataURL` hata atarsa sahne boyutu, olcegi ve Transformer
+  // dugumleri icteki bir `finally` ile geri yuklenmeli; atan bir Konva exportu
+  // icin regression testi de eklenmeli.
   const sahneyiCiz = useCallback(
     (tur: "png" | "jpeg"): string | null => {
       const stage = stageRef.current;

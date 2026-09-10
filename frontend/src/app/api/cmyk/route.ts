@@ -26,6 +26,12 @@ import { readFile } from "node:fs/promises";
 
 import sharp from "sharp";
 
+import {
+  MAX_FILE_BYTES,
+  MAX_INPUT_PIXELS,
+  exceedsInputPixelLimit,
+} from "@/lib/cmyk-limits";
+
 /** Bu route her istekte calismali; onbelleklenmis bir donusum anlamsiz. */
 export const dynamic = "force-dynamic";
 
@@ -42,8 +48,6 @@ export const dynamic = "force-dynamic";
  */
 const ICC_PATH = process.env.CMYK_ICC_PATH;
 
-/** Composed gorseller birkac MB; ustu bir hata ya da kotuye kullanim isaretidir. */
-const MAX_FILE_BYTES = 30 * 1024 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 
 const FORMATS = {
@@ -169,7 +173,18 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const pipeline = sharp(input)
+    // Metadata okunurken piksel limiti kapali: once acik bir 413 mesaji
+    // verebilmek icin boyutu kendimiz denetliyoruz. Gorsel kodu cozulmuyor.
+    const metadata = await sharp(input, { limitInputPixels: false }).metadata();
+    if (exceedsInputPixelLimit(metadata.width, metadata.height)) {
+      return createErrorResponse("Görsel piksel sınırını aşıyor.", 413);
+    }
+  } catch {
+    return createErrorResponse("Geçersiz görsel içeriği.", 400);
+  }
+
+  try {
+    const pipeline = sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
       // CMYK'nin alfasi yok; saydam bolgeler once beyaza duzlestiriliyor.
       .flatten({ background: "#ffffff" })
       .withIccProfile(ICC_PATH)
