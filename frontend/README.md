@@ -447,12 +447,27 @@ Kâğıt rengi saf beyaz değil kırık beyaz (`#f4f1ec`): saf beyaz sayfa ekran
 
 ## Logo
 
-`brand-mark.tsx`, kullanıcının verdiği logonun **yazısız** hâli: yumuşak bir
-dalga ve altında tek nokta. Ekran görüntüsü değil, yeniden çizilmiş SVG — her
-ölçüde net, `currentColor` ile bulunduğu yerin rengini alıyor (üst çubukta
-altın), ayrı bir dosya indirilmiyor.
+`brand-mark.tsx`, kullanıcının verdiği logonun **yazısız** hâli. Dalga rastgele
+bir süs değil, markanın adını yazıyor:
 
-**İşaret geniş (≈3.4:1), kare değil.** Kullanım yerlerinde yükseklik veriliyor
+| parça | harf |
+| --- | --- |
+| baştaki iniş ve çıkış | **V** |
+| ortadaki yüksek tepe | **A** |
+| sondaki kısa yükseliş | **ı** |
+| soldaki ayrı nokta | **İ**'nin noktası |
+
+Bu yüzden oranlar keyfi değil: ortadaki tepe belirgin şekilde daha **yüksek**
+(harf olarak okunması buna bağlı), soldaki vadi derin ve dar, sağdaki daha
+kısa. Bunları eşitlemek işareti anlamsız bir dalgaya çevirir. Nokta çizgiye
+**değmemeli** — değdiği anda ayrı bir harf işareti olmaktan çıkıp çizginin
+parçası gibi okunuyor.
+
+Ekran görüntüsü değil, yeniden çizilmiş SVG — her ölçüde net, `currentColor`
+ile bulunduğu yerin rengini alıyor (üst çubukta altın), ayrı bir dosya
+indirilmiyor.
+
+**İşaret geniş (≈1.5:1), kare değil.** Kullanım yerlerinde yükseklik veriliyor
 ve genişlik `w-auto` ile geliyor; `size-*` gibi kare bir sınıf işareti ezer.
 
 ## Menü ve "Hakkında" paneli

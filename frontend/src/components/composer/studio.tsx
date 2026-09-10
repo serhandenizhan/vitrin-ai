@@ -75,7 +75,7 @@ export function Studio() {
         </Button>
 
         <span className="mx-auto flex items-center gap-2">
-          <BrandMark className="text-gold h-4 w-auto" />
+          <BrandMark className="text-gold h-5 w-auto" />
           <span className="text-[0.9375rem] font-medium tracking-[-0.01em]">
             Stüdyo
           </span>

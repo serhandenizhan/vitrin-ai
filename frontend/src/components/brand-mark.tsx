@@ -1,9 +1,20 @@
 /**
  * Vitrin AI isareti.
  *
- * Kullanicinin verdigi logonun YAZISIZ hali: yumusak bir dalga ve altinda tek
- * bir nokta. Dalga hem vitrin tentesini/kemerini hem de urunun one ciktigi
- * tepe noktasini okutuyor; nokta, o tepenin altina yerlesmis tasi.
+ * Kullanicinin verdigi logonun YAZISIZ hali. Dalga rastgele bir sus degil,
+ * markanin adini yaziyor:
+ *  - Bastaki inis ve cikis  -> V
+ *  - Ortadaki yuksek tepe   -> A
+ *  - Sondaki kisa yukselis  -> ı
+ *  - Soldaki ayri nokta     -> İ'nin noktasi
+ *
+ * Bu yuzden oranlar keyfi degil: ortadaki tepe belirgin sekilde daha YUKSEK
+ * (harf olarak okunmasi buna bagli), soldaki vadi derin ve dar (V), sagdaki
+ * vadi daha kisa (ı). Bunlari esitlemek isareti anlamsiz bir dalgaya cevirir.
+ *
+ * Noktanin cizgiye DEGMEMESI gerekiyor: degdigi anda ayri bir harf isareti
+ * olmaktan cikip cizginin bir parcasi gibi okunuyor. Aradaki bosluk kucuk ama
+ * bilincli.
  *
  * Neden yeniden cizilmis SVG, ekran goruntusu degil:
  *  - Her olcude net; 20 pikselde de 200 pikselde de ayni.
@@ -11,10 +22,7 @@
  *    cubukta altin, koyu panelde kirik beyaz. Ayri bir renk sabiti tutulmuyor.
  *  - Ayri bir dosya indirilmiyor.
  *
- * Cizgi SABIT GENISLIKTE degil, `vector-effect` de kullanilmiyor: `stroke`
- * viewBox ile birlikte olcekleniyor, dolayisiyla kucuk boyutta oran korunuyor.
- *
- * Olcu: isaret GENIS (yaklasik 4:1). Kare bir kutuya sokulmamali; kullanim
+ * Olcu: isaret GENIS (yaklasik 1.5:1). Kare bir kutuya sokulmamali; kullanim
  * yerlerinde yukseklik veriliyor, genislik `w-auto` ile geliyor.
  */
 
@@ -25,38 +33,26 @@ type BrandMarkProps = {
 export function BrandMark({ className }: BrandMarkProps) {
   return (
     <svg
-      viewBox="0 0 116 34"
+      viewBox="0 0 70.5 46"
       fill="none"
       aria-hidden
       className={className}
       focusable="false"
     >
-      {/*
-        Dalga: sol uctan asagi, ortada tepe, sagda tekrar asagi ve saga
-        yukselerek biten tek bir cizgi. Uclar yuvarlak (`round`) — logonun
-        kendisinde de uclar kesik degil yuvarlak.
+      {/* İ'nin noktasi — cizgiden ayri duruyor. */}
+      <circle cx="2.8" cy="21.5" r="2.7" fill="currentColor" />
 
-        Ortadaki tepenin denetim noktalari (50 ve 66) bilincli olarak birbirine
-        YAKIN. Ilk cizimde 45.5 ve 70.5 idi; aradaki 25 birimlik acikligi
-        tarayici genis ve yuvarlak bir kubbe olarak ciziyordu — isaret dalga
-        degil sisman bir tumsek gibi duruyordu. Daha da yaklastirmak (52/64) ise
-        tepede gorunur bir kose birakiyor. 16 birim, tepeyi belirgin ama yumusak
-        tutan aralik.
-      */}
       <path
-        d="M4 6.5
-           C5.2 20.5 12.5 27.5 23 27.5
-           C40 27.5 50 8 58 8
-           C66 8 76 27.5 93 27.5
-           C103.5 27.5 110.8 20.5 112 6.5"
+        d="M9.5 13
+           C9 26 16.5 42 24 42
+           C30.5 42 32.5 15 44 3.5
+           C51 -1.5 53.5 26 59 31.5
+           C63 35.5 66 28 67 12"
         stroke="currentColor"
-        strokeWidth="4.4"
+        strokeWidth="5.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-
-      {/* Tepenin altindaki nokta — dalganin tam ortasinda hizali. */}
-      <circle cx="58" cy="20.4" r="3.1" fill="currentColor" />
     </svg>
   );
 }
