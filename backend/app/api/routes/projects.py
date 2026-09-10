@@ -22,6 +22,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, get_current_user
@@ -47,6 +48,9 @@ THUMBNAIL_MAX_BYTES = 512 * 1024
 MAX_FILE_NAME_LENGTH = 255
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 100
+
+# Postgres SQLSTATE: foreign_key_violation.
+FOREIGN_KEY_VIOLATION = "23503"
 
 
 async def _read_validated(
@@ -124,7 +128,11 @@ async def create_project(
     thumbnail: UploadFile = File(...),
     file_name: str = Form(...),
     is_mocked: bool = Form(False),
-    duration_seconds: float | None = Form(None, ge=0),
+    # `allow_inf_nan=False`: pydantic "inf" ve "1e309"u kabul ediyor; sonsuz
+    # bir süre JSON'a çevrilemediği için kaydedilseydi kullanıcının proje
+    # listesi her istekte 500 dönerdi. Veritabanı kısıtı da aynı şeyi
+    # reddediyor (migration 0003).
+    duration_seconds: float | None = Form(None, ge=0, allow_inf_nan=False),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
@@ -184,7 +192,23 @@ async def create_project(
         thumbnail_r2_key=thumbnail_key,
     )
     db.add(project)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        # Görseller yüklendi ama satır yazılamadı: geri silinmezse erişilemez
+        # yetim nesneler olarak kalırlar.
+        await _delete_objects_quietly(storage, uploaded)
+        if getattr(exc.orig, "sqlstate", None) == FOREIGN_KEY_VIOLATION:
+            # Kullanıcı Supabase'den silinmiş, ama access token'ı süresi
+            # dolana kadar geçerli (Supabase silmede token'ları iptal etmiyor).
+            # Oturum artık bir kullanıcıya ait değil.
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Oturum geçersiz ya da süresi dolmuş.",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        raise
     # `created_at` sunucu varsayılanı; commit sonrası nesnede yok.
     await db.refresh(project)
     return _serialize(project, storage)

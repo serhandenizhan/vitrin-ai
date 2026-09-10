@@ -20,6 +20,11 @@ from app.core.db import Base
 from app.models.admin_user import AdminUser
 from app.models.background import Background  # noqa: F401 - Base.metadata'ya kaydolması için
 from app.models.project import Project  # noqa: F401 - Base.metadata'ya kaydolması için
+from tests.db_safety import (
+    AUTH_SCHEMA_COMMENT_SQL,
+    UnsafeTestDatabaseError,
+    ensure_disposable_database,
+)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -38,6 +43,19 @@ _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _apply_migrations():
+    # ÖNCE koruma: bu paket bağlandığı veritabanını sıfırlıyor. Hedef yerel
+    # test veritabanı değilse (ör. .env'deki Supabase) migration'lar dahil
+    # hiçbir şeye dokunulmadan oturum durduruluyor (bkz. tests/db_safety.py).
+    async with _engine.connect() as connection:
+        row = (await connection.execute(text(AUTH_SCHEMA_COMMENT_SQL))).first()
+    try:
+        ensure_disposable_database(
+            has_auth_schema=row is not None,
+            auth_schema_comment=row[0] if row is not None else None,
+        )
+    except UnsafeTestDatabaseError as exc:
+        pytest.exit(str(exc), returncode=3)
+
     # Testler gerçek Alembic migration'larına karşı çalışır (Base.metadata.create_all
     # DEĞİL) — migration dosyasındaki bir hata bu sayede testlerde de yakalanır.
     # `check=True` migration başarısız olursa test session'ını hemen durdurur.

@@ -215,7 +215,7 @@ konmadı.
 Faz 4 backend kodu (JWT doğrulama, `projects`/`admin_users` şeması, RLS) yerel Postgres'e karşı yazıldı ve test edildi; **gerçek bir Supabase projesi henüz yok**. `SUPABASE_URL` boşken oturum gerektiren her uç nokta (projeler, `POST /api/admin/backgrounds`) açık bir 503 döner — sessizce açık kalmaz. Yapılacaklar (kullanıcı hesabı gerektirdiği için Claude yapamaz):
 
 1. Supabase projesini oluşturmak; **JWT imzalama anahtarlarını (asimetrik, JWKS)** kullanmak — HS256 legacy secret'ı üretim için önerilmiyor.
-2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yazmak (doğrudan bağlantı ya da **session** pooler; transaction pooler asyncpg'nin prepared statement'larıyla uyumsuz).
+2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yazmak (doğrudan bağlantı ya da **session** pooler; transaction pooler asyncpg'nin prepared statement'larıyla uyumsuz). **Bundan sonra `pytest` bu veritabanına karşı çalışmayı reddeder** — test paketi bağlandığı veritabanını sıfırlıyor (`auth.users` dahil); koruma `backend/tests/db_safety.py`. Testleri `DATABASE_URL=... pytest` ile yerel bir Postgres'e yönlendir.
 3. `alembic upgrade head` ile migration'ları Supabase'e uygulamak (0002 orada no-op).
 4. İlk yöneticiyi SQL editöründen eklemek: `insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';` — Faz 3'teki `X-Admin-Secret` kaldırıldığı için zemin yüklemenin artık tek yolu bu.
 5. Supabase Auth ayarlarında access token süresini kısa tutmak (`SECURITY.md` 3.1: ~15 dk + refresh token).

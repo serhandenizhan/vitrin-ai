@@ -60,9 +60,15 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "char_length(file_name) between 1 and 255", name="projects_file_name_length"
         ),
+        # `>= 0` tek başına yetmiyor: Postgres'te `'NaN' >= 0` ve
+        # `'Infinity' >= 0` ikisi de DOĞRU. Sonsuz bir süre JSON'a çevrilemez;
+        # kaydedilseydi kullanıcının proje listesi her istekte 500 dönerdi.
+        # Postgres NaN'ı her sayıdan (Infinity dahil) büyük sıraladığı için
+        # `< 'Infinity'` ikisini birden eliyor.
         sa.CheckConstraint(
-            "duration_seconds is null or duration_seconds >= 0",
-            name="projects_duration_non_negative",
+            "duration_seconds is null or "
+            "(duration_seconds >= 0 and duration_seconds < 'Infinity'::float8)",
+            name="projects_duration_finite_non_negative",
         ),
     )
     # Tek indeks üç işi birden karşılıyor: listeleme sorgusu (kullanıcının

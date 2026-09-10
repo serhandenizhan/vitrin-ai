@@ -50,6 +50,13 @@ POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
 DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
 ```
 
+**Koruma:** oturum başında bağlanılan veritabanında `auth` şeması varsa ve yerel
+uyumluluk katmanının (migration 0002) işaretini taşımıyorsa — yani büyük
+olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 ile durur
+(`tests/db_safety.py`). `.env`'e Supabase `DATABASE_URL`'i yazıldıktan sonra
+yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
+silerdi; sahte bir Supabase veritabanında birebir gösterildi.
+
 Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
@@ -113,6 +120,13 @@ oturumlar reddediliyor. Kod: `app/core/auth.py`.
 | JWKS'ye ulaşılamıyor | `503` |
 | Oturum var ama yönetici değil (admin uç noktası) | `403` |
 
+**Anahtar önbelleği:** JWK set 10 dakika önbellekte tutuluyor; Supabase'de iptal
+edilen bir imzalama anahtarı en geç bu süre dolunca reddediliyor (PyJWT'nin
+anahtar başına süresiz önbelleği bilinçli olarak kapalı). Bilinmeyen bir `kid`
+(anahtar rotasyonu) JWKS'yi yeniden çektiriyor ama en fazla dakikada bir —
+rastgele `kid`'li token'larla Supabase'e istek yağdırılıp threadpool
+doldurulamasın diye.
+
 **Yönetici yetkisi** Faz 3'teki geçici `X-Admin-Secret` yerine `admin_users`
 tablosundan geliyor; her istekte veritabanından kontrol ediliyor. JWT'deki
 `user_metadata` (kullanıcı düzenleyebilir) ve `app_metadata` (token
@@ -145,8 +159,16 @@ Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
   dosya adı anahtara hiç girmiyor (path traversal koruması), yalnızca
   görüntüleme metni olarak saklanıyor.
 - **Sıra:** önce R2, sonra veritabanı; ikinci yükleme patlarsa ilki geri
-  siliniyor. Silmede önce satır siliniyor, R2 silmesi başarısız olursa nesne
-  yetim kalıyor ve log'a yazılıyor (kullanıcıya hata dönmüyor).
+  siliniyor. Veritabanı yazımı başarısız olursa da yüklenen görseller geri
+  siliniyor; Supabase'den silinmiş ama token'ı hâlâ geçerli bir kullanıcının
+  kaydı (FK ihlali) `500` değil `401` dönüyor — Supabase kullanıcı silmede
+  token'ları iptal etmiyor. Silmede önce satır siliniyor, R2 silmesi başarısız
+  olursa nesne yetim kalıyor ve log'a yazılıyor (kullanıcıya hata dönmüyor).
+- **Süre:** `duration_seconds` sonlu ve negatif olmayan bir sayı olmalı. `inf`
+  hem route'ta (`422`) hem veritabanı kısıtında reddediliyor: JSON'a
+  çevrilemediği için kaydedilseydi kullanıcının proje listesi her istekte `500`
+  dönerdi. Postgres'te `'NaN' >= 0` doğru olduğu için kısıt `< 'Infinity'` ile
+  ikisini birden eliyor.
 - **Bilinen sınır:** sonuç PNG'si `MAX_FILE_SIZE_MB` (20 MB) ile sınırlı ve tüm
   istek `MAX_REQUEST_BODY_BYTES` içinde kalmalı. 20 MB'lık bir JPEG'den çıkan
   saydam PNG bundan büyük olabilir; bu durumda `413` döner.

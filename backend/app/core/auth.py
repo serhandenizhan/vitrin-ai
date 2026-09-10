@@ -17,6 +17,8 @@ secret'ı gibi kullanıp HS256 imzalanmış bir token, legacy secret yoksa
 reddediliyor; varsa legacy secret'la (genel anahtarla değil) kontrol ediliyor.
 """
 
+import threading
+import time
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
@@ -35,12 +37,19 @@ from app.models.admin_user import AdminUser
 ASYMMETRIC_ALGORITHMS = ("ES256", "RS256")
 LEGACY_ALGORITHM = "HS256"
 
-# Supabase JWKS yanıtını kendi kenar sunucularında 10 dakika önbellekliyor ve
-# kendi istemci kütüphanelerine de 10 dakika önermiyor; aynı süre. Anahtar
-# döndürüldüğünde bilinmeyen bir `kid` gelirse PyJWKClient önbelleği atlayıp
-# yeniden çekiyor.
+# JWK set bu süre boyunca önbellekte tutuluyor; Supabase de JWKS yanıtını kendi
+# kenar sunucularında 10 dakika önbellekliyor. Supabase'de iptal edilen bir
+# anahtar en geç bu süre dolunca reddedilmeye başlıyor.
 JWKS_CACHE_SECONDS = 600
 JWKS_TIMEOUT_SECONDS = 5
+
+# Bilinmeyen bir `kid` (anahtar rotasyonu), JWKS'nin önbelleği atlanarak yeniden
+# çekilmesini gerektiriyor. Bu zorunlu yenileme en fazla bu aralıkta bir
+# yapılıyor: sınır olmasaydı oturumu olmayan biri rastgele `kid`'li token'larla
+# her istekte Supabase'e bir ağ çağrısı yaptırabilir, threadpool'u doldurup
+# gerçek kullanıcıları bekletebilirdi. Supabase JWKS'yi kenarında zaten 10 dakika
+# önbelleklediği için daha sık yenilemenin bir faydası da yok.
+JWKS_MIN_REFRESH_INTERVAL_SECONDS = 60
 
 # Supabase ile bu sunucunun saatleri arasındaki küçük farka tolerans. Yoksa
 # yeni verilmiş bir token `iat` gelecekte göründüğü için reddedilebilirdi.
@@ -62,14 +71,55 @@ def issuer() -> str:
     return f"{settings.supabase_url.rstrip('/')}/auth/v1"
 
 
+class RateLimitedJWKClient(jwt.PyJWKClient):
+    """Bilinmeyen `kid` için zorunlu JWKS yenilemesini hız sınırına bağlar.
+
+    PyJWKClient'ın kendi `get_signing_key`'i eşleşme bulamayınca HER çağrıda
+    önbelleği atlayıp JWKS'yi yeniden çekiyor. Buradaki tek fark, bu zorunlu
+    yenilemenin `min_refresh_interval` içinde bir kez yapılması; önbellek süresi
+    dolduğunda yapılan normal çekim etkilenmiyor.
+    """
+
+    def __init__(self, *args, min_refresh_interval: float, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._min_refresh_interval = min_refresh_interval
+        self._last_forced_refresh: float | None = None
+        # Doğrulama threadpool'da çalışıyor; aynı anda gelen iki bilinmeyen
+        # `kid` iki yenileme tetiklememeli.
+        self._refresh_lock = threading.Lock()
+
+    def _may_force_refresh(self) -> bool:
+        with self._refresh_lock:
+            now = time.monotonic()
+            if (
+                self._last_forced_refresh is not None
+                and now - self._last_forced_refresh < self._min_refresh_interval
+            ):
+                return False
+            self._last_forced_refresh = now
+            return True
+
+    def get_signing_key(self, kid: str) -> jwt.PyJWK:
+        signing_key = self.match_kid(self.get_signing_keys(), kid)
+        if signing_key is None and self._may_force_refresh():
+            signing_key = self.match_kid(self.get_signing_keys(refresh=True), kid)
+        if signing_key is None:
+            raise jwt.PyJWKClientError(f'Unable to find a signing key that matches: "{kid}"')
+        return signing_key
+
+
 @lru_cache(maxsize=1)
-def get_jwks_client() -> jwt.PyJWKClient:
-    # Süreç başına tek istemci: anahtarları kendi içinde önbellekliyor.
-    return jwt.PyJWKClient(
+def get_jwks_client() -> RateLimitedJWKClient:
+    # Süreç başına tek istemci. Önbellek YALNIZCA JWK set düzeyinde
+    # (`lifespan`). `cache_keys=True` bilinçli olarak kapalı: o seçenek her
+    # anahtarı süre sınırı olmayan bir LRU'da tutuyor ve Supabase'de iptal
+    # edilen bir anahtar, süreç yeniden başlatılana kadar geçerli sayılıyordu.
+    return RateLimitedJWKClient(
         f"{issuer()}/.well-known/jwks.json",
-        cache_keys=True,
+        cache_keys=False,
         lifespan=JWKS_CACHE_SECONDS,
         timeout=JWKS_TIMEOUT_SECONDS,
+        min_refresh_interval=JWKS_MIN_REFRESH_INTERVAL_SECONDS,
     )
 
 

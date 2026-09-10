@@ -191,7 +191,8 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   oturumu + `admin_users` tablosu aldı.
 - **Faz 4:** Şifre hash'leme, JWT/session tasarımı, IDOR koruması (bu fazda en kritik —
   şema yanlış tasarlanırsa sonradan düzeltmek pahalı). **Backend'de yapılanlar:** JWKS ile
-  JWT doğrulaması (algoritma karıştırmaya karşı izin listesi, anonim oturum reddi),
+  JWT doğrulaması (algoritma karıştırmaya karşı izin listesi, anonim oturum reddi,
+  Supabase'de iptal edilen imzalama anahtarının en geç 10 dakikada reddedilmesi),
   `public`'teki her tabloda RLS + `anon`/`authenticated` yetkilerinin geri alınması
   (`alembic_version` dahil), her sorguda sahiplik filtresi ve 404 ile IDOR koruması,
   CORS (2.2), yönetici yetkisinin kullanıcı tarafından değiştirilemeyen bir tabloda

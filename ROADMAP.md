@@ -423,6 +423,22 @@ yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md`
   girmiyor. Görseller Faz 1 doğrulamasından (magic-byte + piksel) geçiyor.
 - **CORS:** `CORSMiddleware`, `CORS_ALLOWED_ORIGINS` ile; `*` ve yollu değerler
   başlangıçta reddediliyor, `allow_credentials` kapalı.
+- **Kod incelemesi (11.09.2026) — beş bulgu, her biri önce kırmızı yanan bir
+  testle düzeltildi:**
+  1. Test paketi `.env`'deki `DATABASE_URL` Supabase'i gösterirse gerçek
+     kullanıcıları silerdi (her testten sonra `delete from auth.users`, sonda
+     `downgrade base`) — sahte bir Supabase veritabanında birebir gösterildi.
+     Artık `auth` şeması yerel katmanın işaretini taşımıyorsa oturum hiçbir
+     şeye dokunmadan durduruluyor.
+  2. JWKS anahtarları süresiz önbellekteydi; Supabase'de iptal edilen bir
+     anahtar süreç yeniden başlatılana kadar geçerliydi. Artık en geç 10
+     dakikada reddediliyor.
+  3. Bilinmeyen `kid` her istekte JWKS'yi yeniden çektiriyordu (oturumsuz
+     birinin Supabase'e istek yağdırabilmesi); artık en fazla dakikada bir.
+  4. `duration_seconds=inf` kaydedilip kullanıcının proje listesini kalıcı
+     500'e düşürüyordu; route ve veritabanı kısıtı artık sonlu değer istiyor.
+  5. Silinmiş kullanıcının hâlâ geçerli token'ıyla yapılan kayıt 500 dönüp
+     R2'de yetim görsel bırakıyordu; artık 401 ve görseller geri siliniyor.
 
 **Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
 - Supabase projesinin kurulması, migration'ların uygulanması, ilk yöneticinin

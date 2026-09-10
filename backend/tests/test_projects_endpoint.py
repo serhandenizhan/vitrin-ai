@@ -3,6 +3,7 @@ import os
 import uuid
 from unittest.mock import ANY, AsyncMock, MagicMock
 
+import pytest
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -339,3 +340,49 @@ async def test_delete_all_removes_only_own_projects(db_session, tokens, create_u
     assert storage.delete.await_count == 4
     for call in storage.delete.await_args_list:
         assert call.args[0].startswith(f"projects/{owner}/")
+
+
+@pytest.mark.parametrize("value", ["inf", "Infinity", "1e309", "nan"])
+async def test_create_rejects_non_finite_duration(db_session, tokens, create_user, value):
+    # `inf` JSON'a çevrilemiyor: kaydedilseydi hem bu istek hem de o
+    # kullanıcının sonraki TÜM liste istekleri 500 dönerdi.
+    user_id = await create_user()
+    storage = _storage_mock()
+    client = _client(db_session, storage, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/projects",
+        files=_files(),
+        data={"file_name": "a.jpg", "duration_seconds": value},
+        headers=tokens.headers(user_id),
+    )
+
+    assert response.status_code == 422
+    storage.upload.assert_not_called()
+    assert await _project_ids(db_session) == set()
+
+
+async def test_deleted_users_session_gets_401_and_uploaded_objects_are_removed(
+    db_session, tokens
+):
+    # Supabase bir kullanıcıyı silince access token'ını iptal etmiyor; token
+    # süresi dolana kadar geçerli kalıyor. Kullanıcı `auth.users`'ta yokken
+    # görseller R2'ye yüklenip veritabanı FK'ye takılıyor — yüklenenler geri
+    # silinmeli, istemci 500 değil 401 almalı.
+    deleted_user = uuid.uuid4()
+    storage = _storage_mock()
+    client = _client(db_session, storage, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/projects",
+        files=_files(),
+        data={"file_name": "a.jpg"},
+        headers=tokens.headers(deleted_user),
+    )
+
+    assert response.status_code == 401
+    uploaded = {call.args[0] for call in storage.upload.await_args_list}
+    removed = {call.args[0] for call in storage.delete.await_args_list}
+    assert len(uploaded) == 2
+    assert removed == uploaded
+    assert await _project_ids(db_session) == set()
