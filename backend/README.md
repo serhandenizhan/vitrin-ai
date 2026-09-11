@@ -8,6 +8,8 @@ birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG
 Docker build başarıyla derleniyor ve container düzgün başlıyor. Faz 3'ün backend kısmı
 (arka plan kütüphanesi: yükleme + listeleme + R2 depolama) da tamamlandı — ayrıntılar
 aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde.
+Ayrıca `GET /health` endpoint'i var — sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz (model
+ilk çağrıda gecikmeli yüklenir, health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi).
 
 ## Yerel çalıştırma (venv ile)
 
