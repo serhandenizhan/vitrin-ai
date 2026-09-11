@@ -71,11 +71,27 @@ class R2StorageService:
             ContentType=content_type,
         )
 
-    def generate_presigned_url(self, key: str) -> str:
+    async def delete(self, key: str) -> None:
+        # S3/R2'de olmayan bir anahtarı silmek hata değil (idempotent) —
+        # yarım kalmış bir silmeyi tekrar denemek güvenli.
+        client = _get_client()
+        await run_in_threadpool(client.delete_object, Bucket=self._bucket_name, Key=key)
+
+    def generate_presigned_url(self, key: str, expires_in: int | None = None) -> str:
         # Yerel bir imzalama işlemi, ağ çağrısı yapmıyor — threadpool gerekmiyor.
+        # Süre verilmezse zeminlerin süresi (Faz 3 davranışı değişmesin diye).
         client = _get_client()
         return client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self._bucket_name, "Key": key},
-            ExpiresIn=settings.background_url_expiry_seconds,
+            ExpiresIn=(
+                expires_in if expires_in is not None else settings.background_url_expiry_seconds
+            ),
         )
+
+
+def get_storage_service() -> R2StorageService:
+    # FastAPI bağımlılığı; testler bunu `app.dependency_overrides` ile
+    # değiştiriyor. Tüm route'lar AYNI fonksiyonu kullanıyor ki tek bir
+    # override hepsini kapsasın.
+    return R2StorageService(bucket_name=settings.r2_bucket_name)

@@ -117,10 +117,13 @@ makinede zaten Node 24 çalışıyordu ve Vitest 5 bunu şart koşuyor.
 
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
-- **Backend'de `/health` endpoint'i yok.** Arayüzde "backend ayakta mı" göstergesi bu yüzden
-  yapılmadı — uydurma bir gösterge yanlış bilgi verirdi. Servisin kapalı olduğu, ilk gerçek
-  istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı"). Böyle bir
-  gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmesi gerekir (Serhan).
+- **Backend'de `GET /api/health` eklendi** (`backend/app/api/routes/health.py`, `{"status": "ok"}`
+  döner — diğer tüm uç noktalarla aynı `/api` öneki altında, tutarlılık için). Sadece süreç
+  canlılığını doğrular — model ilk çağrıda gecikmeli yüklendiği için model durumunu kontrol
+  etmiyor, aksi halde ilk sağlık kontrolü ~30-35sn sürerdi. `backend/Dockerfile`'a bu uç noktayı
+  kullanan bir `HEALTHCHECK` eklendi (önceden yazılıp hiçbir yere bağlanmamıştı). Arayüzde bunu
+  kullanan bir "backend ayakta mı" göstergesi henüz yok; servisin kapalı olduğu hâlâ ilk gerçek
+  istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı").
 - **Eşzamanlılık sınırı arayüze yansıtıldı.** Backend `MAX_CONCURRENT_INFERENCES=1` ile aynı anda
   tek inference'a izin veriyor ve kapasite dolunca 503 dönüyor. Bu bir hata değil geçici bir
   durum olduğu için ayrı ve açık bir mesajla gösteriliyor ("Sistem şu anda meşgul… birkaç saniye
@@ -334,7 +337,7 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   gradyana düşüyor. Gerçek bucket'a karşı doğrulama R2 kimlik bilgileri
   olmadığı için yapılmadı; `backend/scripts/check_r2_cors.py` ve kural şablonu
   (`backend/README.md` → "R2 CORS") hazır. Production alan adı belirlenince
-  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 5).
+  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 4).
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
@@ -367,7 +370,7 @@ incelemede üç madde düzeltildi:
    sunucuda değil kullanıcının tarayıcısında kırık görsel olarak ortaya çıkardı.
    (Copilot incelemesinin ikinci bulgusu.)
 
-### Faz 4 — Veritabanı ve kullanıcı hesapları — ⏳ Planlanan
+### Faz 4 — Veritabanı ve kullanıcı hesapları — 🔄 Sürüyor (Serhan'ın backend kodu yazıldı; Supabase projesi ve Kaan'ın arayüzü bekliyor)
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
 - **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 7)
@@ -382,6 +385,129 @@ incelemede üç madde düzeltildi:
 - Her endpoint'te IDOR koruması: kaynağın gerçekten `current_user`'a ait olduğu DB seviyesinde doğrulanır
 - Session/JWT tasarımı kısa ömürlü access + refresh token deseniyle yapılır
 - CORS middleware'i bu fazda mutlaka eklenir
+
+**Ara sonuç (Serhan, 10.09.2026) — backend kodu yazıldı, gerçek Supabase projesi
+yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md` →
+"Kimlik doğrulama ve yetkilendirme".
+
+- **JWT doğrulaması:** Supabase access token'ı projenin JWKS'iyle (ES256/RS256)
+  yerelde doğrulanıyor; `iss`, `aud=authenticated`, `role=authenticated`, süre ve
+  imza kontrol ediliyor, anonim oturumlar reddediliyor. HS256 yalnızca açıkça
+  verilen legacy secret'la. Algoritma karıştırma saldırısı (genel anahtarı HMAC
+  secret'ı gibi kullanmak) için ayrı test var. `SUPABASE_URL` boşsa oturum
+  gerektiren uç noktalar 503 döner — sessizce açık kalmaz.
+- **Şema (migration 0003):** `projects` (geçmiş çalışmalar — `work-history.ts`'in
+  `WorkRecord` alanlarıyla birebir) ve `admin_users`. `auth.users`'a
+  `ON DELETE CASCADE` FK. Kullanıcıya göre listeleme, RLS ve cascade'i tek
+  bileşik indeks karşılıyor.
+- **RLS:** `public`'teki **her** tabloda açık — `backgrounds` (yukarıdaki not) ve
+  gözden kaçabilecek `alembic_version` dahil. `anon`/`authenticated`'ın hiçbir
+  tabloda yetkisi yok. `projects` için yalnızca "kendi satırını oku/sil"
+  politikası var; INSERT/UPDATE politikası bilinçli olarak yok (istemci başka
+  birinin R2 anahtarını kendi satırına yazıp imzalı URL'sini alabilirdi).
+  Supabase 28.04.2026'dan beri yeni tabloları Data API'ye otomatik açmıyor, ama
+  eski projelerin varsayılan grant'lerine karşı yine de açıkça geri alınıyor.
+- **IDOR:** backend tablo sahibi olarak bağlandığı için RLS onu etkilemiyor;
+  birinci katman her sorgudaki `user_id` filtresi. Başkasının projesi 404
+  (403 değil — varlığını doğrulamamak için). Testlerin gerçekten iş gördüğü
+  mutasyonla kanıtlandı: sahiplik filtresi sökülünce IDOR testleri kırmızı yandı.
+- **Yerel uyumluluk (migration 0002):** düz Postgres'te Supabase'in `auth`
+  şeması, `auth.uid()` ve rolleri yok; 0002 bunları yalnızca yoksa oluşturuyor,
+  Supabase'de no-op. RLS politikaları böylece yerelde ve testlerde de sınanıyor.
+- **Yönetici yetkisi:** Faz 3'teki geçici `X-Admin-Secret` (kök `CLAUDE.md` ders
+  8) **kaldırıldı**; `POST /api/admin/backgrounds` artık Supabase oturumu +
+  `admin_users` kaydı istiyor. JWT'deki `app_metadata` bilinçli olarak
+  kullanılmadı (token yenilenene kadar bayat — yetkisi alınan yönetici token
+  süresince yönetici kalırdı). `ROADMAP` Faz 6'daki admin paneli bu tabloyu
+  kullanacak.
+- **Projeler API'si:** `GET/POST /api/projects`, `GET/DELETE /api/projects/{id}`,
+  `DELETE /api/projects` — `work-history.ts`'in dört fonksiyonuyla birebir.
+  R2 anahtarı `projects/<user_id>/<uuid>/…`; kullanıcının dosya adı anahtara
+  girmiyor. Görseller Faz 1 doğrulamasından (magic-byte + piksel) geçiyor.
+- **CORS:** `CORSMiddleware`, `CORS_ALLOWED_ORIGINS` ile; `*` ve yollu değerler
+  başlangıçta reddediliyor, `allow_credentials` kapalı.
+- **Kod incelemesi (11.09.2026) — beş bulgu, her biri önce kırmızı yanan bir
+  testle düzeltildi:**
+  1. Test paketi `.env`'deki `DATABASE_URL` Supabase'i gösterirse gerçek
+     kullanıcıları silerdi (her testten sonra `delete from auth.users`, sonda
+     `downgrade base`) — sahte bir Supabase veritabanında birebir gösterildi.
+     Artık `auth` şeması yerel katmanın işaretini taşımıyorsa oturum hiçbir
+     şeye dokunmadan durduruluyor.
+  2. JWKS anahtarları süresiz önbellekteydi; Supabase'de iptal edilen bir
+     anahtar süreç yeniden başlatılana kadar geçerliydi. Artık en geç 10
+     dakikada reddediliyor.
+  3. Bilinmeyen `kid` her istekte JWKS'yi yeniden çektiriyordu (oturumsuz
+     birinin Supabase'e istek yağdırabilmesi); artık en fazla dakikada bir.
+  4. `duration_seconds=inf` kaydedilip kullanıcının proje listesini kalıcı
+     500'e düşürüyordu; route ve veritabanı kısıtı artık sonlu değer istiyor.
+  5. Silinmiş kullanıcının hâlâ geçerli token'ıyla yapılan kayıt 500 dönüp
+     R2'de yetim görsel bırakıyordu; artık 401 ve görseller geri siliniyor.
+
+**Supabase projesi kuruldu (Serhan, 11.09.2026).** Proje Kaan'ın hesabında
+(`ilfemklwjmlofeacbdsr.supabase.co`), Serhan Owner rolüyle organizasyona eklendi.
+
+- **JWT:** proje zaten asimetrik anahtarla (ES256, JWKS) geliyordu — Supabase'in
+  01.05.2025 sonrası açılan projelerde varsayılanı bu; ayrı bir geçiş adımı
+  gerekmedi.
+- **Bağlantı:** Direct connection (`db.<ref>.supabase.co`) yalnızca IPv6 `AAAA`
+  kaydı veriyor ve IPv6'sız ağda `getaddrinfo` hatasıyla bağlanamadı — **Session
+  pooler**'a geçilerek çözüldü (IPv4 uyumlu, `aws-0-<bölge>.pooler.supabase.com`,
+  port 5432; Transaction pooler kullanılmadı, asyncpg ile uyumsuz).
+- **Migration:** `alembic upgrade head` ile üç migration da uygulandı; `public`
+  şemasındaki dört tablonun (`projects`, `admin_users`, `backgrounds`,
+  `alembic_version`) dördünde de RLS'in gerçekten açık olduğu
+  `pg_class.relrowsecurity` sorgusuyla canlı projede doğrulandı.
+- İlk yönetici eklendi, access token süresi 900 saniyeye (15 dk) çekildi.
+
+**Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
+
+**Serhan için sıradaki adımlar (tam detay kök `CLAUDE.md` açık takip maddesi 3'te):**
+- **A) R2 CORS kuralını gerçek bucket'a eklemek:** şablon `backend/README.md` → "R2 CORS"'ta, `backend/scripts/check_r2_cors.py` ile doğrulanıyor; şu an yalnızca `localhost:3000` var, production alan adı belli olunca eklenmeli.
+- **B) PR #12'yi incelemek/merge etmek.**
+
+Diğer bekleyenler:
+- Ürün kararları: tarayıcıdaki eski kayıtlar hesaba taşınacak mı; sunucuda özgün
+  fotoğraf da saklanacak mı; `POST /api/remove-background` oturum isteyecek mi
+  (şu an bilinçli olarak herkese açık — kota Faz 5'e bağlanabilir).
+- Kaan: giriş/kayıt arayüzü, vekilin `Authorization` başlığını iletmesi,
+  `work-history.ts`'in `/api/projects`'e bağlanması.
+- Bilinen sınır: kullanıcı silinince veritabanı kayıtları cascade ile gidiyor ama
+  R2'deki proje görselleri gitmiyor (önek `projects/<user_id>/`, tek komutla
+  silinebilir; otomatik temizlik yok).
+
+**Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
+güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
+yapıldı, kullanıcı onayladı). Kaan o sırada çalışmadığı için çakışma yok; ayrı
+dalda (`feature/ui-guncellemeleri`) yapılıp PR #12'ye eklendi.
+- Üst çubuk yüzen kapsüle çevrildi, bulunulan sayfa işaretleniyor, telefonda menü paneli eklendi.
+- Footer: marka, sayfa bağlantıları, yasal metin yerleri (henüz yazılmadı), sosyal medya simgeleri (adresler sonra eklenecek), telif satırı.
+- HEIC önizlemesi tarayıcıda (`heic-to`, LGPL-3.0, yalnızca HEIC seçilince yükleniyor).
+- Paketler sayfası yeniden düzenlendi, karşılaştırma tablosu eklendi.
+- Açılış bölümü iki sütuna alındı, 1440×900'de tek ekrana sığıyor.
+- Yapay zekâ ağzıyla yazılmış izlenimi veren metinler elden geçirildi; "Nasıl çalışır" panelinden model adı (BiRefNet) ve "ilk istek uzun sürer" notu çıkarıldı.
+- **Açık kalan:** Hakkında panelinde ve teknik bilgilerde "fotoğraflar saklanmaz" yazıyor. `POST /api/remove-background` için bu hâlâ doğru, ama Kaan `work-history.ts`'i `/api/projects`'e bağladığında giriş yapmış kullanıcının sonuçları sunucuda saklanacak; o gün bu iki metin güncellenmeli.
+- **İkinci tur (11.09.2026):** Katalog sayfası Paketler'in diliyle uyumlu hale getirildi (koyu, ışıklı bir açılış bölümü + `page-top`); şablon galerisindeki onizleme kartları artık boş değil, site zeminlerinden örnek görsellerle dolu (`catalog-editor.tsx` → `galleryPreviewSlots`) — özellikle koyu "Kapak" şablonu önceden düz bir siyah dikdörtgen gibi durup sayfayı eksik gösteriyordu. Kaydırınca beliren bölümlerin geçiş süresi biraz uzatıldı (0.7s → 0.85s, kullanıcı: "çok çok az arttıralım, smooth olsun") — yalnızca süre değişti, eğri ve mesafe aynı kaldı.
+
+**Öneriler — kullanıcı onayı bekliyor, hiçbiri uygulanmadı (11.09.2026).** Claude Code'un kendi önerileri;
+kullanıcı "9. maddeyi önce göster, ben seçerim" dedi. Hiçbiri şu an kodda yok, yalnızca
+kayıt altına alınıyor:
+
+1. **Logo/filigran ekleme:** Kuyumcunun kendi logosunu görsele koyması; görselin başkaları
+   tarafından kullanılmasını da zorlaştırır.
+2. **Ürün etiketi:** Ayar (14K/22K), gram ve ürün kodu görselin köşesine şık bir etiket olarak
+   eklenir. Kuyumculuğa özgü, rakiplerde yaygın değil.
+3. **Hazır çıktı boyutları:** Instagram gönderisi (1:1, 4:5), hikâye (9:16) ve pazaryeri için
+   beyaz zemin tek tıkla seçilir.
+4. **"WhatsApp'ta paylaş" düğmesi:** Türkiye'de kuyumcu satışının büyük kısmı WhatsApp'tan
+   yürüyor.
+5. **Açılışta etkileşimli önce/sonra:** Sabit iki fotoğraf yerine aracın gerçek çıktısıyla
+   sürüklenebilir bir karşılaştırma; ziyaretçi daha yüklemeden sonucu hisseder.
+6. **Çekim rehberi sayfası:** Telefonla mücevher çekme ipuçları (ışık, kadife, açı). Arama
+   motorlarından kuyumcu çeker ve sonuç kalitesini de artırır.
+7. **Ücretsiz planda filigran (11.09.2026, kullanıcı isteğiyle eklendi):** Deneme planında
+   indirilen kesim/kompozisyona küçük bir "Vitrin AI" filigranı eklenir; ücretli planlarda
+   filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —
+   ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
 
 ### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
 

@@ -94,7 +94,7 @@ def main() -> int:
         return 2
 
     # Ayarlar burada, main içinde yükleniyor: modül seviyesinde yüklenseydi
-    # `missing_permissions` testleri de ADMIN_SECRET/R2_* isterdi.
+    # `missing_permissions` testleri de R2_* ayarlarını isterdi.
     from botocore.exceptions import ClientError
 
     from app.core.config import settings

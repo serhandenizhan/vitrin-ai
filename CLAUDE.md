@@ -59,7 +59,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
-- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini doğrular. **IDOR koruması Supabase tarafında RLS politikalarıyla yazılır — RLS'siz tablo oluşturulmaz** (bkz. `ROADMAP.md` Faz 4 ve `SECURITY.md` 3.2).
+- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme").
 - **Ödemeler:** iyzico
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
@@ -115,6 +115,8 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 
 VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.vscode/tasks.json`). Görev dosyası bilinçli olarak commit ediliyor — "sistemi nasıl ayağa kaldıracağım" bilgisi kişisel bir tercih değil, projenin parçası. Kişisel VS Code ayarları (`settings.json` vb.) yok sayılmaya devam ediyor.
 
+**macOS/Linux'ta terminalden: `./execute.sh`** (repo kökünde, aynı sebeple commit ediliyor). `tasks.json`'un Windows'a özgü olması nedeniyle (`.venv\Scripts\python.exe`) eklendi — tek komutla Postgres'i (Docker) ayağa kaldırır, backend sanal ortamını/migration'larını ve frontend bağımlılıklarını ilk çalıştırmada kurar, ikisini birlikte başlatır. Ctrl+C ikisini birlikte kapatır. `VITRIN_PYTHON` / `VITRIN_VENV_DIR` ile override edilebilir (ders 11: path hard-code edilmez).
+
 **Tuzak:** `.gitignore`'da dizinin kendisi (`.vscode/`) değil **içeriği** (`.vscode/*`) dışlanmalı — git, dışlanmış bir dizinin içine hiç bakmadığı için `!.vscode/tasks.json` negasyonu aksi hâlde çalışmaz.
 
 **İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
@@ -127,10 +129,10 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 
 - `frontend/.env.local` içinde `USE_MOCK_BACKEND=true` backend olmadan arayüzü çalıştırır (sahte bir kesim PNG'i döner, arayüzde "Demo modu" olarak işaretlenir). **Dikkat:** bu değer `true` kalırsa gerçek backend ayakta olsa bile arayüz hep demo/mock sonucu gösterir.
 - Gerçek uçtan uca demo için backend'i ayrı bir terminalde başlatın ve `USE_MOCK_BACKEND=false` yapın. İlk istek modeli belleğe yüklediği için daha uzun sürebilir (bkz. "Bilinen kısıt" bölümü).
-- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Backend HEIC'i işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — arayüz bu formatta önizleme yerine bilgilendirici bir kart gösteriyor.
+- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Chrome/Firefox/Edge HEIC'i `<img>` ile gösteremiyor; önizleme `frontend/src/lib/heic-preview.ts` ile üretiliyor: önce tarayıcının kendi çözücüsü (Safari), olmazsa `heic-to` (libheif WASM, **LGPL-3.0**, ~3 MB) yalnızca HEIC seçildiğinde dinamik yükleniyor. İkisi de başarısızsa eski bilgi kartı çıkıyor. Backend'e her zaman özgün dosya gidiyor; tarayıcıda üretilen JPEG yalnızca gösterim için.
 - **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
-- **Backend'de `/health` endpoint'i yok**, bu yüzden arayüzde "servis ayakta mı" göstergesi bulunmuyor — uydurma bir gösterge yanlış bilgi verirdi. Böyle bir gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmeli (Serhan).
+- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
 - **Frontend testleri:** `cd frontend && npm test` (Vitest). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin vekilleri, CMYK yükleme limitleri, imzalı URL yenileme zamanlaması ve kompozisyon geometrisinin yanı sıra R2 URL yenilemesi, seçili zeminin korunması ve dışa aktarma başarısız olduğunda sahnenin geri yüklenmesine yönelik React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`) ve `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
@@ -145,7 +147,7 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Büyük başlıklarda nokta kullanılmaz** (kullanıcı kararı, 10.09.2026). `display-hero`, `display-section` ve `display-feature` sınıflarını taşıyan her başlık noktasız biter. Apple'ın kendi başlıkları nokta kullanır ama kullanıcı bu ayrıntıda ayrıştı; kural burada geçerli.
 
-**Menüdeki her öğe ya bir yere götürür ya bir şey açar, ikisi karışık değil.** Tek bağlantı `Deneyin`; `Nasıl çalışır`, `Paketler` ve `Hakkında` panel açıyor (`nav-panel.tsx`) ve yanlarındaki ok bunu önceden söylüyor. Panel içerikleri aracı kullanmak için gerekli olmadığından sayfaya bölüm olarak konmuyor — konduklarında ziyaretçinin araca ulaşması her biri için bir ekran gecikiyordu.
+**Menüdeki her öğe ya bir yere götürür ya bir şey açar, ikisi karışık değil.** `Deneyin`, `Katalog` ve `Paketler` bağlantı; `Nasıl çalışır` ve `Hakkında` panel açıyor (`nav-panel.tsx`) ve yanlarındaki ok bunu önceden söylüyor. **Üst çubuk 11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda"): kenarlardan 12 px içeride, sayfanın üstüne biniyor; sayfaların ilk bölümü bu payı `page-top` sınıfıyla geri alıyor (`.section-rhythm.page-top`, bkz. `globals.css`). Yeni bir sayfa eklenirken ilk bölüme `page-top` konmazsa başlık çubuğun altında kalır. Paneller de çubukla aynı genişlikte yüzen kartlar; telefonda bağlantılar "Menü" panelinde. Panel içerikleri aracı kullanmak için gerekli olmadığından sayfaya bölüm olarak konmuyor — konduklarında ziyaretçinin araca ulaşması her biri için bir ekran gecikiyordu.
 
 **Uyarlanmayanlar — bilinçli:**
 - **SF Pro kullanılmaz.** Apple'a ait ve lisanslı; yerine Inter (aynı sınıfta neo-grotesk).
@@ -170,33 +172,33 @@ Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADM
 - Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra karşılaştırması değil yalnızca sonuç gösterilir.
 - En fazla 20 kayıt.
 
-**Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
+**Faz 4'te kapatılacak.** Sunucu tarafı (şema + `/api/projects`) Faz 4'te hazırlandı; Kaan'ın `work-history.ts` bağlamasıyla kapanacak (bkz. açık takip maddesi 2). Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
 
 ## Açık takip maddeleri
 
 Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
 
-### 1. Backend'de `/health` endpoint'i yok — sahibi: Serhan
+**Serhan için sıradaki adımlar — kısa özet** (Supabase kurulumu bitti, ayrıntı için `ROADMAP.md` Faz 4'e bakın — bu liste yalnızca hâlâ açık olanları gösteriyor):
 
-Arayüze "servis ayakta mı" göstergesi **konmadı**. Uydurma bir gösterge yanlış bilgi verir: servis kapalıyken "bağlı" yazan bir rozet, kullanıcının hatayı anlamasını zorlaştırır. Şu an servisin kapalı olduğu ilk gerçek istekte açık bir mesajla anlaşılıyor ("Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir.").
+- **A) R2 CORS kuralını gerçek bucket'a eklemek** (madde 3'ün tam detayı): şablon `backend/README.md` → "R2 CORS"'ta; `backend/scripts/check_r2_cors.py` ile doğrulanıyor. Şu an bilinçli olarak yalnızca `localhost:3000` var — production alan adı belli olunca eklenmesi gerekiyor, unutulursa canlıda sessizce zeminsiz çıktı üretir.
+- **B) PR #12 Kaan'ın incelemesini bekliyor.** Backend (Faz 4) + Serhan'dan UI güncellemeleri (11.09.2026, `feature/ui-guncellemeleri`'den `feature/faz4-saglik-ve-arac`'a push edildi) hepsi PR'da; Serhan'ın kendi yapacağı bir şey kalmadı, Kaan review/merge yapınca kapanır.
 
-Böyle bir gösterge isteniyorsa backend'e küçük bir sağlık endpoint'i eklenmeli. Frontend tarafı hazır: vekil katmanı zaten var, gösterge yarım saatlik iş.
+Diğer iki açık madde (geçmiş çalışmaların bağlanması, CMYK profili) Kaan'ın işi, Serhan'ı bağlamıyor.
 
-**Not:** endpoint eklenirse model yüklü mü / kapasite dolu mu bilgisini de dönmesi faydalı olur — arayüz `MAX_CONCURRENT_INFERENCES=1` yüzünden gelen 503'ü zaten ayrı bir mesajla gösteriyor, aynı bilgiyi önden verebilmek beklemeyi öngörülebilir kılar.
+### 1. Geçmiş çalışmalar tarayıcıda — sunucu tarafı hazır, bağlama kaldı — sahibi: Kaan (bağlama)
 
-### 2. Geçmiş çalışmalar tarayıcıda — Faz 4'te sunucuya taşınacak — sahibi: Serhan (şema) + Kaan (bağlama)
+Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; geçmiş o yüzden şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
 
-Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
+**Serhan'ın yarısı (şema + API) Faz 4'te yapıldı** (`feature/faz4-veritabani-hesaplar`): `projects` tablosu (RLS'li, migration 0003) ve `work-history.ts`'in dört fonksiyonuyla birebir eşleşen uç noktalar — `listWorks` → `GET /api/projects`, `saveWork` → `POST /api/projects` (multipart: `result` PNG, `thumbnail`, `file_name`, `is_mocked`, `duration_seconds`), `deleteWork` → `DELETE /api/projects/{id}`, `clearWorks` → `DELETE /api/projects`. Hepsi `Authorization: Bearer <Supabase access token>` istiyor. Yanıttaki görseller süreli imzalı URL (`result_url`, `thumbnail_url`, `expires_in`) — Blob değil; zeminlerdeki yenileme deseni burada da gerekecek.
 
-Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek bir dosyanın arkasında (`frontend/src/lib/work-history.ts`), yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek. Panel, sağlayıcı ve araç aynı kalacak.
+Kalan (Kaan): `work-history.ts`'in gövdesini bu uç noktalara bağlamak ve Next.js vekiline oturumdaki access token'ı `Authorization` başlığıyla iletmek. Panel, sağlayıcı ve araç aynı kalacak.
 
-Şema tasarlanırken bilinmesi gerekenler:
-- Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
-- Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
-- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
-- Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
+Hâlâ açık **ürün kararları** (kullanıcıya sorulacak):
+- Var olan tarayıcı kayıtları hesaba taşınacak mı? Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
+- Sunucuda **özgün fotoğraf** da saklanacak mı? Şema şu an yalnızca sonucu tutuyor (tarayıcıdakiyle aynı); saklanırsa geçmişten açılan çalışmada önce/sonra karşılaştırması da açılabilir.
+- Kayıt sınırı: tarayıcıdaki 20 kayıt sınırı kotadan geliyordu; sunucuda sınır yok (liste isteği en fazla 100 döndürüyor).
 
-### 3. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
+### 2. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
 
 `/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
 koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
@@ -209,13 +211,7 @@ kendi profili alınmalı. Profilsiz bir çevrim matbaada yanlış renk verir; bu
 sessizce yapmak özelliği hiç sunmamaktan kötüdür — bu yüzden varsayılan
 konmadı.
 
-### 4. CORS middleware'i — sahibi: Serhan, Faz 4
-
-Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
-
-`POST /api/admin/backgrounds` (Faz 3) şu anda gerçek bir admin auth yerine geçici bir `X-Admin-Secret` paylaşılan secret header'ıyla korunuyor (`ADMIN_SECRET` env değişkeni). Bu, ders 8'de anlatılan deseninin ikinci tekrarı — bilinçli, kullanıcı onaylı bir geçici çözüm. Faz 4'te gerçek Supabase Auth + rol kontrolü (`is_admin`) devreye girdiğinde bu header tamamen kaldırılıp yerine gerçek yetkilendirme konulacak.
-
-### 5. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
+### 3. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
 Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
 

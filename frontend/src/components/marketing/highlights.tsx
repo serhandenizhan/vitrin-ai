@@ -15,17 +15,17 @@ const HIGHLIGHTS = [
   {
     baslik: "İnce zincirler ve taş kenarları",
     aciklama:
-      "Model, mücevher fotoğrafçılığının en zor kısmı için seçildi: ince halkalar, yansıtıcı metal ve küçük taşlar temiz kenarlarla korunuyor.",
+      "İnce halkalar, parlayan metal ve küçük taşlar kesimde kaybolmuyor. Kenarlar temiz çıkıyor.",
   },
   {
     baslik: "Çözünürlüğünüz aynı kalıyor",
     aciklama:
-      "Giriş ne kadarsa çıkış da o kadar. Fotoğrafınız işlenirken küçültülmüyor, yeniden sıkıştırılmıyor.",
+      "Yüklediğiniz fotoğraf hangi boyuttaysa kesim de o boyutta iner. Küçültme ya da yeniden sıkıştırma yok.",
   },
   {
     baslik: "iPhone'dan çektiğiniz gibi",
     aciklama:
-      "HEIC dosyaları doğrudan destekleniyor. Dönüştürmeye, WhatsApp'tan geçirmeye gerek yok — sıkıştırma kaliteyi düşürüyor.",
+      "iPhone'un HEIC dosyasını olduğu gibi yükleyin. Dönüştürmenize ya da WhatsApp'tan geçirmenize gerek yok; WhatsApp fotoğrafı sıkıştırıp kaliteyi düşürüyor.",
   },
   {
     baslik: "Şeffaf PNG olarak iniyor",
@@ -40,7 +40,7 @@ export function Highlights() {
       <div className="mx-auto w-full max-w-5xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
-            İşte öne çıkanlar
+            Farkı ayrıntılarda görürsünüz
           </h2>
         </Reveal>
 

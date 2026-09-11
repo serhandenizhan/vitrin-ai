@@ -154,7 +154,7 @@ export async function POST(request: Request): Promise<Response> {
  */
 async function upstreamErrorMessage(upstream: Response): Promise<string> {
   if (upstream.status === 503) {
-    return "Sistem şu anda meşgul — aynı anda yalnızca bir fotoğraf işlenebiliyor. Birkaç saniye sonra tekrar deneyin.";
+    return "Sistem şu anda meşgul, aynı anda yalnızca bir fotoğraf işlenebiliyor. Birkaç saniye sonra tekrar deneyin.";
   }
 
   if (upstream.status === 413) {

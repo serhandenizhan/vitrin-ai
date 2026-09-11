@@ -69,16 +69,18 @@ export function NavPanel({
         }
       />
 
+      {/* Panel, yuzen ust cubugun (bkz. site-header.tsx) hemen altinda ayni
+          genislikte bir kart olarak aciliyor — cubukla ayni ailede dursun. */}
       <div
         role="region"
         aria-label={etiket}
         aria-hidden={!acik}
         className={
-          "nav-panel fixed inset-x-0 top-14 z-40 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-white/10 bg-[#0c0b0a]/92 text-[#f3f0eb] backdrop-blur-2xl backdrop-saturate-150 " +
+          "nav-panel fixed inset-x-3 top-[4.25rem] z-40 mx-auto max-h-[calc(100dvh-5rem)] max-w-6xl overflow-y-auto rounded-[1.75rem] bg-[#121110]/95 text-[#f3f0eb] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] ring-1 ring-white/10 backdrop-blur-2xl backdrop-saturate-150 " +
           (acik ? "nav-panel-acik" : "")
         }
       >
-        <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:py-14">
+        <div className="w-full px-6 py-8 sm:px-10 sm:py-11">
           <div className="flex items-start justify-between gap-6">
             <p className="fine-print tracking-[0.08em] text-[#f3f0eb]/50 uppercase">
               {ustBaslik}

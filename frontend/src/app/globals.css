@@ -288,9 +288,11 @@
 @utility reveal {
   opacity: 0;
   transform: translateY(1.75rem);
+  /* 11.09.2026: 0.7s -> 0.85s (kullanıcı: "çok çok az arttıralım, smooth
+     olsun"). Yalnızca süre değişti; eğri ve mesafe aynı kaldı. */
   transition:
-    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @utility reveal-in {
@@ -401,6 +403,22 @@
 }
 
 /*
+ * Yuzen ust cubugun toplam yuksekligi — site-header.tsx'teki `h-15`/`-mb-15`
+ * ile AYNI deger (3.75rem = 60px).
+ *
+ * TEK KAYNAK: asagidaki `scroll-padding-top`, `.section-rhythm.page-top` ve
+ * `marketing/hero.tsx`'in kendi ust boslugu hepsi bu degiskenden turuyor.
+ * Onceden ucu de birbirinden bagimsiz, elle hesaplanmis sabitlerdi (72px,
+ * "3.75rem + clamp(...)", 112px/96px) — cubugun yuksekligi degistiginde
+ * ucunun de ayri ayri guncellenmesi gerekiyordu ve biri unutulursa o sayfanin
+ * basligi cubugun altinda sessizce kaliyordu. `site-header.tsx`'in kendi
+ * yorumu bu degeri degistirirken burayi da guncellemeyi hatirlatiyor.
+ */
+:root {
+  --header-offset: 3.75rem;
+}
+
+/*
  * Menu baglantilari yumusak kaydirsin.
  *
  * Varsayilan davranis sayfayi aniden hedefe "firlatiyor" ve kullanici nereye
@@ -408,15 +426,28 @@
  * yumusatmasina birakiyor — JS gerekmiyor, klavye ve adres cubugundaki
  * bagla (#dene gibi) da ayni sekilde calisiyor.
  *
- * `scroll-padding-top` ust cubugun yuksekligi kadar (56px): olmadan hedef
- * bolumun basligi yapiskan cubugun ALTINDA kaliyor.
+ * `scroll-padding-top` yuzen ust cubugun kapladigi alan kadar (`--header-offset`)
+ * artı biraz nefes: olmadan hedef bolumun basligi cubugun ALTINDA kaliyor.
  *
  * Hareketi azalt ayari ve isletim sistemi tercihi bunu kapatiyor — uzun
  * sayfalarda yumusak kaydirma bazi kullanicilarda bas donmesi yapiyor.
  */
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 3.5rem;
+  scroll-padding-top: calc(var(--header-offset) + 0.75rem);
+}
+
+/*
+ * Sayfanin ilk bolumu: yuzen ust cubuk (bkz. site-header.tsx) sayfanin
+ * ustune bindigi icin ilk bolum, cubugun kapladigi `--header-offset`'i ust
+ * boslugun uzerine ekliyor.
+ *
+ * BILESIK SECICI (`.section-rhythm.page-top`, 0-2-0): ikisi de ayni
+ * ozgullukte olsaydi kazanani uretilen dosyadaki sira belirlerdi (kok
+ * CLAUDE.md ders 13).
+ */
+.section-rhythm.page-top {
+  padding-top: calc(clamp(3.5rem, 7vw, 7rem) + var(--header-offset));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -606,6 +637,33 @@ html.reduce-motion {
   .nav-panel.nav-panel-acik .nav-panel-icerik {
     transition-duration: 0s;
   }
+}
+
+/* Paketler: onerilen planin altin kenari.
+   `border-image` yuvarlak koselerle calismadigi icin kenar, kartin arkasina
+   konan ve maske ile yalnizca 1 px'lik halkasi birakilan bir gradyan
+   katmanla ciziliyor. Ustte parlak, altta sonuk: isik yukaridan geliyor
+   (sayfa basligindaki altin isikla ayni yon). */
+.paket-vurgulu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    170deg,
+    var(--color-gold-soft),
+    oklch(0.74 0.105 76 / 0.35) 45%,
+    oklch(0.74 0.105 76 / 0.12)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
 }
 
 /* Katalog sayfasi onizlemesi.

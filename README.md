@@ -47,7 +47,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 72 test (pytest) · frontend 68 test (Vitest) |
+| Testler | backend 160 test (pytest) · frontend 72 test (Vitest) |
 | Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü de ölçülerek doğrulandı) |
 | Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
 | Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
@@ -55,8 +55,13 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
 ölçümleri için `frontend/README.md`.
 
-Faz 4 (veritabanı ve kullanıcı hesapları — Supabase Auth, RLS, sunucu tarafı
-proje geçmişi) sırada.
+**Faz 4 (veritabanı ve kullanıcı hesapları) sürüyor.** Backend tarafı yazıldı:
+Supabase JWT doğrulaması (JWKS), kullanıcı projeleri API'si (`/api/projects` —
+tarayıcıdaki geçmişin sunucu karşılığı), `admin_users` ile gerçek yönetici yetkisi
+(Faz 3'ün geçici `X-Admin-Secret`'ı kaldırıldı), `public`'teki her tabloda RLS ve
+CORS. Gerçek Supabase projesi 11.09.2026'da kuruldu ve migration'lar uygulandı;
+giriş/kayıt arayüzü ve geçmişin sunucuya bağlanması Kaan'da. Ayrıntı:
+`backend/README.md` ve `ROADMAP.md` Faz 4.
 
 ## Ekip
 
