@@ -181,7 +181,7 @@ Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **sil
 **Serhan için sıradaki adımlar — kısa özet** (Supabase kurulumu bitti, ayrıntı için `ROADMAP.md` Faz 4'e bakın — bu liste yalnızca hâlâ açık olanları gösteriyor):
 
 - **A) R2 CORS kuralını gerçek bucket'a eklemek** (madde 3'ün tam detayı): şablon `backend/README.md` → "R2 CORS"'ta; `backend/scripts/check_r2_cors.py` ile doğrulanıyor. Şu an bilinçli olarak yalnızca `localhost:3000` var — production alan adı belli olunca eklenmesi gerekiyor, unutulursa canlıda sessizce zeminsiz çıktı üretir.
-- **B) PR #12'yi incelemek/merge etmek.**
+- **B) PR #12 Kaan'ın incelemesini bekliyor.** Backend (Faz 4) + Serhan'dan UI güncellemeleri (11.09.2026, `feature/ui-guncellemeleri`'den `feature/faz4-saglik-ve-arac`'a push edildi) hepsi PR'da; Serhan'ın kendi yapacağı bir şey kalmadı, Kaan review/merge yapınca kapanır.
 
 Diğer iki açık madde (geçmiş çalışmaların bağlanması, CMYK profili) Kaan'ın işi, Serhan'ı bağlamıyor.
 
