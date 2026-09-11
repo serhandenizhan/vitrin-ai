@@ -6,6 +6,14 @@
  * is ve ayri bir oturum. Ana sayfaya konsaydi akisi uzatir, oraya gelen
  * ziyaretciyi ilgilenmedigi bir arayuzle karsilardi.
  *
+ * 11.09.2026'da Paketler sayfasinin diline getirildi (kullanici: "paketler
+ * sayfasina uyduralım, güzel premium bir görüntü olsun"). Acilis artik koyu
+ * bir bolum ve ustunde altin bir isik — Paketler'in basligiyla ayni kurulus.
+ * Sablon galerisi de artik BOS degil: her onizleme kartinda site zeminlerinden
+ * ornek gorseller var (bkz. catalog-editor.tsx `galleryPreviewSlots`);
+ * onceden bos yuvalar ozellikle koyu "Kapak" sablonunda duz bir siyah
+ * dikdortgen gibi durup sayfayi eksik gosteriyordu.
+ *
  * Kapsam notu: ozellik tamamen istemci tarafinda; backend'e, veritabanina ya
  * da yol haritasindaki hicbir faza dokunmuyor (bkz. catalog-editor.tsx).
  */
@@ -25,31 +33,38 @@ export const metadata: Metadata = {
 export default function CatalogPage() {
   return (
     <SiteShell>
-      <section className="surface-mist section-rhythm page-top">
+      <section className="surface-black section-rhythm page-top relative overflow-hidden">
+        {/* Paketler'deki isikla ayni gerekce: goz once basliga gitsin. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[32rem]"
+          style={{
+            background:
+              "radial-gradient(50% 60% at 50% 0%, rgba(212,175,110,0.18), transparent 70%)",
+          }}
+        />
+
+        <div className="relative mx-auto w-full max-w-2xl px-5 text-center">
+          <Reveal>
+            <h1 className="display-hero text-balance">
+              Ürünleriniz için sayfa hazırlayın
+            </h1>
+            <p className="lede on-dark-muted mx-auto mt-5 max-w-xl text-pretty">
+              Arka planını kaldırdığınız görselleri bir şablona yerleştirin,
+              başlığı yazın ve sayfayı indirin. Dergiye, kataloğa ya da sosyal
+              medyaya hazır.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="surface-mist section-rhythm">
         <div className="mx-auto w-full max-w-6xl px-5">
           <Reveal>
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="fine-print on-light-muted tracking-[0.08em] uppercase">
-                Katalog
-              </p>
-              <h1 className="display-section mt-3 text-balance">
-                Ürünleriniz için sayfa hazırlayın
-              </h1>
-              <p className="lede on-light-muted mx-auto mt-4 max-w-xl text-pretty">
-                Arka planını kaldırdığınız görselleri bir şablona yerleştirin,
-                başlığı yazın ve sayfayı indirin. Dergiye, kataloğa ya da
-                sosyal medyaya hazır.
-              </p>
-            </div>
+            <CatalogEditor />
           </Reveal>
 
           <Reveal delay={120}>
-            <div className="mt-12">
-              <CatalogEditor />
-            </div>
-          </Reveal>
-
-          <Reveal delay={220}>
             {/*
               Matbaa gercegi kullanicidan gizlenmiyor. Indirilen PNG dijital
               katalog ve prova icin dogru; gercek matbaa baskisi CMYK ister ve

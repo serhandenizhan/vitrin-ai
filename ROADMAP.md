@@ -471,6 +471,28 @@ dalda (`feature/ui-guncellemeleri`) yapılıp PR #12'ye eklendi.
 - Açılış bölümü iki sütuna alındı, 1440×900'de tek ekrana sığıyor.
 - Yapay zekâ ağzıyla yazılmış izlenimi veren metinler elden geçirildi; "Nasıl çalışır" panelinden model adı (BiRefNet) ve "ilk istek uzun sürer" notu çıkarıldı.
 - **Açık kalan:** Hakkında panelinde ve teknik bilgilerde "fotoğraflar saklanmaz" yazıyor. `POST /api/remove-background` için bu hâlâ doğru, ama Kaan `work-history.ts`'i `/api/projects`'e bağladığında giriş yapmış kullanıcının sonuçları sunucuda saklanacak; o gün bu iki metin güncellenmeli.
+- **İkinci tur (11.09.2026):** Katalog sayfası Paketler'in diliyle uyumlu hale getirildi (koyu, ışıklı bir açılış bölümü + `page-top`); şablon galerisindeki onizleme kartları artık boş değil, site zeminlerinden örnek görsellerle dolu (`catalog-editor.tsx` → `galleryPreviewSlots`) — özellikle koyu "Kapak" şablonu önceden düz bir siyah dikdörtgen gibi durup sayfayı eksik gösteriyordu. Kaydırınca beliren bölümlerin geçiş süresi biraz uzatıldı (0.7s → 0.85s, kullanıcı: "çok çok az arttıralım, smooth olsun") — yalnızca süre değişti, eğri ve mesafe aynı kaldı.
+
+**Öneriler — kullanıcı onayı bekliyor, hiçbiri uygulanmadı (11.09.2026).** Claude Code'un kendi önerileri;
+kullanıcı "9. maddeyi önce göster, ben seçerim" dedi. Hiçbiri şu an kodda yok, yalnızca
+kayıt altına alınıyor:
+
+1. **Logo/filigran ekleme:** Kuyumcunun kendi logosunu görsele koyması; görselin başkaları
+   tarafından kullanılmasını da zorlaştırır.
+2. **Ürün etiketi:** Ayar (14K/22K), gram ve ürün kodu görselin köşesine şık bir etiket olarak
+   eklenir. Kuyumculuğa özgü, rakiplerde yaygın değil.
+3. **Hazır çıktı boyutları:** Instagram gönderisi (1:1, 4:5), hikâye (9:16) ve pazaryeri için
+   beyaz zemin tek tıkla seçilir.
+4. **"WhatsApp'ta paylaş" düğmesi:** Türkiye'de kuyumcu satışının büyük kısmı WhatsApp'tan
+   yürüyor.
+5. **Açılışta etkileşimli önce/sonra:** Sabit iki fotoğraf yerine aracın gerçek çıktısıyla
+   sürüklenebilir bir karşılaştırma; ziyaretçi daha yüklemeden sonucu hisseder.
+6. **Çekim rehberi sayfası:** Telefonla mücevher çekme ipuçları (ışık, kadife, açı). Arama
+   motorlarından kuyumcu çeker ve sonuç kalitesini de artırır.
+7. **Ücretsiz planda filigran (11.09.2026, kullanıcı isteğiyle eklendi):** Deneme planında
+   indirilen kesim/kompozisyona küçük bir "Vitrin AI" filigranı eklenir; ücretli planlarda
+   filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —
+   ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
 
 ### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
 
