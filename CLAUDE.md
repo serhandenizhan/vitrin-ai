@@ -178,16 +178,10 @@ Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADM
 
 Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
 
-**Serhan için sıradaki adımlar — kısa özet (11.09.2026, kullanıcı isteğiyle eklendi ki unutulmasın).** Ayrıntılar madde 3 ve 4'te; bu yalnızca hızlı bir kontrol listesi:
+**Serhan için sıradaki adımlar — kısa özet** (Supabase kurulumu bitti, ayrıntı için `ROADMAP.md` Faz 4'e bakın — bu liste yalnızca hâlâ açık olanları gösteriyor):
 
-- **A) Supabase projesini kurmak** (madde 3'ün tam detayı):
-  1. Supabase'de yeni proje aç, **asimetrik JWT imzalama anahtarları (JWKS)** kullan — HS256 legacy secret önerilmiyor.
-  2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yaz (session pooler veya doğrudan bağlantı; transaction pooler asyncpg ile uyumsuz). **Dikkat:** bundan sonra `pytest`'i o veritabanına karşı çalıştırmaya çalışırsan reddedecek — testleri ayrı, yerel bir Postgres'e yönlendirmen gerekiyor.
-  3. `alembic upgrade head` ile migration'ları Supabase'e uygula.
-  4. İlk yöneticiyi SQL editöründen ekle: `insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';` — artık zemin yükleyebilmenin tek yolu bu.
-  5. Supabase Auth ayarlarında access token süresini kısa tut (~15 dk + refresh token).
-- **B) R2 CORS kuralını gerçek bucket'a eklemek** (madde 4'ün tam detayı): şablon `backend/README.md` → "R2 CORS"'ta; `backend/scripts/check_r2_cors.py` ile doğrulanıyor. Şu an bilinçli olarak yalnızca `localhost:3000` var — production alan adı belli olunca eklenmesi gerekiyor, unutulursa canlıda sessizce zeminsiz çıktı üretir.
-- **C) PR #12'yi incelemek/merge etmek.**
+- **A) R2 CORS kuralını gerçek bucket'a eklemek** (madde 3'ün tam detayı): şablon `backend/README.md` → "R2 CORS"'ta; `backend/scripts/check_r2_cors.py` ile doğrulanıyor. Şu an bilinçli olarak yalnızca `localhost:3000` var — production alan adı belli olunca eklenmesi gerekiyor, unutulursa canlıda sessizce zeminsiz çıktı üretir.
+- **B) PR #12'yi incelemek/merge etmek.**
 
 Diğer iki açık madde (geçmiş çalışmaların bağlanması, CMYK profili) Kaan'ın işi, Serhan'ı bağlamıyor.
 
@@ -217,17 +211,7 @@ kendi profili alınmalı. Profilsiz bir çevrim matbaada yanlış renk verir; bu
 sessizce yapmak özelliği hiç sunmamaktan kötüdür — bu yüzden varsayılan
 konmadı.
 
-### 3. Supabase projesi kurulmadı — backend hazır, bağlanacak proje yok — sahibi: Serhan
-
-Faz 4 backend kodu (JWT doğrulama, `projects`/`admin_users` şeması, RLS) yerel Postgres'e karşı yazıldı ve test edildi; **gerçek bir Supabase projesi henüz yok**. `SUPABASE_URL` boşken oturum gerektiren her uç nokta (projeler, `POST /api/admin/backgrounds`) açık bir 503 döner — sessizce açık kalmaz. Yapılacaklar (kullanıcı hesabı gerektirdiği için Claude yapamaz):
-
-1. Supabase projesini oluşturmak; **JWT imzalama anahtarlarını (asimetrik, JWKS)** kullanmak — HS256 legacy secret'ı üretim için önerilmiyor.
-2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yazmak (doğrudan bağlantı ya da **session** pooler; transaction pooler asyncpg'nin prepared statement'larıyla uyumsuz). **Bundan sonra `pytest` bu veritabanına karşı çalışmayı reddeder** — test paketi bağlandığı veritabanını sıfırlıyor (`auth.users` dahil); koruma `backend/tests/db_safety.py`. Testleri `DATABASE_URL=... pytest` ile yerel bir Postgres'e yönlendir.
-3. `alembic upgrade head` ile migration'ları Supabase'e uygulamak (0002 orada no-op).
-4. İlk yöneticiyi SQL editöründen eklemek: `insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';` — Faz 3'teki `X-Admin-Secret` kaldırıldığı için zemin yüklemenin artık tek yolu bu.
-5. Supabase Auth ayarlarında access token süresini kısa tutmak (`SECURITY.md` 3.1: ~15 dk + refresh token).
-
-### 4. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
+### 3. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
 Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
 

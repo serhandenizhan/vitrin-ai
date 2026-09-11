@@ -59,8 +59,9 @@ RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
 Supabase JWT doğrulaması (JWKS), kullanıcı projeleri API'si (`/api/projects` —
 tarayıcıdaki geçmişin sunucu karşılığı), `admin_users` ile gerçek yönetici yetkisi
 (Faz 3'ün geçici `X-Admin-Secret`'ı kaldırıldı), `public`'teki her tabloda RLS ve
-CORS. Gerçek Supabase projesi henüz kurulmadı; giriş/kayıt arayüzü ve geçmişin
-sunucuya bağlanması Kaan'da. Ayrıntı: `backend/README.md` ve `ROADMAP.md` Faz 4.
+CORS. Gerçek Supabase projesi 11.09.2026'da kuruldu ve migration'lar uygulandı;
+giriş/kayıt arayüzü ve geçmişin sunucuya bağlanması Kaan'da. Ayrıntı:
+`backend/README.md` ve `ROADMAP.md` Faz 4.
 
 ## Ekip
 

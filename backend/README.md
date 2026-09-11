@@ -13,7 +13,8 @@ gecikmeli yüklenir, health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi)
 `backend/Dockerfile`'daki `HEALTHCHECK` bu uç noktayı kullanıyor.
 **Faz 4 (backend) sürüyor:** Supabase JWT doğrulaması, kullanıcı projeleri API'si,
 `admin_users` ile gerçek yönetici yetkisi, tüm tablolarda RLS ve CORS yazıldı ve
-yerel Postgres'e karşı test edildi; gerçek Supabase projesi henüz kurulmadı (bkz.
+yerel Postgres'e karşı test edildi. Gerçek Supabase projesi 11.09.2026'da kuruldu;
+migration'lar uygulandı ve RLS canlı projede doğrulandı (bkz.
 "Kimlik doğrulama ve yetkilendirme").
 
 ## Yerel çalıştırma (venv ile)

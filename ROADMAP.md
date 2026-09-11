@@ -443,12 +443,27 @@ yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md`
   5. Silinmiş kullanıcının hâlâ geçerli token'ıyla yapılan kayıt 500 dönüp
      R2'de yetim görsel bırakıyordu; artık 401 ve görseller geri siliniyor.
 
+**Supabase projesi kuruldu (Serhan, 11.09.2026).** Proje Kaan'ın hesabında
+(`ilfemklwjmlofeacbdsr.supabase.co`), Serhan Owner rolüyle organizasyona eklendi.
+
+- **JWT:** proje zaten asimetrik anahtarla (ES256, JWKS) geliyordu — Supabase'in
+  01.05.2025 sonrası açılan projelerde varsayılanı bu; ayrı bir geçiş adımı
+  gerekmedi.
+- **Bağlantı:** Direct connection (`db.<ref>.supabase.co`) yalnızca IPv6 `AAAA`
+  kaydı veriyor ve IPv6'sız ağda `getaddrinfo` hatasıyla bağlanamadı — **Session
+  pooler**'a geçilerek çözüldü (IPv4 uyumlu, `aws-0-<bölge>.pooler.supabase.com`,
+  port 5432; Transaction pooler kullanılmadı, asyncpg ile uyumsuz).
+- **Migration:** `alembic upgrade head` ile üç migration da uygulandı; `public`
+  şemasındaki dört tablonun (`projects`, `admin_users`, `backgrounds`,
+  `alembic_version`) dördünde de RLS'in gerçekten açık olduğu
+  `pg_class.relrowsecurity` sorgusuyla canlı projede doğrulandı.
+- İlk yönetici eklendi, access token süresi 900 saniyeye (15 dk) çekildi.
+
 **Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
 
-**Serhan için sıradaki adımlar (11.09.2026, unutulmasın diye buraya da yazıldı — tam detay kök `CLAUDE.md` açık takip maddesi 3 ve 4'te):**
-- **A) Supabase projesini kurmak:** (1) proje aç, asimetrik JWT imzalama anahtarları (JWKS) kullan — HS256 legacy secret önerilmiyor; (2) `backend/.env`'e `SUPABASE_URL` + Supabase `DATABASE_URL`'ini yaz (session pooler ya da doğrudan bağlantı; transaction pooler asyncpg ile uyumsuz — ve bundan sonra `pytest` o veritabanına karşı çalışmayı reddeder, testleri yerel bir Postgres'e yönlendir); (3) `alembic upgrade head` ile migration'ları Supabase'e uygula; (4) ilk yöneticiyi SQL editöründen ekle (`insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';`); (5) Supabase Auth'ta access token süresini kısa tut (~15 dk + refresh token).
-- **B) R2 CORS kuralını gerçek bucket'a eklemek:** şablon `backend/README.md` → "R2 CORS"'ta, `backend/scripts/check_r2_cors.py` ile doğrulanıyor; şu an yalnızca `localhost:3000` var, production alan adı belli olunca eklenmeli.
-- **C) PR #12'yi incelemek/merge etmek.**
+**Serhan için sıradaki adımlar (tam detay kök `CLAUDE.md` açık takip maddesi 3'te):**
+- **A) R2 CORS kuralını gerçek bucket'a eklemek:** şablon `backend/README.md` → "R2 CORS"'ta, `backend/scripts/check_r2_cors.py` ile doğrulanıyor; şu an yalnızca `localhost:3000` var, production alan adı belli olunca eklenmeli.
+- **B) PR #12'yi incelemek/merge etmek.**
 
 Diğer bekleyenler:
 - Ürün kararları: tarayıcıdaki eski kayıtlar hesaba taşınacak mı; sunucuda özgün
