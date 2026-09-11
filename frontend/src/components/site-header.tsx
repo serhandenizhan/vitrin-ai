@@ -58,7 +58,7 @@ export function SiteHeader() {
   // Ayni anda tek panel: iki panelin ust uste binmesi ya da biri acikken
   // digerinin arkasinda kalmasi mumkun olmasin.
   const [acikPanel, setAcikPanel] = useState<PanelAdi | null>(null);
-  const kapat = () => setAcikPanel(null);
+  const closePanel = () => setAcikPanel(null);
 
   return (
     <>
@@ -101,7 +101,7 @@ export function SiteHeader() {
 
           <Link
             href="/#top"
-            onClick={kapat}
+            onClick={closePanel}
             className="flex h-full shrink-0 items-center gap-2 pr-2 pl-1 text-[1rem]"
           >
             <BrandMark className="text-gold h-[1.3rem] w-auto" />
@@ -116,15 +116,15 @@ export function SiteHeader() {
 
           <ul className="hidden items-center gap-0.5 lg:flex">
             {LINKS.map((link) => {
-              const aktif = pathname === link.href;
+              const isActive = pathname === link.href;
               return (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    aria-current={aktif ? "page" : undefined}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "flex h-9 items-center rounded-full px-3.5 text-[0.875rem] transition-colors",
-                      aktif
+                      isActive
                         ? "bg-white/12 text-[#f3f0eb]"
                         : "text-[#f3f0eb]/70 hover:bg-white/[0.07] hover:text-[#f3f0eb]",
                     )}
@@ -175,12 +175,16 @@ export function SiteHeader() {
               <span className="hidden sm:inline">Giriş yap</span>
             </button>
 
+            {/* Cok dar ekranda kisa metin: panel dugmesi + marka + giris
+                ikonu + tam metinli CTA + menu dugmesi ust uste bindiginde
+                (320 px'te olculdu) tasma yapiyordu. */}
             <Link
               href="/#dene"
-              onClick={kapat}
-              className="press bg-gold hover:bg-gold-soft flex h-9 items-center rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap text-black transition-colors"
+              onClick={closePanel}
+              className="press bg-gold hover:bg-gold-soft flex h-9 items-center rounded-full px-3 text-[0.875rem] font-medium whitespace-nowrap text-black transition-colors sm:px-4"
             >
-              Hemen deneyin
+              <span className="sm:hidden">Deneyin</span>
+              <span className="hidden sm:inline">Hemen deneyin</span>
             </Link>
 
             <button
@@ -205,7 +209,7 @@ export function SiteHeader() {
           ogeleri ise ilgili paneli aciyor — masaustundeki ayrimin aynisi. */}
       <NavPanel
         acik={acikPanel === "menu"}
-        onKapat={kapat}
+        onKapat={closePanel}
         etiket="Menü"
         ustBaslik="Menü"
       >
@@ -214,7 +218,7 @@ export function SiteHeader() {
             <li key={link.href}>
               <Link
                 href={link.href}
-                onClick={kapat}
+                onClick={closePanel}
                 aria-current={pathname === link.href ? "page" : undefined}
                 className="flex min-h-13 items-center text-[1.25rem] font-semibold tracking-[-0.015em] aria-[current=page]:text-gold"
               >
@@ -243,7 +247,7 @@ export function SiteHeader() {
 
       <NavPanel
         acik={acikPanel === "nasil"}
-        onKapat={kapat}
+        onKapat={closePanel}
         etiket="Nasıl çalışır"
         ustBaslik="Nasıl çalışır"
       >
@@ -252,7 +256,7 @@ export function SiteHeader() {
 
       <NavPanel
         acik={acikPanel === "hakkinda"}
-        onKapat={kapat}
+        onKapat={closePanel}
         etiket="Vitrin AI hakkında"
         ustBaslik="Vitrin AI hakkında"
       >

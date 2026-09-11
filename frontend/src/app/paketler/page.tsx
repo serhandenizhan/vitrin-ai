@@ -40,8 +40,39 @@ type Paket = {
   fiyatNotu: string;
   acik: boolean;
   vurgulu: boolean;
+  /** Kartta GOSTERILEN madde listesi — Mağaza'da "Atölye'deki her şey" gibi
+   * kasıtlı bir özet cümlesi içerebilir, karşılaştırma tablosunun kaynağı
+   * DEĞİL (bkz. `tumOzellikler`). */
   maddeler: string[];
+  /**
+   * Planın GERÇEKTEN sahip olduğu her özelliğin düz listesi — karşılaştırma
+   * tablosu yalnızca buradan türüyor. Mağaza'nınki elle tekrar yazılmıyor,
+   * Atölye'nin listesinin üzerine ekleniyor (aşağıya bakın): bu sayede bir
+   * özellik Atölye'ye eklenince Mağaza'da da otomatik "var" görünüyor, iki
+   * yerin elle senkron tutulması gerekmiyor.
+   */
+  tumOzellikler: string[];
 };
+
+const ORTAK_OZELLIKLER = [
+  "Arka plan kaldırma",
+  "Kompozisyon stüdyosu",
+  "2000×2000 PNG ve JPEG",
+];
+
+/**
+ * NOT: "Çalışmalar ... saklanır" cümleleri buraya bilerek eklenmedi.
+ * Saklama yeri bir var/yok özelliği değil, planlar arasında değişen bir
+ * METİN (bkz. `SAKLAMA_YERI`) — tabloda ayrı, tek bir satır olarak duruyor.
+ */
+const ATOLYE_OZELLIKLERI = [
+  ...ORTAK_OZELLIKLER,
+  "Aylık yüksek işlem hakkı",
+  "Genişletilmiş zemin kütüphanesi",
+  "Baskıya uygun dışa aktarma (CMYK)",
+  "Katalog şablonları",
+  "Öncelikli işlem sırası",
+];
 
 const PAKETLER: Paket[] = [
   {
@@ -52,11 +83,10 @@ const PAKETLER: Paket[] = [
     acik: true,
     vurgulu: false,
     maddeler: [
-      "Arka plan kaldırma",
-      "Kompozisyon stüdyosu",
-      "2000×2000 PNG ve JPEG",
+      ...ORTAK_OZELLIKLER,
       "Çalışmalar bu cihazda saklanır",
     ],
+    tumOzellikler: ORTAK_OZELLIKLER,
   },
   {
     ad: "Atölye",
@@ -73,6 +103,7 @@ const PAKETLER: Paket[] = [
       "Katalog şablonları",
       "Öncelikli işlem sırası",
     ],
+    tumOzellikler: ATOLYE_OZELLIKLERI,
   },
   {
     ad: "Mağaza",
@@ -88,31 +119,53 @@ const PAKETLER: Paket[] = [
       "Marka zeminleri ve şablonları",
       "Kurumsal fatura",
     ],
+    tumOzellikler: [
+      ...ATOLYE_OZELLIKLERI,
+      "Ekip üyeleri ve ortak kütüphane",
+      "Toplu yükleme",
+      "Marka zeminleri ve şablonları",
+      "Kurumsal fatura",
+    ],
   },
 ];
 
 /**
- * Karsilastirma tablosu. Degerler kartlardaki listelerden turetildi; bir
- * paketin icerigi degisirse iki yer birlikte guncellenir. `true`/`false`
- * isaret olarak, metin ise oldugu gibi gosteriliyor.
+ * "Çalışmaların saklandığı yer" satırı tek başına — boole degil, metin
+ * degeri var, dolayısıyla `tumOzellikler` uyeligiyle turetilemiyor.
  */
+const SAKLAMA_YERI: Record<string, string> = {
+  Deneme: "Bu cihaz",
+  Atölye: "Hesabınız",
+  Mağaza: "Hesabınız",
+};
+
+/**
+ * Karsilastirma tablosu artik ELLE YAZILMIYOR: her satir, `PAKETLER[].
+ * tumOzellikler`de en az bir planda gecen ozelliklerin BIRLESIMINDEN
+ * (ilk gorulme sirasiyla) turuyor, her hucre de o planin listesinde o
+ * ozellik var mi diye bakarak hesaplaniyor. Bir plana ozellik eklenip
+ * digerinde unutulmasi artik mumkun degil — tabloda gorunecek tek yer
+ * `tumOzellikler`.
+ */
+const TUM_OZELLIKLER = Array.from(
+  new Set(PAKETLER.flatMap((paket) => paket.tumOzellikler)),
+);
+
+const OZELLIK_SATIRLARI = TUM_OZELLIKLER.map((ozellik) => ({
+  ozellik,
+  degerler: PAKETLER.map((paket) => paket.tumOzellikler.includes(ozellik)),
+}));
+
+// "Saklandigi yer" satiri, ORTAK_OZELLIKLER'in hemen ardindan geliyor —
+// planlar arasındaki ilk gercek fark bu oldugu icin en basta okunmasi
+// dogru; TUM_OZELLIKLER'e dahil olmadigindan elle bu konuma yerlestiriliyor.
 const KARSILASTIRMA: { ozellik: string; degerler: (boolean | string)[] }[] = [
-  { ozellik: "Arka plan kaldırma", degerler: [true, true, true] },
-  { ozellik: "Kompozisyon stüdyosu", degerler: [true, true, true] },
-  { ozellik: "2000×2000 PNG ve JPEG", degerler: [true, true, true] },
+  ...OZELLIK_SATIRLARI.slice(0, ORTAK_OZELLIKLER.length),
   {
     ozellik: "Çalışmaların saklandığı yer",
-    degerler: ["Bu cihaz", "Hesabınız", "Hesabınız"],
+    degerler: PAKETLER.map((paket) => SAKLAMA_YERI[paket.ad]),
   },
-  { ozellik: "Aylık yüksek işlem hakkı", degerler: [false, true, true] },
-  { ozellik: "Genişletilmiş zemin kütüphanesi", degerler: [false, true, true] },
-  { ozellik: "Baskıya uygun dışa aktarma (CMYK)", degerler: [false, true, true] },
-  { ozellik: "Katalog şablonları", degerler: [false, true, true] },
-  { ozellik: "Öncelikli işlem sırası", degerler: [false, true, true] },
-  { ozellik: "Ekip üyeleri ve ortak kütüphane", degerler: [false, false, true] },
-  { ozellik: "Toplu yükleme", degerler: [false, false, true] },
-  { ozellik: "Marka zeminleri ve şablonları", degerler: [false, false, true] },
-  { ozellik: "Kurumsal fatura", degerler: [false, false, true] },
+  ...OZELLIK_SATIRLARI.slice(ORTAK_OZELLIKLER.length),
 ];
 
 const SORULAR = [
@@ -133,7 +186,7 @@ const SORULAR = [
   },
 ];
 
-function PaketKarti({ paket }: { paket: Paket }) {
+function PlanCard({ paket }: { paket: Paket }) {
   return (
     <div
       className={
@@ -207,7 +260,7 @@ function PaketKarti({ paket }: { paket: Paket }) {
   );
 }
 
-function Hucre({ deger }: { deger: boolean | string }) {
+function Cell({ deger }: { deger: boolean | string }) {
   if (typeof deger === "string") {
     return <span className="text-[#f3f0eb]/80">{deger}</span>;
   }
@@ -261,7 +314,7 @@ export default function PaketlerPage() {
                 delay={sira * 90}
                 className={paket.vurgulu ? "lg:-my-4" : "lg:my-0"}
               >
-                <PaketKarti paket={paket} />
+                <PlanCard paket={paket} />
               </Reveal>
             ))}
           </div>
@@ -321,7 +374,7 @@ export default function PaketlerPage() {
                             (PAKETLER[sira].vurgulu ? "bg-white/[0.03]" : "")
                           }
                         >
-                          <Hucre deger={deger} />
+                          <Cell deger={deger} />
                         </td>
                       ))}
                     </tr>

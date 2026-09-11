@@ -54,10 +54,31 @@ async function convertWithHeicTo(file: Blob): Promise<Blob> {
   return heicTo({ blob: file, type: "image/jpeg", quality: 0.9 });
 }
 
+/**
+ * Tarayicinin HEIC'i yerel olarak cozup cozemedigi, oturum boyunca tek
+ * seferlik bir sonuc — Chrome/Firefox/Edge'de asla degismiyor. Bu onbellek
+ * olmadan HEIC gosteremeyen bir tarayicida her HEIC dosyasi, basarisiz
+ * olacagi zaten bilinen bir `img.decode()` denemesinden geciyordu.
+ *
+ * Yanlis pozitif riski: ilk dosya bozuksa (gecerli HEIC degilse) `false`
+ * onbelleklenip sonraki GECERLI dosyalar icin de yerel deneme atlanabilir.
+ * Bunun bedeli en kotu ihtimalle Safari'de gereksiz yere `heic-to`'ya
+ * dusmek — sonuc yine dogru cikiyor, yalnizca daha yavas. Yalnizca
+ * `browserDeps` icin gecerli; testler kendi `canDecode` sahtesini verdigi
+ * icin bu onbellege hic dokunmuyor.
+ */
+let nativeHeicSupport: boolean | null = null;
+
+async function canDecodeNativelyCached(url: string): Promise<boolean> {
+  if (nativeHeicSupport !== null) return nativeHeicSupport;
+  nativeHeicSupport = await canDecodeNatively(url);
+  return nativeHeicSupport;
+}
+
 const browserDeps: PreviewDeps = {
   createObjectUrl: (blob) => URL.createObjectURL(blob),
   revokeObjectUrl: (url) => URL.revokeObjectURL(url),
-  canDecode: canDecodeNatively,
+  canDecode: canDecodeNativelyCached,
   convertHeic: convertWithHeicTo,
 };
 

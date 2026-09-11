@@ -7,7 +7,7 @@
  * SOSYAL MEDYA ADRESLERI HENUZ YOK. Kullanici sonra ekleyecek; o zamana kadar
  * `href: null` olan simgeler tiklanamaz durumda gorunuyor. Bos bir "#"
  * baglantisi sayfayi basa firlatirdi ve kullaniciya bozuk bir dugme hissi
- * verirdi (kok CLAUDE.md ders 8). Adres eklemek icin yalnizca SOSYAL
+ * verirdi (kok CLAUDE.md ders 8). Adres eklemek icin yalnizca SOCIAL
  * dizisindeki `href` doldurulur.
  *
  * YASAL METINLER DE HENUZ YAZILMADI (KVKK aydinlatma metni, gizlilik, kullanim
@@ -31,13 +31,13 @@ const NOTES = [
   "Parmak ya da başka bir nesnenin kapattığı kısımlar kesimde de eksik kalır.",
 ];
 
-const SUTUNLAR: {
-  baslik: string;
-  ogeler: { label: string; href: string | null }[];
+const COLUMNS: {
+  title: string;
+  items: { label: string; href: string | null }[];
 }[] = [
   {
-    baslik: "Ürün",
-    ogeler: [
+    title: "Ürün",
+    items: [
       { label: "Deneyin", href: "/#dene" },
       { label: "Zeminler", href: "/#zeminler" },
       { label: "Nasıl çalışır", href: "/#nasil" },
@@ -45,15 +45,15 @@ const SUTUNLAR: {
     ],
   },
   {
-    baslik: "Sayfalar",
-    ogeler: [
+    title: "Sayfalar",
+    items: [
       { label: "Katalog", href: "/katalog" },
       { label: "Paketler", href: "/paketler" },
     ],
   },
   {
-    baslik: "Yasal",
-    ogeler: [
+    title: "Yasal",
+    items: [
       { label: "KVKK aydınlatma metni", href: null },
       { label: "Gizlilik politikası", href: null },
       { label: "Kullanım koşulları", href: null },
@@ -62,11 +62,11 @@ const SUTUNLAR: {
 ];
 
 /** Simgeler elle cizildi: lucide-react 1.x marka simgelerini kaldirdi. */
-const SOSYAL: { ad: string; href: string | null; simge: React.ReactNode }[] = [
+const SOCIAL: { name: string; href: string | null; icon: React.ReactNode }[] = [
   {
-    ad: "Instagram",
+    name: "Instagram",
     href: null,
-    simge: (
+    icon: (
       <>
         <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
         <circle cx="12" cy="12" r="3.8" />
@@ -75,16 +75,16 @@ const SOSYAL: { ad: string; href: string | null; simge: React.ReactNode }[] = [
     ),
   },
   {
-    ad: "TikTok",
+    name: "TikTok",
     href: null,
-    simge: (
+    icon: (
       <path d="M14 3.8v10.7a3.6 3.6 0 1 1-3.6-3.6M14 3.8c.4 2.6 2.2 4.3 5 4.5" />
     ),
   },
   {
-    ad: "YouTube",
+    name: "YouTube",
     href: null,
-    simge: (
+    icon: (
       <>
         <rect x="2.8" y="5.8" width="18.4" height="12.4" rx="4" />
         <path d="M10.4 9.4v5.2l4.4-2.6z" fill="currentColor" />
@@ -92,9 +92,9 @@ const SOSYAL: { ad: string; href: string | null; simge: React.ReactNode }[] = [
     ),
   },
   {
-    ad: "LinkedIn",
+    name: "LinkedIn",
     href: null,
-    simge: (
+    icon: (
       <>
         <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" />
         <path d="M8.2 10.5v6M12 16.5v-6m0 2.8c0-1.7 1.1-2.9 2.6-2.9s2.4 1.1 2.4 2.9v3.2" />
@@ -122,18 +122,22 @@ export function SiteFooter() {
             </p>
 
             <ul className="mt-6 flex gap-2">
-              {SOSYAL.map((hesap) => (
-                <li key={hesap.ad}>
+              {SOCIAL.map((account) => (
+                <li key={account.name}>
                   <a
-                    href={hesap.href ?? undefined}
-                    target={hesap.href ? "_blank" : undefined}
-                    rel={hesap.href ? "noopener noreferrer" : undefined}
-                    aria-label={hesap.href ? hesap.ad : `${hesap.ad} (yakında)`}
-                    title={hesap.href ? hesap.ad : `${hesap.ad} yakında`}
-                    aria-disabled={hesap.href ? undefined : true}
+                    href={account.href ?? undefined}
+                    target={account.href ? "_blank" : undefined}
+                    rel={account.href ? "noopener noreferrer" : undefined}
+                    aria-label={
+                      account.href ? account.name : `${account.name} (yakında)`
+                    }
+                    title={
+                      account.href ? account.name : `${account.name} yakında`
+                    }
+                    aria-disabled={account.href ? undefined : true}
                     className={
                       "flex size-10 items-center justify-center rounded-full ring-1 ring-white/12 transition-colors " +
-                      (hesap.href
+                      (account.href
                         ? "text-[#f3f0eb]/80 hover:bg-white/10 hover:text-[#f3f0eb]"
                         : "cursor-default text-[#f3f0eb]/40")
                     }
@@ -148,7 +152,7 @@ export function SiteFooter() {
                       strokeLinejoin="round"
                       aria-hidden
                     >
-                      {hesap.simge}
+                      {account.icon}
                     </svg>
                   </a>
                 </li>
@@ -156,22 +160,22 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          {SUTUNLAR.map((sutun) => (
-            <nav key={sutun.baslik} aria-label={sutun.baslik}>
-              <h2 className="text-[0.875rem] font-semibold">{sutun.baslik}</h2>
+          {COLUMNS.map((column) => (
+            <nav key={column.title} aria-label={column.title}>
+              <h2 className="text-[0.875rem] font-semibold">{column.title}</h2>
               <ul className="mt-4 space-y-2.5">
-                {sutun.ogeler.map((oge) => (
-                  <li key={oge.label} className="fine-print">
-                    {oge.href ? (
+                {column.items.map((item) => (
+                  <li key={item.label} className="fine-print">
+                    {item.href ? (
                       <Link
-                        href={oge.href}
+                        href={item.href}
                         className="on-dark-muted transition-colors hover:text-[#f3f0eb]"
                       >
-                        {oge.label}
+                        {item.label}
                       </Link>
                     ) : (
                       <span className="text-[#f3f0eb]/35">
-                        {oge.label}
+                        {item.label}
                         <span className="ml-1.5 text-[0.75rem]">(yakında)</span>
                       </span>
                     )}

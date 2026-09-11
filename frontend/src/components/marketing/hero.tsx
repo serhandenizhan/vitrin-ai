@@ -18,7 +18,10 @@ import { Reveal } from "@/components/reveal";
 export function Hero() {
   return (
     <section id="top" className="surface-black relative overflow-hidden">
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pt-28 pb-16 lg:min-h-svh lg:grid-cols-[1fr_1.05fr] lg:gap-14 lg:pt-24 lg:pb-12">
+      {/* Ust bosluk `--header-offset`den turuyor (bkz. globals.css) — yuzen
+          ust cubugun yuksekligi degisirse burasi da otomatik guncellenir,
+          elle senkron tutulan ayri bir sabit degil. */}
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pt-[calc(var(--header-offset)+3.25rem)] pb-16 lg:min-h-svh lg:grid-cols-[1fr_1.05fr] lg:gap-14 lg:pt-[calc(var(--header-offset)+2.25rem)] lg:pb-12">
         <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
           <Reveal>
             <p className="eyebrow text-gold">Vitrin AI</p>
