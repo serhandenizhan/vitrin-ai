@@ -444,8 +444,13 @@ yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md`
      R2'de yetim görsel bırakıyordu; artık 401 ve görseller geri siliniyor.
 
 **Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
-- Supabase projesinin kurulması, migration'ların uygulanması, ilk yöneticinin
-  eklenmesi (adımlar kök `CLAUDE.md` açık takip maddesi 3'te).
+
+**Serhan için sıradaki adımlar (11.09.2026, unutulmasın diye buraya da yazıldı — tam detay kök `CLAUDE.md` açık takip maddesi 3 ve 4'te):**
+- **A) Supabase projesini kurmak:** (1) proje aç, asimetrik JWT imzalama anahtarları (JWKS) kullan — HS256 legacy secret önerilmiyor; (2) `backend/.env`'e `SUPABASE_URL` + Supabase `DATABASE_URL`'ini yaz (session pooler ya da doğrudan bağlantı; transaction pooler asyncpg ile uyumsuz — ve bundan sonra `pytest` o veritabanına karşı çalışmayı reddeder, testleri yerel bir Postgres'e yönlendir); (3) `alembic upgrade head` ile migration'ları Supabase'e uygula; (4) ilk yöneticiyi SQL editöründen ekle (`insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';`); (5) Supabase Auth'ta access token süresini kısa tut (~15 dk + refresh token).
+- **B) R2 CORS kuralını gerçek bucket'a eklemek:** şablon `backend/README.md` → "R2 CORS"'ta, `backend/scripts/check_r2_cors.py` ile doğrulanıyor; şu an yalnızca `localhost:3000` var, production alan adı belli olunca eklenmeli.
+- **C) PR #12'yi incelemek/merge etmek.**
+
+Diğer bekleyenler:
 - Ürün kararları: tarayıcıdaki eski kayıtlar hesaba taşınacak mı; sunucuda özgün
   fotoğraf da saklanacak mı; `POST /api/remove-background` oturum isteyecek mi
   (şu an bilinçli olarak herkese açık — kota Faz 5'e bağlanabilir).

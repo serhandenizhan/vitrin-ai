@@ -178,6 +178,19 @@ Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADM
 
 Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
 
+**Serhan için sıradaki adımlar — kısa özet (11.09.2026, kullanıcı isteğiyle eklendi ki unutulmasın).** Ayrıntılar madde 3 ve 4'te; bu yalnızca hızlı bir kontrol listesi:
+
+- **A) Supabase projesini kurmak** (madde 3'ün tam detayı):
+  1. Supabase'de yeni proje aç, **asimetrik JWT imzalama anahtarları (JWKS)** kullan — HS256 legacy secret önerilmiyor.
+  2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yaz (session pooler veya doğrudan bağlantı; transaction pooler asyncpg ile uyumsuz). **Dikkat:** bundan sonra `pytest`'i o veritabanına karşı çalıştırmaya çalışırsan reddedecek — testleri ayrı, yerel bir Postgres'e yönlendirmen gerekiyor.
+  3. `alembic upgrade head` ile migration'ları Supabase'e uygula.
+  4. İlk yöneticiyi SQL editöründen ekle: `insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';` — artık zemin yükleyebilmenin tek yolu bu.
+  5. Supabase Auth ayarlarında access token süresini kısa tut (~15 dk + refresh token).
+- **B) R2 CORS kuralını gerçek bucket'a eklemek** (madde 4'ün tam detayı): şablon `backend/README.md` → "R2 CORS"'ta; `backend/scripts/check_r2_cors.py` ile doğrulanıyor. Şu an bilinçli olarak yalnızca `localhost:3000` var — production alan adı belli olunca eklenmesi gerekiyor, unutulursa canlıda sessizce zeminsiz çıktı üretir.
+- **C) PR #12'yi incelemek/merge etmek.**
+
+Diğer iki açık madde (geçmiş çalışmaların bağlanması, CMYK profili) Kaan'ın işi, Serhan'ı bağlamıyor.
+
 ### 1. Geçmiş çalışmalar tarayıcıda — sunucu tarafı hazır, bağlama kaldı — sahibi: Kaan (bağlama)
 
 Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; geçmiş o yüzden şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
