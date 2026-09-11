@@ -13,7 +13,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, FileImage, RefreshCw, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  FileImage,
+  LoaderCircle,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 
 import { ComparisonView } from "@/components/comparison-view";
 import { ProcessingState } from "@/components/processing-state";
@@ -21,11 +27,8 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
-import {
-  formatBytes,
-  isPreviewableInBrowser,
-  validateFile,
-} from "@/lib/upload-constraints";
+import { createPreviewUrl } from "@/lib/heic-preview";
+import { formatBytes, validateFile } from "@/lib/upload-constraints";
 
 type Status = "idle" | "ready" | "processing" | "done" | "error";
 
@@ -41,6 +44,10 @@ export function BackgroundRemover() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   /** Gecmisten acilan calismanin adi — o durumda `file` null oluyor. */
   const [openedFileName, setOpenedFileName] = useState<string | null>(null);
+  /** HEIC onizlemesi tarayicida cozulurken true. */
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  /** Son dosya seciminin sira numarasi; bkz. `handleFileSelected`. */
+  const selectionRef = useRef(0);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor;
   // aksi halde her yeni fotografta bir oncekinin blob'u bellekte kaliyor.
@@ -57,6 +64,9 @@ export function BackgroundRemover() {
   }, []);
 
   const reset = useCallback(() => {
+    // Suren bir onizleme cozumu varsa sonucu artik kimseye ait degil.
+    selectionRef.current += 1;
+    setIsPreparingPreview(false);
     setStatus("idle");
     setFile(null);
     setOriginalUrl(null);
@@ -83,14 +93,23 @@ export function BackgroundRemover() {
       setElapsedSeconds(null);
       setFile(selected);
       setOpenedFileName(null);
-      // HEIC'i tarayicilarin cogu goruntuleyemiyor; onizleme yerine bir dosya
-      // karti gosteriyoruz. Backend HEIC'i sorunsuz isliyor.
-      setOriginalUrl(
-        isPreviewableInBrowser(selected)
-          ? trackObjectUrl(URL.createObjectURL(selected))
-          : null,
-      );
+      setOriginalUrl(null);
       setStatus("ready");
+
+      // HEIC onizlemesi tarayicida cozuluyor ve bu bir-iki saniye surebiliyor
+      // (bkz. lib/heic-preview.ts). Bu arada kullanici baska bir dosya
+      // secerse eski sonuc yenisinin uzerine yazmasin diye her secime bir
+      // sira numarasi veriliyor.
+      const selection = ++selectionRef.current;
+      setIsPreparingPreview(true);
+      void createPreviewUrl(selected).then((url) => {
+        if (selection !== selectionRef.current) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        setOriginalUrl(url ? trackObjectUrl(url) : null);
+        setIsPreparingPreview(false);
+      });
     },
     [trackObjectUrl],
   );
@@ -220,7 +239,19 @@ export function BackgroundRemover() {
 
         {showPreview && file ? (
           <div className="flex flex-col items-center gap-6">
-            {originalUrl ? (
+            {isPreparingPreview ? (
+              <div
+                role="status"
+                className="text-muted-foreground flex aspect-square w-full max-w-sm flex-col items-center justify-center gap-3 rounded-xl border px-6 text-center"
+              >
+                <LoaderCircle
+                  className="size-6 animate-spin"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <span className="text-sm">Önizleme hazırlanıyor</span>
+              </div>
+            ) : originalUrl ? (
               /* next/image kullanilmiyor: kaynak bir blob: URL, olculeri
                  onceden bilinmiyor ve optimizasyon katmani burada bir sey
                  kazandirmaz. */
@@ -234,11 +265,11 @@ export function BackgroundRemover() {
               <div className="text-muted-foreground flex aspect-square w-full max-w-sm flex-col items-center justify-center gap-3 rounded-xl border px-6 text-center">
                 <FileImage className="size-8" strokeWidth={1.25} aria-hidden />
                 <span className="text-foreground text-sm font-medium">
-                  Bu format tarayıcıda önizlenemiyor
+                  Önizleme gösterilemedi
                 </span>
                 <span className="text-xs leading-relaxed">
-                  HEIC dosyaları yalnızca işlendikten sonra görüntülenir. Arka
-                  plan kaldırma normal çalışır.
+                  Fotoğrafı burada açamadık ama arka planı yine de
+                  kaldırabilirsiniz. Sonuç işlem bitince görünecek.
                 </span>
               </div>
             )}

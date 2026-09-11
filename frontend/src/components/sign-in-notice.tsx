@@ -70,7 +70,7 @@ export function SignInNotice() {
         <p className="text-muted-foreground mt-2 text-[0.875rem] leading-relaxed">
           Giriş, kayıt ve hesabınıza bağlı proje geçmişi bir sonraki aşamada
           geliyor. <strong className="text-foreground font-medium">Şu anda
-          kayıt gerekmiyor</strong> — fotoğrafınızı yükleyip sonucu hemen
+          kayıt gerekmiyor.</strong> Fotoğrafınızı yükleyip sonucu hemen
           indirebilirsiniz.
         </p>
 

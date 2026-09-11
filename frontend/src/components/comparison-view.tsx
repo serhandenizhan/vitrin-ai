@@ -79,8 +79,8 @@ export function ComparisonView({
             className="checkerboard aspect-square w-full rounded-2xl object-contain ring-1 ring-black/10"
           />
           <figcaption className="fine-print mt-2 text-center opacity-70">
-            Bu formatta tarayıcı özgün fotoğrafı gösteremiyor, karşılaştırma
-            yapılamıyor.
+            Özgün fotoğraf burada gösterilemediği için yalnızca kesim
+            görünüyor.
           </figcaption>
         </figure>
       )}
@@ -173,17 +173,16 @@ export function ComparisonView({
 
           {vitrinAiAcik ? (
             <p className="fine-print max-w-sm text-center opacity-70">
-              Ürününüze uygun zemini, ışığı ve açıyı otomatik seçecek — siz
-              hiçbir ayara dokunmadan. Şu anda geliştiriliyor; hazır olduğunda
-              bu düğme çalışır hâle gelecek.
+              Ürününüze uyan zemini, ışığı ve açıyı sizin yerinize seçecek.
+              Üzerinde çalışıyoruz; hazır olunca bu düğme açılacak.
             </p>
           ) : null}
         </div>
 
         {isMocked ? (
           <p className="text-muted-foreground text-center text-xs">
-            Demo modu — bu sonuç örnek bir görseldir, gerçek yapay zekâ çıktısı
-            değildir.
+            Demo modu: bu sonuç örnek bir görsel, gerçek yapay zekâ çıktısı
+            değil.
           </p>
         ) : null}
       </div>
@@ -363,8 +362,8 @@ function OnceSonra({
           isi klavyeyle yapabiliyor. Gorsel olarak sade tutuldu. */}
       <p className="fine-print mt-2 text-center opacity-60">
         {yakin
-          ? `${YAKINLASTIRMA}× yakınlaştırıldı — sürükleyerek gezinin, çizgiyi aşağıdaki kaydıraçla taşıyın`
-          : "Çizgiyi sürükleyin · yakından incelemek için büyüteci kullanın"}
+          ? `${YAKINLASTIRMA}× yakınlaştırıldı. Sürükleyerek gezinin, çizgiyi alttaki kaydıraçla taşıyın.`
+          : "Çizgiyi sürükleyin. Yakından bakmak için büyüteci kullanın."}
       </p>
 
       <input

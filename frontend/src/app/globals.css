@@ -408,15 +408,29 @@
  * yumusatmasina birakiyor — JS gerekmiyor, klavye ve adres cubugundaki
  * bagla (#dene gibi) da ayni sekilde calisiyor.
  *
- * `scroll-padding-top` ust cubugun yuksekligi kadar (56px): olmadan hedef
- * bolumun basligi yapiskan cubugun ALTINDA kaliyor.
+ * `scroll-padding-top` yuzen ust cubugun kapladigi alan kadar (12 px bosluk
+ * + 48 px kapsul + biraz nefes): olmadan hedef bolumun basligi cubugun
+ * ALTINDA kaliyor.
  *
  * Hareketi azalt ayari ve isletim sistemi tercihi bunu kapatiyor — uzun
  * sayfalarda yumusak kaydirma bazi kullanicilarda bas donmesi yapiyor.
  */
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 3.5rem;
+  scroll-padding-top: 4.5rem;
+}
+
+/*
+ * Sayfanin ilk bolumu: yuzen ust cubuk (bkz. site-header.tsx) sayfanin
+ * ustune bindigi icin ilk bolum, cubugun kapladigi 60 px'i ust boslugun
+ * uzerine ekliyor.
+ *
+ * BILESIK SECICI (`.section-rhythm.page-top`, 0-2-0): ikisi de ayni
+ * ozgullukte olsaydi kazanani uretilen dosyadaki sira belirlerdi (kok
+ * CLAUDE.md ders 13).
+ */
+.section-rhythm.page-top {
+  padding-top: calc(clamp(3.5rem, 7vw, 7rem) + 3.75rem);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -606,6 +620,33 @@ html.reduce-motion {
   .nav-panel.nav-panel-acik .nav-panel-icerik {
     transition-duration: 0s;
   }
+}
+
+/* Paketler: onerilen planin altin kenari.
+   `border-image` yuvarlak koselerle calismadigi icin kenar, kartin arkasina
+   konan ve maske ile yalnizca 1 px'lik halkasi birakilan bir gradyan
+   katmanla ciziliyor. Ustte parlak, altta sonuk: isik yukaridan geliyor
+   (sayfa basligindaki altin isikla ayni yon). */
+.paket-vurgulu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    170deg,
+    var(--color-gold-soft),
+    oklch(0.74 0.105 76 / 0.35) 45%,
+    oklch(0.74 0.105 76 / 0.12)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
 }
 
 /* Katalog sayfasi onizlemesi.

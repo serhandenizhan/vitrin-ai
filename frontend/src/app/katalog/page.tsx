@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 export default function CatalogPage() {
   return (
     <SiteShell>
-      <section className="surface-mist section-rhythm">
+      <section className="surface-mist section-rhythm page-top">
         <div className="mx-auto w-full max-w-6xl px-5">
           <Reveal>
             <div className="mx-auto max-w-2xl text-center">
@@ -58,9 +58,8 @@ export default function CatalogPage() {
             <p className="on-light-muted fine-print mx-auto mt-10 max-w-2xl text-center text-pretty">
               İndirilen sayfa A4 oranında ve 150 nokta/inç karşılığında; dijital
               katalog, sosyal medya ve matbaa provası için yeterli. Gerçek
-              matbaa baskısı CMYK renk dönüşümü ister — bu dönüşüm tarayıcıda
-              yapılamadığı için sunucu tarafında hazırlanıyor ve ücretli
-              planlarda açılacak.
+              matbaa baskısı için dosyanın CMYK renklerine çevrilmesi gerekiyor.
+              Bu dönüşümü sunucuda hazırlıyoruz, ücretli planlarla açılacak.
             </p>
           </Reveal>
         </div>

@@ -460,6 +460,18 @@ Diğer bekleyenler:
   R2'deki proje görselleri gitmiyor (önek `projects/<user_id>/`, tek komutla
   silinebilir; otomatik temizlik yok).
 
+**Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
+güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
+yapıldı, kullanıcı onayladı). Kaan o sırada çalışmadığı için çakışma yok; ayrı
+dalda (`feature/ui-guncellemeleri`) yapılıp PR #12'ye eklendi.
+- Üst çubuk yüzen kapsüle çevrildi, bulunulan sayfa işaretleniyor, telefonda menü paneli eklendi.
+- Footer: marka, sayfa bağlantıları, yasal metin yerleri (henüz yazılmadı), sosyal medya simgeleri (adresler sonra eklenecek), telif satırı.
+- HEIC önizlemesi tarayıcıda (`heic-to`, LGPL-3.0, yalnızca HEIC seçilince yükleniyor).
+- Paketler sayfası yeniden düzenlendi, karşılaştırma tablosu eklendi.
+- Açılış bölümü iki sütuna alındı, 1440×900'de tek ekrana sığıyor.
+- Yapay zekâ ağzıyla yazılmış izlenimi veren metinler elden geçirildi; "Nasıl çalışır" panelinden model adı (BiRefNet) ve "ilk istek uzun sürer" notu çıkarıldı.
+- **Açık kalan:** Hakkında panelinde ve teknik bilgilerde "fotoğraflar saklanmaz" yazıyor. `POST /api/remove-background` için bu hâlâ doğru, ama Kaan `work-history.ts`'i `/api/projects`'e bağladığında giriş yapmış kullanıcının sonuçları sunucuda saklanacak; o gün bu iki metin güncellenmeli.
+
 ### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
 
 - Serhan: kredi modeli mantığı, iyzico entegrasyonu, webhook'lar, kullanım bazlı düşüm
