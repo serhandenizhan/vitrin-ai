@@ -117,9 +117,11 @@ makinede zaten Node 24 çalışıyordu ve Vitest 5 bunu şart koşuyor.
 
 Bu fazda ortaya çıkan ve dokümana yazılmaya değer noktalar:
 
-- **Backend'de `GET /health` eklendi** (`backend/app/api/routes/health.py`, `{"status": "ok"}`
-  döner). Sadece süreç canlılığını doğrular — model ilk çağrıda gecikmeli yüklendiği için model
-  durumunu kontrol etmiyor, aksi halde ilk sağlık kontrolü ~30-35sn sürerdi. Arayüzde bunu
+- **Backend'de `GET /api/health` eklendi** (`backend/app/api/routes/health.py`, `{"status": "ok"}`
+  döner — diğer tüm uç noktalarla aynı `/api` öneki altında, tutarlılık için). Sadece süreç
+  canlılığını doğrular — model ilk çağrıda gecikmeli yüklendiği için model durumunu kontrol
+  etmiyor, aksi halde ilk sağlık kontrolü ~30-35sn sürerdi. `backend/Dockerfile`'a bu uç noktayı
+  kullanan bir `HEALTHCHECK` eklendi (önceden yazılıp hiçbir yere bağlanmamıştı). Arayüzde bunu
   kullanan bir "backend ayakta mı" göstergesi henüz yok; servisin kapalı olduğu hâlâ ilk gerçek
   istekte açık bir hata mesajıyla anlaşılıyor ("Arka plan servisine ulaşılamadı").
 - **Eşzamanlılık sınırı arayüze yansıtıldı.** Backend `MAX_CONCURRENT_INFERENCES=1` ile aynı anda

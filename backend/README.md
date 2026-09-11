@@ -7,9 +7,10 @@ ve arka plan meta verisi Faz 3'te eklenecek.
 birim testleri yeşil, gerçek mücevher fotoğraflarıyla (HEIC + WhatsApp JPEG) doğrulandı,
 Docker build başarıyla derleniyor ve container düzgün başlıyor. Faz 3'ün backend kısmı
 (arka plan kütüphanesi: yükleme + listeleme + R2 depolama) da tamamlandı — ayrıntılar
-aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde. Ayrıca `GET /health` endpoint'i var —
+aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde. Ayrıca `GET /api/health` endpoint'i var —
 sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz (model ilk çağrıda
 gecikmeli yüklenir, health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi).
+`backend/Dockerfile`'daki `HEALTHCHECK` bu uç noktayı kullanıyor.
 **Faz 4 (backend) sürüyor:** Supabase JWT doğrulaması, kullanıcı projeleri API'si,
 `admin_users` ile gerçek yönetici yetkisi, tüm tablolarda RLS ve CORS yazıldı ve
 yerel Postgres'e karşı test edildi; gerçek Supabase projesi henüz kurulmadı (bkz.
