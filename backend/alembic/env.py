@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 from app.core.db import Base
+from app.models.admin_user import AdminUser  # noqa: F401 - Base.metadata'ya kaydolması için import edilmesi yeterli
 from app.models.background import Background  # noqa: F401 - Base.metadata'ya kaydolması için import edilmesi yeterli
+from app.models.project import Project  # noqa: F401 - Base.metadata'ya kaydolması için import edilmesi yeterli
 
 config = context.config
 if config.config_file_name is not None:

@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.health import router as health_router
+from app.api.routes.projects import router as projects_router
 from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
@@ -51,6 +53,24 @@ app.add_middleware(
     limiter=admission_limiter,
     path=ROUTE_PATH,
 )
+# CORS EN DIŞTA (en son eklenen): tarayıcının OPTIONS ön kontrol isteği
+# gövdesiz geliyor ve admission/body-size katmanlarına hiç girmeden
+# yanıtlanmalı. Asıl istemci bugün Next.js vekili (sunucudan sunucuya, CORS
+# gerektirmez); bu katman backend'e tarayıcıdan doğrudan erişilen her durum
+# için (ayrı alan adı, Faz 8 mobil web görünümleri) sınırı baştan çiziyor.
+#
+# `allow_credentials=False`: kimlik çerezle değil `Authorization` başlığıyla
+# taşınıyor. Credentials açılsaydı yanlış yapılandırılmış bir origin
+# listesi, tarayıcının çerezleri başka bir siteye göndermesine yol açabilirdi.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origin_list,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
 app.include_router(remove_background_router)
 app.include_router(backgrounds_router)
 app.include_router(health_router)
+app.include_router(projects_router)

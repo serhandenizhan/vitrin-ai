@@ -59,7 +59,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
-- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini doğrular. **IDOR koruması Supabase tarafında RLS politikalarıyla yazılır — RLS'siz tablo oluşturulmaz** (bkz. `ROADMAP.md` Faz 4 ve `SECURITY.md` 3.2).
+- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme").
 - **Ödemeler:** iyzico
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
@@ -172,33 +172,26 @@ Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADM
 - Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra karşılaştırması değil yalnızca sonuç gösterilir.
 - En fazla 20 kayıt.
 
-**Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
+**Faz 4'te kapatılacak.** Sunucu tarafı (şema + `/api/projects`) Faz 4'te hazırlandı; Kaan'ın `work-history.ts` bağlamasıyla kapanacak (bkz. açık takip maddesi 2). Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
 
 ## Açık takip maddeleri
 
 Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
 
-### 1. Backend'de `/health` endpoint'i yok — sahibi: Serhan
+### 1. Geçmiş çalışmalar tarayıcıda — sunucu tarafı hazır, bağlama kaldı — sahibi: Kaan (bağlama)
 
-Arayüze "servis ayakta mı" göstergesi **konmadı**. Uydurma bir gösterge yanlış bilgi verir: servis kapalıyken "bağlı" yazan bir rozet, kullanıcının hatayı anlamasını zorlaştırır. Şu an servisin kapalı olduğu ilk gerçek istekte açık bir mesajla anlaşılıyor ("Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir.").
+Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; geçmiş o yüzden şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
 
-Böyle bir gösterge isteniyorsa backend'e küçük bir sağlık endpoint'i eklenmeli. Frontend tarafı hazır: vekil katmanı zaten var, gösterge yarım saatlik iş.
+**Serhan'ın yarısı (şema + API) Faz 4'te yapıldı** (`feature/faz4-veritabani-hesaplar`): `projects` tablosu (RLS'li, migration 0003) ve `work-history.ts`'in dört fonksiyonuyla birebir eşleşen uç noktalar — `listWorks` → `GET /api/projects`, `saveWork` → `POST /api/projects` (multipart: `result` PNG, `thumbnail`, `file_name`, `is_mocked`, `duration_seconds`), `deleteWork` → `DELETE /api/projects/{id}`, `clearWorks` → `DELETE /api/projects`. Hepsi `Authorization: Bearer <Supabase access token>` istiyor. Yanıttaki görseller süreli imzalı URL (`result_url`, `thumbnail_url`, `expires_in`) — Blob değil; zeminlerdeki yenileme deseni burada da gerekecek.
 
-**Not:** endpoint eklenirse model yüklü mü / kapasite dolu mu bilgisini de dönmesi faydalı olur — arayüz `MAX_CONCURRENT_INFERENCES=1` yüzünden gelen 503'ü zaten ayrı bir mesajla gösteriyor, aynı bilgiyi önden verebilmek beklemeyi öngörülebilir kılar.
+Kalan (Kaan): `work-history.ts`'in gövdesini bu uç noktalara bağlamak ve Next.js vekiline oturumdaki access token'ı `Authorization` başlığıyla iletmek. Panel, sağlayıcı ve araç aynı kalacak.
 
-### 2. Geçmiş çalışmalar tarayıcıda — Faz 4'te sunucuya taşınacak — sahibi: Serhan (şema) + Kaan (bağlama)
+Hâlâ açık **ürün kararları** (kullanıcıya sorulacak):
+- Var olan tarayıcı kayıtları hesaba taşınacak mı? Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
+- Sunucuda **özgün fotoğraf** da saklanacak mı? Şema şu an yalnızca sonucu tutuyor (tarayıcıdakiyle aynı); saklanırsa geçmişten açılan çalışmada önce/sonra karşılaştırması da açılabilir.
+- Kayıt sınırı: tarayıcıdaki 20 kayıt sınırı kotadan geliyordu; sunucuda sınır yok (liste isteği en fazla 100 döndürüyor).
 
-Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
-
-Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek bir dosyanın arkasında (`frontend/src/lib/work-history.ts`), yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek. Panel, sağlayıcı ve araç aynı kalacak.
-
-Şema tasarlanırken bilinmesi gerekenler:
-- Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
-- Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
-- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
-- Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
-
-### 3. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
+### 2. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
 
 `/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
 koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
@@ -211,13 +204,17 @@ kendi profili alınmalı. Profilsiz bir çevrim matbaada yanlış renk verir; bu
 sessizce yapmak özelliği hiç sunmamaktan kötüdür — bu yüzden varsayılan
 konmadı.
 
-### 4. CORS middleware'i — sahibi: Serhan, Faz 4
+### 3. Supabase projesi kurulmadı — backend hazır, bağlanacak proje yok — sahibi: Serhan
 
-Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
+Faz 4 backend kodu (JWT doğrulama, `projects`/`admin_users` şeması, RLS) yerel Postgres'e karşı yazıldı ve test edildi; **gerçek bir Supabase projesi henüz yok**. `SUPABASE_URL` boşken oturum gerektiren her uç nokta (projeler, `POST /api/admin/backgrounds`) açık bir 503 döner — sessizce açık kalmaz. Yapılacaklar (kullanıcı hesabı gerektirdiği için Claude yapamaz):
 
-`POST /api/admin/backgrounds` (Faz 3) şu anda gerçek bir admin auth yerine geçici bir `X-Admin-Secret` paylaşılan secret header'ıyla korunuyor (`ADMIN_SECRET` env değişkeni). Bu, ders 8'de anlatılan deseninin ikinci tekrarı — bilinçli, kullanıcı onaylı bir geçici çözüm. Faz 4'te gerçek Supabase Auth + rol kontrolü (`is_admin`) devreye girdiğinde bu header tamamen kaldırılıp yerine gerçek yetkilendirme konulacak.
+1. Supabase projesini oluşturmak; **JWT imzalama anahtarlarını (asimetrik, JWKS)** kullanmak — HS256 legacy secret'ı üretim için önerilmiyor.
+2. `backend/.env`'e `SUPABASE_URL` ve Supabase Postgres'in `DATABASE_URL`'ini yazmak (doğrudan bağlantı ya da **session** pooler; transaction pooler asyncpg'nin prepared statement'larıyla uyumsuz). **Bundan sonra `pytest` bu veritabanına karşı çalışmayı reddeder** — test paketi bağlandığı veritabanını sıfırlıyor (`auth.users` dahil); koruma `backend/tests/db_safety.py`. Testleri `DATABASE_URL=... pytest` ile yerel bir Postgres'e yönlendir.
+3. `alembic upgrade head` ile migration'ları Supabase'e uygulamak (0002 orada no-op).
+4. İlk yöneticiyi SQL editöründen eklemek: `insert into public.admin_users (user_id) select id from auth.users where email = '<e-posta>';` — Faz 3'teki `X-Admin-Secret` kaldırıldığı için zemin yüklemenin artık tek yolu bu.
+5. Supabase Auth ayarlarında access token süresini kısa tutmak (`SECURITY.md` 3.1: ~15 dk + refresh token).
 
-### 5. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
+### 4. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
 Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
 
