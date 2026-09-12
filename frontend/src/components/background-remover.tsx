@@ -37,7 +37,14 @@ import {
 type Status = "idle" | "ready" | "processing" | "done" | "error";
 
 export function BackgroundRemover() {
-  const { recordWork, subscribeToOpenWork, subscribeToReset } = useWorkspace();
+  const {
+    recordWork,
+    subscribeToOpenWork,
+    subscribeToReset,
+    user,
+    isAuthLoaded,
+    openSignIn,
+  } = useWorkspace();
 
   const [status, setStatus] = useState<Status>("idle");
   const [file, setFile] = useState<File | null>(null);
@@ -144,6 +151,15 @@ export function BackgroundRemover() {
   const handleRemoveBackground = useCallback(async () => {
     if (!file) return;
 
+    // Faz 4 karari: giris yapmadan arka plan kaldirilamaz. Fotograf secimi
+    // ve onizleme serbest — kullanici once araci gorsun; islemi baslatirken
+    // giris penceresi aciliyor, secilen dosya yerinde kaliyor. Asil kontrol
+    // vekilde ve backend'de; bu yalnizca bosuna bir istegi onluyor.
+    if (!user) {
+      openSignIn();
+      return;
+    }
+
     // Istek surerken kullanici gecmisten baska bir calisma acabilir ya da
     // "vazgec"e basabilir; o zaman bu oturum artik gecerli degil ve gec
     // gelen sonuc kullanicinin o an baktigi ekranin uzerine yazmamali.
@@ -165,7 +181,10 @@ export function BackgroundRemover() {
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           error?: string;
+          code?: string;
         } | null;
+        // Oturum bu arada dustu (suresi doldu, baska sekmede cikis yapildi).
+        if (payload?.code === "auth_required") openSignIn();
         throw new Error(
           payload?.error ?? "Arka plan kaldırma işlemi başarısız oldu.",
         );
@@ -198,7 +217,7 @@ export function BackgroundRemover() {
       );
       setStatus("error");
     }
-  }, [file, trackObjectUrl, recordWork]);
+  }, [file, trackObjectUrl, recordWork, user, openSignIn]);
 
   /**
    * Kenar cubugundan bir calisma acilinca onu ekrana getir.
@@ -209,10 +228,12 @@ export function BackgroundRemover() {
    * kalici bir durum degil.
    *
    * `file` burada null kaliyor: gecmiste yalnizca SONUC saklaniyor, ozgun
-   * fotograf degil. Sebep kota — ozgun dosyalar 20 MB'a kadar cikabiliyor ve
-   * yirmi kaydin ozguniyle birlikte saklanmasi tarayici kotasini hizla
-   * doldurur. Bu yuzden acilan calismada karsilastirma degil yalnizca sonuc
-   * gosteriliyor; kullanici indirebiliyor.
+   * fotograf degil (Faz 4 urun karari, Kaan 12.09.2026). Bu yuzden acilan
+   * calismada karsilastirma degil yalnizca sonuc gosteriliyor.
+   *
+   * Sonuc sunucudan aliniyor (`resultUrl`, ayni kokenden vekil); gelene kadar
+   * ekran degismiyor. Bu arada baska bir dosya secilirse gec gelen sonuc
+   * oturum sayaciyla atiliyor.
    */
   // "Basa don" olayinda arac bos duruma aliniyor. Abonelik, efekt govdesinde
   // setState cagirmadan calisiyor (bkz. workspace-provider.tsx gerekcesi).
@@ -225,15 +246,31 @@ export function BackgroundRemover() {
         // istegi varsa, ekrana simdi acilan gecmis calismanin uzerine
         // yazmasin diye oturum kapatiliyor.
         sessionRef.current += 1;
+        const session = sessionRef.current;
         setIsPreparingPreview(false);
         setErrorMessage(null);
-        setFile(null);
-        setOriginalUrl(null);
-        setResultUrl(trackObjectUrl(URL.createObjectURL(work.result)));
-        setIsMocked(work.isMocked);
-        setElapsedSeconds(work.durationSeconds);
-        setOpenedFileName(work.fileName);
-        setStatus("done");
+
+        void fetch(work.resultUrl, { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) throw new Error("result");
+            return response.blob();
+          })
+          .then((blob) => {
+            if (session !== sessionRef.current) return;
+            setFile(null);
+            setOriginalUrl(null);
+            setResultUrl(trackObjectUrl(URL.createObjectURL(blob)));
+            setIsMocked(work.isMocked);
+            setElapsedSeconds(work.durationSeconds);
+            setOpenedFileName(work.fileName);
+            setStatus("done");
+          })
+          .catch(() => {
+            if (session !== sessionRef.current) return;
+            setErrorMessage(
+              "Çalışma açılamadı. Bağlantınızı kontrol edip tekrar deneyin.",
+            );
+          });
       }),
     [subscribeToOpenWork, trackObjectUrl],
   );
@@ -274,12 +311,17 @@ export function BackgroundRemover() {
       {/* Arac, tanitim bolumlerinin arasinda beyaz bir kart olarak duruyor —
           Apple'in acik zeminli bolumlerinde one cikan urun karti gibi. */}
       <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-9">
+        {/* `soft-enter`: ekranlar (yukleme -> onizleme -> isleniyor -> sonuc)
+            birden degil yumusakca beliriyor. Kosullu cizim her gecis icin
+            ogeyi yeniden bagladigi icin animasyon her seferinde oynuyor. */}
         {showDropzone ? (
-          <UploadDropzone onFileSelected={handleFileSelected} />
+          <div className="soft-enter">
+            <UploadDropzone onFileSelected={handleFileSelected} />
+          </div>
         ) : null}
 
         {showPreview && file ? (
-          <div className="flex flex-col items-center gap-6">
+          <div className="soft-enter flex flex-col items-center gap-6">
             {isPreparingPreview ? (
               <div
                 role="status"
@@ -320,9 +362,16 @@ export function BackgroundRemover() {
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button size="lg" className="press rounded-full" onClick={handleRemoveBackground}>
+              <Button
+                size="lg"
+                className="press rounded-full"
+                onClick={handleRemoveBackground}
+                disabled={!isAuthLoaded}
+              >
                 <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
-                Arka planı kaldır
+                {user || !isAuthLoaded
+                  ? "Arka planı kaldır"
+                  : "Giriş yapın ve kaldırın"}
               </Button>
               <Button
                 variant="ghost"
@@ -333,22 +382,39 @@ export function BackgroundRemover() {
                 Vazgeç
               </Button>
             </div>
+
+            {isAuthLoaded && !user ? (
+              <p className="text-muted-foreground -mt-2 text-center text-xs">
+                Arka plan kaldırma üyelere açık.{" "}
+                <button
+                  type="button"
+                  onClick={() => openSignIn("signup")}
+                  className="text-foreground font-medium underline underline-offset-2"
+                >
+                  Ücretsiz hesap oluşturun
+                </button>
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         {status === "processing" ? (
-          <ProcessingState onizlemeUrl={originalUrl} />
+          <div className="soft-enter">
+            <ProcessingState onizlemeUrl={originalUrl} />
+          </div>
         ) : null}
 
         {status === "done" && resultUrl && (file || openedFileName) ? (
-          <ComparisonView
-            originalUrl={originalUrl}
-            resultUrl={resultUrl}
-            fileName={file?.name ?? openedFileName ?? "urun"}
-            isMocked={isMocked}
-            elapsedSeconds={elapsedSeconds}
-            onReset={reset}
-          />
+          <div className="soft-enter">
+            <ComparisonView
+              originalUrl={originalUrl}
+              resultUrl={resultUrl}
+              fileName={file?.name ?? openedFileName ?? "urun"}
+              isMocked={isMocked}
+              elapsedSeconds={elapsedSeconds}
+              onReset={reset}
+            />
+          </div>
         ) : null}
       </div>
     </div>

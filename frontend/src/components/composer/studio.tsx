@@ -60,7 +60,7 @@ export function Studio() {
         basilamiyordu. (Kok CLAUDE.md ders 13'un ayni sinifi: esit
         ozgullukte/oncelikte kazanani SIRA belirler.)
       */
-      className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white"
+      className="soft-fade fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white"
     >
       <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-black/8 bg-white/85 px-4 backdrop-blur-xl sm:px-6">
         <Button

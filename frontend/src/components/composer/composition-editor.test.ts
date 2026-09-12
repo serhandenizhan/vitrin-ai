@@ -163,6 +163,87 @@ describe("CompositionEditor", () => {
     );
   });
 
+  describe("öne alınan özellikler (13.09.2026)", () => {
+    it("Pazaryeri biçimi seçilince zemin düz beyaza geçiyor", () => {
+      backgroundState = {
+        ...backgroundState,
+        backgrounds: [
+          ...initialBackgrounds,
+          { type: "placeholder" as const, id: "placeholder-white", name: "Düz beyaz", gradient: [0, "#ffffff", 1, "#ffffff"] },
+        ],
+      };
+      renderEditor();
+      expect(screen.getByTestId("stage-background").textContent).toBe(
+        "r2-a|https://r2.example/a-initial",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /Pazaryeri/ }));
+
+      expect(screen.getByTestId("stage-background").textContent).toBe("placeholder-white|");
+    });
+
+    it("paylaşım menüsü olmayan cihazda JPEG indirir, WhatsApp Web'i açar ve ne yapılacağını söyler", () => {
+      fakeStage = createFakeStage(() => "data:image/jpeg;base64,AAAA");
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      const openSpy = vi.fn();
+      vi.stubGlobal("open", openSpy);
+      // Masaustu: navigator.canShare yok.
+      vi.stubGlobal("navigator", { ...navigator, canShare: undefined, share: undefined });
+      renderEditor();
+
+      fireEvent.click(screen.getByRole("button", { name: /WhatsApp/ }));
+
+      expect(fakeStage.toDataURL).toHaveBeenCalledWith(
+        expect.objectContaining({ mimeType: "image/jpeg" }),
+      );
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://web.whatsapp.com/",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      // Editorde birden fazla `role="status"` olabiliyor; mesaj metniyle aranıyor.
+      expect(screen.getByText(/Görsel indirildi/)).toBeTruthy();
+      clickSpy.mockRestore();
+    });
+
+    it("paylaşım menüsü olan cihazda görselin KENDİSİNİ paylaşıyor, indirme yapmıyor", async () => {
+      fakeStage = createFakeStage(() => "data:image/jpeg;base64,AAAA");
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      const share = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("navigator", { ...navigator, canShare: () => true, share });
+      renderEditor();
+
+      fireEvent.click(screen.getByRole("button", { name: /WhatsApp/ }));
+
+      expect(share).toHaveBeenCalledTimes(1);
+      const [{ files }] = share.mock.calls[0] as [{ files: File[] }];
+      expect(files[0].type).toBe("image/jpeg");
+      expect(files[0].name).toMatch(/\.jpg$/);
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
+
+    it("SVG logo reddediliyor ve sebebi gösteriliyor", () => {
+      renderEditor();
+
+      fireEvent.change(screen.getByLabelText("Logo dosyası seç"), {
+        target: { files: [new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })] },
+      });
+
+      expect(screen.getByRole("alert").textContent).toMatch(/PNG, JPEG ya da WebP/);
+    });
+
+    it("etiket açılınca alanlar geliyor, geçersiz gram uyarısı çıkıyor", () => {
+      renderEditor();
+
+      fireEvent.click(screen.getByRole("switch", { name: "Etiket kapalı" }));
+      fireEvent.change(screen.getByPlaceholderText("3,45"), { target: { value: "üç" } });
+
+      expect(screen.getByRole("alert").textContent).toMatch(/Gramı sayı olarak/);
+    });
+  });
+
   describe("toDataURL hata attığında", () => {
     // Gercek dunyadaki karsiligi: R2 CORS kurali eksik ya da yanlis oldugunda
     // tuval "tainted" olur ve `toDataURL` SecurityError firlatir. Sahne o an

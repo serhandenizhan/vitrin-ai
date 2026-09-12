@@ -27,7 +27,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LogIn, Menu, PanelLeft } from "lucide-react";
+import { ChevronDown, LogIn, Menu, PanelLeft, UserRound } from "lucide-react";
 
 import { NavPanel } from "@/components/nav-panel";
 import {
@@ -36,6 +36,7 @@ import {
 } from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
+import { displayName } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -53,7 +54,14 @@ const PANELLER = [
 type PanelAdi = (typeof PANELLER)[number]["ad"] | "menu";
 
 export function SiteHeader() {
-  const { isSidebarOpen, toggleSidebar, works, openSignIn } = useWorkspace();
+  const {
+    isSidebarOpen,
+    toggleSidebar,
+    works,
+    openSignIn,
+    user,
+    isAuthLoaded,
+  } = useWorkspace();
   const pathname = usePathname();
   // Ayni anda tek panel: iki panelin ust uste binmesi ya da biri acikken
   // digerinin arkasinda kalmasi mumkun olmasin.
@@ -166,14 +174,39 @@ export function SiteHeader() {
           </ul>
 
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-            <button
-              type="button"
-              onClick={openSignIn}
-              className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
-            >
-              <LogIn className="size-4" strokeWidth={1.75} aria-hidden />
-              <span className="hidden sm:inline">Giriş yap</span>
-            </button>
+            {/* Oturum bilgisi gelene kadar yer tutucu: once "Giris yap"
+                gorunup bir an sonra hesaba donmesi titreme gibi duruyordu. */}
+            {!isAuthLoaded ? (
+              <span aria-hidden className="h-9 w-9 sm:w-24" />
+            ) : user ? (
+              // Hesap islemleri (cikis) sol panelde; ayri bir acilir menu
+              // eklemek yerine ayni yere gidiyor.
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label={`Hesabım: ${displayName(user)}`}
+                title={user.email ?? undefined}
+                className="flex h-9 max-w-[12rem] items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
+              >
+                <UserRound
+                  className="size-4 shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                {/* E-posta yerine ad: kullanici istegi (13.09.2026). Adi
+                    olmayan eski hesaplarda e-postanin basi (lib/profile.ts). */}
+                <span className="hidden truncate sm:inline">{displayName(user)}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openSignIn}
+                className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
+              >
+                <LogIn className="size-4" strokeWidth={1.75} aria-hidden />
+                <span className="hidden sm:inline">Giriş yap</span>
+              </button>
+            )}
 
             {/* Cok dar ekranda kisa metin: panel dugmesi + marka + giris
                 ikonu + tam metinli CTA + menu dugmesi ust uste bindiginde

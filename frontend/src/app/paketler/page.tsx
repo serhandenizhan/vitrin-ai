@@ -58,13 +58,11 @@ const ORTAK_OZELLIKLER = [
   "Arka plan kaldırma",
   "Kompozisyon stüdyosu",
   "2000×2000 PNG ve JPEG",
+  // Faz 4'ten beri her planda ayni (Deneme de hesap istiyor), bu yuzden
+  // planlar arasinda degisen ayri bir "saklandigi yer" satiri artik yok.
+  "Çalışmalar hesabınızda saklanır",
 ];
 
-/**
- * NOT: "Çalışmalar ... saklanır" cümleleri buraya bilerek eklenmedi.
- * Saklama yeri bir var/yok özelliği değil, planlar arasında değişen bir
- * METİN (bkz. `SAKLAMA_YERI`) — tabloda ayrı, tek bir satır olarak duruyor.
- */
 const ATOLYE_OZELLIKLERI = [
   ...ORTAK_OZELLIKLER,
   "Aylık yüksek işlem hakkı",
@@ -77,15 +75,12 @@ const ATOLYE_OZELLIKLERI = [
 const PAKETLER: Paket[] = [
   {
     ad: "Deneme",
-    ozet: "Kayıt olmadan, hemen",
+    ozet: "Ücretsiz bir hesapla, hemen",
     fiyat: "Ücretsiz",
     fiyatNotu: "Şu anda açık",
     acik: true,
     vurgulu: false,
-    maddeler: [
-      ...ORTAK_OZELLIKLER,
-      "Çalışmalar bu cihazda saklanır",
-    ],
+    maddeler: ORTAK_OZELLIKLER,
     tumOzellikler: ORTAK_OZELLIKLER,
   },
   {
@@ -130,16 +125,6 @@ const PAKETLER: Paket[] = [
 ];
 
 /**
- * "Çalışmaların saklandığı yer" satırı tek başına — boole degil, metin
- * degeri var, dolayısıyla `tumOzellikler` uyeligiyle turetilemiyor.
- */
-const SAKLAMA_YERI: Record<string, string> = {
-  Deneme: "Bu cihaz",
-  Atölye: "Hesabınız",
-  Mağaza: "Hesabınız",
-};
-
-/**
  * Karsilastirma tablosu artik ELLE YAZILMIYOR: her satir, `PAKETLER[].
  * tumOzellikler`de en az bir planda gecen ozelliklerin BIRLESIMINDEN
  * (ilk gorulme sirasiyla) turuyor, her hucre de o planin listesinde o
@@ -156,28 +141,23 @@ const OZELLIK_SATIRLARI = TUM_OZELLIKLER.map((ozellik) => ({
   degerler: PAKETLER.map((paket) => paket.tumOzellikler.includes(ozellik)),
 }));
 
-// "Saklandigi yer" satiri, ORTAK_OZELLIKLER'in hemen ardindan geliyor —
-// planlar arasındaki ilk gercek fark bu oldugu icin en basta okunmasi
-// dogru; TUM_OZELLIKLER'e dahil olmadigindan elle bu konuma yerlestiriliyor.
-const KARSILASTIRMA: { ozellik: string; degerler: (boolean | string)[] }[] = [
-  ...OZELLIK_SATIRLARI.slice(0, ORTAK_OZELLIKLER.length),
-  {
-    ozellik: "Çalışmaların saklandığı yer",
-    degerler: PAKETLER.map((paket) => SAKLAMA_YERI[paket.ad]),
-  },
-  ...OZELLIK_SATIRLARI.slice(ORTAK_OZELLIKLER.length),
-];
+// Onceden burada elle yerlestirilen bir "saklandigi yer" metin satiri vardi
+// (Deneme: "Bu cihaz"). Faz 4'te her plan hesapta sakladigi icin satir
+// kalkti; tablo tamamen `tumOzellikler`den turuyor. `Cell` metin degerini
+// hala destekliyor — planlar arasinda degisen bir metin satiri gerekirse diye.
+const KARSILASTIRMA: { ozellik: string; degerler: (boolean | string)[] }[] =
+  OZELLIK_SATIRLARI;
 
 const SORULAR = [
   {
     soru: "Bugün ne kadar kullanabilirim?",
     cevap:
-      "Bir sınır koymadık. Kayıt yok, ücret yok; istediğiniz kadar fotoğraf işleyebilirsiniz. Aynı anda tek fotoğraf işlendiği için yoğun anlarda kısa bir süre beklemeniz gerekebilir.",
+      "Bir sınır koymadık. Ücretsiz bir hesap açmanız yeterli, ücret yok; istediğiniz kadar fotoğraf işleyebilirsiniz. Aynı anda tek fotoğraf işlendiği için yoğun anlarda kısa bir süre beklemeniz gerekebilir.",
   },
   {
     soru: "Ücretli plana geçince bugünkü çalışmalarım ne olacak?",
     cevap:
-      "Çalışmalarınız şu anda yalnızca kullandığınız cihazda duruyor. Hesap sistemi açıldığında sunucuya taşınacak ve bunu yapmadan önce size haber vereceğiz.",
+      "Çalışmalarınız hesabınızda saklanıyor. Ücretli bir plana geçtiğinizde hepsi olduğu gibi hesabınızda kalır.",
   },
   {
     soru: "Baskıya uygun (CMYK) çıktı ne demek?",
@@ -302,7 +282,7 @@ export default function PaketlerPage() {
               </h1>
               <p className="lede on-dark-muted mx-auto mt-5 max-w-xl text-pretty">
                 Ödeme sistemi henüz açık değil. Fiyatları netleştirirken aracı
-                kayıt olmadan ve sınır olmadan kullanabilirsiniz.
+                ücretsiz bir hesapla, sınır olmadan kullanabilirsiniz.
               </p>
             </div>
           </Reveal>

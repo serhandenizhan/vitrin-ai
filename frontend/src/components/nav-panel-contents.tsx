@@ -113,8 +113,8 @@ export function HakkindaIcerik() {
       </div>
 
       <p className="fine-print mt-10 text-[#f3f0eb]/45">
-        Kuyumcular için geliştiriliyor. Arka planını kaldırdığımız fotoğrafı
-        sunucuda saklamıyoruz, işlem bitince bellekten siliniyor.
+        Kuyumcular için geliştiriliyor. Özgün fotoğrafınızı sunucuda
+        saklamıyoruz, işlem bitince bellekten siliniyor.
       </p>
     </>
   );

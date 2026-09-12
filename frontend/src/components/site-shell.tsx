@@ -11,12 +11,13 @@
  * tanitim bolumleri sunucu bileseni olmaya devam ediyor ve istemciye inmiyor.
  */
 
+import { AuthDialog } from "@/components/auth-dialog";
 import { Studio } from "@/components/composer/studio";
 import { ScrollToTop } from "@/components/scroll-to-top";
-import { SignInNotice } from "@/components/sign-in-notice";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { WorkSidebar } from "@/components/work-sidebar";
+import { WelcomeToast } from "@/components/welcome-toast";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 
 export function SiteShell({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,8 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
     <WorkspaceProvider>
       <ScrollToTop />
       <WorkSidebar />
-      <SignInNotice />
+      <AuthDialog />
+      <WelcomeToast />
       {/* Tam ekran calisma alani; yalnizca acikken bir sey ciziyor. */}
       <Studio />
       <SiteHeader />

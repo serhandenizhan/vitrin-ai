@@ -1,176 +1,114 @@
 "use client";
 
 /**
- * Gecmis calismalar deposu — GECICI, tarayici icinde.
+ * Gecmis calismalar deposu — hesaba bagli, SUNUCUDA (Faz 4).
  *
- * =========================================================================
- * BU BILINCLI BIR GECICI COZUM (bkz. kok CLAUDE.md ders 8)
- * =========================================================================
- * Yol haritasi proje gecmisini Faz 4'e koyuyor ve orada "bastan SUNUCUDA"
- * diyor — onceki iterasyonda gecmis tarayicida tutulup sonra tasinmisti,
- * bu iterasyonda o tasima isinden kacinilmak isteniyor (bkz. ROADMAP.md
- * Faz 4).
+ * Faz 2'de gecici olarak tarayicida (IndexedDB) tutuluyordu (kok CLAUDE.md
+ * ders 8). Faz 4'te yalnizca bu dosyanin govdesi degisti; fonksiyon adlari
+ * ayni kaldi. Istekler Next.js vekillerinden (`/api/projects`) FastAPI'ye
+ * gidiyor; token vekilde ekleniyor.
  *
- * Kullanici Faz 2'de gecmisi gorunur istedi. Faz 4'un semasi ve RLS'i henuz
- * yok, dolayisiyla tek secenek tarayici. Bu yuzden:
+ * Urun kararlari (Kaan, 12.09.2026):
+ *  - Tarayicidaki eski kayitlar hesaba TASINMIYOR; eski IndexedDB deposu
+ *    `discardLegacyBrowserHistory` ile siliniyor (cihazda sessizce veri
+ *    birakmamak icin).
+ *  - Yalnizca SONUC saklaniyor, ozgun fotograf degil.
  *
- *  - Depo bir ARAYUZUN arkasinda duruyor (asagidaki fonksiyonlar). Faz 4'te
- *    yalnizca bu dosyanin govdesi sunucu cagrilariyla degistirilecek;
- *    arayuzun geri kalani hic degismeyecek.
- *  - Kullaniciya arayuzde acikca "bu cihazda saklaniyor, hesap sistemi
- *    gelince hesabiniza tasinacak" yaziliyor — sessizce yapilmiyor.
- *  - Kullanici geemisi kapatabiliyor ve silebiliyor (ayarlar).
- *
- * Neden IndexedDB, localStorage degil: kayitlar metin degil Blob (PNG).
- * localStorage yalnizca string tutar ve base64'e cevirmek hem boyutu ~%33
- * buyutur hem 5MB'lik kotayi birkac kayitta doldurur.
+ * Ag hatalarinda fonksiyonlar firlatmiyor: gecmis ikincil bir ozellik, asil
+ * akis (kesim + indirme) bundan etkilenmemeli.
  */
 
-const DB_NAME = "vitrin-ai";
-const DB_VERSION = 1;
-const STORE = "works";
+import type { WorkRecord } from "@/lib/project-record";
 
-/** Bu sayidan fazlasi tutulmaz; en eskiler silinir. */
-const MAX_RECORDS = 20;
+export type { WorkRecord } from "@/lib/project-record";
+
+/** Kaydedilecek yeni calisma. */
+export type NewWork = {
+  fileName: string;
+  isMocked: boolean;
+  durationSeconds: number | null;
+  /** Arka plani kaldirilmis sonuc (PNG). */
+  result: Blob;
+};
 
 /** Kenar cubugundaki onizleme icin kucuk kare. */
 const THUMB_SIZE = 128;
 
-export type WorkRecord = {
-  id: string;
-  fileName: string;
-  createdAt: number;
-  isMocked: boolean;
-  durationSeconds: number | null;
-  /** Arka plani kaldirilmis sonuc. */
-  result: Blob;
-  /** Kenar cubugunda gosterilen kucuk onizleme. */
-  thumbnail: Blob;
-};
+/** Faz 2'deki tarayici deposunun adi. */
+const LEGACY_DB_NAME = "vitrin-ai";
 
-/** Depo kullanilamiyorsa (gizli sekme, kota, eski tarayici) null doner. */
-function openDatabase(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
-    if (typeof indexedDB === "undefined") {
-      resolve(null);
-      return;
-    }
-
-    let request: IDBOpenDBRequest;
-    try {
-      request = indexedDB.open(DB_NAME, DB_VERSION);
-    } catch {
-      resolve(null);
-      return;
-    }
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    // Gizli pencerede ya da depolama kapaliyken acilma basarisiz olabilir —
-    // bu bir hata degil, gecmis ozelligi o oturumda yok sayilir.
-    request.onerror = () => resolve(null);
-    request.onblocked = () => resolve(null);
-  });
-}
-
-function promisify<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/** Kayitlari yeniden eskiye dogru dondurur. */
+/** Kayitlari yeniden eskiye dogru dondurur. Oturum yoksa bos liste. */
 export async function listWorks(): Promise<WorkRecord[]> {
-  const db = await openDatabase();
-  if (!db) return [];
   try {
-    const store = db.transaction(STORE, "readonly").objectStore(STORE);
-    const all = await promisify(store.getAll() as IDBRequest<WorkRecord[]>);
-    return all.sort((a, b) => b.createdAt - a.createdAt);
+    const response = await fetch("/api/projects", { cache: "no-store" });
+    if (!response.ok) return [];
+    return (await response.json()) as WorkRecord[];
   } catch {
     return [];
-  } finally {
-    db.close();
   }
 }
 
-export async function saveWork(
-  work: Omit<WorkRecord, "id" | "createdAt" | "thumbnail">,
-): Promise<WorkRecord | null> {
-  const db = await openDatabase();
-  if (!db) return null;
-
+export async function saveWork(work: NewWork): Promise<WorkRecord | null> {
   try {
     const thumbnail = await makeThumbnail(work.result);
-    const record: WorkRecord = {
-      ...work,
-      thumbnail,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-    };
+    const form = new FormData();
+    form.append("result", work.result, "result.png");
+    form.append("thumbnail", thumbnail, "thumbnail.png");
+    form.append("fileName", work.fileName);
+    form.append("isMocked", String(work.isMocked));
+    if (work.durationSeconds !== null && Number.isFinite(work.durationSeconds)) {
+      form.append("durationSeconds", String(work.durationSeconds));
+    }
 
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    store.put(record);
-
-    // Sinirin uzerindeki en eski kayitlari at — gecmis, kotayi doldurmamali.
-    const all = await promisify(store.getAll() as IDBRequest<WorkRecord[]>);
-    const fazlalik = all
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(MAX_RECORDS);
-    for (const eski of fazlalik) store.delete(eski.id);
-
-    await new Promise((resolve) => {
-      tx.oncomplete = resolve;
-      tx.onerror = resolve;
-      tx.onabort = resolve;
-    });
-    return record;
+    const response = await fetch("/api/projects", { method: "POST", body: form });
+    if (!response.ok) return null;
+    return (await response.json()) as WorkRecord;
   } catch {
-    // Kota dolduysa ya da yazma reddedildiyse gecmis kaydedilmez; asil akis
-    // (kesim + indirme) bundan etkilenmemeli.
     return null;
-  } finally {
-    db.close();
   }
 }
 
-export async function deleteWork(id: string): Promise<void> {
-  const db = await openDatabase();
-  if (!db) return;
+/** Basarili olursa true; arayuz kaydi ancak o zaman listeden cikariyor. */
+export async function deleteWork(id: string): Promise<boolean> {
   try {
-    db.transaction(STORE, "readwrite").objectStore(STORE).delete(id);
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    // 404: kayit zaten yok (baska sekmede silindi) — sonuc ayni.
+    return response.ok || response.status === 404;
   } catch {
-    /* yok sayilir */
-  } finally {
-    db.close();
+    return false;
   }
 }
 
-export async function clearWorks(): Promise<void> {
-  const db = await openDatabase();
-  if (!db) return;
+export async function clearWorks(): Promise<boolean> {
   try {
-    db.transaction(STORE, "readwrite").objectStore(STORE).clear();
+    const response = await fetch("/api/projects", { method: "DELETE" });
+    return response.ok;
   } catch {
-    /* yok sayilir */
-  } finally {
-    db.close();
+    return false;
+  }
+}
+
+/**
+ * Faz 2'nin tarayici deposunu siler. Urun karari geregi eski kayitlar
+ * tasinmiyor; silinmezse fotograf sonuclari bu cihazda kimsenin goremedigi
+ * bir yerde kalmaya devam ederdi.
+ */
+export function discardLegacyBrowserHistory(): void {
+  try {
+    if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase(LEGACY_DB_NAME);
+  } catch {
+    /* depolama kapali — silinecek bir sey de yok */
   }
 }
 
 /**
  * Kucuk kare onizleme uretir.
  *
- * Tam boyutlu PNG'i kenar cubugunda gostermek her acilista birkac megabaytin
- * cozulmesi demek; 128px'lik bir kare hem hizli hem yeterli.
+ * Kenar cubugunda tam boyutlu PNG gostermek her acilista birkac megabaytin
+ * indirilmesi demek; 128px'lik bir kare hem hizli hem yeterli. Backend kucuk
+ * resmi 512 KB ile sinirliyor, bu boyutta PNG onun cok altinda.
  */
 async function makeThumbnail(source: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(source);
@@ -180,27 +118,19 @@ async function makeThumbnail(source: Blob): Promise<Blob> {
   const context = canvas.getContext("2d");
   if (!context) {
     bitmap.close();
-    return source;
+    throw new Error("Tuval kullanılamıyor.");
   }
 
   // Orani koruyarak ortala (contain) — kirpmak urunun bir kismini kesiyordu.
-  const scale = Math.min(
-    THUMB_SIZE / bitmap.width,
-    THUMB_SIZE / bitmap.height,
-  );
+  const scale = Math.min(THUMB_SIZE / bitmap.width, THUMB_SIZE / bitmap.height);
   const width = bitmap.width * scale;
   const height = bitmap.height * scale;
-  context.drawImage(
-    bitmap,
-    (THUMB_SIZE - width) / 2,
-    (THUMB_SIZE - height) / 2,
-    width,
-    height,
-  );
+  context.drawImage(bitmap, (THUMB_SIZE - width) / 2, (THUMB_SIZE - height) / 2, width, height);
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/png"),
   );
-  return blob ?? source;
+  if (!blob) throw new Error("Küçük resim üretilemedi.");
+  return blob;
 }

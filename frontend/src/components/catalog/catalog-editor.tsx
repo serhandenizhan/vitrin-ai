@@ -218,7 +218,7 @@ export function CatalogEditor() {
 
   if (!template) {
     return (
-      <div>
+      <div className="soft-enter">
         <div className="grid gap-6 sm:grid-cols-3">
           {Object.values(TEMPLATES).map((option) => (
             <button
@@ -275,7 +275,7 @@ export function CatalogEditor() {
   const selected = selectedSlot !== null ? visibleSlots[selectedSlot] : null;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    <div className="soft-enter grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <div className="mx-auto w-full max-w-[32rem] min-w-0">
         <div
           className="catalog-container overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
@@ -473,15 +473,16 @@ export function CatalogEditor() {
                       key={work.id}
                       type="button"
                       onClick={() => {
-                        const url = URL.createObjectURL(work.result);
-                        objectUrlRef.current.push(url);
-                        void placeInSlot(selectedSlot, url, work.fileName);
+                        // Faz 4: sonuc sunucuda. `resultUrl` ayni kokenden
+                        // vekil; object URL'e gerek yok ve disa aktarmada
+                        // tuval kirlenmiyor (bkz. lib/project-record.ts).
+                        void placeInSlot(selectedSlot, work.resultUrl, work.fileName);
                       }}
                       className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left transition-colors hover:bg-black/5"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={work.thumbnail}
+                        src={work.thumbnailUrl}
                         alt=""
                         aria-hidden
                         className="checkerboard size-9 shrink-0 rounded-md object-contain"
