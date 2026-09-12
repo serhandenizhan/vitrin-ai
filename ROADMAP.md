@@ -337,7 +337,7 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   gradyana düşüyor. Gerçek bucket'a karşı doğrulama R2 kimlik bilgileri
   olmadığı için yapılmadı; `backend/scripts/check_r2_cors.py` ve kural şablonu
   (`backend/README.md` → "R2 CORS") hazır. Production alan adı belirlenince
-  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 4).
+  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 2).
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
@@ -370,7 +370,7 @@ incelemede üç madde düzeltildi:
    sunucuda değil kullanıcının tarayıcısında kırık görsel olarak ortaya çıkardı.
    (Copilot incelemesinin ikinci bulgusu.)
 
-### Faz 4 — Veritabanı ve kullanıcı hesapları — 🔄 Sürüyor (Serhan'ın backend kodu yazıldı; Supabase projesi ve Kaan'ın arayüzü bekliyor)
+### Faz 4 — Veritabanı ve kullanıcı hesapları — ✅ Tamamlandı (13.09.2026; Serhan'ın backend'i ve Kaan'ın arayüzü tek PR'da, Kaan uçtan uca denedi)
 
 - Serhan: Supabase projesi kurulumu, kullanıcı/proje şeması, **RLS politikaları** (tablo ile aynı migration'da — RLS'siz tablo asla oluşturulmaz), FastAPI'de Supabase JWT doğrulaması, CORS middleware'i
 - **Not:** Faz 3'te oluşturulan `backgrounds` tablosunun henüz RLS politikası yok — Faz 3'te sadece yerel Postgres kullanıldığı için (Supabase henüz devrede değil) bu kabul edilebilirdi. Bu migration gerçek Supabase projesine karşı çalıştırıldığında, tablo `anon` anahtarıyla PostgREST üzerinden herkese açık hale gelir — bu yüzden `backgrounds` için de RLS politikası Faz 4'ün Supabase migration işinin bir parçası olarak eklenmeli (bkz. kök `CLAUDE.md` kural 7)
@@ -459,21 +459,50 @@ yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md`
   `pg_class.relrowsecurity` sorgusuyla canlı projede doğrulandı.
 - İlk yönetici eklendi, access token süresi 900 saniyeye (15 dk) çekildi.
 
-**Bekleyenler (kullanıcı hesabı ya da kararı gerektiriyor):**
+**Kaan'ın arayüzü (12-13.09.2026) — tamamlandı, gerçek Supabase + R2 ile uçtan uca denendi.**
+Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyor).
 
-**Serhan için sıradaki adımlar (tam detay kök `CLAUDE.md` açık takip maddesi 3'te):**
-- **A) R2 CORS kuralını gerçek bucket'a eklemek:** şablon `backend/README.md` → "R2 CORS"'ta, `backend/scripts/check_r2_cors.py` ile doğrulanıyor; şu an yalnızca `localhost:3000` var, production alan adı belli olunca eklenmeli.
-- **B) PR #12'yi incelemek/merge etmek.**
+- **Ürün kararları (Kaan):** tarayıcıdaki eski geçmiş hesaba taşınmıyor (eski IndexedDB
+  deposu siliniyor); sunucuda yalnızca sonuç saklanıyor; **arka plan kaldırma giriş
+  istiyor** (backend `get_current_user`, vekil oturumu gövdeyi okumadan önce kontrol
+  ediyor, demo modunda da).
+- **Supabase bağlantısı:** `@supabase/ssr` ile çerezde oturum, tarayıcı ve sunucu
+  istemcileri, her istekte oturumu yenileyen `src/proxy.ts` (Next.js 16'da
+  `middleware.ts`nin yeni adı; yetkilendirme sayılmaz), `/auth/callback` (PKCE kodu ve
+  `token_hash`; `next` parametresi açık yönlendirmeye karşı yalnızca site içi yol kabul
+  ediyor) ve geçersiz bağlantı sayfası.
+- **Kayıt ve giriş:** iki adımlı kayıt — hesap (ad, soyad, e-posta, parola, parola tekrar)
+  ve hesap türü (**bireysel / şirket**; şirkette şirket adı + işletme türü), şehir (81
+  il), isteğe bağlı telefon, zorunlu kullanım koşulları + KVKK onayı, ayrı ve isteğe bağlı
+  ticari e-posta izni. Doğum tarihi, cinsiyet, T.C. kimlik no, adres bilinçli olarak
+  sorulmuyor (KVKK ölçülülük). Hesap türü `user_metadata.account_type`; ileride paketler
+  buna göre ayrışacak. Şirket hesabında ekranda şirket adı, bireyselde kişinin adı
+  görünüyor; girişte "Hoş geldiniz, …" bildirimi.
+- **Parola:** en az 8 karakter, küçük + büyük harf + rakam (Supabase ayarıyla birebir,
+  yazarken canlı liste). Hata mesajları kullanıcı numaralandırmasına kapalı (yanlış parola
+  ile kayıtsız e-posta aynı mesaj; kayıtlı adresle kayıt ve sıfırlamada da "e-postanızı
+  kontrol edin").
+- **Parola sıfırlama:** "Parolamı unuttum" → e-posta → `/auth/yeni-parola` (iki alan);
+  başarıda diğer cihazlardaki oturumlar kapanıyor.
+- **Geçmiş sunucuda:** `work-history.ts` → `/api/projects` vekilleri; sonuç görseli
+  `/api/projects/[id]/result` ile aynı kökenden (tuval kirlenmiyor, R2 CORS gerekmiyor);
+  liste kullanıcıya bağlı (çıkışta önceki kullanıcının listesi bir an bile görünmüyor);
+  küçük resim adreslerinin süresi dolunca liste yenileniyor.
+- **Hesap sayfası (`/hesap`):** profil bilgileri (hesap türü dahil), mevcut parolayla
+  parola değiştirme, tüm cihazlardan çıkış, e-posta yazarak hesap silme. Silme backend'de
+  (`DELETE /api/account`): önce kullanıcının R2 görselleri (`projects/<user_id>/`), sonra
+  Supabase kullanıcısı (Admin API, `SUPABASE_SECRET_KEY`); yapılandırma eksikse hiçbir şey
+  silinmiyor.
+- **Metinler:** "kayıt gerekmiyor", "bu cihazda saklanır", "fotoğraflar saklanmaz" gibi
+  artık doğru olmayan cümleler (ana sayfa, Paketler, Teknik bilgiler, Hakkında) düzeltildi.
+- **Backend düzeltmesi:** `config.py` `.env`'yi çalışılan klasörden değil kendi
+  konumundan buluyor (kök `CLAUDE.md` ders 18).
+- **Testler:** frontend 72 → 188. Backend'e oturum ve hesap silme testleri eklendi (160 →
+  177); yerel Postgres'le henüz çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4).
 
-Diğer bekleyenler:
-- Ürün kararları: tarayıcıdaki eski kayıtlar hesaba taşınacak mı; sunucuda özgün
-  fotoğraf da saklanacak mı; `POST /api/remove-background` oturum isteyecek mi
-  (şu an bilinçli olarak herkese açık — kota Faz 5'e bağlanabilir).
-- Kaan: giriş/kayıt arayüzü, vekilin `Authorization` başlığını iletmesi,
-  `work-history.ts`'in `/api/projects`'e bağlanması.
-- Bilinen sınır: kullanıcı silinince veritabanı kayıtları cascade ile gidiyor ama
-  R2'deki proje görselleri gitmiyor (önek `projects/<user_id>/`, tek komutla
-  silinebilir; otomatik temizlik yok).
+**Bekleyenler:**
+- R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).
+- Kullanım koşulları / KVKK metinleri ve değiştirilemez onay kaydı (açık takip maddesi 3).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -485,25 +514,36 @@ dalda (`feature/ui-guncellemeleri`) yapılıp PR #12'ye eklendi.
 - Paketler sayfası yeniden düzenlendi, karşılaştırma tablosu eklendi.
 - Açılış bölümü iki sütuna alındı, 1440×900'de tek ekrana sığıyor.
 - Yapay zekâ ağzıyla yazılmış izlenimi veren metinler elden geçirildi; "Nasıl çalışır" panelinden model adı (BiRefNet) ve "ilk istek uzun sürer" notu çıkarıldı.
-- **Açık kalan:** Hakkında panelinde ve teknik bilgilerde "fotoğraflar saklanmaz" yazıyor. `POST /api/remove-background` için bu hâlâ doğru, ama Kaan `work-history.ts`'i `/api/projects`'e bağladığında giriş yapmış kullanıcının sonuçları sunucuda saklanacak; o gün bu iki metin güncellenmeli.
+- ~~Hakkında panelinde ve teknik bilgilerde "fotoğraflar saklanmaz" metni~~ — geçmiş sunucuya bağlanınca güncellendi (13.09.2026).
 - **İkinci tur (11.09.2026):** Katalog sayfası Paketler'in diliyle uyumlu hale getirildi (koyu, ışıklı bir açılış bölümü + `page-top`); şablon galerisindeki onizleme kartları artık boş değil, site zeminlerinden örnek görsellerle dolu (`catalog-editor.tsx` → `galleryPreviewSlots`) — özellikle koyu "Kapak" şablonu önceden düz bir siyah dikdörtgen gibi durup sayfayı eksik gösteriyordu. Kaydırınca beliren bölümlerin geçiş süresi biraz uzatıldı (0.7s → 0.85s, kullanıcı: "çok çok az arttıralım, smooth olsun") — yalnızca süre değişti, eğri ve mesafe aynı kaldı.
 
-**Öneriler — kullanıcı onayı bekliyor, hiçbiri uygulanmadı (11.09.2026).** Claude Code'un kendi önerileri;
-kullanıcı "9. maddeyi önce göster, ben seçerim" dedi. Hiçbiri şu an kodda yok, yalnızca
-kayıt altına alınıyor:
+**Öne alınan iş — kullanıcı kararı (13.09.2026): öneriler 1-5 yapıldı.** Faz 4'ün
+kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı yapıldı, kullanıcı onayladı). Fazlarda
+karşılığı olmadığı için burada "öne alınan iş" olarak kayıtlı. Hepsi backend
+gerektirmiyor; kullanıcı dördünü de denedi.
 
-1. **Logo/filigran ekleme:** Kuyumcunun kendi logosunu görsele koyması; görselin başkaları
-   tarafından kullanılmasını da zorlaştırır.
-2. **Ürün etiketi:** Ayar (14K/22K), gram ve ürün kodu görselin köşesine şık bir etiket olarak
-   eklenir. Kuyumculuğa özgü, rakiplerde yaygın değil.
-3. **Hazır çıktı boyutları:** Instagram gönderisi (1:1, 4:5), hikâye (9:16) ve pazaryeri için
-   beyaz zemin tek tıkla seçilir.
-4. **"WhatsApp'ta paylaş" düğmesi:** Türkiye'de kuyumcu satışının büyük kısmı WhatsApp'tan
-   yürüyor.
-5. **Açılışta etkileşimli önce/sonra:** Sabit iki fotoğraf yerine aracın gerçek çıktısıyla
-   sürüklenebilir bir karşılaştırma; ziyaretçi daha yüklemeden sonucu hisseder.
+1. ✅ **Logo:** stüdyoda logo yükleniyor (PNG/JPEG/WebP; SVG reddediliyor), köşe, boyut
+   ve saydamlık ayarlanıyor; tarayıcıda hatırlanıyor (hesaba kaydetmek R2 ister).
+2. ✅ **Ürün etiketi:** ayar (8K-24K), gram, ürün kodu tek satırlık bir etiket; köşe ve
+   koyu/açık görünüm seçiliyor, logoyla aynı köşeye konursa üst üste binmiyor.
+3. ✅ **Hazır çıktı boyutları:** Instagram dikey 1080×1350 ve **Pazaryeri** (2000×2000;
+   seçilince zemin düz beyaza geçiyor, başka zemin seçilirse uyarı). Kare ve hikâye zaten
+   vardı.
+4. ✅ **"WhatsApp'ta paylaş":** telefonda paylaşım menüsü görselin kendisiyle açılıyor;
+   bilgisayarda WhatsApp Web'e dosya eklenemediği için görsel indiriliyor, WhatsApp Web
+   açılıyor ve ne yapılacağı yazıyor. Logo ve etiket tüm çıktılarda.
+5. ✅ **Açılışta etkileşimli önce/sonra:** açılıştaki iki sabit fotoğrafın yerine aracın
+   gerçek kesimiyle sürüklenebilir karşılaştırma. Eski `showcase/kesim.webp` fotoğrafla
+   aynı kadrajda olmadığı için yeni çift `scripts/prepare-before-after.py` ile üretildi;
+   hizalama ölçüldü (ürün piksellerinde ortalama renk farkı ~2, 12 px kaydırınca ~25).
+
+Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `soft-fade`, kök
+`CLAUDE.md` "Arayüz tasarım dili").
+
+**Öneriler — hâlâ bekleyen:**
+
 6. **Çekim rehberi sayfası:** Telefonla mücevher çekme ipuçları (ışık, kadife, açı). Arama
-   motorlarından kuyumcu çeker ve sonuç kalitesini de artırır.
+   motorlarından kuyumcu çeker ve sonuç kalitesini de artırır. (Kullanıcı: "6 kalsın".)
 7. **Ücretsiz planda filigran (11.09.2026, kullanıcı isteğiyle eklendi):** Deneme planında
    indirilen kesim/kompozisyona küçük bir "Vitrin AI" filigranı eklenir; ücretli planlarda
    filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —

@@ -12,8 +12,9 @@ koruyor.
 
 ## Durum
 
-**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru**, **Faz 2 — web frontend MVP**
-ve **Faz 3 — arka plan kütüphanesi + kompozisyon editörü** tamamlandı.
+**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru**, **Faz 2 — web frontend MVP**,
+**Faz 3 — arka plan kütüphanesi + kompozisyon editörü** ve **Faz 4 — veritabanı ve
+kullanıcı hesapları** tamamlandı.
 
 - Faz 1: `POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
   gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
@@ -47,21 +48,27 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 160 test (pytest) · frontend 72 test (Vitest) |
-| Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü de ölçülerek doğrulandı) |
+| Testler | backend 177 test (pytest; Faz 4'te eklenen 17'si yerel Postgres'le henüz çalıştırılmadı) · frontend 188 test (Vitest) |
+| Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü ölçülerek doğrulandı) · Instagram dikey 1080×1350 · Pazaryeri 2000×2000 beyaz zemin |
 | Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
 | Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
 
 RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
 ölçümleri için `frontend/README.md`.
 
-**Faz 4 (veritabanı ve kullanıcı hesapları) sürüyor.** Backend tarafı yazıldı:
-Supabase JWT doğrulaması (JWKS), kullanıcı projeleri API'si (`/api/projects` —
-tarayıcıdaki geçmişin sunucu karşılığı), `admin_users` ile gerçek yönetici yetkisi
-(Faz 3'ün geçici `X-Admin-Secret`'ı kaldırıldı), `public`'teki her tabloda RLS ve
-CORS. Gerçek Supabase projesi 11.09.2026'da kuruldu ve migration'lar uygulandı;
-giriş/kayıt arayüzü ve geçmişin sunucuya bağlanması Kaan'da. Ayrıntı:
-`backend/README.md` ve `ROADMAP.md` Faz 4.
+- Faz 4 (backend): Supabase JWT doğrulaması (JWKS), kullanıcı projeleri API'si
+  (`/api/projects`), `admin_users` ile gerçek yönetici yetkisi (Faz 3'ün geçici
+  `X-Admin-Secret`'ı kaldırıldı), `public`'teki her tabloda RLS, CORS, hesap silme
+  (`DELETE /api/account`) ve arka plan kaldırmada oturum zorunluluğu.
+- Faz 4 (frontend): iki adımlı kayıt (bireysel / şirket hesabı), giriş, parola
+  sıfırlama, "Hoş geldiniz" bildirimi, sunucuda çalışma geçmişi ve `/hesap` sayfası
+  (profil, parola değiştirme, tüm cihazlardan çıkış, hesap silme). Gerçek Supabase +
+  R2 ile uçtan uca denendi.
+- Öne alınan işler: stüdyoda logo, ürün etiketi (ayar/gram/kod), Instagram dikey ve
+  pazaryeri boyutları, WhatsApp'ta paylaşım; açılışta aracın gerçek çıktısıyla
+  sürüklenebilir önce/sonra; sitenin genelinde yumuşak geçişler.
+
+Ayrıntı: `ROADMAP.md` Faz 4, `backend/README.md`, `frontend/README.md`.
 
 ## Ekip
 
@@ -115,6 +122,11 @@ npm install
 cp .env.example .env.local   # USE_MOCK_BACKEND=true ile backend olmadan çalışır
 npm run dev
 ```
+
+Giriş yapabilmek (ve arka plan kaldırabilmek) için `frontend/.env.local`'e Supabase
+proje adresi ve publishable anahtarı, `backend/.env`'e Supabase ve R2 değerleri
+yazılmalı; ayrıntı `frontend/README.md` → "Hesaplar" ve `backend/README.md` →
+"Ortam değişkenleri".
 
 Gerçek uçtan uca akış için backend'i ayrı bir terminalde başlatın ve
 `frontend/.env.local` içinde `USE_MOCK_BACKEND=false` yapın. Ayrıntılar için
