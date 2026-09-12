@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routes.account import router as account_router
 from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
@@ -74,3 +75,4 @@ app.include_router(remove_background_router)
 app.include_router(backgrounds_router)
 app.include_router(health_router)
 app.include_router(projects_router)
+app.include_router(account_router)

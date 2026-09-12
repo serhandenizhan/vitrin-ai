@@ -11,11 +11,17 @@ aşağıda ve kök `ROADMAP.md` Faz 3 bölümünde. Ayrıca `GET /api/health` en
 sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz (model ilk çağrıda
 gecikmeli yüklenir, health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi).
 `backend/Dockerfile`'daki `HEALTHCHECK` bu uç noktayı kullanıyor.
-**Faz 4 (backend) sürüyor:** Supabase JWT doğrulaması, kullanıcı projeleri API'si,
-`admin_users` ile gerçek yönetici yetkisi, tüm tablolarda RLS ve CORS yazıldı ve
-yerel Postgres'e karşı test edildi. Gerçek Supabase projesi 11.09.2026'da kuruldu;
-migration'lar uygulandı ve RLS canlı projede doğrulandı (bkz.
+**Faz 4 (backend) tamamlandı:** Supabase JWT doğrulaması, kullanıcı projeleri API'si,
+`admin_users` ile gerçek yönetici yetkisi, tüm tablolarda RLS, CORS, hesap silme
+(`DELETE /api/account`) ve `POST /api/remove-background`'da oturum zorunluluğu. Gerçek
+Supabase projesi 11.09.2026'da kuruldu; migration'lar uygulandı ve RLS canlı projede
+doğrulandı. Arayüzle birlikte gerçek Supabase + R2'ye karşı uçtan uca denendi (bkz.
 "Kimlik doğrulama ve yetkilendirme").
+
+**`.env` her zaman `backend/.env`'den okunuyor**, uygulama hangi klasörden başlatılırsa
+başlatılsın (`app/core/config.py` → `BACKEND_ENV_FILE`). Önceden göreli yol kullanılıyordu
+ve repo kökünden başlatılan backend `.env`'yi hiç okumadan açılıp her oturum isteğine 503
+dönüyordu (kök `CLAUDE.md` ders 18).
 
 ## Yerel çalıştırma (venv ile)
 
@@ -61,6 +67,10 @@ olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 
 (`tests/db_safety.py`). `.env`'e Supabase `DATABASE_URL`'i yazıldıktan sonra
 yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
+
+**Faz 4 sonunda eklenen testler** (`test_account_endpoint.py`, `test_remove_background_endpoint.py`
+içindeki oturum testleri) Postgres'i olan bir makinede henüz çalıştırılmadı (kök
+`CLAUDE.md` açık takip maddesi 4). Toplam 177 test.
 
 Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
@@ -178,9 +188,46 @@ Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
   istek `MAX_REQUEST_BODY_BYTES` içinde kalmalı. 20 MB'lık bir JPEG'den çıkan
   saydam PNG bundan büyük olabilir; bu durumda `413` döner.
 - **KVKK:** kullanıcı Supabase'den silinince `projects` ve `admin_users`
-  satırları `ON DELETE CASCADE` ile gidiyor, ama **R2 nesneleri gitmiyor** —
-  önek `projects/<user_id>/` olduğu için tek komutla silinebilir; otomatik
-  temizlik henüz yok.
+  satırları `ON DELETE CASCADE` ile gidiyor. Kullanıcı hesabını **arayüzden**
+  silerse R2 görselleri de siliniyor (aşağıdaki "Hesap silme"); Supabase panelinden
+  elle silinen bir kullanıcının R2 nesneleri ise hâlâ otomatik temizlenmiyor.
+
+### Hesap silme
+
+`DELETE /api/account` (oturum gerekli, `204`). Kod: `app/api/routes/account.py`,
+`app/services/supabase_admin.py`.
+
+**Sıra — her adım yarıda kalırsa tekrar denemek güvenli:**
+
+1. **Yapılandırma kontrolü.** `SUPABASE_SECRET_KEY` (ya da `SUPABASE_URL`) yoksa
+   **hiçbir şey silinmeden** `503`. R2 yapılandırılmamışsa da `503`.
+2. **R2 görselleri:** `projects/<user_id>/` önekiyle listelenip sayfa sayfa
+   siliniyor (`R2StorageService.delete_prefix`). Önek token'daki kullanıcıdan;
+   istemciden gelen hiçbir değer girmiyor. Boş ya da `/` ile bitmeyen önek
+   reddediliyor (`projects/u` başka bir kullanıcının `projects/u2/` önekiyle
+   eşleşebilirdi). Başarısızsa `502`, **hesap duruyor**.
+3. **Supabase kullanıcısı:** Auth yönetici API'si
+   (`DELETE <SUPABASE_URL>/auth/v1/admin/users/<id>`). Veritabanından
+   `delete from auth.users` yapılmıyor: `auth` şeması Supabase'e ait ve iç tabloları
+   değişebiliyor. `404` (zaten silinmiş) başarı sayılıyor. Başarısızsa `502`;
+   tekrar denemede R2 adımı boş önekle hızla geçiyor.
+
+Ters sıra (önce hesap) daha kötü olurdu: hesap silindikten sonra R2 hatası alınırsa
+sahibi artık giriş yapıp tekrar deneyemeyeceği için görseller yetim kalırdı.
+
+**Gizli anahtar** RLS'i atlayan tam yetkili bir anahtar: yalnızca backend'de, hata
+mesajlarına ve loglara hiç yazılmıyor (testle korunuyor). Yeni `sb_secret_...`
+anahtarları yalnızca `apikey` başlığıyla, eski `service_role` JWT'si ek olarak
+`Authorization` ile gönderiliyor.
+
+### Arka plan kaldırmada oturum
+
+`POST /api/remove-background` Faz 4'te **oturum istiyor** (ürün kararı, 12.09.2026):
+`get_current_user` bağımlılığı token'ı doğruluyor, geçersizse `401` ile BiRefNet'e hiç
+ulaşılmıyor. Sınır: FastAPI multipart gövdeyi bağımlılıklardan önce ayrıştırıyor,
+yani oturumsuz bir istek de gövde sınırına kadar okunuyor; Next.js vekili oturumu
+gövdeyi okumadan önce kontrol ettiği için normal akışta bu olmuyor, doğrudan backend'e
+gelen isteklere karşı asıl önlem Faz 7 rate limiting.
 
 ### Veritabanı erişim modeli ve RLS
 
@@ -261,6 +308,7 @@ sunucu/instance seçin.
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
 | `SUPABASE_JWT_AUDIENCE` | `authenticated` | Beklenen `aud` değeri |
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
+| `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Project Settings → API Keys → Secret keys). Yalnızca hesap silme için; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` hiçbir şeye dokunmadan `503` döner |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir — boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmadığı için R2'siz yerel geliştirme çalışmaya devam eder |
@@ -275,11 +323,9 @@ Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
 
 ## Kaynak tüketimi korumaları
 
-`POST /api/remove-background` şu anda auth/kota kontrolü olmadan herkese açık.
-Faz 4'te kimlik doğrulama geldi ama bu uç noktaya **bilinçli olarak
-bağlanmadı**: arayüzdeki "Deneyin" akışı oturum açmadan çalışıyor ve bunu
-kapatmak bir ürün kararı (kredi sistemi Faz 5'te; kota muhtemelen oraya
-bağlanacak). Bu ara dönemde kaynak tüketimini sınırlayan üç bağımsız katman var:
+`POST /api/remove-background` Faz 4'ten beri **oturum istiyor** (bkz. "Arka plan
+kaldırmada oturum"); kota/kredi kontrolü Faz 5'te gelecek. Oturumdan bağımsız olarak
+kaynak tüketimini sınırlayan üç katman var:
 
 1. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf
    ASGI middleware, `receive()` akışını sararak toplam istek gövdesi

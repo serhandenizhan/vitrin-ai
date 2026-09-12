@@ -1,3 +1,4 @@
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
@@ -28,12 +29,21 @@ MULTIPART_OVERHEAD_ALLOWANCE_BYTES = 64 * 1024
 DEFAULT_METADATA_BUDGET_BYTES = 60 * 1024
 
 
+# `backend/.env` — çalışılan klasörden BAĞIMSIZ. Önceden `env_file=".env"`
+# göreliydi ve uvicorn başka bir klasörden başlatıldığında (ör. repo kökünden
+# `--app-dir backend` ile) dosya hiç okunmuyordu: uygulama hatasız açılıyor,
+# ama her oturum uç noktası "SUPABASE_URL ayarlanmalı" diye 503 dönüyordu
+# (13.09.2026'da tam olarak böyle görüldü). Kök CLAUDE.md ders 11: yol, repo
+# yapısından türetilir. Gerçek ortam değişkenleri yine `.env`'nin önüne geçer.
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
 def _split_origins(value: str) -> list[str]:
     return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=BACKEND_ENV_FILE, extra="ignore")
 
     max_file_size_mb: int = 20
     # BiRefNet'in ölçülen 12-14GB RAM bütçesi (bkz. kök CLAUDE.md "Bilinen kısıt")
@@ -80,6 +90,12 @@ class Settings(BaseSettings):
     # anahtarı (ES256/RS256, JWKS) kullanıyor ve bu alan BOŞ kalmalı; yalnızca
     # henüz imzalama anahtarlarına geçmemiş bir proje için doldurulur.
     supabase_legacy_jwt_secret: str = ""
+    # Supabase'in GİZLİ sunucu anahtarı (`sb_secret_...` ya da eski
+    # `service_role`). Yalnızca yönetici işlemleri için: şu an tek kullanımı
+    # hesap silme (`DELETE /api/account`). RLS'i atlayan, tam yetkili bir
+    # anahtar — frontend'e, loglara ya da hata mesajlarına asla girmez. Boşsa
+    # hesap silme hiçbir şeye dokunmadan 503 döner.
+    supabase_secret_key: str = ""
     # Virgülle ayrılmış tarayıcı origin'leri (SECURITY.md 2.2). `*` ve yol
     # içeren değerler başlangıçta reddedilir (bkz. `_validate_cors_origins`).
     cors_allowed_origins: str = "http://localhost:3000"
