@@ -3,12 +3,14 @@ import io
 import struct
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.api.routes.remove_background import get_background_removal_service, remove_background
+from app.core.auth import CurrentUser, get_current_user
 from app.core.config import (
     DEFAULT_METADATA_BUDGET_BYTES,
     MULTIPART_OVERHEAD_ALLOWANCE_BYTES,
@@ -72,8 +74,15 @@ def _jpeg_truncated_after_sos_entropy() -> bytes:
     return jpeg[:cut_point]
 
 
+def _signed_in_user() -> CurrentUser:
+    return CurrentUser(id=uuid.uuid4(), email="test@test.example", session_id=None)
+
+
 def _client_with_fake_service(fake_service: FakeBackgroundRemovalService) -> TestClient:
+    # Bu dosyadaki testler yükleme/doğrulama davranışını sınıyor; oturum
+    # zorunluluğu aşağıdaki ayrı testlerde gerçek token doğrulamasıyla sınanıyor.
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_current_user] = _signed_in_user
     client = TestClient(app)
     return client
 
@@ -95,6 +104,53 @@ def test_returns_png_for_valid_jpeg_upload():
     assert response.headers["content-type"] == "image/png"
     assert response.content == b"cutout-png-bytes"
     assert fake_service.received_content == _jpeg_bytes()
+
+
+def test_rejects_request_without_session_with_401_and_service_not_called(tokens):
+    # Faz 4 kararı: giriş yapmadan arka plan kaldırılamaz. RED yolu (ders 15):
+    # oturumsuz istek 401 alıyor ve BiRefNet HİÇ çağrılmıyor.
+    fake_service = FakeBackgroundRemovalService()
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/remove-background",
+        files={"file": ("product.jpg", _jpeg_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 401
+    assert fake_service.received_content is None
+
+
+def test_rejects_invalid_token_with_401_and_service_not_called(tokens):
+    fake_service = FakeBackgroundRemovalService()
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/remove-background",
+        files={"file": ("product.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=tokens.headers(uuid.uuid4(), expires_in=-3600),
+    )
+
+    assert response.status_code == 401
+    assert fake_service.received_content is None
+
+
+def test_accepts_request_with_valid_token(tokens):
+    # KABUL yolu (ders 15): override yok, gerçek JWT doğrulaması.
+    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/remove-background",
+        files={"file": ("product.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=tokens.headers(uuid.uuid4()),
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"cutout-png-bytes"
 
 
 def test_returns_png_for_valid_webp_upload():
@@ -345,6 +401,7 @@ def test_returns_429_immediately_when_admission_capacity_is_full():
             return b"cutout-png-bytes"
 
     app.dependency_overrides[get_background_removal_service] = lambda: BlockingService()
+    app.dependency_overrides[get_current_user] = _signed_in_user
     client = TestClient(app)
 
     first_response: dict = {}
@@ -467,7 +524,9 @@ def test_validate_upload_runs_in_threadpool_without_blocking_event_loop(monkeypa
     async def call_route():
         fake_file = _FakeUploadFile(_jpeg_bytes(), "image/jpeg")
         fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-        response = await remove_background(file=fake_file, service=fake_service)
+        response = await remove_background(
+            file=fake_file, service=fake_service, _user=_signed_in_user()
+        )
         assert response.status_code == 200
 
     async def scenario():

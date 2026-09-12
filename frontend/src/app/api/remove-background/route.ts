@@ -14,6 +14,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { getAccessToken } from "@/lib/supabase/access-token";
 import {
   ALLOWED_CONTENT_TYPES,
   EXTENSION_CONTENT_TYPES,
@@ -53,8 +54,26 @@ const MOCK_CUTOUT_PATH = path.join(
   "sample-cutout.png",
 );
 
-function jsonError(message: string, status: number): Response {
-  return Response.json({ error: message }, { status });
+function jsonError(message: string, status: number, code?: string): Response {
+  return Response.json(code ? { error: message, code } : { error: message }, {
+    status,
+  });
+}
+
+/**
+ * Arayuz bu kodu gorunce giris penceresini aciyor (bkz.
+ * background-remover.tsx); mesaji metinden ayirt etmeye calismiyor.
+ * Export edilmiyor: Next.js route dosyalari yalnizca HTTP isleyicileri ve
+ * route ayarlarini disari verebiliyor.
+ */
+const AUTH_REQUIRED_CODE = "auth_required";
+
+function authRequired(): Response {
+  return jsonError(
+    "Arka planı kaldırmak için giriş yapın.",
+    401,
+    AUTH_REQUIRED_CODE,
+  );
 }
 
 /**
@@ -71,6 +90,12 @@ function resolveUploadContentType(file: File): string | null {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Oturum GOVDEDEN ONCE: giris yapmamis birinin 20 MB'lik yuklemesi hic
+  // okunmuyor. Faz 4 urun karari (Kaan, 12.09.2026): giris yapmadan arka plan
+  // kaldirilamaz — demo modunda da, akis gercekle ayni kalsin diye.
+  const accessToken = await getAccessToken();
+  if (!accessToken) return authRequired();
+
   let form: FormData;
   try {
     form = await request.formData();
@@ -112,6 +137,7 @@ export async function POST(request: Request): Promise<Response> {
     upstream = await fetch(`${BACKEND_URL}/api/remove-background`, {
       method: "POST",
       body: upstreamForm,
+      headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });
   } catch (error) {
@@ -128,6 +154,10 @@ export async function POST(request: Request): Promise<Response> {
       502,
     );
   }
+
+  // Vekilin gecerli saydigi token'i backend reddetti (suresi tam bu arada
+  // doldu, kullanici silindi): arayuz yine giris penceresini acsin.
+  if (upstream.status === 401) return authRequired();
 
   if (!upstream.ok) {
     return jsonError(await upstreamErrorMessage(upstream), upstream.status);
@@ -154,7 +184,7 @@ export async function POST(request: Request): Promise<Response> {
  */
 async function upstreamErrorMessage(upstream: Response): Promise<string> {
   if (upstream.status === 503) {
-    return "Sistem şu anda meşgul — aynı anda yalnızca bir fotoğraf işlenebiliyor. Birkaç saniye sonra tekrar deneyin.";
+    return "Sistem şu anda meşgul, aynı anda yalnızca bir fotoğraf işlenebiliyor. Birkaç saniye sonra tekrar deneyin.";
   }
 
   if (upstream.status === 413) {

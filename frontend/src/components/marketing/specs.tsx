@@ -52,8 +52,8 @@ const SPECS = [
   {
     baslik: "Gizlilik",
     satirlar: [
-      "Fotoğraflar saklanmıyor",
-      "Görsel yalnızca işlem süresince bellekte tutulur, sonuç doğrudan tarayıcınıza döner.",
+      "Özgün fotoğrafınız saklanmaz",
+      "Fotoğraf yalnızca işlem süresince bellekte tutulur. Arka planı kaldırılmış sonuç, geçmişinizde görebilmeniz için hesabınıza kaydedilir; ayarlardan kapatabilir ya da silebilirsiniz.",
     ],
   },
 ];
@@ -64,7 +64,7 @@ export function Specs() {
       <div className="mx-auto w-full max-w-5xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
-            Ayrıntılara yakından bakış
+            Teknik bilgiler
           </h2>
         </Reveal>
 

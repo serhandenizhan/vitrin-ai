@@ -21,7 +21,10 @@
 const STORAGE_KEY = "vitrin-ai:settings";
 
 export type Settings = {
-  /** Gecmis bu cihazda saklansin mi. */
+  /**
+   * Yeni sonuclar hesaptaki gecmise kaydedilsin mi (Faz 4'ten beri sunucuda).
+   * Tercihin kendisi bu cihazda tutuluyor; hesap ayari degil.
+   */
   historyEnabled: boolean;
   /** Kaydirma animasyonlarini kapat. */
   reduceMotion: boolean;

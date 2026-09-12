@@ -29,11 +29,16 @@ import {
   updateSettings as writeSettings,
   type Settings,
 } from "@/lib/settings-store";
+import { displayName, readProfile, type Profile } from "@/lib/profile";
+import { createClient } from "@/lib/supabase/client";
+import { getSupabaseEnv } from "@/lib/supabase/env";
 import {
   clearWorks,
   deleteWork,
+  discardLegacyBrowserHistory,
   listWorks,
   saveWork,
+  type NewWork,
   type WorkRecord,
 } from "@/lib/work-history";
 
@@ -46,11 +51,14 @@ type WorkspaceValue = {
 
   works: WorkRecord[];
   isHistoryLoaded: boolean;
-  recordWork: (
-    work: Omit<WorkRecord, "id" | "createdAt" | "thumbnail">,
-  ) => Promise<void>;
+  recordWork: (work: NewWork) => Promise<void>;
   removeWork: (id: string) => Promise<void>;
   removeAllWorks: () => Promise<void>;
+  /**
+   * Listeyi sunucudan yeniden alir. Kucuk resimlerin imzali adresleri
+   * suresi dolunca (varsayilan 1 saat) kenar cubugu bunu cagiriyor.
+   */
+  refreshWorks: () => void;
 
   /**
    * Kenar cubugundan bir calisma acildiginda haber verir.
@@ -64,16 +72,35 @@ type WorkspaceValue = {
   openWork: (work: WorkRecord) => void;
   subscribeToOpenWork: (listener: (work: WorkRecord) => void) => () => void;
 
-  /**
-   * "Giris yap" penceresi.
-   *
-   * Hesap sistemi Faz 4'te geliyor. Calismayan bir dugme koymak yerine
-   * dugme gorunuyor ama ne oldugunu acikca soyleyen bir pencere aciyor —
-   * tasarim tamamlanmis gorunuyor, kullaniciya yalan soylenmiyor.
-   */
+  /** "Giris yap / kayit ol" penceresi (bkz. `auth-dialog.tsx`). */
   isSignInOpen: boolean;
-  openSignIn: () => void;
+  /**
+   * Pencereyi acar. `mode` verilmezse giris ekrani; "Hesap olusturun" gibi
+   * cagrilar dogrudan kayit ekranini acar. Dugmelere `onClick={openSignIn}`
+   * olarak da verilebiliyor — gelen olay nesnesi mod sayilmiyor.
+   */
+  openSignIn: (mode?: AuthMode | unknown) => void;
+  signInMode: AuthMode;
   closeSignIn: () => void;
+
+  /** Gosterilecek "Hos geldiniz" ismi; gosterilmeyecekse null. */
+  welcomeName: string | null;
+  dismissWelcome: () => void;
+
+  /**
+   * Oturum acmis kullanici (Faz 4, Supabase Auth).
+   *
+   * YALNIZCA GORUNUM ICIN: bu deger tarayicidaki cerezden okunuyor, yani
+   * kullanicinin degistirebilecegi bir yerden. Arayuzde "giris yapilmis"
+   * gostermek icin yeterli; yetki karari icin DEGIL — backend her istekte
+   * token'i JWKS ile kendisi dogruluyor.
+   */
+  user: AuthUser | null;
+  /** Ilk oturum bilgisi geldi mi; gelmeden "Giris yap" yanip sonmesin. */
+  isAuthLoaded: boolean;
+  /** Supabase env degiskenleri tanimli mi. */
+  isAuthConfigured: boolean;
+  signOut: () => Promise<void>;
 
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -144,6 +171,64 @@ function aracaKaydir(): void {
   }, 0);
 }
 
+/**
+ * Oturum acmis kullanici. Profil alanlari `user_metadata`dan; yalnizca
+ * gorunum ve iletisim icin, yetki icin degil (bkz. lib/profile.ts).
+ */
+export type AuthUser = {
+  id: string;
+  email: string | null;
+} & Profile;
+
+export type AuthMode = "signin" | "signup" | "forgot";
+
+const AUTH_MODES: readonly AuthMode[] = ["signin", "signup", "forgot"];
+
+/**
+ * "Bu kullanici icin hos geldin gosterildi" isareti. Cikis yapilinca
+ * siliniyor; boylece her GIRISTE bir kez gorunuyor, sayfa yenilemede ya da
+ * Supabase'in sekme odaginda tekrar gonderdigi SIGNED_IN olayinda degil.
+ */
+const WELCOMED_KEY = "vitrin-ai:welcomed-user";
+
+/** E-posta dogrulama baglantisindan donuste `/auth/callback` bunu ekliyor. */
+export const WELCOME_QUERY_PARAM = "hosgeldiniz";
+
+function readWelcomed(): string | null {
+  try {
+    return window.localStorage.getItem(WELCOMED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeWelcomed(userId: string | null): void {
+  try {
+    if (userId) window.localStorage.setItem(WELCOMED_KEY, userId);
+    else window.localStorage.removeItem(WELCOMED_KEY);
+  } catch {
+    /* depolama kapali — en kotu ihtimalle hos geldin bir kez daha gorunur */
+  }
+}
+
+/** Adres cubugundaki `?hosgeldiniz` isaretini okuyup kaldirir. */
+function consumeWelcomeParam(): boolean {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(WELCOME_QUERY_PARAM)) return false;
+  url.searchParams.delete(WELCOME_QUERY_PARAM);
+  window.history.replaceState(window.history.state, "", url);
+  return true;
+}
+
+/**
+ * Derleme aninda sabit: `NEXT_PUBLIC_` degiskenleri paketin icine gomuluyor,
+ * yani sunucu ve tarayici ayni degeri goruyor (hidrasyon uyusmazligi olmaz).
+ */
+const IS_AUTH_CONFIGURED = getSupabaseEnv() !== null;
+
+/** Sabit bos liste: her render'da yeni `[]` context'i bosuna yenilemesin. */
+const EMPTY_WORKS: WorkRecord[] = [];
+
 export type StudioData = {
   cutoutUrl: string;
   fileName: string;
@@ -162,9 +247,70 @@ export function useWorkspace(): WorkspaceValue {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSignInOpen, setSignInOpen] = useState(false);
+  const [signInMode, setSignInMode] = useState<AuthMode>("signin");
+  const [welcomeName, setWelcomeName] = useState<string | null>(null);
+  const dismissWelcome = useCallback(() => setWelcomeName(null), []);
   const [studio, setStudio] = useState<StudioData | null>(null);
-  const [works, setWorks] = useState<WorkRecord[]>([]);
-  const [isHistoryLoaded, setHistoryLoaded] = useState(false);
+  /**
+   * Gecmis, HANGI KULLANICI icin yuklendigiyle birlikte tutuluyor. Cikis
+   * yapildiginda ya da baska bir hesaba gecildiginde onceki kullanicinin
+   * listesi bir an bile gosterilmiyor: `works` yalnizca kayit mevcut
+   * kullaniciya aitse doluyor. (Efektte `setWorks([])` cagirmak yerine
+   * turetiliyor — react-hooks/set-state-in-effect.)
+   */
+  const [history, setHistory] = useState<{
+    userId: string | null;
+    works: WorkRecord[];
+  }>({ userId: null, works: [] });
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  // Yapilandirma yoksa beklenecek bir oturum da yok.
+  const [isAuthLoaded, setAuthLoaded] = useState(!IS_AUTH_CONFIGURED);
+
+  // Oturum degisikliklerine abone ol. `onAuthStateChange` ilk olarak
+  // INITIAL_SESSION ile mevcut durumu bildiriyor, sonra giris/cikis/token
+  // yenilemede tekrar cagriliyor — ayrica bir `getSession()` gerekmiyor.
+  // setState olayin geri cagrisinda (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (!IS_AUTH_CONFIGURED) return;
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const sessionUser = session?.user;
+      const next: AuthUser | null = sessionUser
+        ? {
+            id: sessionUser.id,
+            email: sessionUser.email ?? null,
+            ...readProfile(sessionUser.user_metadata),
+          }
+        : null;
+      setUser(next);
+      setAuthLoaded(true);
+
+      if (event === "SIGNED_OUT") {
+        writeWelcomed(null);
+        return;
+      }
+      // Hos geldin: pencereden giris (SIGNED_IN) ya da e-posta baglantisindan
+      // donus (sunucuda acilan oturum, istemcide INITIAL_SESSION + adres
+      // isareti). Ayni kullanici icin cikis yapilana kadar bir kez.
+      const cameFromEmailLink = event === "INITIAL_SESSION" && consumeWelcomeParam();
+      if (next && (event === "SIGNED_IN" || cameFromEmailLink) && readWelcomed() !== next.id) {
+        writeWelcomed(next.id);
+        setWelcomeName(displayName(next));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signOut = useCallback(async () => {
+    if (!IS_AUTH_CONFIGURED) return;
+    // Kullanici null'a SIGNED_OUT olayiyla dusuyor. `scope: "local"`: yalnizca
+    // bu cihazdaki oturum kapaniyor; diger cihazlardaki oturumlar suruyor.
+    await createClient().auth.signOut({ scope: "local" });
+    setSidebarOpen(false);
+  }, []);
 
   // Ayarlar localStorage'da, yani React disi bir kaynakta — bkz.
   // lib/settings-store.ts. Sunucu anlik goruntusu varsayilan.
@@ -177,18 +323,34 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // "Calisma acildi" olayinin dinleyicileri.
   const openListenersRef = useRef(new Set<(work: WorkRecord) => void>());
 
+  const userId = user?.id ?? null;
+  const works = useMemo(
+    () => (userId && history.userId === userId ? history.works : EMPTY_WORKS),
+    [userId, history],
+  );
+  // Oturum yoksa beklenecek bir liste de yok.
+  const isHistoryLoaded = isAuthLoaded && (!userId || history.userId === userId);
+
+  // Faz 2'nin tarayici deposu tek seferlik siliniyor (urun karari: eski
+  // kayitlar hesaba tasinmiyor).
   useEffect(() => {
+    discardLegacyBrowserHistory();
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
-    async function load() {
-      const kayitlar = await listWorks();
+    void listWorks().then((kayitlar) => {
       if (cancelled) return;
-      setWorks(kayitlar);
-      setHistoryLoaded(true);
-    }
-    void load();
+      setHistory({ userId, works: kayitlar });
+    });
     return () => {
       cancelled = true;
     };
+  }, [userId, historyVersion]);
+
+  const refreshWorks = useCallback(() => {
+    setHistoryVersion((current) => current + 1);
   }, []);
 
   // "Hareketi azalt" secildiginde tum kaydirma animasyonlari kapaniyor.
@@ -206,22 +368,32 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const recordWork = useCallback<WorkspaceValue["recordWork"]>(
     async (work) => {
-      if (!settings.historyEnabled) return;
+      if (!settings.historyEnabled || !userId) return;
       const kayit = await saveWork(work);
       if (!kayit) return;
-      setWorks((current) => [kayit, ...current].slice(0, 20));
+      // Kayit sirasinda kullanici degistiyse (cikis) listeye eklenmiyor.
+      setHistory((current) =>
+        current.userId === userId
+          ? { userId, works: [kayit, ...current.works] }
+          : current,
+      );
     },
-    [settings.historyEnabled],
+    [settings.historyEnabled, userId],
   );
 
   const removeWork = useCallback(async (id: string) => {
-    await deleteWork(id);
-    setWorks((current) => current.filter((item) => item.id !== id));
+    // Sunucuda silinemediyse listede kalsin; "silindi" gorunup yeniden
+    // acilista geri gelmesi kullaniciyi yaniltirdi.
+    if (!(await deleteWork(id))) return;
+    setHistory((current) => ({
+      ...current,
+      works: current.works.filter((item) => item.id !== id),
+    }));
   }, []);
 
   const removeAllWorks = useCallback(async () => {
-    await clearWorks();
-    setWorks([]);
+    if (!(await clearWorks())) return;
+    setHistory((current) => ({ ...current, works: [] }));
   }, []);
 
   const openWork = useCallback((work: WorkRecord) => {
@@ -277,14 +449,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordWork,
       removeWork,
       removeAllWorks,
+      refreshWorks,
       openWork,
       subscribeToOpenWork,
       isSignInOpen,
-      openSignIn: () => {
+      openSignIn: (mode?: AuthMode | unknown) => {
+        setSignInMode(
+          AUTH_MODES.includes(mode as AuthMode) ? (mode as AuthMode) : "signin",
+        );
         setSignInOpen(true);
         setSidebarOpen(false);
       },
+      signInMode,
       closeSignIn: () => setSignInOpen(false),
+      welcomeName,
+      dismissWelcome,
+      user,
+      isAuthLoaded,
+      isAuthConfigured: IS_AUTH_CONFIGURED,
+      signOut,
       settings,
       updateSettings,
       returnToStart,
@@ -316,9 +499,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordWork,
       removeWork,
       removeAllWorks,
+      refreshWorks,
       openWork,
       subscribeToOpenWork,
       isSignInOpen,
+      signInMode,
+      welcomeName,
+      dismissWelcome,
+      user,
+      isAuthLoaded,
+      signOut,
       settings,
       updateSettings,
       studio,

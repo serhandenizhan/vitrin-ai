@@ -1,4 +1,7 @@
-from pydantic import model_validator
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Multipart zarfı (boundary delimiter'ları + her `part` için `Content-Disposition`/
@@ -26,8 +29,21 @@ MULTIPART_OVERHEAD_ALLOWANCE_BYTES = 64 * 1024
 DEFAULT_METADATA_BUDGET_BYTES = 60 * 1024
 
 
+# `backend/.env` — çalışılan klasörden BAĞIMSIZ. Önceden `env_file=".env"`
+# göreliydi ve uvicorn başka bir klasörden başlatıldığında (ör. repo kökünden
+# `--app-dir backend` ile) dosya hiç okunmuyordu: uygulama hatasız açılıyor,
+# ama her oturum uç noktası "SUPABASE_URL ayarlanmalı" diye 503 dönüyordu
+# (13.09.2026'da tam olarak böyle görüldü). Kök CLAUDE.md ders 11: yol, repo
+# yapısından türetilir. Gerçek ortam değişkenleri yine `.env`'nin önüne geçer.
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def _split_origins(value: str) -> list[str]:
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=BACKEND_ENV_FILE, extra="ignore")
 
     max_file_size_mb: int = 20
     # BiRefNet'in ölçülen 12-14GB RAM bütçesi (bkz. kök CLAUDE.md "Bilinen kısıt")
@@ -61,22 +77,66 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai"
     )
-    # Faz 4'te gerçek Supabase Auth + rol kontrolü gelene kadar
-    # `POST /api/admin/backgrounds` bu paylaşılan secret ile korunuyor (bkz.
-    # kök CLAUDE.md ders 8 — bilinçli geçici çözüm). Kasıtlı olarak varsayılan
-    # değeri YOK: env'de yoksa uygulama başlarken hata verir, sessizce açık
-    # bir admin endpoint'iyle üretime çıkılmaz.
-    admin_secret: str
+    # Faz 4: Supabase Auth. Proje kök adresi (https://<ref>.supabase.co);
+    # token'ların `iss` değeri ve JWKS adresi buradan türetiliyor. Boşsa
+    # kimlik doğrulama gerektiren her endpoint açık bir 503 döner — sessizce
+    # herkese açık kalmaz (bkz. app/core/auth.py). Faz 3'teki geçici
+    # `ADMIN_SECRET` bununla birlikte kaldırıldı; yönetici yetkisi artık
+    # `admin_users` tablosundan geliyor.
+    supabase_url: str = ""
+    # Supabase'in oturum açmış kullanıcılara verdiği token'daki `aud`.
+    supabase_jwt_audience: str = "authenticated"
+    # ESKİ (legacy) HS256 JWT secret'ı. Yeni projeler asimetrik imzalama
+    # anahtarı (ES256/RS256, JWKS) kullanıyor ve bu alan BOŞ kalmalı; yalnızca
+    # henüz imzalama anahtarlarına geçmemiş bir proje için doldurulur.
+    supabase_legacy_jwt_secret: str = ""
+    # Supabase'in GİZLİ sunucu anahtarı (`sb_secret_...` ya da eski
+    # `service_role`). Yalnızca yönetici işlemleri için: şu an tek kullanımı
+    # hesap silme (`DELETE /api/account`). RLS'i atlayan, tam yetkili bir
+    # anahtar — frontend'e, loglara ya da hata mesajlarına asla girmez. Boşsa
+    # hesap silme hiçbir şeye dokunmadan 503 döner.
+    supabase_secret_key: str = ""
+    # Virgülle ayrılmış tarayıcı origin'leri (SECURITY.md 2.2). `*` ve yol
+    # içeren değerler başlangıçta reddedilir (bkz. `_validate_cors_origins`).
+    cors_allowed_origins: str = "http://localhost:3000"
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
     r2_bucket_name: str = ""
     # GET /api/backgrounds içindeki presigned URL'lerin geçerlilik süresi.
     background_url_expiry_seconds: int = 3600
+    # Proje (geçmiş çalışma) görsellerinin imzalı URL geçerlilik süresi.
+    project_url_expiry_seconds: int = 3600
 
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
+
+    @property
+    def cors_allowed_origin_list(self) -> list[str]:
+        return _split_origins(self.cors_allowed_origins)
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def _validate_cors_origins(cls, value: str) -> str:
+        # `*` reddediliyor (SECURITY.md 2.2). Yol/sondaki `/` da reddediliyor:
+        # tarayıcının gönderdiği Origin hiçbir zaman yol içermez; öyle yazılmış
+        # bir değer hiçbir isteğe uymaz ve CORS "açık" sanılırken sessizce
+        # her şeyi reddederdi.
+        for origin in _split_origins(value):
+            parts = urlsplit(origin)
+            if (
+                parts.scheme not in ("http", "https")
+                or not parts.netloc
+                or parts.path
+                or parts.query
+                or parts.fragment
+            ):
+                raise ValueError(
+                    f"Geçersiz CORS origin'i: {origin!r}. Beklenen biçim: "
+                    "https://alan-adi (yolsuz, sonda '/' olmadan); '*' kabul edilmez."
+                )
+        return value
 
     @model_validator(mode="after")
     def _apply_default_max_request_body_bytes(self) -> "Settings":

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
+from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.services.background_removal import BackgroundRemovalService
 from app.validation.upload import UploadValidationError, validate_upload
@@ -22,6 +23,17 @@ def get_background_removal_service() -> BackgroundRemovalService:
 async def remove_background(
     file: UploadFile = File(...),
     service: BackgroundRemovalService = Depends(get_background_removal_service),
+    # Faz 4 ürün kararı (Kaan, 12.09.2026): giriş yapmadan arka plan
+    # kaldırılamaz. Kimlik burada kullanılmıyor ama bağımlılık token'ı
+    # doğruluyor; geçersizse 401 ile BiRefNet'e hiç ulaşılmıyor. Kota/kredi
+    # (Faz 5) bu kullanıcıya bağlanacak.
+    #
+    # Sınır: FastAPI multipart gövdeyi bağımlılıklardan önce ayrıştırıyor, yani
+    # oturumsuz bir istek de gövde sınırına kadar okunuyor. Next.js vekili
+    # oturumu gövdeyi okumadan önce kontrol ettiği için normal akışta bu
+    # gerçekleşmiyor; doğrudan backend'e gelen isteklere karşı asıl önlem Faz 7
+    # rate limiting.
+    _user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     # Toplam istek gövdesi boyutu sınırı `BodySizeLimitMiddleware` tarafından,
     # eşzamanlılık kapasitesi ise `EndpointAdmissionLimiterMiddleware`

@@ -1,14 +1,17 @@
 "use client";
 
 /**
- * Ust cubuk panellerinin icerikleri: Nasil calisir, Paketler, Hakkinda.
+ * Ust cubuk panellerinin icerikleri: Nasil calisir, Hakkinda.
  *
  * Kabuk `nav-panel.tsx` icinde; burada yalnizca metin ve duzen var. Ayri
  * dosyada olmalarinin sebebi, kabugun davranisini (odak, Escape, gecis)
  * icerikten ayri tutmak — icerik degistiginde davranisa dokunmak gerekmiyor.
+ *
+ * Metinler 11.09.2026'da elden gecirildi (kullanici istegi): model adi
+ * (BiRefNet) ziyaretciye bir sey anlatmadigi icin cikarildi, "ilk istek uzun
+ * surer" notu panelden kaldirildi. Bu not bekleme ekraninda
+ * (processing-state.tsx) yerinde duruyor — orada gercekten isine yariyor.
  */
-
-
 
 /* --- Nasil calisir ------------------------------------------------------ */
 
@@ -17,31 +20,31 @@ const ADIMLAR = [
     no: "01",
     baslik: "Fotoğrafı yükleyin",
     metin:
-      "Telefonla tezgâhta çektiğiniz kare yeterli. JPEG, PNG, WebP ve iPhone'un HEIC formatı doğrudan kabul ediliyor; 20 MB'a kadar.",
+      "Tezgâhta telefonla çektiğiniz fotoğraf yeterli. JPEG, PNG, WebP ve iPhone'un HEIC dosyaları kabul ediliyor, en fazla 20 MB.",
   },
   {
     no: "02",
-    baslik: "Yapay zekâ sınırı bulur",
+    baslik: "Arka plan kalksın",
     metin:
-      "BiRefNet, mücevher fotoğrafçılığının en zor kısmı için seçildi: ince zincir halkaları, yansıtıcı metal ve küçük taş kenarları. Çözünürlüğünüz birebir korunur.",
+      "Yapay zekâ ürünün kenarını buluyor. İnce zincir halkaları, parlayan metal ve küçük taşlar kesimde kalıyor. Fotoğrafın çözünürlüğü değişmiyor.",
   },
   {
     no: "03",
     baslik: "Sonucu inceleyin",
     metin:
-      "Önce/sonra çizgisini sürükleyin, büyüteçle kenarlara yakından bakın. Beğenmezseniz saydam PNG'yi indirip kendi programınızda kullanabilirsiniz.",
+      "Önce ve sonra arasındaki çizgiyi sürükleyin, büyüteçle kenarlara yakından bakın. İsterseniz saydam PNG'yi indirip kendi programınızda kullanın.",
   },
   {
     no: "04",
     baslik: "Vitrine yerleştirin",
     metin:
-      "Zemini seçin, ürünü sürükleyip ölçekleyin, gölge ve ışık havuzunu açın; 2000×2000 PNG veya JPEG olarak indirin.",
+      "Bir zemin seçin, ürünü sürükleyip boyutunu ayarlayın, gölge ve ışık ekleyin. 2000×2000 PNG ya da JPEG olarak indirin.",
   },
   {
     no: "05",
-    baslik: "Katalog ve baskı",
+    baslik: "Katalog hazırlayın",
     metin:
-      "Hazırladığınız görselleri katalog şablonlarına yerleştirip A4 oranında indirin. Matbaa baskısı için gereken CMYK dönüşümü ücretli planlarda açılacak.",
+      "Görselleri katalog şablonlarına yerleştirip A4 sayfa olarak indirin. Matbaaya gidecek CMYK dosyası ücretli planlarla gelecek.",
   },
 ];
 
@@ -49,7 +52,7 @@ export function NasilCalisirIcerik() {
   return (
     <>
       <h2 className="display-feature max-w-xl text-balance">
-        Fotoğraftan satışa hazır görsele dört adım
+        Tezgâhtan vitrine beş adım
       </h2>
 
       <ol className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2">
@@ -69,11 +72,6 @@ export function NasilCalisirIcerik() {
           </li>
         ))}
       </ol>
-
-      <p className="fine-print mt-9 text-[#f3f0eb]/45">
-        İlk istek modeli belleğe yüklediği için bir kereye mahsus daha uzun
-        sürer; sonraki fotoğraflar belirgin şekilde daha hızlıdır.
-      </p>
     </>
   );
 }
@@ -84,17 +82,17 @@ const HAKKINDA = [
   {
     baslik: "Amacımız",
     metin:
-      "Bir ürünü satışa hazır göstermek bugün ya pahalı bir çekim ya da saatler süren bir düzenleme işi. Vitrin AI bunu tezgâhın başında, telefonla çekilmiş tek bir kareden yapıyor. Aradaki farkı kapatan şey ürünün kendisi değil, arkasındaki dağınıklık.",
+      "Bir yüzüğü satışa hazır göstermek için ya stüdyoya para veriyorsunuz ya da saatlerce fotoğraf düzenliyorsunuz. Çoğu zaman sorun ürün değil, arkasındaki tezgâh. Vitrin AI, telefonla çektiğiniz tek bir fotoğraftan temiz bir ürün görseli çıkarıyor.",
   },
   {
     baslik: "Misyonumuz",
     metin:
-      "Her kuyumcunun kendi stüdyosu olsun. Ürünü tezgâhta çekip aynı dakikada vitrine koyabilmek; bunun için ajans, stüdyo ya da düzenleme bilgisi gerekmesin.",
+      "Ürünü tezgâhta çekip birkaç dakika içinde sitenize ya da Instagram'a koyabilmek. Bunun için ajansa, stüdyoya ya da Photoshop bilgisine ihtiyaç duymamak.",
   },
   {
     baslik: "Vizyonumuz",
     metin:
-      "Vitrinden mobile tek akış. Kesim, zemin, ölçü ve dışa aktarma tek bir yerde — sonunda telefonun içinde, ürün tezgâhtan çıkmadan mağaza sayfasında.",
+      "Bugün tarayıcıda arka plan kaldırıyor, zemin seçiyor ve katalog hazırlıyoruz. Sırada mobil uygulama var: fotoğrafı çektiğiniz telefonda düzenleyip doğrudan mağazanıza yüklemek.",
   },
 ];
 
@@ -115,8 +113,8 @@ export function HakkindaIcerik() {
       </div>
 
       <p className="fine-print mt-10 text-[#f3f0eb]/45">
-        Kuyumcular için geliştiriliyor. Fotoğraflar saklanmaz; görsel yalnızca
-        işlem süresince bellekte tutulur.
+        Kuyumcular için geliştiriliyor. Özgün fotoğrafınızı sunucuda
+        saklamıyoruz, işlem bitince bellekten siliniyor.
       </p>
     </>
   );

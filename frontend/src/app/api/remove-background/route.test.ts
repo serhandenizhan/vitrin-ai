@@ -15,6 +15,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
 
+// Oturum Supabase cerezinden okunuyor; testte yalnizca "token var/yok"
+// durumu kontrol ediliyor. `vi.hoisted`: mock fabrikasi import'lardan once
+// calistigi icin paylasilan durum da ondan once tanimli olmali.
+const auth = vi.hoisted(() => ({ token: "gecerli-token" as string | null }));
+vi.mock("@/lib/supabase/access-token", () => ({
+  getAccessToken: async () => auth.token,
+}));
+
 function formRequest(file: File): Request {
   const form = new FormData();
   form.append("file", file);
@@ -53,6 +61,61 @@ async function loadRoute() {
 
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV, USE_MOCK_BACKEND: "false" };
+  auth.token = "gecerli-token";
+});
+
+describe("oturum zorunlulugu", () => {
+  it("oturum yoksa 401 auth_required doner ve backend'e HIC gitmez", async () => {
+    auth.token = null;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST } = await loadRoute();
+
+    const response = await POST(formRequest(pngFile()));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "auth_required",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("demo modunda da oturum istiyor", async () => {
+    auth.token = null;
+    process.env.USE_MOCK_BACKEND = "true";
+    const { POST } = await loadRoute();
+
+    const response = await POST(formRequest(pngFile()));
+
+    expect(response.status).toBe(401);
+  });
+
+  it("token'i backend'e Authorization basligiyla iletiyor", async () => {
+    let header: string | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      header = new Headers(init?.headers).get("Authorization");
+      return new Response(new Uint8Array([1]), { status: 200 });
+    });
+    const { POST } = await loadRoute();
+
+    const response = await POST(formRequest(pngFile()));
+
+    expect(response.status).toBe(200);
+    expect(header).toBe("Bearer gecerli-token");
+  });
+
+  it("backend token'i reddederse yine auth_required doner", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      upstreamError(401, "Oturum geçersiz ya da süresi dolmuş."),
+    );
+    const { POST } = await loadRoute();
+
+    const response = await POST(formRequest(pngFile()));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "auth_required",
+    });
+  });
 });
 
 afterEach(() => {

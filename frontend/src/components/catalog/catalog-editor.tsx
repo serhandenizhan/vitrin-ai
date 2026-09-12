@@ -41,6 +41,7 @@ import {
   MAX_SLOT_SCALE,
   MIN_SLOT_SCALE,
   type SlotTransform,
+  type Template,
   TEMPLATES,
   type TemplateName,
 } from "@/lib/catalog-templates";
@@ -62,6 +63,37 @@ const SAMPLE: { template: TemplateName; texts: CatalogTexts; images: string[] } 
   },
   images: ["/showcase/vitrin-kadife.webp", "/showcase/vitrin-altin.webp"],
 };
+
+/**
+ * Sablon galerisindeki mini onizlemeler icin ornek gorseller.
+ *
+ * 11.09.2026'da eklendi (kullanici: "kullanıcı o koleksiyona görseller
+ * koymadıysa base koleksiyon örnekleri olsun"). Onceden galeri bos yuvalarla
+ * (`option.slots.map(() => null)`) ciziliyordu; bu, ozellikle koyu "Kapak"
+ * sablonunda duz bir siyah dikdortgen gibi gorunuyordu ve sayfa bos/eksik
+ * hissettiriyordu. Ayni ucrenin ustune yerlestirdigimiz gercek zemin
+ * karelerini (`backgrounds-showcase.tsx` ile ayni kaynak) kullaniyoruz;
+ * boylece galeri de aracin gercek ciktisini gosteriyor, uydurma bir gorsel
+ * degil. Uclu izgara ucuncu yuvada ilk gorsele donuyor.
+ *
+ * Gercek olculeri (900x900, kare) betikte sabit; onizleme icin ayrica
+ * `<img>` yuklemeye gerek yok.
+ */
+const GALLERY_PREVIEW_IMAGES = [
+  "/showcase/vitrin-kadife.webp",
+  "/showcase/vitrin-altin.webp",
+  "/showcase/vitrin-sicak-gri.webp",
+];
+
+function galleryPreviewSlots(template: Template): SlotContent[] {
+  return template.slots.map((_, index) => ({
+    url: GALLERY_PREVIEW_IMAGES[index % GALLERY_PREVIEW_IMAGES.length],
+    name: "örnek",
+    width: 900,
+    height: 900,
+    transform: { ...DEFAULT_SLOT_TRANSFORM },
+  }));
+}
 
 const DEFAULT_TEXTS: CatalogTexts = {
   eyebrow: "Sonbahar 2026",
@@ -186,8 +218,8 @@ export function CatalogEditor() {
 
   if (!template) {
     return (
-      <div>
-        <div className="grid gap-5 sm:grid-cols-3">
+      <div className="soft-enter">
+        <div className="grid gap-6 sm:grid-cols-3">
           {Object.values(TEMPLATES).map((option) => (
             <button
               key={option.name}
@@ -198,22 +230,24 @@ export function CatalogEditor() {
               }}
               className="press group text-left"
             >
-              <div className="overflow-hidden rounded-[1.25rem] ring-1 ring-black/10 transition-shadow group-hover:ring-black/25">
+              <div className="overflow-hidden rounded-[1.5rem] shadow-[0_1px_2px_rgba(0,0,0,0.06),0_24px_50px_-22px_rgba(0,0,0,0.35)] ring-1 ring-black/10 transition-shadow group-hover:ring-black/25">
                 <div
                   className="catalog-container"
                   style={{ aspectRatio: `${CATALOG_WIDTH} / ${CATALOG_HEIGHT}` }}
                 >
                   {/* Mini onizleme, gercek sablonun kendisi — ayri bir
                       "kapak resmi" tutulsaydi sablon degistiginde sessizce
-                      eskirdi. */}
+                      eskirdi. Yuvalar site zeminlerinden ornek gorsellerle
+                      dolu: bos siyah/kirik-beyaz bir kutu yerine calisan bir
+                      sayfa gibi duruyor. */}
                   <CatalogPageView
                     template={option}
-                    slots={option.slots.map(() => null)}
+                    slots={galleryPreviewSlots(option)}
                     texts={DEFAULT_TEXTS}
                   />
                 </div>
               </div>
-              <h3 className="mt-3 text-[1.0625rem] font-semibold tracking-[-0.01em]">
+              <h3 className="mt-4 text-[1.0625rem] font-semibold tracking-[-0.01em]">
                 {option.title}
               </h3>
               <p className="on-light-muted fine-print mt-0.5">{option.summary}</p>
@@ -221,7 +255,7 @@ export function CatalogEditor() {
           ))}
         </div>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-9 flex justify-center">
           <Button
             type="button"
             variant="outline"
@@ -241,7 +275,7 @@ export function CatalogEditor() {
   const selected = selectedSlot !== null ? visibleSlots[selectedSlot] : null;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    <div className="soft-enter grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <div className="mx-auto w-full max-w-[32rem] min-w-0">
         <div
           className="catalog-container overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
@@ -439,15 +473,16 @@ export function CatalogEditor() {
                       key={work.id}
                       type="button"
                       onClick={() => {
-                        const url = URL.createObjectURL(work.result);
-                        objectUrlRef.current.push(url);
-                        void placeInSlot(selectedSlot, url, work.fileName);
+                        // Faz 4: sonuc sunucuda. `resultUrl` ayni kokenden
+                        // vekil; object URL'e gerek yok ve disa aktarmada
+                        // tuval kirlenmiyor (bkz. lib/project-record.ts).
+                        void placeInSlot(selectedSlot, work.resultUrl, work.fileName);
                       }}
                       className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left transition-colors hover:bg-black/5"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={work.thumbnail}
+                        src={work.thumbnailUrl}
                         alt=""
                         aria-hidden
                         className="checkerboard size-9 shrink-0 rounded-md object-contain"

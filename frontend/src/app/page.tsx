@@ -35,8 +35,8 @@ export default function HomePage() {
                   Kendi fotoğrafınızla deneyin
                 </h2>
                 <p className="lede on-light-muted mx-auto mt-3 max-w-lg text-pretty">
-                  Kayıt gerekmiyor. Fotoğrafınızı yükleyin, sonucu saniyeler
-                  içinde görün.
+                  Fotoğrafınızı yükleyin, ücretsiz hesabınızla sonucu hemen
+                  görün.
                 </p>
               </div>
             </Reveal>

@@ -1,9 +1,11 @@
 # frontend
 
-Vitrin AI'ın Next.js web uygulaması. **Faz 2 (web frontend MVP) tamamlandı.**
+Vitrin AI'ın Next.js web uygulaması. **Faz 2 (web frontend MVP), Faz 3 (stüdyo) ve
+Faz 4'ün arayüzü (hesaplar, sunucuda geçmiş) tamamlandı.**
 
-Akış: fotoğraf seç → önizle → arka planı kaldır → önce/sonra karşılaştırması →
-PNG indir.
+Akış: giriş yap → fotoğraf seç → önizle → arka planı kaldır → önce/sonra
+karşılaştırması → stüdyoda zemine yerleştir (logo, ürün etiketi) → PNG/JPEG indir ya da
+WhatsApp'ta paylaş. Sonuç hesaptaki geçmişe kaydedilir.
 
 ## Çalıştırma
 
@@ -21,7 +23,10 @@ npm run dev
 | Değişken | Varsayılan | Ne işe yarar |
 | --- | --- | --- |
 | `BACKEND_URL` | `http://localhost:8000` | FastAPI servisinin adresi. Tarayıcı buraya doğrudan bağlanmaz. |
-| `USE_MOCK_BACKEND` | `true` | Demo modu — backend hiç çağrılmaz, sabit bir örnek kesim döner. |
+| `USE_MOCK_BACKEND` | `true` | Demo modu — backend hiç çağrılmaz, sabit bir örnek kesim döner. Giriş yine gerekir. |
+| `NEXT_PUBLIC_SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | boş | Supabase publishable (anon) anahtarı; tarayıcıya gitmek için tasarlandı, veriyi RLS koruyor. Boşsa site açılır ama giriş yapılamaz. `service_role`/secret anahtar buraya asla yazılmaz. |
+| `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. |
 
 > **`USE_MOCK_BACKEND` uyarısı:** bu değer `true` kaldığı sürece gerçek backend
 > ayakta olsa bile arayüz **hep aynı örnek görseli** gösterir. Önceki iterasyonda
@@ -79,9 +84,26 @@ sınırı, gövde boyutu middleware'i).
 ## HEIC
 
 iPhone'un varsayılan formatı, hedef kitle telefonla çekiyor. Backend HEIC'i
-sorunsuz işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — bu yüzden
-önizleme yerine bilgilendirici bir kart gösteriliyor ("Bu format tarayıcıda
-önizlenemiyor"). Sonuç PNG olarak döndüğü için sonuç ekranı normal çalışıyor.
+sorunsuz işliyor ama Chrome, Firefox ve Edge HEIC'i `<img>` ile gösteremiyor
+(Safari 17+ gösterebiliyor). Önizleme `src/lib/heic-preview.ts` ile üretiliyor:
+
+1. HEIC değilse doğrudan `URL.createObjectURL`.
+2. HEIC ise önce tarayıcının kendi çözücüsü deneniyor (`img.decode()`); Safari'de
+   ek bir şey indirilmiyor.
+3. Olmazsa [`heic-to`](https://www.npmjs.com/package/heic-to) (libheif'in
+   WebAssembly derlemesi) **yalnızca bu anda** dinamik `import()` ile yükleniyor.
+   ~3 MB'lık ayrı bir parça; HEIC seçmeyen ziyaretçi onu hiç indirmiyor.
+4. O da başarısız olursa bilgi kartı ("Önizleme gösterilemedi") çıkıyor; arka
+   plan kaldırma yine çalışıyor.
+
+Önizleme yalnızca gösterim için: backend'e her zaman kullanıcının özgün dosyası
+gidiyor. Karşılaştırma ekranının "önce" tarafı da artık HEIC'te çalışıyor.
+
+**Lisans:** `heic-to` **LGPL-3.0** (içindeki libheif'ten geliyor). Değiştirilmeden
+ve ayrı bir parça olarak dinamik yüklendiği için LGPL'in "kütüphane olarak
+kullanma" koşulu sağlanıyor. Yayına çıkmadan önce lisans metninin ve kaynak
+bağlantısının bir "Açık kaynak lisansları" sayfasında gösterilmesi gerekiyor
+(Faz 7'deki yasal metinlerle birlikte).
 
 ## Şeffaflık neden dama deseninde gösteriliyor
 
@@ -121,7 +143,8 @@ yok** ve görünümün dışına taşan öğe yok.
 
 | Genişlik | Davranış |
 | --- | --- |
-| < 640 px | Tek sütun. Üst çubuktaki menü bağlantıları gizlenir, logo + "Hemen deneyin" kalır. |
+| < 1024 px | Üst çubuktaki bağlantılar "Menü" düğmesinin açtığı panele geçer; açılış bölümü tek sütun (metin üstte, görsel altta). |
+| < 640 px | Tek sütun. "Giriş yap" yazısı gizlenir, ikonu kalır. |
 | ≥ 640 px | Öne çıkanlar ve teknik bilgiler iki sütuna, üç adım üç sütuna geçer; menü bağlantıları görünür. |
 | ≥ 1024 px | Teknik bilgiler üç sütun. |
 | ≥ 1280 px | Tipografi üst sınıra oturur (hero 64 px); daha geniş ekranlarda içerik 1024 px'te ortalanır, büyümeye devam etmez. |
@@ -145,22 +168,41 @@ tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu — 
 önce deneyip sonra okuyabilsin.
 
 ```
-Hero (siyah)            → vaat + ürün görseli
+Hero (siyah)            → vaat solda, ürün görseli sağda; tam bir ekran
 Deneyin (açık gri)      → aracın kendisi
+Zeminler (siyah)        → aynı kesim üç zeminde
 Öne çıkanlar (kömür)    → dört madde, taranmak için
 Nasıl çalışır (açık)    → üç adım + çekim önerileri
 Teknik bilgiler (siyah) → formatlar, sınırlar, süre, gizlilik
-Footer (açık gri)       → model sınırlamaları, dipnotlar
+Footer (kömür)          → marka, bağlantılar, yasal, sosyal medya, dipnotlar, telif
 ```
+
+**Açılış tam bir ekran (11.09.2026).** Önceki sürümde her şey üst üste
+ortalanmıştı; toplam ~1400 px ediyor ve 900 px'lik dizüstünde görsellerin
+yarısı ilk ekranın dışında kalıyordu. Şimdi geniş ekranda iki sütun ve görselin
+genişliği ekran **yüksekliğinden** türetiliyor (`hero-visual.tsx`), 1440×900'de
+iki kare de bütün olarak görünüyor.
+
+**Footer'daki boş yerler.** Sosyal medya adresleri henüz yok (`site-footer.tsx`
+→ `SOSYAL` dizisinde `href: null`, simgeler tıklanamaz görünüyor). KVKK
+aydınlatma metni, gizlilik politikası ve kullanım koşulları da henüz yazılmadı;
+"yakında" olarak işaretli. Ödeme (Faz 5) açılmadan önce yazılmaları gerekiyor.
 
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
 ## Üst çubuk
 
-Marka **en solda**, hemen yanında panel düğmesi; bağlantılar markanın
-devamında; "Giriş yap" ve "Hemen deneyin" en sağda. Çubuk 56 px, bağlantılar
-14 px.
+**11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda
+duruyor"). Kenarlardan 12 px içeride, 48 px yüksekliğinde, tam yuvarlak ve
+gölgeli; en fazla 1152 px genişliyor. Sayfanın üstüne biniyor (`-mb-15`), bu
+yüzden açılıştaki koyu bölüm çubuğun arkasından başlıyor. Sayfaların ilk bölümü
+çubuğun kapladığı 60 px'i `page-top` sınıfıyla geri alıyor. Bulunulan sayfa
+(Katalog, Paketler) dolu bir hap olarak görünüyor. Paneller çubukla aynı
+genişlikte, altında açılan yüzen kartlar.
+
+Sıra: panel düğmesi, marka, bağlantılar, en sağda "Giriş yap", "Hemen deneyin"
+ve (< 1024 px) "Menü". Aşağıdaki ölçüm notları önceki şerit sürümünden.
 
 İlk sürümde gövde `max-w-5xl` ile ortalanıyordu ve 1877 px'lik bir ekranda
 logo sayfanın ortasına yakın duruyor, solda kocaman bir boşluk kalıyordu;
@@ -205,7 +247,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-68 test sekiz dosyaya dağılmış:
+**188 test** (Faz 4 sonu). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -216,7 +258,23 @@ geri yüklenip hatanın kullanıcıya gösterilmesi.
 | `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
 | `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
 | `components/composer/use-backgrounds.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
-| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması |
+| `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması; Pazaryeri → beyaz zemin, WhatsApp paylaşımı (telefon ve masaüstü yolu), SVG logo reddi, geçersiz gram uyarısı |
+
+Faz 4'te eklenenler:
+
+| dosya | kapsam |
+| --- | --- |
+| `app/api/remove-background/route.test.ts` (ek) | Oturum yoksa backend'e gitmeden `401 auth_required`, demo modunda da; token'ın `Authorization` ile iletilmesi; backend 401'inin yine `auth_required`e çevrilmesi |
+| `app/api/projects/route.test.ts`, `app/api/projects/[id]/route.test.ts` | Geçmiş vekilleri: oturum zorunluluğu, yanıtın arayüz kaydına çevrilmesi, yalnızca bilinen alanların iletilmesi, UUID olmayan kimliğin backend'e hiç gönderilmemesi |
+| `app/api/account/route.test.ts` | Hesap silme vekili |
+| `lib/project-record.test.ts` | Backend kaydı → arayüz kaydı, kimlik doğrulaması |
+| `lib/safe-redirect.test.ts` | Açık yönlendirme: `//`, `/\`, mutlak adres, kontrol karakteri reddi |
+| `lib/auth-errors.test.ts` | Supabase hatalarının Türkçe mesajları; yanlış parola ile kayıtsız e-postanın ayırt edilmemesi |
+| `lib/password-policy.test.ts` | Parola kuralı (8+, küçük, büyük, rakam; Türkçe büyük harfin Supabase gibi sayılmaması) |
+| `lib/profile.test.ts`, `lib/turkey-cities.test.ts` | Ad/şirket adı/telefon doğrulaması, metadata okuma, ekranda görünen ad (şirket/bireysel), 81 il |
+| `components/auth-dialog.test.ts` | Kayıt formu: şirket alanlarının yalnızca şirket seçilince görünmesi, bireysel hesapta şirket bilgisinin Supabase'e yazılmaması, zorunlu alanlar |
+| `lib/overlays.test.ts` | Logo/etiket yerleşimi, gram biçimi, ürün kodu temizliği, aynı köşede üst üste binmeme |
+| `components/marketing/hero-before-after.test.ts` | Açılıştaki önce/sonra kaydıracı |
 
 Özellikle korunanlar:
 
@@ -246,41 +304,72 @@ oluşturuluyor ve sahte `size` kayboluyor. Boyut gerçekten üretilmeli.
 - **Gövde: çalışmalarım** — geçmiş sonuçlar; küçük önizleme, dosya adı, ne
   kadar önce yapıldığı. Tıklayınca sonuç ekranda geri açılır, çöp kutusuyla
   tek tek silinir.
-- **Alt şerit: ayarlar, altında çıkış** — ayarlar geçmiş kaydını aç/kapat,
-  hareketi azalt ve tümünü sil içeriyor; çıkış hesap sistemi gelene kadar
-  soluk duruyor ve tıklanınca durumu açıklayan pencereyi açıyor.
+- **Alt şerit: ayarlar, hesabım, çıkış** — ayarlar geçmiş kaydını aç/kapat,
+  hareketi azalt ve tümünü sil içeriyor. Giriş yapılmışsa "Hesabım" (`/hesap`) ve
+  "Çıkış yap", yapılmamışsa "Giriş yap" görünüyor; gövdede de liste yerine giriş
+  çağrısı çıkıyor.
 
 Ayarlar önceden üstte bir sekmeydi; alta alınması paneli tek işli yapıyor
 (gövde = çalışmalar) ve ayarı uygulamalarda beklenen yere koyuyor.
 
-## "Giriş yap" — hesap sistemi henüz yok
+## Hesaplar (Faz 4)
 
-Menüde giriş yeri **var** ama tıklayınca `sign-in-notice.tsx` açılıyor: hesap
-sisteminin bir sonraki aşamada geldiğini ve şu anda kayıt gerekmediğini
-söylüyor. Çalışmayan bir düğme koymak ya da sahte bir form açmak kullanıcıya
-yalan söylemek olurdu; tamamen gizlemek ise tasarımı eksik bırakıyordu. Faz
-4'te bu bileşen gerçek giriş/kayıt formuyla değişecek, çağrı noktası aynen
-kalacak.
+Supabase Auth, `@supabase/ssr` ile. Oturum **çerezde** (localStorage değil):
+sunucu bileşenleri, route handler'lar ve `src/proxy.ts` aynı oturumu okuyabiliyor.
 
-### Geçmiş şu anda tarayıcıda — bu geçici
+| Parça | Dosya | İş |
+| --- | --- | --- |
+| İstemciler | `src/lib/supabase/{client,server,env}.ts` | Tarayıcı ve sunucu istemcisi; env yoksa `null` (site çalışır, giriş yapılamaz) |
+| Oturum yenileme | `src/proxy.ts` | Next.js 16'da `middleware.ts`nin adı. Süresi dolan token'ı her istekte yeniliyor. **Yetkilendirme değil** |
+| E-posta dönüşü | `src/app/auth/callback/route.ts` | PKCE `code` ya da `token_hash`; `next` yalnızca site içi yol (`lib/safe-redirect.ts`). Geçersizse `/auth/hata` |
+| Giriş / kayıt / sıfırlama | `src/components/auth-dialog.tsx` | Tek pencere, üç ekran; `openSignIn("signup")` doğrudan kayıtta açar |
+| Yeni parola | `src/app/auth/yeni-parola/`, `components/new-password-form.tsx` | Sıfırlama bağlantısının açtığı sayfa; başarıda diğer cihazlardaki oturumlar kapanır |
+| Hesap sayfası | `src/app/hesap/`, `components/account-panel.tsx` | Profil, parola değiştirme (mevcut parola istenir), tüm cihazlardan çıkış, hesap silme |
+| Hoş geldin | `components/welcome-toast.tsx` | Girişte ya da e-posta bağlantısından dönüşte bir kez |
+| Vekil yardımcısı | `src/lib/backend-proxy.ts`, `lib/supabase/access-token.ts` | Token'ı `Authorization` ile iletme, 401 → `auth_required`, backend'e ulaşılamazsa 502 |
 
-`ROADMAP.md` proje geçmişini **Faz 4'e ve sunucuya** koyuyor. Kullanıcı Faz
-2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için
-geçmiş şimdilik **IndexedDB**'de tutuluyor. Riski sınırlayan dört karar:
+**Kayıt iki adım:** (1) ad, soyad, e-posta, parola, parola tekrar; (2) **hesap türü
+(bireysel / şirket)** — şirkette şirket adı + işletme türü —, şehir (81 il), isteğe
+bağlı telefon, zorunlu kullanım koşulları + KVKK onayı, ayrı ve isteğe bağlı ticari
+e-posta izni. Değerler Supabase `user_metadata`'da (`lib/profile.ts`); yalnızca
+görünüm için, yetki kararında kullanılmıyor. Ekranda görünen ad: şirket hesabında
+şirket adı, bireyselde kişinin adı (hesap türü seçilmemiş eski hesapta kişinin adı —
+yerine karar verilmiyor).
 
-1. Depo bir arayüzün arkasında (`src/lib/work-history.ts`). Faz 4'te yalnızca
-   o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç
-   hiç değişmeyecek.
-2. Panelde kullanıcıya açıkça yazıyor: *"yalnızca bu cihazda saklanıyor, hesap
-   sistemi geldiğinde hesabınıza taşınacak."* Sessizce yapılmıyor.
-3. Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a
-   kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı
-   kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra
-   karşılaştırması değil yalnızca sonuç gösterilir.
-4. En fazla 20 kayıt; ayarlardan kapatılabilir ve silinebilir.
+**Parola kuralı** Supabase ayarıyla birebir: en az 8, küçük + büyük harf + rakam
+(`lib/password-policy.ts`, ASCII — Supabase "Ş"yi büyük harf saymıyor). Yazarken canlı
+liste (`components/password-checklist.tsx`).
 
-Depolama açılamazsa (gizli pencere, kota dolu, eski tarayıcı) geçmiş sessizce
-devre dışı kalır — kesim ve indirme akışı bundan etkilenmez.
+**Kullanıcı numaralandırması kapalı:** yanlış parola ile kayıtsız e-posta aynı
+mesajı veriyor (`lib/auth-errors.ts`); kayıtlı adresle kayıtta ve sıfırlamada da
+"e-postanızı kontrol edin" ekranı çıkıyor.
+
+**Arka plan kaldırma giriş istiyor** (ürün kararı). Fotoğraf seçip önizlemek serbest;
+"Arka planı kaldır"a basınca oturum yoksa giriş penceresi açılıyor, seçilen dosya
+yerinde kalıyor. Vekil oturumu 20 MB'lık gövdeyi okumadan önce kontrol ediyor.
+
+**Supabase paneli:** Redirect URLs'e `http://localhost:3000/auth/callback`
+(sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
+parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
+
+### Geçmiş sunucuda
+
+`src/lib/work-history.ts`'in fonksiyonları aynı, gövdesi `/api/projects`
+vekillerine gidiyor (Faz 2'deki IndexedDB geçici çözümü kapandı).
+
+- **Eski tarayıcı kayıtları taşınmıyor** (ürün kararı); eski IndexedDB deposu
+  siliniyor ki cihazda kimsenin göremediği fotoğraf sonuçları kalmasın.
+- **Yalnızca sonuç saklanıyor**, özgün fotoğraf değil.
+- Kayıtlı sonuç görseli R2'nin imzalı adresi yerine **aynı kökenden**
+  (`/api/projects/[id]/result`) veriliyor: stüdyo ve katalog görseli tuvale çiziyor,
+  başka kökenden gelen görsel tuvali kirletip dışa aktarmayı bozardı.
+- Liste **kullanıcıya bağlı** tutuluyor (`workspace-provider.tsx`): çıkışta ya da
+  başka hesaba geçişte önceki kullanıcının listesi bir an bile görünmüyor.
+- Küçük resimler R2'nin süreli adresi; panel açıldığında süresi dolmuş kayıt varsa
+  liste yenileniyor.
+- Silme sunucuda başarısız olursa kayıt listeden çıkarılmıyor.
+- Kayıt başarısız olursa (ör. backend'de R2 yapılandırılmamış) sessizce atlanıyor;
+  kesim ve indirme akışı etkilenmiyor.
 
 ### Durum nerede tutuluyor
 
@@ -323,35 +412,57 @@ src/components/processing-state.tsx         bekleme ekranı (geçen süre sayac�
 src/components/comparison-view.tsx          önce/sonra + PNG indirme
 src/components/reveal.tsx                   kaydırınca ortaya çıkma sarmalayıcısı
 src/components/brand-mark.tsx               logo (SVG)
-src/components/sign-in-notice.tsx           "hesap sistemi yakında" penceresi
-src/components/workspace-provider.tsx       panel/geçmiş/ayarlar context'i
+src/components/auth-dialog.tsx              giriş / kayıt (iki adım) / parola sıfırlama
+src/components/account-panel.tsx            /hesap sayfasının kartları
+src/components/welcome-toast.tsx            "Hoş geldiniz" bildirimi
+src/components/workspace-provider.tsx       panel/geçmiş/ayarlar/oturum context'i
 src/components/work-sidebar.tsx             sol çekmece (çalışmalarım + ayarlar)
-src/components/site-header.tsx              yapışkan üst çubuk
-src/components/site-footer.tsx              dipnotlar
+src/components/site-header.tsx              yüzen üst çubuk + telefon menüsü
+src/components/nav-panel.tsx                üst çubuktan açılan panel kabuğu
+src/components/site-footer.tsx              bağlantılar, sosyal medya, dipnotlar, telif
 src/components/marketing/hero.tsx           açılış bölümü
 src/components/marketing/highlights.tsx     öne çıkanlar
 src/components/marketing/how-it-works.tsx   üç adım + çekim önerileri
 src/components/marketing/specs.tsx          teknik bilgiler
-src/components/marketing/hero-visual.tsx    açılıştaki önce/sonra görseli
+src/components/marketing/hero-visual.tsx    açılış görselinin çerçevesi (sunucu bileşeni)
+src/components/marketing/hero-before-after.tsx  sürüklenebilir önce/sonra (istemci)
+src/proxy.ts                                her istekte Supabase oturumunu yeniler
+src/app/auth/                               callback, geçersiz bağlantı, yeni parola
+src/app/hesap/                              hesap sayfası
+src/app/api/projects/, api/account/         geçmiş ve hesap silme vekilleri
+src/lib/supabase/                           Supabase istemcileri, access token
+src/lib/backend-proxy.ts                    oturumlu vekillerin ortak kısmı
+src/lib/profile.ts, password-policy.ts      kayıt alanları ve parola kuralı
+src/lib/overlays.ts                         stüdyoda logo ve ürün etiketi geometrisi
 src/lib/upload-constraints.ts               backend ile senkron yükleme kısıtları
-src/lib/work-history.ts                     geçmiş deposu (GEÇİCİ — IndexedDB)
+src/lib/heic-preview.ts                     HEIC önizlemesi (yerel çözücü, yoksa heic-to)
+src/lib/work-history.ts                     geçmiş deposu (sunucuda, /api/projects)
 src/lib/settings-store.ts                   ayarlar (useSyncExternalStore kaynağı)
 public/mock/sample-cutout.png               örnek kesim ("sonra")
 public/mock/sample-photo.png                aynı ürün kadife zeminde ("önce")
 scripts/generate-mock-cutout.py             ikisini de üreten betik (ek bağımlılık yok)
 ```
 
-## Açılıştaki ürün fotoğrafları
+## Açılıştaki önce/sonra (13.09.2026)
 
-`public/photos/atolye.webp` ve `vitrin.webp` — **gerçek ürün fotoğrafları**,
-telifi bize ait. Kullanıcının sağladığı tek kare (2816×1536, 3,6 MB) ikiye
-bölünüp küçültülerek üretiliyor: `node scripts/prepare-photos.mjs`.
+Açılışta, aracın **gerçek çıktısıyla** sürüklenebilir bir karşılaştırma var
+(`marketing/hero-before-after.tsx`). Önceden burada iki sabit fotoğraf
+("Atölyede / Vitrinde") duruyordu; sağdaki aracın çıktısı değil ayrı bir çekimdi, bu
+yüzden "Önce / Sonra" denmemişti. Artık "sonra" gerçekten aracın sonucu.
 
-Etiketler bilinçli olarak "Önce / Sonra" **değil**, "Atölyede / Vitrinde":
-sağdaki kare bu aracın çıktısı değil, ayrı bir çekim. "Sonra" demek,
-kullanıcıya bu sonucu bu aracın ürettiğini söylemek olurdu. İkisi birlikte
-ürünün **vaadini** anlatıyor; aracın gerçek çıktısını kullanıcı birkaç ekran
-aşağıda kendi fotoğrafıyla görüyor.
+- `public/showcase/once.webp` ve `sonra.webp` (900×900) **birebir hizalı**:
+  `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` modeli
+  doğrudan çağırıyor (HTTP değil — `/api/remove-background` artık oturum istiyor).
+  BiRefNet'in ham çıktısı kaynakla aynı piksel ölçüsünde olduğu için ikisi aynı
+  pencereden kırpılıyor; ölçekleme ya da kaydırma yok. Hizalama ölçüldü: ürün
+  piksellerinde ortalama renk farkı ~2, kesim 12 px kaydırılınca ~25.
+- Mevcut `showcase/kesim.webp` bu iş için **kullanılamadı**: kesimi kırpıp karenin
+  ortasına büyütüyor, fotoğrafla aynı kadrajda değil. Kaydıraç iki görseli üst üste
+  koyduğu için kolye iki tarafta farklı yerde durur ve karşılaştırma yanıltıcı olurdu.
+- `public/photos/atolye.webp` ve `vitrin.webp` hâlâ üretiliyor (kaynak
+  `vitrin.webp`); gerçek ürün fotoğrafları, telifi bize ait. Kullanıcının sağladığı
+  tek kare (2816×1536, 3,6 MB) ikiye bölünüp küçültülüyor:
+  `node scripts/prepare-photos.mjs`.
 
 **Kaynak dosya `public/` dışında** (`photo-source/`). İlk denemede
 `public/photos/_kaynak/` altındaydı ve bu, 3,6 MB'lik ham JPEG'in olduğu gibi
@@ -627,3 +738,29 @@ parçası ve kare üretmeyen bir bağlamda (gizli sekme) hiç teslim edilmeyebil
 Ölçülen kapsayıcıya `min-w-0` verilmesi de şart — yoksa grid öğesinin
 `min-width: auto` değeri yüzünden ölçüm kullanılabilir alanı değil kendi
 içeriğini ölçüyor ve sahne kapsayıcısından taşıyor.
+
+### Logo, ürün etiketi, boyutlar, WhatsApp (öne alınan iş, 13.09.2026)
+
+Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
+
+- **Logo:** PNG/JPEG/WebP (SVG reddediliyor: dış kaynak çağırabilir, tuvali
+  kirletebilir). Yüklenince uzun kenarı 600 px'e küçültülüp PNG veri URL'i olarak
+  **tarayıcıda** (`localStorage`, `vitrin-ai:logo`) saklanıyor — hesaba kaydetmek R2
+  isterdi. Veri URL'i aynı kökenden sayıldığı için tuval kirlenmiyor. Köşe, boyut
+  (kısa kenarın %8-35'i) ve saydamlık ayarlanıyor.
+- **Ürün etiketi:** ayar (8K-24K), gram ("3,45" ya da "3.45"; en fazla iki ondalık),
+  ürün kodu (en fazla 24 karakter, izinli karakterler) tek satırda:
+  "22K · 3,45 gr · Kod A-102". Köşe ve koyu/açık görünüm seçiliyor. Metnin genişliği
+  Konva'ya ölçtürülüyor; yazı tipi, `next/font`'un karma adı yüzünden gövdenin
+  hesaplanmış stilinden alınıyor. Logoyla aynı köşeye konursa etiket logonun iç
+  tarafına kayıyor.
+- İkisi de **en üst katmanda ve `listening={false}`**: ürünü seçmeyi engellemiyor,
+  sahnenin parçası oldukları için PNG/JPEG/CMYK/WhatsApp çıktılarının hepsine giriyor.
+- **Boyutlar:** Instagram dikey 1080×1350 ve Pazaryeri 2000×2000 eklendi
+  (`lib/composition.ts`). Pazaryeri seçilince zemin **düz beyaza** (`placeholder-white`,
+  gradyansız `#ffffff`) geçiyor; başka zemin seçilirse "Beyaza dön" uyarısı çıkıyor.
+- **WhatsApp'ta paylaş:** sahne JPEG olarak çiziliyor ve veri URL'i **senkron** dosyaya
+  çevriliyor (araya `await` girerse tarayıcı "kullanıcı etkileşimi" sayılmayan paylaşımı
+  reddedebiliyor). `navigator.canShare({ files })` varsa (telefon) paylaşım menüsü
+  görselin kendisiyle açılıyor; yoksa (masaüstü — WhatsApp Web'e bağlantıyla dosya
+  eklenemiyor) görsel indiriliyor, WhatsApp Web açılıyor ve ne yapılacağı yazıyor.

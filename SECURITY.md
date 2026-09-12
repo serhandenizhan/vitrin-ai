@@ -54,6 +54,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 2.2 CORS
 - Backend CORS ayarı sadece bilinen frontend origin'lerine (`localhost:3000` dev,
   production domain) izin vermeli. `allow_origins=["*"]` production'da asla kullanılmaz.
+- **Uygulandı (Faz 4):** `CORSMiddleware`, liste `CORS_ALLOWED_ORIGINS` env değişkeninden.
+  `*`, yol içeren ya da şemasız değerler uygulama başlarken reddediliyor (sessizce hiçbir
+  isteğe uymayan bir liste yazılamıyor); `allow_credentials` kapalı çünkü kimlik çerezle
+  değil `Authorization` başlığıyla taşınıyor. Production alan adı belli olunca eklenmeli.
 
 ### 2.3 DDoS / Firewall katmanı
 - Cloudflare (proxy modu) önerilir: DDoS koruması, bot filtreleme, ve WAF (Web Application
@@ -79,6 +83,19 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   korumasının Supabase tarafındaki karşılığıdır.
 - Session token'lar / JWT'ler kısa ömürlü (örn. 15dk access + refresh token deseni).
 - Parola sıfırlama linkleri tek kullanımlık ve süreli (15-60dk).
+- **Uygulandı (Faz 4):**
+  - Parola kuralı en az 8 karakter + küçük harf + büyük harf + rakam; Supabase ayarında
+    zorunlu, arayüzde yazarken canlı gösteriliyor (`frontend/src/lib/password-policy.ts`).
+  - E-posta bağlantıları (doğrulama, sıfırlama) kısa süreli ve tek kullanımlık (Supabase
+    ayarı); access token 15 dakika.
+  - Kullanıcı numaralandırması kapalı: yanlış parola ile kayıtsız e-posta aynı mesajı veriyor;
+    kayıtlı adresle kayıtta ve parola sıfırlamada da "e-postanızı kontrol edin" deniyor.
+  - Açık yönlendirme kapalı: `/auth/callback`'teki `next` yalnızca site içi yolu kabul
+    ediyor (`//`, `/\`, kontrol karakteri ve mutlak adres reddediliyor; `safe-redirect.ts`).
+  - Oturum çerezde (`@supabase/ssr`), token tarayıcıya ve backend adresine hiç açılmıyor;
+    vekiller iletiyor.
+  - Parola değiştirme mevcut parolayı istiyor; parola sıfırlanınca ve istenirse "tüm
+    cihazlardan çıkış" ile diğer oturumlar kapatılıyor.
 
 ### 3.2 Yetkilendirme (authorization)
 - Her kullanıcı sadece kendi verisine (kendi yüklediği fotoğraflar, projeler, kredi bakiyesi)
@@ -88,6 +105,12 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   yetmez.
 - Admin panel endpoint'leri ayrı bir rol kontrolü (`is_admin`) ile korunmalı; role check
   frontend'de değil backend'de yapılmalı.
+- Kullanıcının kendisinin düzenleyebildiği veri (Supabase `user_metadata`: ad, şirket adı,
+  hesap türü) **hiçbir yetki kararında** kullanılmaz; yalnızca görünüm içindir. Hesap türüne
+  göre paketler geldiğinde (Faz 5) plan bilgisi kullanıcının değiştiremeyeceği bir yerde
+  tutulmalı.
+- Vekiller istemciden gelen kaynak kimliğini backend adresine eklemeden önce doğruluyor
+  (`/api/projects/[id]` yalnızca UUID; `../admin` gibi değerler backend'e gitmiyor).
 
 ### 3.3 SQL Injection
 - ORM (SQLAlchemy) veya parametreli sorgular her zaman kullanılır; string concatenation ile
@@ -147,6 +170,18 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   (kayıt sırasında kullanıcıya gösterilir).
 - Kullanıcı hesabını silme talebinde bulunduğunda verisinin (fotoğraflar, projeler) makul
   bir sürede silinmesi için bir süreç tanımlanmalı ("right to erasure").
+  **Uygulandı (Faz 4):** `/hesap` → "Hesabı sil" (`DELETE /api/account`) önce kullanıcının
+  R2'deki bütün görsellerini, sonra Supabase kullanıcısını siliyor; veritabanı satırları
+  cascade ile gidiyor. Supabase panelinden elle silinen bir kullanıcının R2 görselleri ise
+  hâlâ otomatik temizlenmiyor.
+- **Veri ölçülülüğü (Faz 4):** kayıtta yalnızca ürün için gerekli bilgiler soruluyor (ad,
+  soyad, e-posta, hesap türü, şirket adı/türü, şehir, isteğe bağlı telefon); doğum tarihi,
+  cinsiyet, T.C. kimlik no ve adres sorulmuyor. Özgün fotoğraf sunucuda saklanmıyor,
+  yalnızca sonuç. Ticari e-posta izni zorunlu onaya bağlı değil, ayrı ve isteğe bağlı; hesap
+  sayfasından her an geri alınabiliyor.
+- **Açık:** kayıttaki onay kutusunun atıf yaptığı kullanım koşulları ve KVKK aydınlatma
+  metni henüz yazılmadı; onay kaydı şu an kullanıcının düzenleyebildiği `user_metadata`'da
+  (bkz. `CLAUDE.md` açık takip maddesi 3).
 - Üçüncü taraf servislere (Sentry, analytics) gönderilen veri minimize edilmeli — hata
   loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı.
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
@@ -181,12 +216,22 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   devreye girdiğinde bunların tarayıcıya sızmasını engelleyecek katmanı şimdiden kurar.
 - **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`), bucket CORS
   kuralının yalnızca bilinen origin'lere GET/HEAD vermesi (gerçek bucket doğrulaması açık —
-  bkz. `CLAUDE.md` açık takip maddesi 5).
-  `POST /api/admin/backgrounds` geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
-  korunuyor — bu bilinçli bir geçici çözüm (bkz. kök `CLAUDE.md` ders 8), Faz 4'te
-  gerçek Supabase Auth + rol kontrolüyle değiştirilecek.
+  bkz. `CLAUDE.md` açık takip maddesi 2).
+  `POST /api/admin/backgrounds` Faz 3'te geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
+  korunuyordu (bkz. kök `CLAUDE.md` ders 8); **Faz 4'te kaldırıldı**, yerini Supabase
+  oturumu + `admin_users` tablosu aldı.
 - **Faz 4:** Şifre hash'leme, JWT/session tasarımı, IDOR koruması (bu fazda en kritik —
-  şema yanlış tasarlanırsa sonradan düzeltmek pahalı)
+  şema yanlış tasarlanırsa sonradan düzeltmek pahalı). **Backend'de yapılanlar:** JWKS ile
+  JWT doğrulaması (algoritma karıştırmaya karşı izin listesi, anonim oturum reddi,
+  Supabase'de iptal edilen imzalama anahtarının en geç 10 dakikada reddedilmesi),
+  `public`'teki her tabloda RLS + `anon`/`authenticated` yetkilerinin geri alınması
+  (`alembic_version` dahil), her sorguda sahiplik filtresi ve 404 ile IDOR koruması,
+  CORS (2.2), yönetici yetkisinin kullanıcı tarafından değiştirilemeyen bir tabloda
+  tutulması. **Frontend'de yapılanlar:** çerezde oturum, token'ı ileten vekiller, açık
+  yönlendirme ve kullanıcı numaralandırması koruması, parola kuralı, arka plan kaldırmada
+  oturum zorunluluğu, hesap silme (3.1, 3.2, 6). Supabase'de access token 15 dakika, parola
+  kuralı ve kısa e-posta bağlantı süresi ayarlandı. **Açık:** Supabase panelinden elle
+  silinen kullanıcının R2 görselleri otomatik temizlenmiyor; KVKK metinleri (bölüm 6).
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency
 - **Faz 6:** Admin rol kontrolü backend seviyesinde
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, rate limiting'in tamamı, dependency

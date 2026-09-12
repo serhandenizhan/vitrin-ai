@@ -97,7 +97,7 @@ export function ProcessingState({ onizlemeUrl }: ProcessingStateProps) {
 
       <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
         {gecenSaniye >= YAVAS_ESIGI_SANIYE
-          ? "Bu ilk istek olabilir — model belleğe yükleniyor ve bu bir kereye mahsus daha uzun sürer. Sonraki fotoğraflar belirgin şekilde daha hızlı işlenir."
+          ? "Sunucu yeni açıldıysa ilk fotoğraf biraz daha uzun sürer. Sonrakiler daha hızlı işlenir."
           : "Sayfayı kapatmayın; sonuç hazır olduğunda burada açılacak."}
       </p>
     </div>

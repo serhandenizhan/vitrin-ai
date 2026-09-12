@@ -32,6 +32,7 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 15. **Ders — bir testin yeşil geçmesi hatanın olmadığını göstermez; testin neyi *doğrulamadığına* bakın.** Faz 3'te `POST /api/admin/backgrounds`'un admin secret karşılaştırması non-ASCII secret'larda bozuktu ve düzeltmesi de bozuktu (bkz. ders 16). Yanındaki test, `test_non_ascii_admin_secret_returns_401_not_500`, yalnızca **yanlış** secret'ın 401 döndürdüğünü doğruluyordu; **doğru** secret'ın kabul edildiğine hiç bakmıyordu. Bozuk kod bu testten yeşil geçiyordu — hata, testin baktığı yerin dışında duruyordu. **Kural: bir yetkilendirme/doğrulama kontrolü test edilirken hem RED hem KABUL yolu ayrı ayrı doğrulanır.** Daha genel olarak, bir hatayı düzeltirken yazılan testin gerçekten iş gördüğü, testi ESKİ (bozuk) koda karşı çalıştırıp kırmızı yandığını görerek kanıtlanır; yalnızca yeni kodda yeşil yanması hiçbir şey söylemez.
 16. **Ders — HTTP header'ları `latin-1`, ortam değişkenleri `utf-8`'dir; karşılaştırırken codec'i karıştırmayın.** Starlette, ASGI header baytlarını `latin-1` ile decode ederek `str` yapar. `secrets.compare_digest` `str` argümanlarında yalnızca ASCII kabul ettiği için karşılaştırma baytlar üzerinden yapılmalı — ama iki tarafın codec'i **aynı değil**: header'dan gelen `str`'in ham baytlarını geri almak için `latin-1` ile encode edilir, `.env`'den okunan secret ise `utf-8`'dir. Her iki tarafı `utf-8` ile encode etmek header baytlarını ikinci kez kodlar (double-encode) ve Türkçe karakter içeren bir `ADMIN_SECRET`'ta doğru secret gönderilse bile kalıcı 401 üretir. Bulgu GitHub Copilot'un PR incelemesinden geldi, düzeltme PR #7'de.
 17. **Ders — stacked PR'da merge SIRASI işi kaybettirebilir.** PR #4'ün base'i `main` değil `feature/faz-2-web-frontend` idi. Önce PR #3 (alt dal → `main`), bir dakika sonra PR #4 (üst dal → alt dal) birleştirildi. Alt dal `main`'e zaten girmiş olduğu için PR #4'ün 8 commit'i **`main`'e hiç ulaşmadı** ve bu, GitHub'da her iki PR da "Merged" göründüğü için fark edilmedi; `main`'de sol panel, gerçek fotoğraflar ve 27 frontend testinin tamamı eksik kaldı. **Kural: stacked PR'lar her zaman ÜSTTEN ALTA birleştirilir (önce PR #4 alt dala, sonra alt dal `main`'e); ve bir merge'den sonra işin gerçekten `main`'de olduğu `git merge-base --is-ancestor <commit> origin/main` ile doğrulanır.** "Merged" rozeti, işin `main`'de olduğu anlamına gelmez.
+18. **Ders — `.env` dosyası çalışılan klasöre göre değil, kodun konumuna göre bulunmalı.** Faz 4'te backend repo kökünden (`--app-dir backend` ile) başlatıldığında `env_file=".env"` göreli yolu `backend/.env`'yi **hiç okumadı**: uygulama hatasız açıldı ama oturum isteyen her uç nokta "SUPABASE_URL ayarlanmalı" diye 503 döndü. Hata, ayarların eksik olduğu izlenimini veriyordu; asıl sebep dosyanın bulunamamasıydı. `app/core/config.py` artık `.env`'yi dosyanın kendi konumundan türettiği mutlak yoldan okuyor (`BACKEND_ENV_FILE`). Ders 11'in aynı sınıfı: yol, çalıştırma biçimine değil repo yapısına bağlanır.
 
 ## Proje genel bakış
 
@@ -59,7 +60,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
-- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini doğrular. **IDOR koruması Supabase tarafında RLS politikalarıyla yazılır — RLS'siz tablo oluşturulmaz** (bkz. `ROADMAP.md` Faz 4 ve `SECURITY.md` 3.2).
+- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme"). **Frontend tarafı:** tarayıcı token'ı hiç görmüyor; Next.js vekilleri (`src/lib/backend-proxy.ts`) çerezdeki oturumdan token'ı alıp `Authorization` başlığıyla iletiyor. `src/proxy.ts` her istekte oturumu yeniliyor ama **yetkilendirme sayılmaz** — asıl kontrol backend'de. Ekranda gösterilen profil bilgileri (ad, şirket, hesap türü) Supabase `user_metadata`'da ve kullanıcının düzenleyebildiği veri olduğu için hiçbir yetki kararında kullanılmaz.
 - **Ödemeler:** iyzico
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
@@ -115,6 +116,8 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 
 VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.vscode/tasks.json`). Görev dosyası bilinçli olarak commit ediliyor — "sistemi nasıl ayağa kaldıracağım" bilgisi kişisel bir tercih değil, projenin parçası. Kişisel VS Code ayarları (`settings.json` vb.) yok sayılmaya devam ediyor.
 
+**macOS/Linux'ta terminalden: `./execute.sh`** (repo kökünde, aynı sebeple commit ediliyor). `tasks.json`'un Windows'a özgü olması nedeniyle (`.venv\Scripts\python.exe`) eklendi — tek komutla Postgres'i (Docker) ayağa kaldırır, backend sanal ortamını/migration'larını ve frontend bağımlılıklarını ilk çalıştırmada kurar, ikisini birlikte başlatır. Ctrl+C ikisini birlikte kapatır. `VITRIN_PYTHON` / `VITRIN_VENV_DIR` ile override edilebilir (ders 11: path hard-code edilmez).
+
 **Tuzak:** `.gitignore`'da dizinin kendisi (`.vscode/`) değil **içeriği** (`.vscode/*`) dışlanmalı — git, dışlanmış bir dizinin içine hiç bakmadığı için `!.vscode/tasks.json` negasyonu aksi hâlde çalışmaz.
 
 **İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
@@ -127,12 +130,14 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 
 - `frontend/.env.local` içinde `USE_MOCK_BACKEND=true` backend olmadan arayüzü çalıştırır (sahte bir kesim PNG'i döner, arayüzde "Demo modu" olarak işaretlenir). **Dikkat:** bu değer `true` kalırsa gerçek backend ayakta olsa bile arayüz hep demo/mock sonucu gösterir.
 - Gerçek uçtan uca demo için backend'i ayrı bir terminalde başlatın ve `USE_MOCK_BACKEND=false` yapın. İlk istek modeli belleğe yüklediği için daha uzun sürebilir (bkz. "Bilinen kısıt" bölümü).
-- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Backend HEIC'i işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — arayüz bu formatta önizleme yerine bilgilendirici bir kart gösteriyor.
+- Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Chrome/Firefox/Edge HEIC'i `<img>` ile gösteremiyor; önizleme `frontend/src/lib/heic-preview.ts` ile üretiliyor: önce tarayıcının kendi çözücüsü (Safari), olmazsa `heic-to` (libheif WASM, **LGPL-3.0**, ~3 MB) yalnızca HEIC seçildiğinde dinamik yükleniyor. İkisi de başarısızsa eski bilgi kartı çıkıyor. Backend'e her zaman özgün dosya gidiyor; tarayıcıda üretilen JPEG yalnızca gösterim için.
 - **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
-- **Backend'de `/health` endpoint'i yok**, bu yüzden arayüzde "servis ayakta mı" göstergesi bulunmuyor — uydurma bir gösterge yanlış bilgi verirdi. Böyle bir gösterge istenirse backend'e küçük bir sağlık endpoint'i eklenmeli (Serhan).
-- **Frontend testleri:** `cd frontend && npm test` (Vitest). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin vekilleri, CMYK yükleme limitleri, imzalı URL yenileme zamanlaması ve kompozisyon geometrisinin yanı sıra R2 URL yenilemesi, seçili zeminin korunması ve dışa aktarma başarısız olduğunda sahnenin geri yüklenmesine yönelik React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
-- **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`) ve `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
+- **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
+- **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). Backend'de R2 yapılandırılmamışsa kayıt sessizce atlanır, kesim ve indirme akışı etkilenmez.
+- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 188 test). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, editör (pazaryeri, WhatsApp paylaşımı, logo reddi) ve açılıştaki önce/sonra için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
 ## Arayüz tasarım dili (kilitli karar — Faz 2)
@@ -145,7 +150,7 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Büyük başlıklarda nokta kullanılmaz** (kullanıcı kararı, 10.09.2026). `display-hero`, `display-section` ve `display-feature` sınıflarını taşıyan her başlık noktasız biter. Apple'ın kendi başlıkları nokta kullanır ama kullanıcı bu ayrıntıda ayrıştı; kural burada geçerli.
 
-**Menüdeki her öğe ya bir yere götürür ya bir şey açar, ikisi karışık değil.** Tek bağlantı `Deneyin`; `Nasıl çalışır`, `Paketler` ve `Hakkında` panel açıyor (`nav-panel.tsx`) ve yanlarındaki ok bunu önceden söylüyor. Panel içerikleri aracı kullanmak için gerekli olmadığından sayfaya bölüm olarak konmuyor — konduklarında ziyaretçinin araca ulaşması her biri için bir ekran gecikiyordu.
+**Menüdeki her öğe ya bir yere götürür ya bir şey açar, ikisi karışık değil.** `Deneyin`, `Katalog` ve `Paketler` bağlantı; `Nasıl çalışır` ve `Hakkında` panel açıyor (`nav-panel.tsx`) ve yanlarındaki ok bunu önceden söylüyor. **Üst çubuk 11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda"): kenarlardan 12 px içeride, sayfanın üstüne biniyor; sayfaların ilk bölümü bu payı `page-top` sınıfıyla geri alıyor (`.section-rhythm.page-top`, bkz. `globals.css`). Yeni bir sayfa eklenirken ilk bölüme `page-top` konmazsa başlık çubuğun altında kalır. Paneller de çubukla aynı genişlikte yüzen kartlar; telefonda bağlantılar "Menü" panelinde. Panel içerikleri aracı kullanmak için gerekli olmadığından sayfaya bölüm olarak konmuyor — konduklarında ziyaretçinin araca ulaşması her biri için bir ekran gecikiyordu.
 
 **Uyarlanmayanlar — bilinçli:**
 - **SF Pro kullanılmaz.** Apple'a ait ve lisanslı; yerine Inter (aynı sınıfta neo-grotesk).
@@ -158,45 +163,19 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
 
-**Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı.
+**Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı. (İstisna, 13.09.2026: açılıştaki önce/sonra kaydıracı `marketing/hero-before-after.tsx` küçük bir istemci parçası; çerçevesi `hero-visual.tsx` sunucu bileşeni olarak kaldı.)
 
-## Geçici çözüm kaydı — geçmiş çalışmalar tarayıcıda (Faz 2)
+**Yumuşak geçişler (13.09.2026, kullanıcı isteği: "tak diye açılıyor").** Bir ekran, pencere ya da katman belirirken `soft-enter` (hafif yükselip belirme) ya da `soft-fade` sınıfları kullanılıyor; tanımlar `globals.css`'in sonunda. Yalnızca giriş animasyonu, eğri sitenin geri kalanıyla aynı (`cubic-bezier(0.16, 1, 0.3, 1)`), "hareketi azalt" açıkken kapalı. Yeni bir koşullu ekran eklenirken aynı sınıflar kullanılmalı. **Doğrulama tuzağı:** gömülü tarayıcı paneli gizliyken kare üretilmediği için bu animasyonlar ilerlemez ve öğe görünmez kalır gibi ölçülür (ders 13); ölçmek için Web Animations API ile zaman ilerletilir.
 
-Kullanıcı Faz 2'de sol panelde geçmiş çalışmaları görmek istedi. `ROADMAP.md` proje geçmişini Faz 4'e ve **sunucuya** koyuyor; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor. Ders 8'in gereği olarak bu sessizce yapılmadı:
+## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 
-- Depo bir arayüzün arkasında: `frontend/src/lib/work-history.ts`. Faz 4'te yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek; panel, sağlayıcı ve araç hiç değişmeyecek.
-- Panelde kullanıcıya açıkça yazıyor: "yalnızca bu cihazda saklanıyor, hesap sistemi geldiğinde hesabınıza taşınacak."
-- Ayarlardan kapatılabiliyor ve tümü silinebiliyor.
-- Yalnızca **sonuç** saklanıyor, özgün fotoğraf değil — özgün dosyalar 20 MB'a kadar çıkabiliyor ve yirmi kaydın özgünüyle birlikte saklanması tarayıcı kotasını doldurur. Görünür sonucu: geçmişten açılan çalışmada önce/sonra karşılaştırması değil yalnızca sonuç gösterilir.
-- En fazla 20 kayıt.
-
-**Faz 4'te kapatılacak.** Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir ürün kararı; taşınmayacaksa kullanıcıya önceden bildirilmeli.
+Faz 2'de kullanıcı isteğiyle tarayıcıda (IndexedDB) tutulan geçmiş, Faz 4'te **sunucuya** taşındı: `frontend/src/lib/work-history.ts`'in yalnızca gövdesi değişti, fonksiyon adları aynı kaldı. Ürün kararları (Kaan, 12.09.2026): eski tarayıcı kayıtları hesaba **taşınmıyor** (eski IndexedDB deposu siliniyor), sunucuda yalnızca **sonuç** saklanıyor, **arka plan kaldırma giriş istiyor**. Ayrıntı: `ROADMAP.md` Faz 4, `frontend/README.md` → "Geçmiş sunucuda".
 
 ## Açık takip maddeleri
 
 Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
 
-### 1. Backend'de `/health` endpoint'i yok — sahibi: Serhan
-
-Arayüze "servis ayakta mı" göstergesi **konmadı**. Uydurma bir gösterge yanlış bilgi verir: servis kapalıyken "bağlı" yazan bir rozet, kullanıcının hatayı anlamasını zorlaştırır. Şu an servisin kapalı olduğu ilk gerçek istekte açık bir mesajla anlaşılıyor ("Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir.").
-
-Böyle bir gösterge isteniyorsa backend'e küçük bir sağlık endpoint'i eklenmeli. Frontend tarafı hazır: vekil katmanı zaten var, gösterge yarım saatlik iş.
-
-**Not:** endpoint eklenirse model yüklü mü / kapasite dolu mu bilgisini de dönmesi faydalı olur — arayüz `MAX_CONCURRENT_INFERENCES=1` yüzünden gelen 503'ü zaten ayrı bir mesajla gösteriyor, aynı bilgiyi önden verebilmek beklemeyi öngörülebilir kılar.
-
-### 2. Geçmiş çalışmalar tarayıcıda — Faz 4'te sunucuya taşınacak — sahibi: Serhan (şema) + Kaan (bağlama)
-
-Yol haritası proje geçmişini Faz 4'e ve **sunucuya** koymuştu. Kullanıcı Faz 2'de görünür olmasını istedi; Faz 4'ün şeması ve RLS'i henüz olmadığı için geçmiş şimdilik **tarayıcıda (IndexedDB)** tutuluyor.
-
-Taşıma sırasında **arayüzde hiçbir değişiklik gerekmeyecek**: depo tek bir dosyanın arkasında (`frontend/src/lib/work-history.ts`), yalnızca o dosyanın gövdesi sunucu çağrılarıyla değişecek. Panel, sağlayıcı ve araç aynı kalacak.
-
-Şema tasarlanırken bilinmesi gerekenler:
-- Şu anda yalnızca **sonuç** saklanıyor, özgün fotoğraf değil (kota). Sunucuda özgün de saklanacaksa arayüzde geçmişten açılan çalışma için önce/sonra karşılaştırması da açılabilir.
-- Kayıt başına tutulan alanlar: dosya adı, oluşturma zamanı, demo mu, süre, sonuç görseli.
-- **RLS zorunlu** — tablo ve politika aynı migration'da (bkz. yukarıdaki kural 7 ve `SECURITY.md` 3.2).
-- Var olan tarayıcı kayıtlarının hesaba taşınıp taşınmayacağı bir **ürün kararı**. Taşınmayacaksa kullanıcıya önceden bildirilmeli; panelde şu an "hesap sistemi geldiğinde hesabınıza taşınacak" yazıyor.
-
-### 3. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
+### 1. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
 
 `/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
 koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
@@ -209,14 +188,16 @@ kendi profili alınmalı. Profilsiz bir çevrim matbaada yanlış renk verir; bu
 sessizce yapmak özelliği hiç sunmamaktan kötüdür — bu yüzden varsayılan
 konmadı.
 
-### 4. CORS middleware'i — sahibi: Serhan, Faz 4
-
-Backend'de CORS middleware'i Faz 4'e kadar eklenmeyecek (frontend sunucu tarafı vekil kullandığı için Faz 0-3'te sorun değil). Faz 4'te auth devreye girdiğinde, ya da backend ayrı bir alan adına taşınırsa/mobil uygulama (Faz 8) gündeme gelirse `fastapi.middleware.cors.CORSMiddleware` eklenmesi gerekecek.
-
-`POST /api/admin/backgrounds` (Faz 3) şu anda gerçek bir admin auth yerine geçici bir `X-Admin-Secret` paylaşılan secret header'ıyla korunuyor (`ADMIN_SECRET` env değişkeni). Bu, ders 8'de anlatılan deseninin ikinci tekrarı — bilinçli, kullanıcı onaylı bir geçici çözüm. Faz 4'te gerçek Supabase Auth + rol kontrolü (`is_admin`) devreye girdiğinde bu header tamamen kaldırılıp yerine gerçek yetkilendirme konulacak.
-
-### 5. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
+### 2. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
 Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
 
 **Bilinçli karar (10.09.2026, kullanıcı onayı):** henüz bir production alan adı yok, bu yüzden bucket'a şimdilik yalnızca `http://localhost:3000` için GET/HEAD kuralı eklenecek (şablon `backend/README.md` → "R2 CORS"). **Deploy anında bu maddeye mutlaka geri dönülmeli** — asıl production alan adı belirlendiğinde kurala eklenmezse, canlıda çıkan her kompozisyon sessizce zeminsiz iner (yerelde fark edilmeyen bir hata modu, çünkü localhost zaten kuralda var). Doğrulama: `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli.
+
+### 3. Kullanım koşulları ve KVKK metinleri yazılmalı — sahibi: Kaan + Serhan
+
+Kayıt formu kullanım koşulları ve KVKK aydınlatma metni için zorunlu bir onay kutusu gösteriyor, ama **metinlerin kendisi henüz yok** (footer'da "yakında"). Gerçek kullanıcıya açılmadan önce yazılmalı. Aynı iş kapsamında: onay zamanı ve sürümü şu an Supabase `user_metadata`'da (`terms_accepted_at`, `terms_version`), yani kullanıcının değiştirebildiği bir yerde; hukuki ispat için onayların değiştirilemez bir tabloda (zaman, sürüm) tutulması gerekiyor. Metin değiştiğinde `TERMS_VERSION` (`frontend/src/lib/profile.ts`) artırılmalı.
+
+### 4. Faz 4'te eklenen backend testleri yerel Postgres'le çalıştırılmalı — sahibi: Serhan
+
+`backend/tests/test_account_endpoint.py` (hesap silme) ve `test_remove_background_endpoint.py`'deki oturum testleri yazıldı ama Postgres'i olan bir makinede **hiç çalıştırılmadı** (geliştirme makinesinde Docker yoktu; `.env` gerçek Supabase'i gösterdiği için oraya karşı çalıştırılması yasak — bkz. `backend/README.md` "Testler"). Yerel bir Postgres'le `pytest` çalıştırılıp sonucu PR'a yazılmalı.
