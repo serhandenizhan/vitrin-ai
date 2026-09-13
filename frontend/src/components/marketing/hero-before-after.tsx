@@ -121,7 +121,9 @@ export function HeroBeforeAfter() {
         value={Math.round(ratio * 100)}
         onChange={(event) => setRatio(Number(event.target.value) / 100)}
         aria-label="Önce ve sonra arasındaki çizgi"
-        className="accent-gold mt-3 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15"
+        // Yerel kaydirac, 24 px yukseklik: `appearance-none` + `h-1` hem
+        // tutamaci Chrome'da gizliyor hem dokunma alanini 4 px'e indiriyordu.
+        className="accent-gold mt-2 h-6 w-full cursor-pointer"
       />
     </div>
   );

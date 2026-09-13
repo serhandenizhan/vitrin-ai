@@ -163,13 +163,15 @@ export function SiteFooter() {
           {COLUMNS.map((column) => (
             <nav key={column.title} aria-label={column.title}>
               <h2 className="text-[0.875rem] font-semibold">{column.title}</h2>
-              <ul className="mt-4 space-y-2.5">
+              <ul className="mt-3 space-y-0.5">
                 {column.items.map((item) => (
                   <li key={item.label} className="fine-print">
                     {item.href ? (
                       <Link
                         href={item.href}
-                        className="on-dark-muted transition-colors hover:text-[#f3f0eb]"
+                        // min-h-8: telefonda parmakla dokunulabilir yukseklik
+                        // (metin 17 px'ti); satir araligi bu yukseklikten geliyor.
+                        className="on-dark-muted inline-flex min-h-8 items-center transition-colors hover:text-[#f3f0eb]"
                       >
                         {item.label}
                       </Link>

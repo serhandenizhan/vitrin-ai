@@ -77,7 +77,10 @@ export function WorkSidebar() {
         tabIndex={isSidebarOpen ? 0 : -1}
         onClick={closeSidebar}
         className={cn(
-          "drawer-backdrop fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]",
+          // Perde ve cekmece yuzen ust cubugun (z-50) USTUNDE: telefonda cubuk
+          // cekmecenin baslik satirini ortuyor, "Paneli kapat" dugmesine
+          // dokunulamiyordu (mobil kontrol, 13.09.2026).
+          "drawer-backdrop fixed inset-0 z-[52] bg-black/45 backdrop-blur-[2px]",
           isSidebarOpen && "drawer-backdrop-open",
         )}
       />
@@ -88,7 +91,7 @@ export function WorkSidebar() {
            erisilemez oluyor; yalnizca gorunmez yapmak yetmiyordu. */
         inert={!isSidebarOpen}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-white/10 bg-[#1d1d1f] text-[#f5f5f7] shadow-2xl",
+          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/10 bg-[#1d1d1f] text-[#f5f5f7] shadow-2xl",
           // Kayma `drawer` / `drawer-open` ile — sebebi globals.css'te yazili.
           "drawer",
           isSidebarOpen && "drawer-open",

@@ -36,6 +36,14 @@ npm run dev
 > gösterilmiyor. Gerçek uçtan uca test için `false` yapıp dev sunucusunu yeniden
 > başlatın (Next.js `.env.local`'i yalnızca açılışta okur).
 
+**Telefondan denemek:** telefon bilgisayarla aynı Wi-Fi'da olmalı. `.env.local`'e
+bilgisayarın yerel IP'sini yazın (`DEV_ALLOWED_ORIGINS=192.168.1.10`), dev
+sunucusunu yeniden başlatın ve telefonda `http://<ip>:3000` açın. Bu satır olmadan
+Next.js 16 localhost dışından gelen geliştirme isteklerini engelliyor: sayfa açılır
+ama düğmeler çalışmaz. Windows ilk açılışta sorarsa Node.js'e **özel ağ** izni verin.
+E-posta bağlantıları (doğrulama, sıfırlama) Supabase Redirect URLs'te yalnızca
+localhost kayıtlı olduğu için telefondaki IP adresine dönmez; şifreyle giriş çalışır.
+
 ## Neden sunucu tarafı vekil
 
 Tarayıcı FastAPI'ye **doğrudan gitmiyor**; istek önce
