@@ -432,7 +432,9 @@ yok.** Dal: `feature/faz4-veritabani-hesaplar`. Ayrıntılar `backend/README.md`
      kullanıcıları silerdi (her testten sonra `delete from auth.users`, sonda
      `downgrade base`) — sahte bir Supabase veritabanında birebir gösterildi.
      Artık `auth` şeması yerel katmanın işaretini taşımıyorsa oturum hiçbir
-     şeye dokunmadan durduruluyor.
+     şeye dokunmadan durduruluyor. PR #12 incelemesinden sonra (13.09.2026)
+     bağlanmadan önce adres de kontrol ediliyor: sunucu yerel değilse
+     (`VITRIN_ALLOW_REMOTE_TEST_DB=1` verilmedikçe) bağlantı hiç açılmıyor.
   2. JWKS anahtarları süresiz önbellekteydi; Supabase'de iptal edilen bir
      anahtar süreç yeniden başlatılana kadar geçerliydi. Artık en geç 10
      dakikada reddediliyor.
@@ -497,8 +499,8 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   artık doğru olmayan cümleler (ana sayfa, Paketler, Teknik bilgiler, Hakkında) düzeltildi.
 - **Backend düzeltmesi:** `config.py` `.env`'yi çalışılan klasörden değil kendi
   konumundan buluyor (kök `CLAUDE.md` ders 18).
-- **Testler:** frontend 72 → 188. Backend'e oturum ve hesap silme testleri eklendi (160 →
-  177); yerel Postgres'le henüz çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4).
+- **Testler:** frontend 72 → 188. Backend'e oturum, hesap silme ve test veritabanı adres
+  koruması testleri eklendi (160 → 185); yerel Postgres'le henüz çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4).
 
 **Bekleyenler:**
 - R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).

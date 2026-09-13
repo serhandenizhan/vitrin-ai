@@ -200,4 +200,4 @@ Kayıt formu kullanım koşulları ve KVKK aydınlatma metni için zorunlu bir o
 
 ### 4. Faz 4'te eklenen backend testleri yerel Postgres'le çalıştırılmalı — sahibi: Serhan
 
-`backend/tests/test_account_endpoint.py` (hesap silme) ve `test_remove_background_endpoint.py`'deki oturum testleri yazıldı ama Postgres'i olan bir makinede **hiç çalıştırılmadı** (geliştirme makinesinde Docker yoktu; `.env` gerçek Supabase'i gösterdiği için oraya karşı çalıştırılması yasak — bkz. `backend/README.md` "Testler"). Yerel bir Postgres'le `pytest` çalıştırılıp sonucu PR'a yazılmalı.
+`backend/tests/test_account_endpoint.py` (hesap silme), `test_remove_background_endpoint.py`'deki oturum testleri ve `test_db_safety.py`'deki adres koruması testleri yazıldı (adres koruması saf fonksiyon olarak doğrudan çağrılıp denendi; gerçek `.env`'deki uzak adresi reddettiği görüldü) ama Postgres'i olan bir makinede **hiç çalıştırılmadı** (geliştirme makinesinde Docker yoktu; `.env` gerçek Supabase'i gösterdiği için oraya karşı çalıştırılması yasak — bkz. `backend/README.md` "Testler"). Yerel bir Postgres'le `pytest` çalıştırılıp sonucu PR'a yazılmalı.

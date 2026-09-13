@@ -61,7 +61,15 @@ POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
 DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
 ```
 
-**Koruma:** oturum başında bağlanılan veritabanında `auth` şeması varsa ve yerel
+**Koruma, iki aşama** (`tests/db_safety.py`):
+
+1. **Bağlanmadan önce adres:** `DATABASE_URL`'in sunucusu `localhost`, `127.0.0.1`,
+   `::1` ya da docker-compose servis adı `postgres` değilse oturum çıkış kodu 3 ile
+   durur, uzak sunucuya bağlantı bile açılmaz. Ayrı bir uzak TEST veritabanı
+   bilinçli olarak kullanılacaksa (ör. CI) `VITRIN_ALLOW_REMOTE_TEST_DB=1`. PR #12
+   incelemesinde eklendi: yalnızca şema kontrolü, `auth` şeması olmayan uzak bir
+   Postgres'i "yeni kurulmuş" sanıp sıfırlardı.
+2. **Bağlandıktan sonra şema:** bağlanılan veritabanında `auth` şeması varsa ve yerel
 uyumluluk katmanının (migration 0002) işaretini taşımıyorsa — yani büyük
 olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 ile durur
 (`tests/db_safety.py`). `.env`'e Supabase `DATABASE_URL`'i yazıldıktan sonra
@@ -69,8 +77,8 @@ yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıla
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
 
 **Faz 4 sonunda eklenen testler** (`test_account_endpoint.py`, `test_remove_background_endpoint.py`
-içindeki oturum testleri) Postgres'i olan bir makinede henüz çalıştırılmadı (kök
-`CLAUDE.md` açık takip maddesi 4). Toplam 177 test.
+içindeki oturum testleri, `test_db_safety.py`'deki adres testleri) Postgres'i olan bir
+makinede henüz pytest ile çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4). Toplam 185 test.
 
 Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor

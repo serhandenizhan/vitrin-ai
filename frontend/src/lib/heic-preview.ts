@@ -60,26 +60,45 @@ async function convertWithHeicTo(file: Blob): Promise<Blob> {
  * olmadan HEIC gosteremeyen bir tarayicida her HEIC dosyasi, basarisiz
  * olacagi zaten bilinen bir `img.decode()` denemesinden geciyordu.
  *
- * Yanlis pozitif riski: ilk dosya bozuksa (gecerli HEIC degilse) `false`
- * onbelleklenip sonraki GECERLI dosyalar icin de yerel deneme atlanabilir.
- * Bunun bedeli en kotu ihtimalle Safari'de gereksiz yere `heic-to`'ya
- * dusmek — sonuc yine dogru cikiyor, yalnizca daha yavas. Yalnizca
- * `browserDeps` icin gecerli; testler kendi `canDecode` sahtesini verdigi
- * icin bu onbellege hic dokunmuyor.
+ * "EVET" hemen hatirlaniyor; "HAYIR" ise ancak dosyanin GECERLI oldugu
+ * kanitlaninca (heic-to ayni dosyayi cevirebildiyse). PR #12 incelemesinde
+ * bulunan hata: ilk surum `false`'u her durumda hatirliyordu, yani Safari'de
+ * ilk secilen dosya bozuksa sonraki gecerli dosyalar da oturum boyunca yerel
+ * cozucuyu atlayip gereksiz yere ~3 MB'lik `heic-to`'ya dusuyordu. Yerel
+ * deneme basarisiz AMA donusturme de basarisizsa kusur dosyada, tarayicida
+ * degil — o durumda hicbir sey hatirlanmiyor.
+ *
+ * Yalnizca `browserDeps` icin gecerli; testler kendi `canDecode` sahtesini
+ * verdigi icin bu onbellege dokunmuyor.
  */
 let nativeHeicSupport: boolean | null = null;
+/** Son yerel deneme basarisizdi; dosyanin gecerli oldugu henuz kanitlanmadi. */
+let unconfirmedNativeFailure = false;
 
 async function canDecodeNativelyCached(url: string): Promise<boolean> {
   if (nativeHeicSupport !== null) return nativeHeicSupport;
-  nativeHeicSupport = await canDecodeNatively(url);
-  return nativeHeicSupport;
+  const decoded = await canDecodeNatively(url);
+  if (decoded) {
+    nativeHeicSupport = true;
+  } else {
+    unconfirmedNativeFailure = true;
+  }
+  return decoded;
+}
+
+async function convertAndConfirmNativeFailure(file: Blob): Promise<Blob> {
+  const converted = await convertWithHeicTo(file);
+  // Dosya gecerliymis (cevrilebildi) ama tarayici cozemedi: kusur tarayicida.
+  if (unconfirmedNativeFailure) nativeHeicSupport = false;
+  unconfirmedNativeFailure = false;
+  return converted;
 }
 
 const browserDeps: PreviewDeps = {
   createObjectUrl: (blob) => URL.createObjectURL(blob),
   revokeObjectUrl: (url) => URL.revokeObjectURL(url),
   canDecode: canDecodeNativelyCached,
-  convertHeic: convertWithHeicTo,
+  convertHeic: convertAndConfirmNativeFailure,
 };
 
 export async function createPreviewUrl(

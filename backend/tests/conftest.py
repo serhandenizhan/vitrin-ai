@@ -24,6 +24,7 @@ from tests.db_safety import (
     AUTH_SCHEMA_COMMENT_SQL,
     UnsafeTestDatabaseError,
     ensure_disposable_database,
+    ensure_local_database_host,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -46,6 +47,12 @@ async def _apply_migrations():
     # ÖNCE koruma: bu paket bağlandığı veritabanını sıfırlıyor. Hedef yerel
     # test veritabanı değilse (ör. .env'deki Supabase) migration'lar dahil
     # hiçbir şeye dokunulmadan oturum durduruluyor (bkz. tests/db_safety.py).
+    # Adres kontrolü bağlanmadan ÖNCE: uzak bir sunucuya bağlantı bile açılmıyor.
+    try:
+        ensure_local_database_host(settings.database_url)
+    except UnsafeTestDatabaseError as exc:
+        pytest.exit(str(exc), returncode=3)
+
     async with _engine.connect() as connection:
         row = (await connection.execute(text(AUTH_SCHEMA_COMMENT_SQL))).first()
     try:

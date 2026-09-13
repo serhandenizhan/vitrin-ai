@@ -2,10 +2,49 @@ import pytest
 from sqlalchemy import text
 
 from tests.db_safety import (
+    ALLOW_REMOTE_ENV,
     LOCAL_AUTH_SHIM_MARKER,
     UnsafeTestDatabaseError,
     ensure_disposable_database,
+    ensure_local_database_host,
 )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai",
+        "postgresql+asyncpg://vitrin_ai:x@127.0.0.1:5434/vitrin_ai",
+        "postgresql+asyncpg://vitrin_ai:x@[::1]:5432/vitrin_ai",
+        "postgresql+asyncpg://vitrin_ai:x@postgres:5432/vitrin_ai",
+    ],
+)
+def test_local_database_hosts_are_allowed(url):
+    ensure_local_database_host(url, environ={})
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Supabase session pooler — `auth` şeması kontrolüne gelmeden durmalı.
+        "postgresql+asyncpg://postgres.ref:parola@aws-0-eu-central-1.pooler.supabase.com:5432/postgres",
+        # `auth` şeması OLMAYAN uzak bir Postgres: şema kontrolü bunu "yeni
+        # kurulmuş düz Postgres" sanıp sıfırlardı (PR #12 incelemesi bulgusu).
+        "postgresql+asyncpg://app:parola@db.example.com:5432/app",
+        "postgresql+asyncpg://app:parola@10.0.0.12:5432/app",
+    ],
+)
+def test_remote_database_hosts_are_refused_before_connecting(url):
+    with pytest.raises(UnsafeTestDatabaseError) as info:
+        ensure_local_database_host(url, environ={})
+    # Bağlantı dizesi (parola) hata mesajına girmiyor.
+    assert "parola" not in str(info.value)
+
+
+def test_remote_database_can_be_allowed_explicitly():
+    ensure_local_database_host(
+        "postgresql+asyncpg://ci:x@test-db.internal:5432/ci", environ={ALLOW_REMOTE_ENV: "1"}
+    )
 
 
 def test_plain_postgres_without_auth_schema_is_allowed():
