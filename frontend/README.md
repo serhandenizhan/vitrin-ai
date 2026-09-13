@@ -247,7 +247,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**188 test** (Faz 4 sonu). Faz 2-3 dosyaları:
+**193 test** (Faz 4 sonu). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -323,7 +323,7 @@ sunucu bileşenleri, route handler'lar ve `src/proxy.ts` aynı oturumu okuyabili
 | Oturum yenileme | `src/proxy.ts` | Next.js 16'da `middleware.ts`nin adı. Süresi dolan token'ı her istekte yeniliyor. **Yetkilendirme değil** |
 | E-posta dönüşü | `src/app/auth/callback/route.ts` | PKCE `code` ya da `token_hash`; `next` yalnızca site içi yol (`lib/safe-redirect.ts`). Geçersizse `/auth/hata` |
 | Giriş / kayıt / sıfırlama | `src/components/auth-dialog.tsx` | Tek pencere, üç ekran; `openSignIn("signup")` doğrudan kayıtta açar |
-| Yeni parola | `src/app/auth/yeni-parola/`, `components/new-password-form.tsx` | Sıfırlama bağlantısının açtığı sayfa; başarıda diğer cihazlardaki oturumlar kapanır |
+| Yeni parola | `src/app/auth/yeni-parola/`, `components/new-password-form.tsx` | Sıfırlama bağlantısının açtığı sayfa; başarıda diğer cihazlardaki oturumlar kapanır. Form yalnızca bağlantıdan gelinmişse açılır: `/auth/callback` başarılı sıfırlamada 10 dakikalık `httpOnly` bir çerez yazar (`lib/password-recovery.ts`). Aksi hâlde oturumu açık bir bilgisayarda adresi yazan biri mevcut parolayı bilmeden parolayı değiştirebilirdi; giriş yapmış kullanıcı Hesabım'a yönlendirilir |
 | Hesap sayfası | `src/app/hesap/`, `components/account-panel.tsx` | Profil, parola değiştirme (mevcut parola istenir), tüm cihazlardan çıkış, hesap silme |
 | Hoş geldin | `components/welcome-toast.tsx` | Girişte ya da e-posta bağlantısından dönüşte bir kez |
 | Vekil yardımcısı | `src/lib/backend-proxy.ts`, `lib/supabase/access-token.ts` | Token'ı `Authorization` ile iletme, 401 → `auth_required`, backend'e ulaşılamazsa 502 |

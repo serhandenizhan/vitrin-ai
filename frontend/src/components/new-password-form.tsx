@@ -27,7 +27,11 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { authErrorMessage, MIN_PASSWORD_LENGTH } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
-export function NewPasswordForm() {
+/**
+ * `cameFromResetLink`: sunucu, sifirlama baglantisinin yazdigi `httpOnly`
+ * cerezi gordu mu (bkz. lib/password-recovery.ts). Yalnizca oturum yetmiyor.
+ */
+export function NewPasswordForm({ cameFromResetLink }: { cameFromResetLink: boolean }) {
   const { user, isAuthLoaded, openSignIn } = useWorkspace();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -104,6 +108,27 @@ export function NewPasswordForm() {
           className="press bg-foreground text-background mt-7 inline-flex min-h-11 items-center rounded-full px-6 text-[0.9375rem] font-medium"
         >
           Ana sayfaya dön
+        </Link>
+      </div>
+    );
+  }
+
+  // Oturum var ama sifirlama baglantisindan gelinmedi: parola burada mevcut
+  // parola sorulmadan degistirilemez; hesap sayfasi mevcut parolayi istiyor.
+  if (user && !cameFromResetLink) {
+    return (
+      <div className="text-center">
+        <h1 className="display-feature">Parolanızı hesabınızdan değiştirin</h1>
+        <p className="on-light-muted mt-3 text-[0.9375rem] leading-relaxed">
+          Bu sayfa yalnızca e-postayla gelen sıfırlama bağlantısıyla açılır.
+          Giriş yapmışsanız parolanızı, mevcut parolanızla birlikte Hesabım
+          sayfasından değiştirebilirsiniz.
+        </p>
+        <Link
+          href="/hesap"
+          className="press bg-foreground text-background mt-7 inline-flex min-h-11 items-center rounded-full px-6 text-[0.9375rem] font-medium"
+        >
+          Hesabıma git
         </Link>
       </div>
     );

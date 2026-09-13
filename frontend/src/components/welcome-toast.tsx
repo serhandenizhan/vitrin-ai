@@ -48,7 +48,11 @@ export function WelcomeToast() {
         className={cn(
           "pointer-events-auto flex items-center gap-3 rounded-full bg-[#171614]/90 py-2 pr-2 pl-5 text-[0.9375rem] text-[#f3f0eb] shadow-[0_18px_40px_-16px_rgba(0,0,0,0.6)] ring-1 ring-white/10 backdrop-blur-xl",
           "transition-[opacity,transform] duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-          isShown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
+          // Gorunmezken tiklamayi yakalamasin: kapatildiktan sonra kaldirilana
+          // kadar alttaki ust cubuk dugmelerini ortuyordu.
+          isShown
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none -translate-y-2 opacity-0",
         )}
       >
         <span>
@@ -56,7 +60,11 @@ export function WelcomeToast() {
         </span>
         <button
           type="button"
-          onClick={() => setShown(false)}
+          onClick={() => {
+            setShown(false);
+            // Kaybolma animasyonu bitince bilesen de kalksin.
+            setTimeout(dismissWelcome, FADE_MS);
+          }}
           aria-label="Bildirimi kapat"
           className="flex size-8 items-center justify-center rounded-full text-[#f3f0eb]/60 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
         >

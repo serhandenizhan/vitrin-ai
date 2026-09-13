@@ -5,8 +5,9 @@
  * backend/app/api/routes/projects.py). Tarayici backend'e dogrudan gitmiyor;
  * token burada ekleniyor ve yanit arayuzun kayit sekline cevriliyor.
  */
-import { callBackend, jsonError } from "@/lib/backend-proxy";
+import { authRequired, callBackend, jsonError } from "@/lib/backend-proxy";
 import { toWorkRecord, type BackendProject } from "@/lib/project-record";
+import { getAccessToken } from "@/lib/supabase/access-token";
 
 /** Backend'in izin verdigi en buyuk sayfa (projects.py `MAX_LIST_LIMIT`). */
 const LIST_LIMIT = 100;
@@ -26,6 +27,11 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Oturum GOVDEDEN ONCE (arka plan kaldirma vekiliyle ayni): giris yapmamis
+  // birinin yuklemesi hic okunmuyor. `callBackend` token'i yeniden aliyor;
+  // bu kontrol yalnizca gereksiz govde okumayi onluyor.
+  if (!(await getAccessToken())) return authRequired();
+
   let form: FormData;
   try {
     form = await request.formData();

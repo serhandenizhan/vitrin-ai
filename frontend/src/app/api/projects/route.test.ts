@@ -126,6 +126,21 @@ describe("POST /api/projects", () => {
     expect(form.get("user_id")).toBeNull();
   });
 
+  it("oturum yoksa govdeyi okumadan 401 doner", async () => {
+    auth.token = null;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const request = saveRequest();
+    const formDataSpy = vi.spyOn(request, "formData");
+    const { POST } = await loadRoute();
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ code: "auth_required" });
+    expect(formDataSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("gorsel eksikse backend'e gitmeden 400 doner", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { POST } = await loadRoute();

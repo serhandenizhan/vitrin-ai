@@ -92,6 +92,11 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
     kayıtlı adresle kayıtta ve parola sıfırlamada da "e-postanızı kontrol edin" deniyor.
   - Açık yönlendirme kapalı: `/auth/callback`'teki `next` yalnızca site içi yolu kabul
     ediyor (`//`, `/\`, kontrol karakteri ve mutlak adres reddediliyor; `safe-redirect.ts`).
+  - Parola değiştirme her yolda kanıt istiyor: Hesabım sayfası mevcut parolayı soruyor;
+    mevcut parolasız `/auth/yeni-parola` formu yalnızca sıfırlama bağlantısından gelinince
+    açılıyor (`/auth/callback`'in yazdığı 10 dakikalık `httpOnly` çerez,
+    `frontend/src/lib/password-recovery.ts`). Yalnızca oturuma bakılsaydı açık kalmış bir
+    oturum parolayı ele geçirmeye yeterdi.
   - Oturum çerezde (`@supabase/ssr`), token tarayıcıya ve backend adresine hiç açılmıyor;
     vekiller iletiyor.
   - Parola değiştirme mevcut parolayı istiyor; parola sıfırlanınca ve istenirse "tüm

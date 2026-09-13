@@ -485,7 +485,10 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   ile kayıtsız e-posta aynı mesaj; kayıtlı adresle kayıt ve sıfırlamada da "e-postanızı
   kontrol edin").
 - **Parola sıfırlama:** "Parolamı unuttum" → e-posta → `/auth/yeni-parola` (iki alan);
-  başarıda diğer cihazlardaki oturumlar kapanıyor.
+  başarıda diğer cihazlardaki oturumlar kapanıyor. Form yalnızca sıfırlama bağlantısından
+  gelinmişse açılıyor (callback'in yazdığı 10 dakikalık `httpOnly` çerez); aksi hâlde oturumu
+  açık bir bilgisayarda adresi yazan biri mevcut parolayı bilmeden parolayı değiştirebilirdi
+  (Faz 4 son incelemesinde bulundu).
 - **Geçmiş sunucuda:** `work-history.ts` → `/api/projects` vekilleri; sonuç görseli
   `/api/projects/[id]/result` ile aynı kökenden (tuval kirlenmiyor, R2 CORS gerekmiyor);
   liste kullanıcıya bağlı (çıkışta önceki kullanıcının listesi bir an bile görünmüyor);
@@ -499,7 +502,7 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   artık doğru olmayan cümleler (ana sayfa, Paketler, Teknik bilgiler, Hakkında) düzeltildi.
 - **Backend düzeltmesi:** `config.py` `.env`'yi çalışılan klasörden değil kendi
   konumundan buluyor (kök `CLAUDE.md` ders 18).
-- **Testler:** frontend 72 → 188. Backend'e oturum, hesap silme ve test veritabanı adres
+- **Testler:** frontend 72 → 193. Backend'e oturum, hesap silme ve test veritabanı adres
   koruması testleri eklendi (160 → 185); yerel Postgres'le henüz çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4).
 
 **Bekleyenler:**

@@ -9,12 +9,35 @@
  *  - `?token_hash=...&type=...`  e-posta sablonu ozellestirilirse gelen bicim.
  *
  * `next` ACIK YONLENDIRMEYE karsi `safeRedirectPath`ten geciyor.
+ *
+ * Sifirlama baglantisi (`next` = yeni parola sayfasi) basariyla oturuma
+ * cevrilince kisa omurlu bir `httpOnly` cerez yaziliyor; yeni parola formu
+ * yalnizca o cerez varken aciliyor (bkz. lib/password-recovery.ts).
  */
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  NEW_PASSWORD_PATH,
+  RECOVERY_COOKIE,
+  RECOVERY_COOKIE_MAX_AGE,
+} from "@/lib/password-recovery";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
+
+function success(next: string, origin: string): NextResponse {
+  const response = NextResponse.redirect(new URL(next, origin));
+  if (next === NEW_PASSWORD_PATH) {
+    response.cookies.set(RECOVERY_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: origin.startsWith("https://"),
+      path: NEW_PASSWORD_PATH,
+      maxAge: RECOVERY_COOKIE_MAX_AGE,
+    });
+  }
+  return response;
+}
 
 const OTP_TYPES: EmailOtpType[] = [
   "signup",
@@ -36,13 +59,13 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return success(next, origin);
   } else if (tokenHash && type && OTP_TYPES.includes(type)) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type,
     });
-    if (!error) return NextResponse.redirect(new URL(next, origin));
+    if (!error) return success(next, origin);
   }
 
   // Suresi dolmus ya da daha once kullanilmis baglanti. Hata ayrintisi URL'e

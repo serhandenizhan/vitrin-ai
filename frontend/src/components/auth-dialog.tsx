@@ -41,6 +41,9 @@ import {
   type AuthMode,
 } from "@/components/workspace-provider";
 import { authErrorMessage } from "@/lib/auth-errors";
+// Sabit sunucuda da (`/auth/callback`) kullaniliyor; "use client" bir
+// dosyadan sunucuya sabit aktarilamadigi icin ortak dosyada.
+import { NEW_PASSWORD_PATH } from "@/lib/password-recovery";
 import { passwordProblem } from "@/lib/password-policy";
 import {
   ACCOUNT_TYPES,
@@ -61,8 +64,6 @@ import { createClient } from "@/lib/supabase/client";
 import { TURKEY_CITIES_SORTED } from "@/lib/turkey-cities";
 import { cn } from "@/lib/utils";
 
-/** Sifirlama baglantisinin acacagi sayfa. */
-export const NEW_PASSWORD_PATH = "/auth/yeni-parola";
 
 const TITLES: Record<AuthMode, string> = {
   signin: "Giriş yapın",

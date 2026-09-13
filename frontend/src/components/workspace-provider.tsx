@@ -401,9 +401,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSidebarOpen(false);
     // Calisma aciliyordu ama kullanici sayfanin kaldigi yerde kaliyordu —
     // panelden bir ise tikladiginda ekranda hicbir sey degismiyor gibi
-    // gorunuyordu. `requestAnimationFrame`: panel ayni karede kapaniyor,
-    // kaydirma ondan SONRA yapilmali; aksi halde hedefin konumu panel hala
-    // acikken olculuyor.
+    // gorunuyordu. Kaydirma panel kapandiktan SONRA yapiliyor (bkz.
+    // `aracaKaydir`, neden rAF degil setTimeout).
     aracaKaydir();
   }, []);
 
@@ -485,10 +484,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // genellikle tanitim bolumlerinin ortasiydi — sonuc ekrani ekranin
         // 1600 px altinda kaliyor, kullanici "geri gelemedim" saniyordu.
         // Aracin bolumunu goruse getiriyoruz.
-        //
-        // `requestAnimationFrame`: katman ayni karede kaldiriliyor, kaydirma
-        // ondan SONRA yapilmali; aksi halde hedefin konumu katman hala
-        // yerindeyken olculuyor.
+        // Kaydirma katman kaldirildiktan SONRA (bkz. `aracaKaydir`).
         aracaKaydir();
       },
     }),
