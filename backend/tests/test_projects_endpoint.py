@@ -240,7 +240,8 @@ async def test_list_returns_only_own_projects_newest_first(db_session, tokens, c
     response = client.get("/api/projects", headers=tokens.headers(owner))
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [str(newer.id), str(older.id)]
+    assert [item["id"] for item in response.json()["items"]] == [str(newer.id), str(older.id)]
+    assert response.json()["next_cursor"] is None
 
 
 async def test_list_respects_limit(db_session, tokens, create_user):
@@ -251,8 +252,47 @@ async def test_list_respects_limit(db_session, tokens, create_user):
 
     response = client.get("/api/projects?limit=2", headers=tokens.headers(owner))
 
-    assert len(response.json()) == 2
+    assert len(response.json()["items"]) == 2
+    assert response.json()["next_cursor"] is not None
     assert client.get("/api/projects?limit=101", headers=tokens.headers(owner)).status_code == 422
+
+
+async def test_list_cursor_walks_every_project_without_duplicates(
+    db_session, tokens, create_user
+):
+    owner = await create_user()
+    expected = {
+        (await _insert_project(db_session, owner, f"{index}.jpg")).id for index in range(5)
+    }
+    client = _client(db_session, _storage_mock())
+    seen: list[uuid.UUID] = []
+    cursor = None
+
+    while True:
+        params = {"limit": 2}
+        if cursor:
+            params["cursor"] = cursor
+        response = client.get("/api/projects", params=params, headers=tokens.headers(owner))
+        assert response.status_code == 200, response.text
+        page = response.json()
+        seen.extend(uuid.UUID(item["id"]) for item in page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+
+    assert len(seen) == 5
+    assert set(seen) == expected
+
+
+async def test_list_rejects_invalid_cursor(db_session, tokens, create_user):
+    owner = await create_user()
+    client = _client(db_session, _storage_mock())
+
+    response = client.get(
+        "/api/projects?cursor=gecersiz!", headers=tokens.headers(owner)
+    )
+
+    assert response.status_code == 400
 
 
 async def test_get_own_project(db_session, tokens, create_user):
@@ -291,6 +331,24 @@ async def test_delete_other_users_project_returns_404_and_keeps_it(db_session, t
     response = client.delete(f"/api/projects/{project.id}", headers=tokens.headers(attacker))
 
     assert response.status_code == 404
+    assert await _project_ids(db_session) == {project.id}
+    storage.delete.assert_not_called()
+
+
+async def test_delete_is_rejected_if_browser_session_changed(
+    db_session, tokens, create_user
+):
+    original_user = await create_user()
+    current_user = await create_user()
+    project = await _insert_project(db_session, current_user)
+    storage = _storage_mock()
+    client = _client(db_session, storage)
+    headers = tokens.headers(current_user)
+    headers["X-Expected-User-Id"] = str(original_user)
+
+    response = client.delete(f"/api/projects/{project.id}", headers=headers)
+
+    assert response.status_code == 409
     assert await _project_ids(db_session) == {project.id}
     storage.delete.assert_not_called()
 

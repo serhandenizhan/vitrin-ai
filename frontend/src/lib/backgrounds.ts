@@ -63,6 +63,15 @@ export const PLACEHOLDER_BACKGROUNDS: PlaceholderBackground[] = [
     name: "Sis beyazı",
     gradient: [0, "#ffffff", 1, "#f5f5f7"],
   },
+  // Duz beyaz (#ffffff, gradyansiz): pazaryerleri urun gorselinde saf beyaz
+  // zemin istiyor; "Sis beyazi"ndaki hafif gri gecis orada reddedilebiliyor.
+  // Kimligi `MARKETPLACE_BACKGROUND_ID` ile ayni (lib/composition.ts).
+  {
+    type: "placeholder",
+    id: "placeholder-white",
+    name: "Düz beyaz",
+    gradient: [0, "#ffffff", 1, "#ffffff"],
+  },
   {
     type: "placeholder",
     id: "placeholder-gold",

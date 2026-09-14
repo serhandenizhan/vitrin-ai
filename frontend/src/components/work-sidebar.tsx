@@ -13,13 +13,13 @@
  * alinmasi paneli tek isli yapiyor (govde = calismalar) ve ayari uygulamalarda
  * beklenen yere koyuyor.
  *
- * Gecmisin GECICI oldugu panelde acikca yaziyor — sessizce tarayiciya
- * kaydedip kullaniciya "calismalarim" demek yaniltici olurdu
- * (bkz. src/lib/work-history.ts bas kismi).
+ * Faz 4'ten beri gecmis hesaba bagli ve sunucuda (bkz. src/lib/work-history.ts).
+ * Oturum yoksa liste yerine giris cagrisi gosteriliyor.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { LogOut, Settings2, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LogIn, LogOut, Settings2, Trash2, UserRound, X } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -33,15 +33,31 @@ export function WorkSidebar() {
     closeSidebar,
     works,
     isHistoryLoaded,
+    hasMoreWorks,
+    isLoadingMoreWorks,
+    loadMoreWorks,
     removeWork,
     removeAllWorks,
     openWork,
     settings,
     updateSettings,
     openSignIn,
+    user,
+    signOut,
+    refreshWorks,
   } = useWorkspace();
 
+  // Kucuk resimlerin imzali adresleri sureli. Panel acildiginda suresi
+  // dolmus (ya da bir dakika icinde dolacak) kayit varsa liste yenileniyor;
+  // aksi halde bir saat sonra acilan panelde resimler kirik gorunuyordu.
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const soon = Date.now() + 60_000;
+    if (works.some((work) => work.expiresAt < soon)) refreshWorks();
+  }, [isSidebarOpen, works, refreshWorks]);
+
   const [showSettings, setShowSettings] = useState(false);
+  const router = useRouter();
 
   // Cekmece acikken Esc kapatsin.
   useEffect(() => {
@@ -64,7 +80,10 @@ export function WorkSidebar() {
         tabIndex={isSidebarOpen ? 0 : -1}
         onClick={closeSidebar}
         className={cn(
-          "drawer-backdrop fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]",
+          // Perde ve cekmece yuzen ust cubugun (z-50) USTUNDE: telefonda cubuk
+          // cekmecenin baslik satirini ortuyor, "Paneli kapat" dugmesine
+          // dokunulamiyordu (mobil kontrol, 13.09.2026).
+          "drawer-backdrop fixed inset-0 z-[52] bg-black/45 backdrop-blur-[2px]",
           isSidebarOpen && "drawer-backdrop-open",
         )}
       />
@@ -75,7 +94,7 @@ export function WorkSidebar() {
            erisilemez oluyor; yalnizca gorunmez yapmak yetmiyordu. */
         inert={!isSidebarOpen}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-white/10 bg-[#1d1d1f] text-[#f5f5f7] shadow-2xl",
+          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/10 bg-[#1d1d1f] text-[#f5f5f7] shadow-2xl",
           // Kayma `drawer` / `drawer-open` ile — sebebi globals.css'te yazili.
           "drawer",
           isSidebarOpen && "drawer-open",
@@ -110,9 +129,14 @@ export function WorkSidebar() {
             <WorksPanel
               works={works}
               isLoaded={isHistoryLoaded}
+              isSignedIn={user !== null}
               historyEnabled={settings.historyEnabled}
               onOpen={openWork}
               onDelete={removeWork}
+              onSignIn={openSignIn}
+              hasMore={hasMoreWorks}
+              isLoadingMore={isLoadingMoreWorks}
+              onLoadMore={loadMoreWorks}
             />
           )}
         </div>
@@ -125,19 +149,28 @@ export function WorkSidebar() {
             isActive={showSettings}
             onClick={() => setShowSettings((current) => !current)}
           />
-          {/*
-           * Cikis, hesap sistemi gelene kadar devre disi. Calisan bir cikis
-           * dugmesi koymak, olmayan bir oturumu varmis gibi gostermek olurdu;
-           * tamamen gizlemek ise tasarimi eksik birakiyordu. Tiklayinca
-           * "Giris yap" penceresi aciliyor, orada durum aciklaniyor.
-           */}
-          <RailButton
-            Icon={LogOut}
-            label="Çıkış yap"
-            hint="Hesap sistemi yakında"
-            isMuted
-            onClick={openSignIn}
-          />
+          {/* Oturum varsa cikis, yoksa giris. Olmayan bir oturumdan "cikis"
+              gostermek yaniltici olurdu. */}
+          {user ? (
+            <RailButton
+              Icon={UserRound}
+              label="Hesabım"
+              onClick={() => {
+                closeSidebar();
+                router.push("/hesap");
+              }}
+            />
+          ) : null}
+          {user ? (
+            <RailButton
+              Icon={LogOut}
+              label="Çıkış yap"
+              hint={user.email ?? undefined}
+              onClick={() => void signOut()}
+            />
+          ) : (
+            <RailButton Icon={LogIn} label="Giriş yap" onClick={openSignIn} />
+          )}
         </div>
       </aside>
     </>
@@ -190,15 +223,25 @@ function RailButton({
 function WorksPanel({
   works,
   isLoaded,
+  isSignedIn,
   historyEnabled,
   onOpen,
   onDelete,
+  onSignIn,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }: {
   works: WorkRecord[];
   isLoaded: boolean;
+  isSignedIn: boolean;
   historyEnabled: boolean;
   onOpen: (work: WorkRecord) => void;
   onDelete: (id: string) => void;
+  onSignIn: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -206,7 +249,22 @@ function WorksPanel({
         Çalışmalarım
       </h2>
 
-      {!historyEnabled ? (
+      {isLoaded && !isSignedIn ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[0.8125rem] font-medium">Giriş yapın</p>
+          <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
+            Çalışmalarınız hesabınızda saklanır; giriş yaptığınız her cihazdan
+            ulaşırsınız.
+          </p>
+          <Button
+            size="sm"
+            onClick={onSignIn}
+            className="bg-gold hover:bg-gold-soft mt-1 min-h-9 self-start rounded-full text-black"
+          >
+            Giriş yap
+          </Button>
+        </div>
+      ) : !historyEnabled ? (
         <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
           Geçmiş kaydı kapalı. Alttaki ayarlardan açabilirsiniz.
         </p>
@@ -233,12 +291,22 @@ function WorksPanel({
             ))}
           </ul>
 
-          {/* Geciciligin acikca yazildigi yer — bkz. lib/work-history.ts */}
+          {hasMore ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isLoadingMore}
+              onClick={onLoadMore}
+              className="min-h-9 border-white/15 bg-transparent text-[#f5f5f7] hover:bg-white/10 hover:text-white"
+            >
+              {isLoadingMore ? "Yükleniyor…" : "Daha eski çalışmaları yükle"}
+            </Button>
+          ) : null}
+
           <p className="mt-2 border-t border-white/10 pt-3 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-            Çalışmalar yalnızca{" "}
-            <strong className="font-medium">bu cihazda</strong> ve bu tarayıcıda
-            saklanıyor; başka bir cihazdan görünmez. Hesap sistemi geldiğinde
-            geçmiş hesabınıza taşınacak. En son 20 çalışma tutulur.
+            Çalışmalar hesabınızda saklanır. Yalnızca arka planı kaldırılmış
+            sonuç tutulur, özgün fotoğrafınız saklanmaz.
           </p>
         </>
       )}
@@ -255,13 +323,9 @@ function WorkRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
-  // Blob'dan URL uretmek pahali degil ama SERBEST BIRAKILMALI; aksi halde
-  // panel her acildiginda bellekte yeni bir kopya birikiyor.
-  const thumbUrl = useMemo(
-    () => URL.createObjectURL(work.thumbnail),
-    [work.thumbnail],
-  );
-  useEffect(() => () => URL.revokeObjectURL(thumbUrl), [thumbUrl]);
+  // Kucuk resim R2'nin sureli imzali adresi; suresi dolunca panel listeyi
+  // yeniliyor (bkz. WorkSidebar).
+  const thumbUrl = work.thumbnailUrl;
 
   return (
     <li className="flex items-center gap-3 rounded-lg p-1.5 transition-colors hover:bg-white/8">
@@ -319,7 +383,7 @@ function SettingsPanel({
       </h2>
 
       <Toggle
-        label="Çalışmaları bu cihazda sakla"
+        label="Çalışmalarımı hesabımda sakla"
         description="Kapatırsanız yeni sonuçlar kaydedilmez. Mevcut kayıtlar silinmez."
         checked={settings.historyEnabled}
         onChange={(value) => onChange({ historyEnabled: value })}
@@ -336,7 +400,7 @@ function SettingsPanel({
         <p className="text-[0.8125rem] font-medium">Geçmişi temizle</p>
         <p className="mt-1 text-[0.75rem] leading-relaxed text-[#f5f5f7]/55">
           {workCount > 0
-            ? `${workCount} çalışma bu cihazdan kalıcı olarak silinir.`
+            ? `${workCount} çalışma hesabınızdan kalıcı olarak silinir.`
             : "Silinecek çalışma yok."}
         </p>
         <Button
@@ -352,8 +416,9 @@ function SettingsPanel({
       </div>
 
       <p className="border-t border-white/10 pt-5 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-        Hesap, kredi ve ekip ayarları hesap sistemiyle birlikte gelecek. Şu anda
-        kayıt gerekmiyor ve fotoğraflarınız sunucuda saklanmıyor.
+        Kredi ve ekip ayarları ücretli planlarla birlikte gelecek. Özgün
+        fotoğraflarınız sunucuda saklanmaz; yalnızca sonuçlar hesabınızda
+        durur.
       </p>
     </div>
   );

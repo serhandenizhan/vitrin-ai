@@ -10,11 +10,6 @@
  * verirdi (kok CLAUDE.md ders 8). Adres eklemek icin yalnizca SOCIAL
  * dizisindeki `href` doldurulur.
  *
- * YASAL METINLER DE HENUZ YAZILMADI (KVKK aydinlatma metni, gizlilik, kullanim
- * kosullari). Turkiye'de ticari bir site icin bunlar zorunlu; yerleri ayrildi
- * ve "yakinda" olarak isaretli. Odeme (Faz 5) acilmadan once yazilmalari
- * gerekiyor.
- *
  * Model sinirlamalarina dair dipnotlar korunuyor: bir aracin ne YAPAMADIGINI
  * soylemek, ilk basarisiz denemede guven kaybini onluyor.
  *
@@ -49,14 +44,15 @@ const COLUMNS: {
     items: [
       { label: "Katalog", href: "/katalog" },
       { label: "Paketler", href: "/paketler" },
+      { label: "Çekim rehberi", href: "/cekim-rehberi" },
     ],
   },
   {
     title: "Yasal",
     items: [
-      { label: "KVKK aydınlatma metni", href: null },
-      { label: "Gizlilik politikası", href: null },
-      { label: "Kullanım koşulları", href: null },
+      { label: "KVKK aydınlatma metni", href: "/kvkk" },
+      { label: "Gizlilik politikası", href: "/gizlilik" },
+      { label: "Kullanım koşulları", href: "/kullanim-kosullari" },
     ],
   },
 ];
@@ -163,13 +159,15 @@ export function SiteFooter() {
           {COLUMNS.map((column) => (
             <nav key={column.title} aria-label={column.title}>
               <h2 className="text-[0.875rem] font-semibold">{column.title}</h2>
-              <ul className="mt-4 space-y-2.5">
+              <ul className="mt-3 space-y-0.5">
                 {column.items.map((item) => (
                   <li key={item.label} className="fine-print">
                     {item.href ? (
                       <Link
                         href={item.href}
-                        className="on-dark-muted transition-colors hover:text-[#f3f0eb]"
+                        // min-h-8: telefonda parmakla dokunulabilir yukseklik
+                        // (metin 17 px'ti); satir araligi bu yukseklikten geliyor.
+                        className="on-dark-muted inline-flex min-h-8 items-center transition-colors hover:text-[#f3f0eb]"
                       >
                         {item.label}
                       </Link>

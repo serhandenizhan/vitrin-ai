@@ -167,7 +167,29 @@ export const OUTPUT_FORMATS = {
     outputHeight: 1920,
     fileSlug: "hikaye",
   },
+  // Oneri 3 (one alinan is, 13.09.2026): Instagram'in akista en cok yer
+  // kaplayan dikey gonderi olcusu 4:5.
+  instagramPortrait: {
+    label: "Instagram dikey",
+    summary: "1080×1350",
+    outputWidth: 1080,
+    outputHeight: 1350,
+    fileSlug: "dikey",
+  },
+  // Pazaryerleri urun gorselini duz BEYAZ zeminde ve kare istiyor. Bu bicim
+  // secildiginde editor zemini beyaza aliyor (bkz. composition-editor.tsx
+  // `changeFormat`); olcu kare ile ayni.
+  marketplace: {
+    label: "Pazaryeri",
+    summary: "Beyaz zemin · 2000×2000",
+    outputWidth: 2000,
+    outputHeight: 2000,
+    fileSlug: "pazaryeri",
+  },
 } as const satisfies Record<string, OutputFormat>;
+
+/** Pazaryeri biciminin zorunlu tuttugu zeminin kimligi (bkz. backgrounds.ts). */
+export const MARKETPLACE_BACKGROUND_ID = "placeholder-white";
 
 export type OutputFormatName = keyof typeof OUTPUT_FORMATS;
 

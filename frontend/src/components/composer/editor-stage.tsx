@@ -25,10 +25,27 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from "react-konva";
+import {
+  Group,
+  Image as KonvaImage,
+  Layer,
+  Rect,
+  Stage,
+  Text,
+  Transformer,
+} from "react-konva";
 import Konva from "konva";
 
 import type { Background } from "@/lib/backgrounds";
+import {
+  type LogoSettings,
+  type ProductLabel,
+  labelMetrics,
+  labelText,
+  logoBox,
+  placeInCorner,
+  stackLabelBox,
+} from "@/lib/overlays";
 // Saf geometri `@/lib/composition` icinde: Konva/React'ten bagimsiz oldugu icin
 // Node ortaminda canvas yuklemeden test edilebiliyor.
 import {
@@ -55,6 +72,10 @@ export type EditorStageProps = {
   /** `null` iken sahne kesim yuklenince kendi baslangic yerlesimini hesaplar. */
   transform: Transform | null;
   appearance: Appearance;
+  /** Kuyumcunun logosu (veri URL'i, ayni kaynak — tuvali kirletmiyor); yoksa null. */
+  logoUrl: string | null;
+  logo: LogoSettings;
+  label: ProductLabel;
   onTransformChange: (transform: Transform) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onCutoutSize: (size: { width: number; height: number }) => void;
@@ -121,6 +142,9 @@ export function EditorStage({
   stageHeight,
   transform,
   appearance,
+  logoUrl,
+  logo,
+  label,
   onTransformChange,
   onCutoutSize,
   onStageReady,
@@ -148,6 +172,49 @@ export function EditorStage({
   const backgroundImage = useLoadedImage(
     background.type === "server" ? background.url : null,
   );
+  const logoImage = useLoadedImage(logoUrl);
+
+  /**
+   * Etiketin yazi tipi sitenin kendisi (Inter). `next/font` aileye karma bir
+   * ad veriyor; tuval CSS degiskeni okuyamadigi icin gercek ad govdenin
+   * hesaplanmis stilinden aliniyor. Sahne yalnizca istemcide cizildigi icin
+   * (`ssr: false`) `document` burada her zaman var.
+   */
+  const fontFamily = useMemo(
+    () => getComputedStyle(document.body).fontFamily || "sans-serif",
+    [],
+  );
+
+  /** Logo ve etiket kutulari (sahne koordinati); bkz. lib/overlays.ts. */
+  const overlay = useMemo(() => {
+    const logoRect = logoImage
+      ? logoBox(logoImage.width, logoImage.height, logo, stageWidth, stageHeight)
+      : null;
+
+    const text = labelText(label);
+    if (!text) return { logoRect, labelRect: null, text: null, metrics: null };
+
+    const metrics = labelMetrics(stageWidth, stageHeight);
+    // Metnin genisligi Konva'ya olcturuluyor: sabit bir karakter genisligi
+    // tahmini "22K" ile "Kod A-102-XL" arasinda hep yanlis kalirdi.
+    const measured = new Konva.Text({
+      text,
+      fontSize: metrics.fontSize,
+      fontFamily,
+      fontStyle: "600",
+    });
+    const width = measured.width() + metrics.paddingX * 2;
+    const height = measured.height() + metrics.paddingY * 2;
+    measured.destroy();
+
+    const labelRect = stackLabelBox(
+      placeInCorner(label.corner, width, height, stageWidth, stageHeight),
+      label.corner,
+      logoRect,
+      logoRect ? logo.corner : null,
+    );
+    return { logoRect, labelRect, text, metrics };
+  }, [logoImage, logo, label, stageWidth, stageHeight, fontFamily]);
 
   useEffect(() => {
     onStageReady(stageRef.current);
@@ -388,6 +455,47 @@ export function EditorStage({
             newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
           }
         />
+      </Layer>
+
+      {/*
+        Logo ve urun etiketi EN USTTE ve `listening={false}`: surukleme ve
+        secim urune ait; etiketin ustune tiklamak urunu secmeyi engellemesin.
+        Sahnenin parcasi olduklari icin disa aktarmaya (PNG/JPEG/CMYK/WhatsApp)
+        kendiliginden giriyorlar.
+      */}
+      <Layer listening={false}>
+        {logoImage && overlay.logoRect ? (
+          <KonvaImage
+            image={logoImage}
+            x={overlay.logoRect.x}
+            y={overlay.logoRect.y}
+            width={overlay.logoRect.width}
+            height={overlay.logoRect.height}
+            opacity={logo.opacity}
+          />
+        ) : null}
+
+        {overlay.text && overlay.labelRect && overlay.metrics ? (
+          <Group x={overlay.labelRect.x} y={overlay.labelRect.y}>
+            <Rect
+              width={overlay.labelRect.width}
+              height={overlay.labelRect.height}
+              cornerRadius={overlay.labelRect.height / 2}
+              fill={label.theme === "dark" ? "rgba(12,11,10,0.74)" : "rgba(255,255,255,0.88)"}
+              stroke={label.theme === "dark" ? "rgba(212,175,110,0.55)" : "rgba(0,0,0,0.08)"}
+              strokeWidth={overlay.metrics.fontSize * 0.06}
+            />
+            <Text
+              text={overlay.text}
+              x={overlay.metrics.paddingX}
+              y={overlay.metrics.paddingY}
+              fontSize={overlay.metrics.fontSize}
+              fontFamily={fontFamily}
+              fontStyle="600"
+              fill={label.theme === "dark" ? "#f3f0eb" : "#1a1917"}
+            />
+          </Group>
+        ) : null}
       </Layer>
     </Stage>
   );

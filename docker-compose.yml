@@ -16,5 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # PR #13 kapanışı: yükleme hız sınırlayıcısı (backend/app/services/rate_limit.py)
+  # process içi bellekten buraya taşındı — dağıtık/çoklu worker'da doğru
+  # çalışması için. Kalıcı bir volume bilinçli olarak YOK: rate-limit anahtarları
+  # kısa TTL'li (birkaç saniye-dakika) ve zaten geçici; container yeniden
+  # başlarsa sayaçların sıfırlanması zararsız. Celery/RQ (ROADMAP'te planlı,
+  # henüz kurulmadı) bu Redis'i broker olarak kullanmaya başladığında kalıcılık
+  # yeniden değerlendirilmeli.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:

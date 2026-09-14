@@ -64,6 +64,16 @@ def missing_permissions(
     return missing
 
 
+def _presigned_url(client, bucket: str, key: str, method: str, expires_in: int) -> str:
+    """HTTP metoduna uygun imza üretir; GET imzası HEAD isteğinde geçerli değildir."""
+    operation = "get_object" if method == "GET" else "head_object"
+    return client.generate_presigned_url(
+        operation,
+        Params={"Bucket": bucket, "Key": key},
+        ExpiresIn=expires_in,
+    )
+
+
 def _live_check(url: str, origin: str, method: str) -> tuple[bool, str]:
     request = urllib.request.Request(url, method=method, headers={"Origin": origin})
     try:
@@ -98,7 +108,7 @@ def main() -> int:
     from botocore.exceptions import ClientError
 
     from app.core.config import settings
-    from app.services.storage import R2StorageService, _get_client
+    from app.services.storage import _get_client
 
     if not (settings.r2_account_id and settings.r2_bucket_name and settings.r2_access_key_id):
         print("R2_* değişkenleri boş — backend/.env içinde R2 kimlik bilgileri yok.")
@@ -132,12 +142,18 @@ def main() -> int:
             print("   backgrounds/ altında nesne yok; canlı kontrol için --key verin.")
             return 1
         key = contents[0]["Key"]
-    url = R2StorageService(bucket_name=bucket).generate_presigned_url(key)
     print(f"   Nesne: {key}")
 
     live_failed = False
     for origin in origins:
         for method in REQUIRED_METHODS:
+            url = _presigned_url(
+                client,
+                bucket,
+                key,
+                method,
+                settings.background_url_expiry_seconds,
+            )
             ok, detail = _live_check(url, origin, method)
             live_failed |= not ok
             print(f"   {'GEÇTİ' if ok else 'KALDI'} {method} {origin} — {detail}")

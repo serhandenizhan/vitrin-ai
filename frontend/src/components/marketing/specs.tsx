@@ -52,8 +52,8 @@ const SPECS = [
   {
     baslik: "Gizlilik",
     satirlar: [
-      "Fotoğraflar saklanmıyor",
-      "Görsel yalnızca işlem süresince bellekte tutulur, sonuç doğrudan tarayıcınıza döner.",
+      "Özgün fotoğrafınız saklanmaz",
+      "Fotoğraf yalnızca işlem süresince bellekte tutulur. Arka planı kaldırılmış sonuç, geçmişinizde görebilmeniz için hesabınıza kaydedilir; ayarlardan kapatabilir ya da silebilirsiniz.",
     ],
   },
 ];
