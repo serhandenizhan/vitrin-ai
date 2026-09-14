@@ -254,7 +254,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**203 test** (Faz 4 kapanış incelemesi). Faz 2-3 dosyaları:
+**210 test** (Faz 4 kapanış incelemesi + parola kuralına sembol eklenmesi, 14.09.2026). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -277,7 +277,7 @@ Faz 4'te eklenenler:
 | `lib/project-record.test.ts` | Backend kaydı → arayüz kaydı, kimlik doğrulaması |
 | `lib/safe-redirect.test.ts` | Açık yönlendirme: `//`, `/\`, mutlak adres, kontrol karakteri reddi |
 | `lib/auth-errors.test.ts` | Supabase hatalarının Türkçe mesajları; yanlış parola ile kayıtsız e-postanın ayırt edilmemesi |
-| `lib/password-policy.test.ts` | Parola kuralı (8+, küçük, büyük, rakam; Türkçe büyük harfin Supabase gibi sayılmaması) |
+| `lib/password-policy.test.ts` | Parola kuralı (8+, küçük, büyük, rakam, sembol; Türkçe büyük harfin Supabase gibi sayılmaması) |
 | `lib/profile.test.ts`, `lib/turkey-cities.test.ts` | Ad/şirket adı/telefon doğrulaması, metadata okuma, ekranda görünen ad (şirket/bireysel), 81 il |
 | `components/auth-dialog.test.ts` | Kayıt formu: şirket alanlarının yalnızca şirket seçilince görünmesi, bireysel hesapta şirket bilgisinin Supabase'e yazılmaması, zorunlu alanlar |
 | `lib/overlays.test.ts` | Logo/etiket yerleşimi, gram biçimi, ürün kodu temizliği, aynı köşede üst üste binmeme |
@@ -347,9 +347,15 @@ Ekranda görünen ad: şirket hesabında
 şirket adı, bireyselde kişinin adı (hesap türü seçilmemiş eski hesapta kişinin adı —
 yerine karar verilmiyor).
 
-**Parola kuralı** Supabase ayarıyla birebir: en az 8, küçük + büyük harf + rakam
+**Parola kuralı** Supabase ayarıyla birebir: en az 8, küçük + büyük harf + rakam + sembol
 (`lib/password-policy.ts`, ASCII — Supabase "Ş"yi büyük harf saymıyor). Yazarken canlı
 liste (`components/password-checklist.tsx`).
+
+**14.09.2026 düzeltmesi:** istemci kontrolü sembol kuralını unutmuştu — Dashboard'daki
+gerçek ayar "lowercase, uppercase letters, digits **and symbols**" iken kod yalnızca
+ilk üçünü kontrol ediyordu. Sonuç: checklist tamamen yeşil görünüyor ama Supabase
+sunucu tarafında `weak_password` ile reddediyordu (kullanıcı bildirdi). Bkz. kök
+`CLAUDE.md` ders 19.
 
 **Kullanıcı numaralandırması kapalı:** yanlış parola ile kayıtsız e-posta aynı
 mesajı veriyor (`lib/auth-errors.ts`); kayıtlı adresle kayıtta ve sıfırlamada da

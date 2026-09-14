@@ -480,8 +480,9 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   sorulmuyor (KVKK ölçülülük). Hesap türü `user_metadata.account_type`; ileride paketler
   buna göre ayrışacak. Şirket hesabında ekranda şirket adı, bireyselde kişinin adı
   görünüyor; girişte "Hoş geldiniz, …" bildirimi.
-- **Parola:** en az 8 karakter, küçük + büyük harf + rakam (Supabase ayarıyla birebir,
-  yazarken canlı liste). Hata mesajları kullanıcı numaralandırmasına kapalı (yanlış parola
+- **Parola:** en az 8 karakter, küçük + büyük harf + rakam + sembol (Supabase ayarıyla
+  birebir — 14.09.2026'da düzeltildi, önceki sürüm sembolü unutmuştu, bkz. kök `CLAUDE.md`
+  ders 19; yazarken canlı liste). Hata mesajları kullanıcı numaralandırmasına kapalı (yanlış parola
   ile kayıtsız e-posta aynı mesaj; kayıtlı adresle kayıt ve sıfırlamada da "e-postanızı
   kontrol edin").
 - **Parola sıfırlama:** "Parolamı unuttum" → e-posta → `/auth/yeni-parola` (iki alan);
@@ -530,6 +531,15 @@ davranışı doğrudan sınayan bir test eklendi (160 → 201 → **202**): iki 
 anahtarını paylaşınca sınırın da paylaşıldığını doğruluyor — process içi eski
 implementasyona karşı çalıştırılsaydı bu test kırmızı yanardı, çünkü iki ayrı
 Python nesnesi birbirinden habersizdi.
+
+**PR #13 birleştikten sonra bulunan üretim hatası — parola kuralına sembol
+eklendi (14.09.2026).** Kullanıcı gerçek ortamda kayıt olamadı: checklist'in
+tamamı yeşil görünüyordu ama Supabase `weak_password` ile reddediyordu.
+Sebep: `frontend/src/lib/password-policy.ts`, Supabase Dashboard'ın parola
+ayarının "küçük + büyük harf + rakam" olduğunu doğrulanmadan varsaymıştı;
+canlı ayar aslında "...and symbols (recommended)" idi. İstemci kontrolüne
+sembol kuralı eklendi, ilgili tüm dokümanlar ve testler (203 → **210**)
+güncellendi. Bkz. kök `CLAUDE.md` ders 19.
 
 **Bekleyenler:**
 - R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).
