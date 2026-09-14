@@ -48,7 +48,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 201 test (yerel PostgreSQL ile pytest) · frontend 203 test (Vitest) |
+| Testler | backend 202 test (yerel PostgreSQL + Redis ile pytest) · frontend 203 test (Vitest) |
 | Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü ölçülerek doğrulandı) · Instagram dikey 1080×1350 · Pazaryeri 2000×2000 beyaz zemin |
 | Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
 | Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
@@ -78,7 +78,8 @@ Ayrıntı: `ROADMAP.md` Faz 4, `backend/README.md`, `frontend/README.md`.
 
 ## Teknoloji yığını
 
-- Backend: Python, FastAPI, Celery/RQ + Redis
+- Backend: Python, FastAPI, Celery/RQ + Redis (Redis şimdilik yalnızca dağıtık
+  yükleme hız sınırlaması için kurulu; Celery/RQ kuyruğu henüz kurulmadı)
 - AI modeli: BiRefNet (`ZhengPeng7/BiRefNet`, MIT lisanslı ağırlıklar)
 - Veritabanı: PostgreSQL (production'da Supabase)
 - Nesne depolama: Cloudflare R2
@@ -101,7 +102,7 @@ Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları içi
 
 ```bash
 cp .env.example .env   # değerleri düzenleyin
-docker compose up -d   # yerel PostgreSQL'i başlatır
+docker compose up -d   # yerel PostgreSQL + Redis'i başlatır
 ```
 
 ### VS Code ile tek tıkla

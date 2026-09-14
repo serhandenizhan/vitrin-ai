@@ -5,11 +5,13 @@ import time
 import uuid
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import jwt
 import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import ec
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -78,6 +80,38 @@ async def _apply_migrations():
         [sys.executable, "-m", "alembic", "downgrade", "base"], cwd=BACKEND_DIR, check=True
     )
     await _engine.dispose()
+
+
+#: Redis testleri Postgres'inki gibi bir "sıfırlama" korumasına ihtiyaç
+#: duymuyor — her test kendi rastgele anahtarını kullanıyor ve yazılan tek
+#: şey birkaç saniyelik TTL'li sayaç anahtarları (bkz. backend/README.md
+#: "Testler"). Yine de yanlışlıkla paylaşılan/uzak bir Redis'e bağlanıp
+#: gereksiz trafik üretmemek için adres burada da yerelle sınırlanıyor.
+LOCAL_REDIS_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "redis"})
+
+
+@pytest_asyncio.fixture(scope="session")
+async def redis_client() -> AsyncGenerator[Redis, None]:
+    host = (urlsplit(settings.redis_url).hostname or "").lower()
+    if host not in LOCAL_REDIS_HOSTS:
+        pytest.exit(
+            "Testler durduruldu: REDIS_URL yerel bir Redis'i göstermiyor. "
+            "Yerel bir Redis'e yönlendirin, örn. "
+            "REDIS_URL=redis://localhost:6380/0 (bkz. backend/README.md 'Testler').",
+            returncode=3,
+        )
+    client = Redis.from_url(settings.redis_url)
+    try:
+        await client.ping()
+    except Exception as exc:  # noqa: BLE001 - baglanti hatasini okunur mesaja cevir
+        pytest.exit(
+            f"Testler durduruldu: Redis'e bağlanılamadı ({settings.redis_url}). "
+            "`docker compose up -d redis` çalıştırıldı mı? "
+            f"Ayrıntı: {exc}",
+            returncode=3,
+        )
+    yield client
+    await client.aclose()
 
 
 @pytest_asyncio.fixture

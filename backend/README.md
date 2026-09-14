@@ -61,7 +61,23 @@ POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
 DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
 ```
 
-**Koruma, iki aşama** (`tests/db_safety.py`):
+Ayrıca gerçek bir **Redis** ister (`docker compose up -d redis`) — yükleme hız
+sınırlayıcısı testleri gerçek Redis'e karşı çalışır, mock'lanmaz. Postgres gibi
+paralel worktree'lerde ayrı bir porta yönlendirilebilir:
+
+```bash
+REDIS_PORT=6380 docker compose -p <worktree-adi> up -d redis
+REDIS_URL=redis://localhost:6380/0 .venv/bin/pytest
+```
+
+Redis testleri Postgres'inki gibi ağır bir "sıfırlama" koruması gerektirmiyor:
+her test kendi rastgele anahtarını kullanıyor (ör. `user:<uuid4>`) ve yazılan
+tek şey birkaç saniyelik TTL'li sayaç anahtarları — üzerine yazma ya da veri
+kaybı riski yok. Yine de testler bağlanmadan önce `REDIS_URL`'in yerel bir
+Redis'e (`localhost`/`127.0.0.1`/`::1`/docker-compose servis adı `redis`)
+işaret ettiğini doğruluyor (`tests/conftest.py`).
+
+**Koruma, iki aşama** (`tests/db_safety.py`, yalnızca Postgres için):
 
 1. **Bağlanmadan önce adres:** `DATABASE_URL`'in sunucusu `localhost`, `127.0.0.1`,
    `::1` ya da docker-compose servis adı `postgres` değilse oturum çıkış kodu 3 ile
@@ -77,9 +93,10 @@ yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıla
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
 
 **Faz 4 ve kapanış incelemesindeki testlerin tamamı** izole yerel PostgreSQL
-(`localhost:5434`) üzerinde çalıştırıldı: **200 test geçti**. Buna hesap,
-oturum/gövde, DB adres güvenliği, cursor, erken JWT, hesap değişimi ve hız
-sınırı testleri dahildir; gerçek Supabase test hedefi olarak kullanılmadı.
+(`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **202
+test geçti**. Buna hesap, oturum/gövde, DB adres güvenliği, cursor, erken
+JWT, hesap değişimi ve dağıtık hız sınırı testleri dahildir; gerçek Supabase
+test hedefi olarak kullanılmadı.
 
 Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
@@ -321,6 +338,7 @@ sunucu/instance seçin.
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
 | `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
 | `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
+| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
@@ -348,8 +366,11 @@ kaynak tüketimini sınırlayan beş katman var:
 1. **Erken hız sınırı** — `UploadRateLimitMiddleware` oturumsuz/geçersiz
    token denemelerini IP ile; `EarlyAuthenticationMiddleware` doğrulanmış
    kullanıcıları `sub` ile kayan pencerede sınırlar. Aşım gövde okunmadan
-   `429` + `Retry-After` döner. Process-içi ilk savunmadır; Faz 7'de dağıtık
-   Redis/proxy sınırı gerekir.
+   `429` + `Retry-After` döner. Sayaçlar Redis'te (`app/services/rate_limit.py`,
+   `REDIS_URL`) — **dağıtık**: birden fazla worker/instance aynı anahtarı
+   paylaşır. Faz 7'ye bekletilen "dağıtık rate limiting" maddesiydi, PR #13
+   incelemesinde öne alındı; önceden process içi bellekteydi ve her worker
+   kendi sayacını tuttuğu için gerçek limit worker sayısıyla çarpılıyordu.
 2. **Erken JWT** — korumalı üç POST uç noktasında token multipart parser'ın
    ilk `receive()` çağrısından önce doğrulanır; 401/503 yanıtı gövdeyi tüketmez.
 3. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf

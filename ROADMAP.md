@@ -64,7 +64,7 @@ Aşağıdaki tüm satırlar önceki iterasyonda karara bağlandı ve doğruland�
 | --- | --- | --- |
 | AI model sunumu | BiRefNet (`rembg` üzerinden, ONNX) | Bkz. bölüm 2 |
 | Backend | Python + FastAPI | AI + backend'i tek dilde tutar, MVP için ayrı bir inference mikroservisinden kaçınır |
-| Asenkron iş kuyruğu | Celery veya RQ + Redis | Görüntü işleme birkaç saniye sürebilir; istek thread'ini bloklamamalı |
+| Asenkron iş kuyruğu | Celery veya RQ + Redis | Görüntü işleme birkaç saniye sürebilir; istek thread'ini bloklamamalı. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`docker-compose.yml`); Celery/RQ kuyruğunun kendisi henüz kurulmadı |
 | Veritabanı | PostgreSQL (production'da Supabase) | İlişkisel veri: kullanıcılar, krediler, arka plan meta verisi, işlemler. Supabase seçilince ayrı bir DB sağlayıcısına gerek kalmadı |
 | Nesne depolama | Cloudflare R2 (S3 uyumlu) | Ürün fotoğrafları ve arka plan tasarımları; S3'e göre daha düşük çıkış (egress) maliyeti. Önceki iterasyonda gerçek hesaba karşı uçtan uca doğrulandı (yükleme → imzalı URL → indirme) |
 | Frontend (web) | Next.js + TypeScript + Tailwind + shadcn/ui | Hızlı iterasyon, modern geliştirici deneyimi, admin paneli aynı uygulamada yaşayabilir |
@@ -516,6 +516,20 @@ boyut ve saydamlık da tarayıcıda kalıyor. KVKK/Gizlilik/Kullanım Koşullar�
 çekim rehberi sayfaları eklendi. Yasal bildirim/kabul sürümü sunucu zamanlı
 `user_consents` tablosunda tutuluyor ve eski metadata kayıtları migration'da
 backfill ediliyor.
+
+**PR #13 inceleme takibi (14.09.2026) — dağıtık hız sınırlaması öne alındı.**
+Kullanıcı onayıyla: yükleme hız sınırlayıcısı (yukarıdaki madde) `SECURITY.md`'de
+Faz 7'ye bırakılmış "dağıtık (çok worker/instance) rate limiting" maddesiydi —
+process içi bellekten Redis'e taşındı, artık birden fazla worker/instance aynı
+sayacı paylaşıyor (bkz. `backend/app/services/rate_limit.py`,
+`backend/README.md` "Kaynak tüketimi korumaları"). `docker-compose.yml`'e bu
+amaçla Redis eklendi; asenkron iş kuyruğu (Celery/RQ) henüz kurulmadı, bu
+Redis örneği şimdilik yalnızca hız sınırlaması için kullanılıyor. Dağıtık
+davranışı doğrudan sınayan bir test eklendi (160 → 201 → **202**): iki ayrı
+`RequestRateLimiter` nesnesi (iki ayrı worker'ı taklit eder) aynı Redis
+anahtarını paylaşınca sınırın da paylaşıldığını doğruluyor — process içi eski
+implementasyona karşı çalıştırılsaydı bu test kırmızı yanardı, çünkü iki ayrı
+Python nesnesi birbirinden habersizdi.
 
 **Bekleyenler:**
 - R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).

@@ -2,6 +2,7 @@ import asyncio
 import uuid
 
 import jwt
+import pytest
 
 from app.core import auth as auth_module
 from app.core.auth import CurrentUser
@@ -111,11 +112,12 @@ def test_project_for_another_session_is_rejected_without_reading_body(monkeypatc
     assert receive_calls == 0
 
 
-def test_verified_user_rate_limit_runs_before_body(monkeypatch):
+@pytest.mark.asyncio
+async def test_verified_user_rate_limit_runs_before_body(monkeypatch, redis_client):
     user = CurrentUser(id=uuid.uuid4(), email="test@test.example", session_id=None)
     monkeypatch.setattr(settings, "supabase_url", "https://test.supabase.co")
     monkeypatch.setattr(auth_module, "verify_access_token", lambda _: user)
-    limiter = RequestRateLimiter(1, 60)
+    limiter = RequestRateLimiter(1, 60, redis_url=settings.redis_url)
     receive_calls = 0
 
     async def receive():
@@ -123,27 +125,25 @@ def test_verified_user_rate_limit_runs_before_body(monkeypatch):
         receive_calls += 1
         return {"type": "http.request", "body": b"govde", "more_body": False}
 
-    async def scenario():
-        statuses = []
-        middleware = EarlyAuthenticationMiddleware(
-            _body_consuming_app, user_limiter=limiter
+    statuses = []
+    middleware = EarlyAuthenticationMiddleware(_body_consuming_app, user_limiter=limiter)
+    for _ in range(2):
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                statuses.append(message["status"])
+
+        await middleware(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/remove-background",
+                "headers": [(b"authorization", b"Bearer gecerli")],
+            },
+            receive,
+            send,
         )
-        for _ in range(2):
-            async def send(message):
-                if message["type"] == "http.response.start":
-                    statuses.append(message["status"])
 
-            await middleware(
-                {
-                    "type": "http",
-                    "method": "POST",
-                    "path": "/api/remove-background",
-                    "headers": [(b"authorization", b"Bearer gecerli")],
-                },
-                receive,
-                send,
-            )
-        return statuses
-
-    assert asyncio.run(scenario()) == [200, 429]
+    assert statuses == [200, 429]
     assert receive_calls == 1
+    await limiter.aclose()

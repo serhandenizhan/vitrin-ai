@@ -240,14 +240,16 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   yönlendirme ve kullanıcı numaralandırması koruması, parola kuralı, arka plan kaldırmada
   oturum zorunluluğu, hesap silme (3.1, 3.2, 6). Upload'larda multipart'tan
   önce JWT, toplam gövde sınırı, oturumsuz/geçersiz istekler için IP ve
-  doğrulanmış kullanıcı için kayan pencere hız sınırı uygulanıyor. Supabase'de
-  access token 15 dakika, parola kuralı ve kısa e-posta bağlantı süresi ayarlandı.
+  doğrulanmış kullanıcı için kayan pencere hız sınırı uygulanıyor — sayaçlar
+  Redis'te tutuluyor, **dağıtık** (birden fazla worker/instance aynı sayacı
+  paylaşır; PR #13 incelemesinde Faz 7'den öne alındı, bkz. `backend/README.md`
+  "Kaynak tüketimi korumaları"). Supabase'de access token 15 dakika, parola
+  kuralı ve kısa e-posta bağlantı süresi ayarlandı.
   **Açık:** Supabase panelinden elle silinen kullanıcının R2 görselleri otomatik temizlenmiyor.
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency
 - **Faz 6:** Admin rol kontrolü backend seviyesinde
-- **Faz 7:** Penetrasyon testi / güvenlik taraması, dağıtık (çok worker/instance)
-  rate limiting, dependency audit, HTTPS/HSTS son kontrol ve yasal metinlerin
-  hukukçu kontrolü — **launch öncesi son kapı**
+- **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
+  son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
 
 ---
 

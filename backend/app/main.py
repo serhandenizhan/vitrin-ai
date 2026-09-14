@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI):
     # pool'unu düzgünce serbest bırak (bkz. app/core/db.py).
     yield
     await engine.dispose()
+    await upload_ip_limiter.aclose()
+    await upload_user_limiter.aclose()
 
 
 app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)
@@ -42,13 +44,18 @@ async def r2_configuration_error_handler(_, exc: R2ConfigurationError) -> JSONRe
 # için bu, testlerin üretimde çalışan gerçek limiter'a doğrudan erişebilmesinin
 # tek yoludur — bkz. tests/test_remove_background_endpoint.py).
 admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_inferences)
+# Redis tabanli, dagitik hiz sinirlayicilar — birden fazla worker/instance
+# ayni Redis'e baglaninca ayni sayaci paylasir (bkz. app/services/rate_limit.py;
+# baglanti nesnesi calisan event loop basina tembel olusturulur).
 upload_ip_limiter = RequestRateLimiter(
     settings.upload_ip_rate_limit_requests,
     settings.upload_rate_limit_window_seconds,
+    redis_url=settings.redis_url,
 )
 upload_user_limiter = RequestRateLimiter(
     settings.upload_user_rate_limit_requests,
     settings.upload_rate_limit_window_seconds,
+    redis_url=settings.redis_url,
 )
 
 # Starlette `add_middleware`, her çağrıda listenin BAŞINA ekler (bkz.

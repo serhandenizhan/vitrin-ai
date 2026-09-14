@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     background_url_expiry_seconds: int = 3600
     # Proje (geçmiş çalışma) görsellerinin imzalı URL geçerlilik süresi.
     project_url_expiry_seconds: int = 3600
+    # Faz 4 kapanışı: yükleme hız sınırlayıcısı artık Redis tabanlı ve
+    # dağıtık (bkz. app/services/rate_limit.py) — önceden process içi
+    # bellekteydi, her worker kendi sayacını tutuyordu. Varsayılan,
+    # docker-compose.yml'deki yerel Redis'e işaret ediyor.
+    redis_url: str = "redis://localhost:6379/0"
 
     @property
     def max_file_size_bytes(self) -> int:

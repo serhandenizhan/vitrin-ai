@@ -54,7 +54,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
-- **Backend:** Python, FastAPI, asenkron işler için Celery/RQ + Redis
+- **Backend:** Python, FastAPI, asenkron işler için Celery/RQ + Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`); Celery/RQ kuyruğunun kendisi henüz kurulmadı.
 - **AI modeli:** BiRefNet — sadece orijinal `ZhengPeng7/BiRefNet` MIT lisanslı ağırlıkları kullanın. BRIA'nın "RMBG" ağırlıklarını asla kullanmayın (aynı mimari, ancak bu ağırlıklar ticari değildir). Üretim modeli doğrudan `birefnet-general` — `-lite` ve `u2net` önceki iterasyonda elendi.
 - **Veritabanı:** PostgreSQL (production'da Supabase — aynı proje, DB ve Auth ayrılmıyor)
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
@@ -82,7 +82,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
                    arka plan meta verisi (Postgres/Alembic) — Faz 3'te genişler
 /frontend          Next.js uygulaması (web arayüzü, admin paneli) — Faz 2'de kurulur
 /mobile            React Native uygulaması (Faz 8'de eklenecek)
-docker-compose.yml Yerel Postgres (Faz 0/3)
+docker-compose.yml Yerel Postgres (Faz 0/3) + Redis (Faz 4, hız sınırlaması)
 ROADMAP.md         Tam fazlı proje planı
 CLAUDE.md          Bu dosya
 SECURITY.md        Katman katman güvenlik standartları
