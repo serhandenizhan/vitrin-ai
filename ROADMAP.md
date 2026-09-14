@@ -506,7 +506,7 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   konumundan buluyor (kök `CLAUDE.md` ders 18).
 - **Testler:** frontend 72 → 203. Backend'e oturum, hesap silme, test veritabanı adres
   koruması, cursor, erken auth, hesap-değişimi ve hız sınırı testleri eklendi
-  (160 → 200); tamamı izole yerel PostgreSQL üzerinde geçti.
+  (160 → 201); tamamı izole yerel PostgreSQL üzerinde geçti.
 
 **Faz 4 kapanış düzeltmeleri (14.09.2026):** hesap silmede yazılan e-posta artık
 backend'de de doğrulanıyor; bekleyen sonuç/silme işlemleri başlatan kullanıcı
