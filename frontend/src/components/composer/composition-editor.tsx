@@ -757,7 +757,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu
               seçenek görseli, hedef baskı koşulunun ICC profiliyle CMYK renk
               uzayına çevirip profili dosyaya gömer. Saydam alanlar beyaza
-              düzleştirilir — CMYK&apos;nin alfa kanalı yoktur. TIFF matbaanın
+              düzleştirilir, çünkü CMYK&apos;de saydamlık yoktur. TIFF matbaanın
               tercih ettiği biçim; JPEG daha küçük.
             </p>
           ) : null}

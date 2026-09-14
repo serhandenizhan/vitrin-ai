@@ -36,7 +36,11 @@ const PANELS = [
 
 export function HeroVisual() {
   return (
-    <div className="relative mx-auto w-full max-w-3xl">
+    /* Genislik ekran YUKSEKLIGINDEN turetiliyor: iki kare yan yana ve her
+       biri ~0.92 oraninda; `(100svh - 13rem)` yukseklige sigan genislik bu.
+       Boylece acilis bolumu hangi dizustu olcusunde olursa olsun gorsel
+       butun olarak ilk ekranda kaliyor (bkz. hero.tsx). */
+    <div className="relative mx-auto w-full max-w-2xl lg:max-w-[min(100%,calc((100svh-13rem)*1.83))]">
       {/* Altin isik havuzu — kareleri siyah zeminden ayiran yumusak hale. */}
       <div
         aria-hidden
@@ -60,7 +64,7 @@ export function HeroVisual() {
                 width={900}
                 height={982}
                 priority
-                sizes="(max-width: 768px) 50vw, 384px"
+                sizes="(max-width: 1024px) 50vw, 320px"
                 className="h-full w-full object-cover"
               />
               <span
@@ -78,8 +82,8 @@ export function HeroVisual() {
       </figure>
 
       <figcaption className="on-dark-muted fine-print mt-3 text-center text-balance">
-        Örnek ürün fotoğrafları. Aracın gerçek çıktısını birkaç ekran aşağıda
-        kendi fotoğrafınızla görebilirsiniz.
+        Örnek fotoğraflar. Aracın gerçek sonucunu hemen aşağıda kendi
+        fotoğrafınızla görebilirsiniz.
       </figcaption>
     </div>
   );

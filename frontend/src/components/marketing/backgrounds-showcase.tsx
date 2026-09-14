@@ -89,8 +89,8 @@ export function BackgroundsShowcase() {
 
         <Reveal delay={280}>
           <p className="fine-print on-dark-muted mt-8 text-center">
-            Gerçek çıktı — bu kareler aracın kendisi tarafından, yukarıdaki
-            fotoğraftan üretildi.
+            Bu üç kare aracın gerçek çıktısı. Hepsi en üstteki kolye
+            fotoğrafından üretildi.
           </p>
         </Reveal>
       </div>

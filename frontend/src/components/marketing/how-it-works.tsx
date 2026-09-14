@@ -38,7 +38,7 @@ const TIPS = [
   {
     baslik: "Ürünü elde tutmayın",
     aciklama:
-      "Elde tutulan üründe model bazen eli de koruyor, bazen kaldırıyor — davranış öngörülemiyor. Ürün masada ya da kadife üzerinde tek başına dursun.",
+      "Elde tutulan üründe el bazen kesimde kalıyor, bazen kalkıyor. Ürünü masaya ya da kadifenin üzerine tek başına koyun.",
   },
   {
     baslik: "Özgün dosyayı gönderin",
@@ -83,9 +83,8 @@ export function HowItWorks() {
               En iyi sonuç için üç öneri
             </h3>
             <p className="lede on-light-muted mt-2.5 max-w-2xl text-pretty">
-              Çıktı kalitesini en çok düşüren etkenler modelin değil, girdinin
-              sorunu. Bu üç madde, model tarafında hiçbir şey değiştirmeden
-              sonucu belirgin şekilde iyileştiriyor.
+              Sonucu en çok etkileyen şey fotoğrafın kendisi. Çekerken bu üçüne
+              dikkat ederseniz kenarlar çok daha temiz çıkar.
             </p>
 
             <ul className="mt-8 grid gap-7 sm:grid-cols-3">

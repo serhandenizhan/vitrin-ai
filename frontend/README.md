@@ -79,9 +79,26 @@ sınırı, gövde boyutu middleware'i).
 ## HEIC
 
 iPhone'un varsayılan formatı, hedef kitle telefonla çekiyor. Backend HEIC'i
-sorunsuz işliyor ama **tarayıcılar HEIC'i görüntüleyemiyor** — bu yüzden
-önizleme yerine bilgilendirici bir kart gösteriliyor ("Bu format tarayıcıda
-önizlenemiyor"). Sonuç PNG olarak döndüğü için sonuç ekranı normal çalışıyor.
+sorunsuz işliyor ama Chrome, Firefox ve Edge HEIC'i `<img>` ile gösteremiyor
+(Safari 17+ gösterebiliyor). Önizleme `src/lib/heic-preview.ts` ile üretiliyor:
+
+1. HEIC değilse doğrudan `URL.createObjectURL`.
+2. HEIC ise önce tarayıcının kendi çözücüsü deneniyor (`img.decode()`); Safari'de
+   ek bir şey indirilmiyor.
+3. Olmazsa [`heic-to`](https://www.npmjs.com/package/heic-to) (libheif'in
+   WebAssembly derlemesi) **yalnızca bu anda** dinamik `import()` ile yükleniyor.
+   ~3 MB'lık ayrı bir parça; HEIC seçmeyen ziyaretçi onu hiç indirmiyor.
+4. O da başarısız olursa bilgi kartı ("Önizleme gösterilemedi") çıkıyor; arka
+   plan kaldırma yine çalışıyor.
+
+Önizleme yalnızca gösterim için: backend'e her zaman kullanıcının özgün dosyası
+gidiyor. Karşılaştırma ekranının "önce" tarafı da artık HEIC'te çalışıyor.
+
+**Lisans:** `heic-to` **LGPL-3.0** (içindeki libheif'ten geliyor). Değiştirilmeden
+ve ayrı bir parça olarak dinamik yüklendiği için LGPL'in "kütüphane olarak
+kullanma" koşulu sağlanıyor. Yayına çıkmadan önce lisans metninin ve kaynak
+bağlantısının bir "Açık kaynak lisansları" sayfasında gösterilmesi gerekiyor
+(Faz 7'deki yasal metinlerle birlikte).
 
 ## Şeffaflık neden dama deseninde gösteriliyor
 
@@ -121,7 +138,8 @@ yok** ve görünümün dışına taşan öğe yok.
 
 | Genişlik | Davranış |
 | --- | --- |
-| < 640 px | Tek sütun. Üst çubuktaki menü bağlantıları gizlenir, logo + "Hemen deneyin" kalır. |
+| < 1024 px | Üst çubuktaki bağlantılar "Menü" düğmesinin açtığı panele geçer; açılış bölümü tek sütun (metin üstte, görsel altta). |
+| < 640 px | Tek sütun. "Giriş yap" yazısı gizlenir, ikonu kalır. |
 | ≥ 640 px | Öne çıkanlar ve teknik bilgiler iki sütuna, üç adım üç sütuna geçer; menü bağlantıları görünür. |
 | ≥ 1024 px | Teknik bilgiler üç sütun. |
 | ≥ 1280 px | Tipografi üst sınıra oturur (hero 64 px); daha geniş ekranlarda içerik 1024 px'te ortalanır, büyümeye devam etmez. |
@@ -145,22 +163,41 @@ tanıtım bölümlerinin sonuna değil, açılıştan hemen sonraya konuldu — 
 önce deneyip sonra okuyabilsin.
 
 ```
-Hero (siyah)            → vaat + ürün görseli
+Hero (siyah)            → vaat solda, ürün görseli sağda; tam bir ekran
 Deneyin (açık gri)      → aracın kendisi
+Zeminler (siyah)        → aynı kesim üç zeminde
 Öne çıkanlar (kömür)    → dört madde, taranmak için
 Nasıl çalışır (açık)    → üç adım + çekim önerileri
 Teknik bilgiler (siyah) → formatlar, sınırlar, süre, gizlilik
-Footer (açık gri)       → model sınırlamaları, dipnotlar
+Footer (kömür)          → marka, bağlantılar, yasal, sosyal medya, dipnotlar, telif
 ```
+
+**Açılış tam bir ekran (11.09.2026).** Önceki sürümde her şey üst üste
+ortalanmıştı; toplam ~1400 px ediyor ve 900 px'lik dizüstünde görsellerin
+yarısı ilk ekranın dışında kalıyordu. Şimdi geniş ekranda iki sütun ve görselin
+genişliği ekran **yüksekliğinden** türetiliyor (`hero-visual.tsx`), 1440×900'de
+iki kare de bütün olarak görünüyor.
+
+**Footer'daki boş yerler.** Sosyal medya adresleri henüz yok (`site-footer.tsx`
+→ `SOSYAL` dizisinde `href: null`, simgeler tıklanamaz görünüyor). KVKK
+aydınlatma metni, gizlilik politikası ve kullanım koşulları da henüz yazılmadı;
+"yakında" olarak işaretli. Ödeme (Faz 5) açılmadan önce yazılmaları gerekiyor.
 
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
 ## Üst çubuk
 
-Marka **en solda**, hemen yanında panel düğmesi; bağlantılar markanın
-devamında; "Giriş yap" ve "Hemen deneyin" en sağda. Çubuk 56 px, bağlantılar
-14 px.
+**11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda
+duruyor"). Kenarlardan 12 px içeride, 48 px yüksekliğinde, tam yuvarlak ve
+gölgeli; en fazla 1152 px genişliyor. Sayfanın üstüne biniyor (`-mb-15`), bu
+yüzden açılıştaki koyu bölüm çubuğun arkasından başlıyor. Sayfaların ilk bölümü
+çubuğun kapladığı 60 px'i `page-top` sınıfıyla geri alıyor. Bulunulan sayfa
+(Katalog, Paketler) dolu bir hap olarak görünüyor. Paneller çubukla aynı
+genişlikte, altında açılan yüzen kartlar.
+
+Sıra: panel düğmesi, marka, bağlantılar, en sağda "Giriş yap", "Hemen deneyin"
+ve (< 1024 px) "Menü". Aşağıdaki ölçüm notları önceki şerit sürümünden.
 
 İlk sürümde gövde `max-w-5xl` ile ortalanıyordu ve 1877 px'lik bir ekranda
 logo sayfanın ortasına yakın duruyor, solda kocaman bir boşluk kalıyordu;
@@ -326,14 +363,16 @@ src/components/brand-mark.tsx               logo (SVG)
 src/components/sign-in-notice.tsx           "hesap sistemi yakında" penceresi
 src/components/workspace-provider.tsx       panel/geçmiş/ayarlar context'i
 src/components/work-sidebar.tsx             sol çekmece (çalışmalarım + ayarlar)
-src/components/site-header.tsx              yapışkan üst çubuk
-src/components/site-footer.tsx              dipnotlar
+src/components/site-header.tsx              yüzen üst çubuk + telefon menüsü
+src/components/nav-panel.tsx                üst çubuktan açılan panel kabuğu
+src/components/site-footer.tsx              bağlantılar, sosyal medya, dipnotlar, telif
 src/components/marketing/hero.tsx           açılış bölümü
 src/components/marketing/highlights.tsx     öne çıkanlar
 src/components/marketing/how-it-works.tsx   üç adım + çekim önerileri
 src/components/marketing/specs.tsx          teknik bilgiler
 src/components/marketing/hero-visual.tsx    açılıştaki önce/sonra görseli
 src/lib/upload-constraints.ts               backend ile senkron yükleme kısıtları
+src/lib/heic-preview.ts                     HEIC önizlemesi (yerel çözücü, yoksa heic-to)
 src/lib/work-history.ts                     geçmiş deposu (GEÇİCİ — IndexedDB)
 src/lib/settings-store.ts                   ayarlar (useSyncExternalStore kaynağı)
 public/mock/sample-cutout.png               örnek kesim ("sonra")

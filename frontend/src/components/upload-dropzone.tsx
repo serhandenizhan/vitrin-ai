@@ -83,7 +83,7 @@ export function UploadDropzone({
       </span>
 
       <span className="text-muted-foreground text-xs">
-        JPEG · PNG · WebP · HEIC — en fazla {MAX_FILE_SIZE_MB} MB
+        JPEG, PNG, WebP veya HEIC, en fazla {MAX_FILE_SIZE_MB} MB
       </span>
 
       <input
