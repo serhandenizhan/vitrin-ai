@@ -1,6 +1,6 @@
 # Faz 5 — Ödemeler ve kredi sistemi tasarımı
 
-**Tarih:** 2026-09-14 (v4 — üçüncü inceleme turundan sonra revize edildi)
+**Tarih:** 2026-09-14 (v5 — yenileme gecikmesi ve trial yarış düzeltmelerinden sonra revize edildi)
 **Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü bu API sözleşmesine dayanır; arayüz tasarımı ayrı çalışmadır.
 
 ## v2 → v3: kilit düzeltmeler
@@ -27,6 +27,16 @@ v2; rezervasyon, checkout idempotency, gerçek webhook olay adları ve finansal 
 - **Eşzamanlı çift deneme rezervasyonu artık veritabanı seviyesinde engelleniyor** —
   `trial_used_at` checkout açılış anında yazılıyor ve `checkout_sessions` üzerinde kullanıcı
   başına en fazla bir `reserved` trial'a izin veren kısmi unique index eklendi.
+
+## v4 → v5: yenileme ve trial semantiği tamamlandı
+
+- **Yenileme webhook'u tek gerçek-zamanlı yol değildir.** Dönem sonunda gelen ilk kullanım
+  isteği, kısa süreli ve eşzamanlılığa dayanıklı bir iyzico doğrulama yolunu tetikler. Başarılı
+  tahsilat doğrulanırsa yeni dönem webhook beklenmeden atomik açılır; doğrulanmayan ödeme için
+  asla yeni kredi verilmez.
+- **Trial rezervasyonu kullanım değildir.** `trial_used_at` artık checkout açılışında değil,
+  yalnız doğrulanmış başarı event'i işlenirken yazılır. Aktif rezervasyona kullanıcı başına tek
+  satır kısıtı, aynı anda birden fazla trial checkout yaratılmasını engellemeyi sürdürür.
 
 ## Kilit kararlar
 
@@ -73,6 +83,7 @@ Her ticari değişiklik yeni immutable **plan_versions** satırı yaratır:
 | status | text | active, trialing, past_due, canceling, canceled, suspended, expired |
 | access_until | timestamptz, null | Provider iptal edilse de satın alınmış erişim sonu |
 | trial_used_at | timestamptz, null | Kullanıcı yaşamında yalnız bir trial |
+| renewal_check_after | timestamptz, null | Dönem sonu iyzico doğrulamasını kullanıcı başına en fazla dakikada bir başlatır |
 | created_at, updated_at | timestamptz | |
 
 Her erişim dönemi immutable **subscription_periods** satırıdır:
@@ -90,7 +101,25 @@ Her erişim dönemi immutable **subscription_periods** satırıdır:
 
 Kayıt trigger'ı yayımlanmış Deneme sürümüyle ilk aylık dönemi açar. Dönem sonrasında ilk yeni istekte, tek kısa transaction eski dönemi expired yapar ve yeni Deneme dönemi yaratır. Ücretli yenilemede ise yeni dönem yalnız doğrulanmış iyzico başarılı ödemesiyle yaratılır; ödeme yoksa yeni kota verilmez.
 
-**Bilinen sınır — ücretli yenilemede webhook gecikmesi.** Ücretli dönem tamamen webhook güdümlü olduğu için, iyzico'nun yenileme webhook'u dönem bitişinden birkaç dakika/saat geç gelirse, gerçekte ödemesi geçmiş bir müşteri bu aralıkta yeni kota göremeyebilir. iyzico'nun yenileme tahsilatını dönem bitiminden ne kadar önce/sonra denediği doğrulanmadı — bu yüzden burada uydurma bir "grace" durumu **eklenmiyor** (v1'in webhook isim hatasıyla aynı sınıfa düşmemek için). Bunun yerine iki gerçek güvence var: (1) aşağıdaki günlük reconciliation işi bu tür bir gecikmeyi en geç 24 saat içinde yakalayıp düzeltir, otomatik erişim değiştirmeden alarm üretir; (2) destek, bir kullanıcı "ödedim ama erişemiyorum" derse `POST /api/admin/subscriptions/{user_id}/suspend`'in tersi bir manuel düzeltme (dönemi elle `active` yapma) ile anında müdahale edebilir. iyzico'nun gerçek yenileme zamanlamasını (dönem bitiminden önce mi tahsil ediyor, tam sınırda mı) canlı hesapla doğrulamak implementasyonun bir adımı; gerçekten sistematik bir gecikme gözlenirse `ends_at`'e küçük bir teknik tampon eklemek ayrı bir iyileştirme olarak değerlendirilir.
+**Ücretli yenileme: webhook gecikmesine dayanıklı doğrulama.** Webhook normal yoldur; fakat
+`period.ends_at <= now()` iken gelen ilk kota isteyen istek, önce mevcut period/webhook sonucunu
+kontrol eder. Yeni dönem yoksa `subscriptions` satırı kilitlenir ve `renewal_check_after` koşullu
+olarak `now() + 60 saniye` yapılır; yalnız kazanan istek iyzico'dan subscription/son ödeme
+durumunu sunucu tarafında, kısa timeout ile sorgular. Ağ çağrısı DB transaction'ı dışında yapılır.
+Sonra ikinci kısa transaction şu iki sonuçtan yalnız birini yazar:
+
+1. iyzico tahsilatı başarılı ve provider referansı/planı/tutarı/currency'si beklenenle eşleşiyorsa,
+   webhook handler ile **aynı idempotent dönem-açma fonksiyonu** yeni paid period'u ve charge
+   ledger kaydını yaratır. Geç gelen webhook daha sonra no-op olur.
+2. Tahsilat başarısız, pending veya iyzico erişilemezse mevcut dönem uzatılmaz ve yeni kredi
+   verilmez. İstemci `409 billing_renewal_pending` ve en fazla 60 saniyelik `Retry-After` alır;
+   önceki dönemde kullanılmamış kota da period bitmiş olduğu için harcanamaz.
+
+Bu, sınırsız/uydurma bir entitlement grace'i değildir: müşteri yalnız provider'da gerçekten
+başarılı görünen ödeme ile yeni kotaya geçer. `renewal_check_after` içindeki diğer istekler aynı
+pending cevabı alır; bakım worker'ı zamanı gelince doğrulamayı yeniden dener. Günlük
+reconciliation hâlâ kaçırılmış olaylar için alarm ve manuel inceleme güvenlik ağıdır, erişimin
+tek onarım yolu değildir.
 
 ### usage_reservations ve usage_events
 
@@ -128,7 +157,21 @@ Remove-background akışı:
 
 Aynı kullanıcı+idempotency anahtarı pending ise aynı hosted URL döner; süresi dolmuş anahtar 409 döner ve yeni anahtar gerekir. Trial checkout açıldığında yalnız reserved olur; failed/expired session reservation'ı serbest kalır. Trial, yalnız doğrulanmış subscription.order.success sonrasında consumed olur.
 
-**Eşzamanlı çift rezervasyon koruması.** `subscriptions.trial_used_at`, bir `checkout_sessions` satırı `trial_status='reserved'` olarak açıldığı **anda**, aynı transaction'da yazılır — webhook onayını beklemez (v2'de bulunan, "webhook'a kadar bekleyip aynı anda birden fazla checkout ile birden fazla deneme kazanma" riskini kapatmak için). Bunu tek başına yeterli kılan şey: `checkout_sessions` üzerinde **`user_id` için `trial_status = 'reserved'` olan en fazla bir satıra izin veren kısmi unique index** (`CREATE UNIQUE INDEX ... WHERE trial_status = 'reserved'`). Aynı kullanıcı ikinci bir trial-uygun checkout açmaya çalışırsa (ilk hâlâ `reserved` iken) veritabanı seviyesinde reddedilir — uygulama kodundaki bir kontrolü atlamak mümkün değildir.
+**Trial rezervasyonu ve tüketimi.** Trial-uygun checkout oluştururken backend kullanıcının
+`subscriptions` satırını `FOR UPDATE` kilitler. `trial_used_at IS NOT NULL` ise iyzico'ya trial
+günü gönderilmez. Aksi halde, geçerli `pending + reserved` session varsa farklı idempotency anahtarı
+ile bile yeni provider checkout yaratmak yerine o session'ın hosted URL'i döner. Yoksa session
+`reserved` olarak eklenir. Veritabanı son savunma olarak şu kısmi unique index'i taşır:
+`CREATE UNIQUE INDEX ... ON checkout_sessions(user_id) WHERE trial_status = 'reserved' AND status = 'pending'`.
+Bu yüzden uygulama kodu yarışsa bile kullanıcı başına aynı anda yalnız bir canlı trial rezervasyonu
+oluşur.
+
+İmzalı webhook ve server-side iyzico doğrulamasından sonra, session hâlâ `pending + reserved` ve
+bitmemişse tek transaction içinde `reserved → consumed`, `pending → completed` ve
+`subscriptions.trial_used_at = now()` yazılır; `trial_used_at` için `IS NULL` koşulu compare-and-set
+olarak kullanılır. Ödeme başarısız olur, session süresi dolar veya doğrulama geçemezse yalnız session
+`released` olur; `trial_used_at` **değişmeden null kalır**. Böylece checkout sayfasını kapatmak
+trial hakkını yakmaz; buna karşılık iki eşzamanlı checkout da iki trial sağlayamaz.
 
 Webhook erişim vermeden önce dört doğrulama yapar: V3 HMAC, eşleşen/bitmemiş customer_reference_code veya conversation reference, provider subscription ile pricing-plan referansının session plan sürümüyle eşleşmesi, provider ödeme kaydında beklenen tutar ve para birimi. Bir tanesi uyuşmazsa erişim, period ve finansal kayıt oluşmaz; event manuel incelemeye gider.
 
@@ -206,7 +249,10 @@ vardır; worker lease ile işi alır ve R2 silme idempotent tamamlanınca projec
 
 ## Bakım, reconciliation ve launch kapıları
 
-Hetzner'de deploy edilen billing-maintenance.service + billing-maintenance.timer her dakika reservation, checkout expiry, webhook/action retry işlemlerini; her gün iyzico reconciliation'ı çalıştırır. Timer uygulamanın DB modellerini doğrudan kullanır; pg_cron üzerinden belirsiz HTTP self-call yapılmaz.
+Hetzner'de deploy edilen billing-maintenance.service + billing-maintenance.timer her dakika reservation,
+checkout expiry, webhook/action retry ve `renewal_check_after <= now()` olmuş dönem-sonu yenileme
+doğrulamalarını çalıştırır; her gün iyzico reconciliation'ı çalıştırır. Timer uygulamanın DB
+modellerini doğrudan kullanır; pg_cron üzerinden belirsiz HTTP self-call yapılmaz.
 
 Günlük reconciliation aktif provider aboneliklerini, son günün ödeme hareketlerini ve yerel billing_transactions/period durumlarını karşılaştırır. Eksik veya çelişkili kayıtlar otomatik erişim değiştirmek yerine alarm + manuel inceleme kuyruğuna gider.
 
@@ -235,7 +281,13 @@ Kaynaklar: [iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [iyzi
 - Son kotada iki eşzamanlı inference: yalnız biri reservation alır.
 - OOM/timeout/restart: pending reservation yalnız bir kez serbest kalır.
 - Deneme aylık yenilenir; expired/past_due kullanıcı kota tüketemez.
-- Aynı checkout anahtarı ikinci provider aboneliği oluşturmaz; expired trial reservation serbest kalır.
+- iyzico'da başarılı görünen yenileme webhook'tan önce kullanım isteğiyle doğrulanırsa tek yeni
+  period ve tek charge kaydı yaratılır; geç gelen webhook no-op olur.
+- iyzico yenilemesi pending/başarısız/erişilemezken yeni period veya kredi yaratılmaz ve istek
+  `billing_renewal_pending` + en fazla 60 saniye `Retry-After` alır.
+- Aynı checkout anahtarı ikinci provider aboneliği oluşturmaz; farklı anahtarlı iki eşzamanlı
+  trial isteği tek reserved session/hosted URL üretir. Expired/failed session released olur ve
+  `trial_used_at` null kalır; yalnız doğrulanmış başarı onu bir kez set eder.
 - Eski webhook yeni period'u değiştiremez; yanlış amount/currency/plan erişim veremez.
 - Plan yayınlama sonrası UI ve iyzico aynı yeni sürümü kullanır; eski snapshot değişmez.
 - Cancel/refund provider çağrısı ve DB yazısı arasındaki hata action retry ile toparlanır.
