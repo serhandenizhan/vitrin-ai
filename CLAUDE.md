@@ -206,3 +206,50 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` ile verilmeli ve metinler Türkiye'de yetkili
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
+
+### 4. Supabase'in kendi (built-in) e-posta servisi production için yeterli değil — sahibi: Serhan
+
+Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
+e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"
+ekranı — bkz. `frontend/README.md` "Hesaplar"). Şu an hiçbir özel SMTP
+sağlayıcısı (Resend/Postmark/SendGrid vb.) bağlı değil; proje Supabase'in
+projeyle birlikte gelen **dahili e-posta servisini** kullanıyor.
+
+Bu servis yalnızca test/geliştirme için: saatte birkaç e-postayla sınırlı,
+genel bir Supabase alan adından gönderiliyor (spam'e düşme riski yüksek) ve
+Supabase'in kendisi de production'a çıkmadan önce özel bir SMTP
+bağlanmasını açıkça öneriyor.
+
+**14.09.2026'da gerçek bir kayıt denemesinde gözlemlendi:** doğrulama
+e-postası ne gelen kutusuna ne spam'e düştü, hiç ulaşmadı — rate limit'e
+takılmış olabilir ya da dahili servisin kendi bir sınırına. Kod tarafında
+zaten `over_email_send_rate_limit` diye ayrı bir hata mesajı var (bu
+senaryo öngörülmüştü) ama arayüzde bu hata da gösterilmedi; e-posta
+isteği sessizce mi başarısız oldu yoksa gönderilip mi kayboldu, Supabase
+Dashboard → Authentication → Logs'tan doğrulanmadı.
+
+**Çözüm iki aşamalı — sağlayıcı seçildi (Resend, 14.09.2026):**
+
+1. **Sandbox aşaması — ✅ tamamlandı ve doğrulandı (14.09.2026).** Resend
+   hesabı + API key ile Supabase'e özel SMTP bağlandı. Gerçek bir kayıt
+   denemesiyle uçtan uca test edildi: e-posta ulaştı, Resend Dashboard →
+   Logs'ta gönderim kaydı görüldü — SMTP entegrasyonunun kendisi çalışıyor.
+   (İlk denemede e-posta hiç gelmemişti; sebep SMTP değil, o adresle
+   `serhandenizhan404@gmail.com` zaten kayıtlı bir kullanıcı vardı —
+   Supabase var olan kullanıcı için numaralandırma korumasıyla sessizce
+   yeni e-posta göndermiyor. `+` etiketli farklı bir adresle tekrar
+   denenince e-posta ulaştı.)
+
+   **Bilinen sınırlama — son UX kontrolünde hatırlanmalı:** e-posta
+   **spam'e düşüyor**. Beklenen bir durum: `onboarding@resend.dev` Resend'in
+   paylaşılan/genel gönderen adresi, kendi alan adımızın SPF/DKIM kaydı
+   yok. Aşağıdaki 2. aşama (kendi alan adını doğrulama) bunu da düzeltmesi
+   beklenen bir yan etki — ayrı bir iş değil, aynı adımın parçası.
+2. **Tam üretim aşaması (henüz yapılamaz — sahibi: Serhan, dış girdiye
+   bağlı):** proje bir alan adı alınca, o alan adı Resend'de doğrulanmalı
+   (DNS'e SPF/DKIM kaydı) ve gönderen adresi kendi alan adına çevrilmeli.
+   Bu olmadan gerçek müşterilere e-posta gitmez (ve spam'e düşme sorunu da
+   sürer) — R2 CORS ve production domain maddesiyle (açık takip maddesi 2)
+   aynı dış girdiye bağlı, o
+   yüzden bu ikinci aşama de facto Faz 7'nin "launch öncesi son kapı"
+   listesine düşüyor.

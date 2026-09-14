@@ -541,10 +541,25 @@ canlı ayar aslında "...and symbols (recommended)" idi. İstemci kontrolüne
 sembol kuralı eklendi, ilgili tüm dokümanlar ve testler (203 → **210**)
 güncellendi. Bkz. kök `CLAUDE.md` ders 19.
 
-**Bekleyenler:**
-- R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).
-- Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son kontrolü
-  (kök `CLAUDE.md` açık takip maddesi 3).
+**Bekleyenler (launch anına bağlı, Faz 7'ye taşındı — kullanıcı kararı
+14.09.2026):** R2 CORS'a production alan adı eklenmesi ve production veri
+sorumlusu/hukukçu onayı, ikisi de henüz gerçekleşmemiş dış girdilere
+(alan adı, hukukçu) bağlı olduğu için Faz 7 "launch öncesi son kapı"
+kontrol listesine taşındı — bkz. aşağıda Faz 7 ve kök `CLAUDE.md` açık
+takip maddeleri 2-3.
+
+**Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
+Resend bağlandı; dahili e-posta servisi bir kayıt denemesinde e-postayı hiç
+teslim etmemişti (kök CLAUDE.md açık takip maddesi 4). **Sandbox aşaması**
+(hesap + API key + Supabase'e bağlama) gerçek bir kayıt denemesiyle uçtan
+uca doğrulandı — e-posta ulaştı, Resend Logs'ta kayıt görüldü. **Bilinen
+sınırlama:** e-posta şu an spam'e düşüyor (kendi alan adımız yok, Resend'in
+paylaşılan gönderen adresi kullanılıyor) — son UX kontrolünde hatırlanacak,
+aşağıdaki alan adı doğrulama adımıyla birlikte düzelmesi bekleniyor.
+
+**Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
+bağlı — bu kısım Faz 7'nin launch listesine ekleniyor (bkz. kök
+`CLAUDE.md` açık takip maddesi 4).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -615,6 +630,21 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Launch öncesi son kapı, dış girdiye bağlı olduğu için buraya taşındı
+  (kullanıcı kararı 14.09.2026):**
+  - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
+    takip maddesi 2) — production alan adı belirlenince.
+  - Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son
+    kontrolü (kök `CLAUDE.md` açık takip maddesi 3) — hukukçu onayı
+    verilince.
+  - Baskı (CMYK) profili üretime konması (kök `CLAUDE.md` açık takip
+    maddesi 1, Faz 3'ten kalma) — profil lisansı/matbaa koşulu doğrulanınca.
+  - Resend'de alan adı doğrulama (SPF/DKIM) ve gönderen adresinin kendi
+    alan adına çevrilmesi — Faz 5'te yalnızca sandbox (kendi hesabına
+    gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan
+    sonra gider. **Son UX kontrolünde hatırlanmalı:** sandbox e-postaları
+    şu an spam'e düşüyor, bu adım muhtemelen bunu da düzeltecek
+    (kök `CLAUDE.md` açık takip maddesi 4).
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
 

@@ -270,3 +270,4 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
 - [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
 - [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor
+- [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi (Faz 5'te sandbox aşaması — yalnızca kendi hesabına gönderim — kapatıldı; bu, gerçek müşterilere e-posta gitmesi için son adım — bkz. kök `CLAUDE.md` açık takip maddesi 4)

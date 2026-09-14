@@ -371,6 +371,11 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
+**Açık — e-posta teslimi (14.09.2026):** doğrulama e-postaları şu an Supabase'in
+dahili (test amaçlı, hız sınırlı) e-posta servisinden gidiyor; gerçek bir kayıt
+denemesinde e-posta ne gelen kutusuna ne spam'e ulaştı. Üretime çıkmadan önce
+özel bir SMTP sağlayıcısı bağlanmalı (bkz. kök `CLAUDE.md` açık takip maddesi 4).
+
 ### Geçmiş sunucuda
 
 `src/lib/work-history.ts`'in fonksiyonları aynı, gövdesi `/api/projects`
