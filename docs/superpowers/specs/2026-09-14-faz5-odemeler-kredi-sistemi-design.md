@@ -1,289 +1,226 @@
 # Faz 5 — Ödemeler ve kredi sistemi tasarımı
 
-**Tarih:** 2026-09-14 (v2 — Codex incelemesinden sonra revize edildi)
-**Kapsam:** `ROADMAP.md` Faz 5 — abonelik/kota modeli, iyzico entegrasyonu, webhook işleme,
-kullanım bazlı düşüm, iade/itiraz (Serhan). Kaan'ın satın alma akışı arayüzü, kredi bakiyesi
-gösterimi ve fatura/geçmiş sayfası bu spec'in API sözleşmesine dayanır ama arayüz tasarımı ayrı,
-kendi brainstorming turunu gerektirir — bu spec'in kapsamı dışında.
+**Tarih:** 2026-09-14 (v3 — ikinci Codex incelemesinden sonra revize edildi)
+**Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü bu API sözleşmesine dayanır; arayüz tasarımı ayrı çalışmadır.
 
-## v1 → v2: neden revize edildi
+## v2 → v3: kilit düzeltmeler
 
-v1, bağımsız bir incelemeden (Codex) geçti; 10 P1 + 6 P2 bulgusunun **9'u P1'den, tamamı
-P2'den** doğrulandı (ikisi bağımsız araştırmayla da teyit edildi: iyzico'nun gerçek webhook
-olay isimleri ve gerçek komisyon oranı — v1'deki rakamlar/isimler doğrulanmadan yazılmıştı).
-Kök sorun: v1 "tek `subscriptions` satırı + canlı sayaç" modeliyle üretim ödemesi, kota
-rezervasyonu ve webhook güvenilirliğini eksik tasarlamıştı. v2, rezervasyon deseni + değişmez
-işlem defteri + checkout idempotency ekliyor. Tek itiraz ettiğim nokta (ayrı bir
-`subscription_periods` tablosu yerine `subscriptions` satırına snapshot alanı eklemek) aşağıda
-uygulandı — daha basit, aynı garantiyi veriyor.
+v2; rezervasyon, checkout idempotency, gerçek webhook olay adları ve finansal ledger ekledi. İkinci incelemede kalan açıklar bu sürümde kapatıldı:
 
-## Bağlam ve kilitli kararlar
+- Geçmiş dönemleri korumak için immutable **subscription_periods** eklendi.
+- Kota için gerçek dönem yenileme, dönem sonu kontrolü ve request idempotency tanımlandı.
+- Yerel plan fiyatı ile iyzico pricing planı ayrışmasın diye immutable **plan_versions** ve yayınlama akışı eklendi.
+- Checkout eşlemesi gerçek iyzico referansları, trial reservation ve amount/currency doğrulamasıyla netleştirildi.
+- İptal, plan değişimi, iade, itiraz ve hesap silme provider–DB action/outbox akışına bağlandı.
+- Webhook retry'nin hiç ulaşmayan event'i bulamayacağı kabul edildi; günlük reconciliation launch kapısıdır.
+- Basic/full zemin yetkisi backend'de zorunlu hale getirildi.
 
-- **Monolit mimari değişmiyor.** (v1'den aynı.)
-- **İş modeli: abonelik, oranlama yok.** Plan değişimi anında geçerli, yeni dönem sıfır
-  kullanımla başlar. (v1'den aynı.)
-- **Ödeme sağlayıcısı: iyzico (web), hosted Checkout Form.** Kart bilgisi backend'e dokunmaz.
-- **Mobil (Faz 8) için mimari hazır, IAP şimdi yazılmıyor.** (v1'den aynı.)
-- **Kota takibi: rezervasyon deseni + ledger + önbellekli sayaç** (aşağıda detaylı — v1'in
-  "inference'tan önce artır, başarısızsa rollback" tasarımı **terk edildi**, gerçek bir uzun
-  transaction/çökme riski taşıyordu).
-- **Barındırma: Hetzner (backend), Supabase hosted.** (v1'den aynı.)
-- **İade/itiraz bu fazda tasarlanıyor** (v1'de Faz 7'ye bırakılmıştı — kullanıcı kararıyla
-  öne alındı, aşağıda ayrı bölüm).
+## Kilit kararlar
+
+- Tüm iş mantığı FastAPI'de kalır; Next.js yalnız UI ve vekildir. Mobil Faz 8 aynı API'yi kullanır.
+- İş modeli aboneliktir; proration yoktur. Yeni checkout açılması erişimi değiştirmez; erişim yalnız doğrulanmış provider ödemesiyle değişir.
+- Webde iyzico Hosted Checkout Form kullanılır; kart verisi backend'e girmez. Production checkout için X-IYZ-SIGNATURE-V3 Merchant Panel'de etkin ve smoke-test edilmiş olmalıdır.
+- Kullanım rezervasyonu, dönem entitlement'ı, finansal hareket ve ham provider event'i ayrı veri kaynaklarıdır.
+- Bakım işleri uygulama içi gizli scheduler değildir: Hetzner'de deploy edilen, gözlemlenen systemd timer uygulamanın DB katmanını doğrudan çağırır.
 
 ## Veri modeli
 
-### `plans` (admin tarafından düzenlenebilir veri — kod içine sabit yazılmaz)
+### plans ve plan_versions
+
+**plans**, kullanıcıya görünen kalıcı ürün kimliğidir: id, name, active, created_at. Fiyat, kota ve provider referansı plans üzerinde değiştirilemez.
+
+Her ticari değişiklik yeni immutable **plan_versions** satırı yaratır:
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | text, PK | `deneme`, `atolye`, `magaza` |
-| `name` | text | ekranda gösterilen ad |
-| `price_minor_units` | int, null olabilir | **kuruş cinsinden tam sayı** (ör. 45000 = 450,00 TL) — `numeric` yerine (Codex P2: para tutarları ondalık/format belirsizliğine kapalı tutulmalı); Deneme için null |
-| `currency` | text, default `'TRY'` | ileride çoklu para birimi için hazır |
-| `monthly_quota` | int | aylık işlem hakkı |
-| `background_tier` | text (`basic`/`full`) | Deneme yalnızca düz renk zeminler görür |
-| `trial_period_days` | int, default `0` | ücretli planlarda `7` |
-| `iyzico_product_reference_code` | text, null olabilir | iyzico Merchant Panel'den alınır — gerçek değer olmadan checkout başlatılamaz (Codex P1-4) |
-| `iyzico_pricing_plan_reference_code` | text, null olabilir | aynı |
-| `active` | bool, default `true` | eski planlar silinmez, `false` yapılır |
+| id | UUID PK | |
+| plan_id, version | text, int | unique(plan_id, version) |
+| price_minor_units, currency | int, text | Kuruş ve TRY; Deneme için 0/TRY |
+| monthly_quota | int | Deneme dahil pozitif aylık kota |
+| background_tier | text | basic veya full; entitlement sürümünün parçası |
+| trial_period_days | int | Ücretli sürümde en çok 7, Deneme'de 0 |
+| iyzico_product_reference_code | text, null | Deneme'de null |
+| iyzico_pricing_plan_reference_code | text, null | Ücretli yayımlanmış sürümde zorunlu |
+| published_at, retired_at | timestamptz, null | Aynı planın yalnız bir canlı sürümü vardır |
 
-Migration, `plans` tablosunu oluşturduğu aynı migration'da üç planı da placeholder fiyat/kota
-ile doldurur (`iyzico_*_reference_code` alanları **null kalır** — iyzico Merchant Panel'de
-gerçek ürün/plan oluşturulmadan checkout endpoint'i `503` döner, sessizce yanlış bir referansla
-denemez).
+İlk migration Deneme sürümünü yayımlar. Ücretli sürüm, iyzico ürünü ve pricing planı doğrulanmadan yayımlanamaz; checkout açıkça 503 billing_not_ready döner.
 
-**Admin düzenleme uç noktası (Codex P2 — "admin düzenler" deniyor ama mekanizma yoktu):**
-`PATCH /api/admin/plans/{id}` — `admin_users` tablosu gerektirir (mevcut desen, Faz 4'ten).
-Yalnızca fiyat/kota/aktiflik alanlarını değiştirir. **Var olan aboneliklerin dönem içi
-snapshot'ını etkilemez** (aşağıya bakın) — bu yüzden bir plan fiyatı değişince mevcut
-abonelerin o anki dönemi sessizce yeniden yorumlanmaz (Codex P2).
+**Plan yayınlama:** POST /api/admin/plans/{id}/versions yalnız admin_users için çalışır. Yeni fiyat için önce iyzico'da yeni pricing plan oluşturulur; backend provider referansını doğrular, sonra yeni immutable sürümü yayımlar ve eski sürümü emekliye ayırır. PATCH /api/admin/plans/{id} yalnız name/active değiştirir; fiyat, kota ve provider referansı değiştiremez.
 
-### `subscriptions` (her kullanıcının, Deneme dahil, tek satırı)
+### subscriptions ve subscription_periods
+
+**subscriptions** kullanıcının mevcut provider ilişkisidir; kullanıcı başına tek satırdır ve geçmişi tutmaz.
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | UUID, PK | |
-| `user_id` | UUID, FK `auth.users`, **unique** | |
-| `plan_id` | text, FK `plans` | |
-| `payment_provider` | text, default `'iyzico'` | |
-| `provider_subscription_id` | text, null olabilir | Deneme'de null |
-| `status` | text | `trialing` / `active` / `past_due` / `canceled` / `expired` |
-| `current_period_start`, `current_period_end` | timestamptz | |
-| `quota_snapshot` | int | **bu dönemin kotası** — `plans.monthly_quota`'nın dönem başındaki görüntüsü, sonraki plan düzenlemelerinden etkilenmez (Codex P1-1/P1-3/P2'nin ortak kökü) |
-| `used_this_period` | int, default `0` | önbellekli sayaç |
-| `cancel_at_period_end` | bool, default `false` | |
-| `trial_used` | bool, default `false` | **kullanıcı ömrü boyunca bir kez** — plan değişimi/tekrar abone olma bunu sıfırlamaz (Codex P1-5: deneme döngüsü suistimalini engeller) |
-| `created_at`, `updated_at` | timestamptz | |
+| id | UUID PK | |
+| user_id | UUID FK auth.users, unique | |
+| provider | text, null | Deneme'de null; şimdilik iyzico |
+| provider_subscription_reference | text, null, unique | |
+| status | text | active, trialing, past_due, canceling, canceled, suspended, expired |
+| access_until | timestamptz, null | Provider iptal edilse de satın alınmış erişim sonu |
+| trial_used_at | timestamptz, null | Kullanıcı yaşamında yalnız bir trial |
+| created_at, updated_at | timestamptz | |
 
-RLS: `projects` desenindeki gibi — kullanıcı yalnızca kendi satırını okur, INSERT/UPDATE
-politikası yok, backend tablo sahibi olarak yazıyor. **`plans`, `usage_reservations`,
-`usage_events`, `checkout_sessions`, `billing_transactions`, `webhook_events` de dahil — bu
-spec'in eklediği yedi tablonun her biri RLS açık, `anon`/`authenticated`'a hiçbir grant yok**
-(Codex P2 — v1'de bu her tablo için tekrar edilmemişti, `CLAUDE.md` kural 7'nin gerektirdiği
-açıklıkla burada tekrarlanıyor).
-
-**Kayıt anında otomatik satır:** `auth.users` trigger'ı (migration 0004 deseniyle aynı)
-`plan_id='deneme'`, `status='active'`, `quota_snapshot=<deneme'nin o anki kotası>` bir satır
-açar.
-
-### `usage_reservations` (yeni — Codex P1-2'nin çözümü)
-
-BiRefNet inference'ı 15-35 saniye sürüyor; kota artışını bu süre boyunca açık bir transaction'a
-bağlamak (v1'in tasarımı) bağlantıları kilitler ve süreç çökerse geri alma garantisi vermez.
-Bunun yerine **rezervasyon deseni:**
+Her erişim dönemi immutable **subscription_periods** satırıdır:
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | UUID, PK | |
-| `user_id`, `subscription_id` | UUID, FK | |
-| `status` | text | `pending` / `consumed` / `released` |
-| `created_at`, `resolved_at` | timestamptz | `resolved_at` yalnızca `consumed`/`released` olunca dolar |
+| id | UUID PK | |
+| subscription_id, user_id | UUID FK | |
+| plan_version_id | UUID FK | Fiyat/kota/zemin yetkisinin immutable kaynağı |
+| provider_subscription_reference, provider_order_reference | text, null | Provider kanıtı |
+| starts_at, ends_at | timestamptz | Deneme dahil gerçek aylık sınırlar; uzak tarih yok |
+| quota_snapshot, used_this_period | int | Sürümden kopyalanır |
+| status | text | pending, active, superseded, expired, suspended |
+| created_at, closed_at | timestamptz, null | |
 
-**Akış:**
-1. İnference başlamadan önce: **tek, kısa bir transaction'da** atomik kontrol-ve-artır —
-   `UPDATE subscriptions SET used_this_period = used_this_period + 1 WHERE user_id = :uid AND
-   used_this_period < quota_snapshot AND status IN ('active', 'trialing') RETURNING id`, başarılıysa
-   aynı transaction'da bir `usage_reservations` satırı `pending` olarak açılır. Transaction
-   hemen commit edilir — inference başlamadan **önce** kapanır.
-2. İnference çalışır (DB transaction'ı açık değil).
-3. Başarılı: rezervasyon `consumed` yapılır, `usage_events`'e bir satır düşer (tek transaction).
-4. Başarısız/hata: rezervasyon `released` yapılır **ve** `used_this_period` bir azaltılır (tek
-   transaction) — kullanıcı kredisini geri alır.
-5. **Süreç çökerse** (worker OOM, restart — BiRefNet'in RAM baskısı altında gerçek bir risk):
-   rezervasyon `pending` kalır. Bir arka plan işi (basit bir `pg_cron` görevi, Supabase'de
-   zaten mevcut bir uzantı — yeni altyapı gerekmez) 5 dakikadan eski `pending` satırları
-   `released` yapıp sayacı düzeltir. 5 dakika, gerçekçi en uzun inference süresinin (35 sn)
-   kat kat üzerinde, yanlışlıkla canlı bir işlemi iptal etmez.
+Kayıt trigger'ı yayımlanmış Deneme sürümüyle ilk aylık dönemi açar. Dönem sonrasında ilk yeni istekte, tek kısa transaction eski dönemi expired yapar ve yeni Deneme dönemi yaratır. Ücretli yenilemede ise yeni dönem yalnız doğrulanmış iyzico başarılı ödemesiyle yaratılır; ödeme yoksa yeni kota verilmez.
 
-### `usage_events` (ledger, v1'den aynı — artık `consumed` adımında yazılıyor)
-
-### `checkout_sessions` (yeni — Codex P1-4'ün ikinci yarısı)
-
-Çift tıklama, ağ retry'ı veya sekme yenilemesinde iki abonelik oluşmasını engeller.
+### usage_reservations ve usage_events
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | UUID, PK | |
-| `user_id` | UUID, FK | |
-| `plan_id` | text, FK `plans` | hedef plan |
-| `price_snapshot_minor_units`, `quota_snapshot` | int | checkout anındaki plan görüntüsü |
-| `idempotency_key` | text, **unique** | istemci üretir (ör. bir UUID, "Abone ol" düğmesine her basışta yeni) |
-| `status` | text | `pending` / `completed` / `expired` / `failed` |
-| `provider_checkout_reference` | text, null olabilir | iyzico'nun döndürdüğü referans |
-| `created_at`, `expires_at` | timestamptz | `expires_at` = `created_at` + 30 dk |
+| usage_reservations.id | UUID PK | |
+| period_id, user_id | UUID FK | |
+| request_id | UUID | unique(user_id, request_id); inference retry idempotency |
+| status | text | pending, consumed, released |
+| created_at, resolved_at | timestamptz | |
+| usage_events.id | bigint identity PK | |
+| period_id, reservation_id, user_id | FK | Tüketimin dönemi değişmez biçimde bellidir |
+| event_type, created_at | text, timestamptz | Şimdilik background_removal |
 
-`POST /api/subscriptions/checkout`, aynı `idempotency_key` ile ikinci bir istek gelirse **var
-olan** `pending` satırı döner, yeni bir iyzico çağrısı yapmaz. Webhook, bir aboneliği yalnızca
-**geçerli bir `checkout_sessions` satırına bağlıysa** etkinleştirir — provider referansı
-eşleşmeyen ya da süresi dolmuş bir webhook hiçbir şeyi değiştirmez (Codex P1-5'in "geç/eski
-webhook yeni planı bozmasın" isteği de bu eşleştirmeyle karşılanıyor).
+Remove-background akışı:
 
-### `billing_transactions` (yeni — Codex P1-7'nin çözümü, gerçek fatura defteri)
+1. admin_users muaf tutulur. Diğer kullanıcı için aktif period, period.ends_at > now() ve subscriptions.status active/trialing şartıyla bulunur.
+2. Tek kısa transaction içinde subscription_periods sayaç artırılır: period aktif, bitmemiş ve used_this_period < quota_snapshot olmalıdır. Aynı transaction pending reservation ekler. Aynı request_id mevcutsa yeni inference başlatılmaz.
+3. Transaction kapanır; inference çalışır. Başarıda yalnız pending → consumed koşullu geçişi usage_events insert'iyle birlikte yapılır. Hatada yalnız pending → released koşullu geçişi sayacı bir azaltır.
+4. Bakım işi beş dakikayı aşan pending reservation'ı yalnız halen pending ise released yapar; yarışta çifte azaltma yapamaz.
 
-`webhook_events.payload` kullanıcıya gösterilecek bir veri kaynağı değil (Codex haklı) — bu,
-Kaan'ın "fatura/geçmiş" sayfasının **tek doğru kaynağı**:
+### checkout_sessions
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | UUID, PK | |
-| `user_id`, `subscription_id` | UUID, FK | |
-| `type` | text | `charge` / `refund` / `chargeback` |
-| `amount_minor_units`, `currency` | int, text | gerçekte tahsil/iade edilen tutar |
-| `status` | text | `succeeded` / `failed` |
-| `provider_transaction_reference` | text | iyzico'nun `iyziReferenceCode`'u |
-| `period_start`, `period_end` | timestamptz | bu işlemin kapsadığı dönem (görüntüleme için) |
-| `created_at` | timestamptz | |
+| id | UUID PK | |
+| user_id, plan_version_id | UUID FK | |
+| idempotency_key | UUID | unique(user_id, idempotency_key) |
+| customer_reference_code, conversation_reference | UUID | İyzico'ya gönderilen tekil eşleme değerleri |
+| expected_amount_minor_units, currency | int, text | Session fiyat snapshot'ı |
+| provider_checkout_token, provider_subscription_reference | text, null | |
+| trial_status | text | none, reserved, consumed, released |
+| status | text | pending, completed, expired, failed |
+| created_at, expires_at, completed_at | timestamptz | 30 dakika sınır |
 
-**Yeni uç nokta:** `GET /api/billing/history` — bu tablodan, kullanıcının kendi satırlarını
-döner. Ham webhook verisi (`webhook_events`) yalnızca denetim/hata ayıklama için kalır,
-kullanıcıya hiç gösterilmez.
+Aynı kullanıcı+idempotency anahtarı pending ise aynı hosted URL döner; süresi dolmuş anahtar 409 döner ve yeni anahtar gerekir. Trial checkout açıldığında yalnız reserved olur; failed/expired session reservation'ı serbest kalır. Trial, yalnız doğrulanmış subscription.order.success sonrasında consumed olur.
 
-### `webhook_events` (idempotency + retry — v1'den genişletildi)
+Webhook erişim vermeden önce dört doğrulama yapar: V3 HMAC, eşleşen/bitmemiş customer_reference_code veya conversation reference, provider subscription ile pricing-plan referansının session plan sürümüyle eşleşmesi, provider ödeme kaydında beklenen tutar ve para birimi. Bir tanesi uyuşmazsa erişim, period ve finansal kayıt oluşmaz; event manuel incelemeye gider.
+
+### billing_transactions, webhook_events ve provider_actions
+
+**billing_transactions** kullanıcıya gösterilen immutable para defteridir.
 
 | Alan | Tip | Not |
 | --- | --- | --- |
-| `id` | bigint, identity, PK | |
-| `provider` | text | `iyzico` |
-| `provider_event_id` | text | **`iyziReferenceCode`** — iyzico dokümanlarından doğrulandı |
-| `event_type` | text | **gerçek değerler:** `subscription.order.success`, `subscription.order.failure` (iyzico dokümanlarından doğrulandı — v1'deki isimler uydurmaydı) |
-| `payload` | jsonb | ham veri |
-| `processing_attempts` | int, default `0` | |
-| `last_error` | text, null olabilir | |
-| `processed_at` | timestamptz, null olabilir | |
+| id | UUID PK | |
+| user_id, period_id | UUID FK | Kullanıcı silinince user_id pseudonymize edilir; mali kayıt cascade silinmez |
+| type | text | charge, refund, chargeback, chargeback_reversal |
+| status | text | succeeded, failed, disputed, won, lost |
+| amount_minor_units, currency | int, text | |
+| provider, provider_transaction_reference | text | unique(provider, provider_transaction_reference, type) |
+| invoice_reference, created_at | text, timestamptz | |
 
-**Unique kısıt:** `(provider, provider_event_id)` — idempotency.
+**webhook_events** ham JSON, provider_event_id = iyziReferenceCode, event_type, processed_at, processing_attempts, last_error ve lease_until tutar. unique(provider, provider_event_id) idempotency sağlar. Handler imzayı doğrular, event durable yazılmadan 2xx dönmez. Worker satırı FOR UPDATE SKIP LOCKED + lease ile alır; 10 deneme sonrası alarm ve manuel inceleme kuyruğu üretir. Bilinmeyen event processed sayılmaz ve alarm verir.
 
-**Retry mekanizması (Codex P1-6 — v1'de yoktu):** `processed_at IS NULL` olan satırlar bir
-işlenmemiş sayılır. Aynı `pg_cron` görevi (rezervasyon temizliğiyle birlikte) her birkaç
-dakikada bir bu satırları yeniden işlemeyi dener, `processing_attempts`'i artırır, 10
-denemeden sonra `last_error`'la birlikte bırakır ve **manuel inceleme** için işaretli kalır
-(sessizce sonsuza kadar denenmez ama sessizce de kaybolmaz).
+**provider_actions** uzak yan etki outbox'ıdır: cancel_subscription, refund_payment, suspend_entitlement ve delete_account. Her action idempotency anahtarı, hedef provider referansı, pending/running/succeeded/failed durumu, attempt sayısı ve son hatayı tutar. Worker provider çağrısından önce veya sonra çökse de action'ı idempotent tekrar dener.
 
-**Bilinmeyen olay türü çökertmez, ama artık gerçekten "unutulmuyor":** tanınmayan bir
-`event_type` de aynı satır+retry mekanizmasından geçer; ileride iyzico yeni bir tür eklerse
-kod güncellenene kadar `processed_at` boş kalır ama **kaybolmaz**, retry görevinin loglarında
-görünür kalır.
+### RLS, kayıt silme ve checkout hukuki kanıtı
 
-### `user_consents` genişlemesi (v1'den aynı)
+plans, plan_versions, subscriptions, subscription_periods, usage_reservations, usage_events,
+checkout_sessions, billing_transactions, webhook_events, provider_actions ve
+storage_deletion_jobs aynı migration'da RLS açık olarak oluşturulur. anon/authenticated rolleri
+tablolara ve sequence'lere doğrudan grant almaz; tüm erişim FastAPI'nin sahiplik filtresiyle
+yapılır. Kullanıcıya açık iki veri yüzeyi, backend'in ürettiği GET /api/plans ve yalnız kendi
+satırını döndüren GET /api/subscriptions/me ile GET /api/billing/history'dir. Admin endpointleri
+her zaman admin_users kontrolü ister.
 
-`distance_sales_agreement` document_type'ı eklenir; metin `CLAUDE.md` açık takip maddesi
-3'ün (hukukçu son kontrolü) kapsamında.
+checkout session oluşturulmadan önce mesafeli satış ön bilgilendirmesi/sözleşmesi için kabul
+zorunludur. user_consents tablosuna document_type, document_version, document_hash, locale,
+accepted_at, plan_version_id ve checkout_session_id ile immutable satır yazılır. Kullanıcı
+hesabı silinse bile fatura/consent için zorunlu saklama kaydı, hukukçu ile belirlenen süre ve
+pseudonymization politikasıyla korunur; aktif kullanıcı verisi ve R2 içeriği ise ancak remote
+abonelik iptal action'ı başarılı olunca silinir.
 
 ## API yüzeyi
 
 | Uç nokta | Açıklama |
 | --- | --- |
-| `GET /api/plans` | Herkese açık, `/paketler`'i besler. |
-| `GET /api/subscriptions/me` | `{ plan, quota, used_this_period, status, current_period_end, cancel_at_period_end }`. |
-| `POST /api/subscriptions/checkout` | `plan_id` + `idempotency_key` alır. `trial_used=true` ise `trialPeriodDays=0` gönderir (deneme döngüsü koruması). `checkout_sessions` satırı açar, iyzico'nun hosted URL'ini döner. **`trial_used`, `checkout_sessions` satırı `trialPeriodDays>0` ile açıldığı ANDA `true` yapılır** — webhook'un sonucunu beklemez; aksi hâlde bir kullanıcı ödeme sonucu netleşmeden aynı anda birden fazla checkout başlatıp birden fazla deneme kazanabilirdi. |
-| `POST /api/subscriptions/cancel` | **Önce iyzico'nun abonelik iptal API'sini senkron çağırır** (Codex P1-5 — v1'de yalnızca yerel bayrak değiştiriliyordu, provider'da abonelik açık kalıp tahsilat devam edebilirdi). Başarılıysa `cancel_at_period_end=true`; provider çağrısı başarısız olursa **hata döner**, yerel durum değişmez. |
-| `POST /api/subscriptions/change-plan` | Hedef plan **ücretliyse**: önce eski provider aboneliği iptal edilir, sonra yeni plan için `checkout` akışı başlar (yeni `checkout_sessions` satırı, `trial_used` kontrolü burada da geçerli). Hedef plan **Deneme'yse** (ücretsiz): checkout'a hiç girilmez — eski provider aboneliği iptal edilir, yerel satır doğrudan `plan_id='deneme'`, `provider_subscription_id=null`, `quota_snapshot=<deneme kotası>`, `used_this_period=0` olarak güncellenir. |
-| `POST /api/webhooks/iyzico` | `X-IYZ-SIGNATURE-V3` doğrulaması (iyzico dokümanlarından doğrulanan gerçek header), `checkout_sessions`/`provider_subscription_id` eşleştirmesi, idempotent yazma. |
-| `GET /api/billing/history` | Kullanıcının kendi `billing_transactions` kayıtları. |
-| `POST /api/admin/subscriptions/{user_id}/refund` | Aşağıdaki "İade ve itiraz" bölümüne bakın. |
-| `PATCH /api/admin/plans/{id}` | Admin plan düzenleme (yukarıda). |
+| GET /api/plans | Herkese açık, yalnız yayımlanmış aktif plan sürümünü döner. |
+| GET /api/subscriptions/me | Oturum ister; aktif dönem, kota, kullanım, access end ve status döner. |
+| POST /api/subscriptions/checkout | Oturum ister; plan_id ve idempotency_key alır. Fiyat/trial istemciden gelmez. |
+| POST /api/subscriptions/cancel | cancel_subscription action açar; provider iptali başarılı olunca erişim yalnız access_until kadar sürer. |
+| POST /api/subscriptions/change-plan | Aynı iyzico ürün/interval ise provider upgrade; değilse yeni checkout. Eski abonelik yeni ödeme doğrulanmadan iptal edilmez. |
+| GET /api/billing/history | Kullanıcının sayfalanmış billing_transactions geçmişi. |
+| POST /api/admin/billing/{transaction_id}/refund | Yalnız admin; belirli başarılı charge ve idempotency anahtarı alır. |
+| POST /api/admin/subscriptions/{user_id}/suspend | Yalnız admin; chargeback/dispute için erişimi keser, refund çağırmaz. |
+| POST /api/admin/plans/{id}/versions | Yeni immutable plan sürümü yayınlar. |
+| POST /api/webhooks/iyzico | V3 HMAC, durable ingest ve idempotency. |
 
-### `POST /api/remove-background` değişikliği
+### İptal, plan değişimi, iade, itiraz ve hesap silme
 
-Yukarıdaki rezervasyon akışı (bkz. `usage_reservations`) burada devreye girer. `admin_users`
-tablosundaki kullanıcılar rezervasyon adımını hiç görmez, tamamen muaf.
+- **İptal:** iyzico iptali action ile başarılı olmadan kullanıcıya iptal edildi denmez. Remote iptal gelecekteki tahsilatı durdurur; access_until satın alınmış dönemin erişimini korur. Süre sonunda period expired olur.
+- **Plan değişimi:** yeni ücretli charge doğrulanır, yeni period yaratılır; ancak sonra eski provider aboneliği için cancel action başlar. Cancel hata verirse retry ve alarm üretilir. Aynı plan sürümüne geçiş reddedilir.
+- **İade:** admin belirli bir charge için refund_payment action açar. Başarılı refund immutable refund kaydı oluşturur, erişimi derhal suspend eder ve aktif provider aboneliği için ayrı cancel action başlatır.
+- **Chargeback:** bankanın zaten uyguladığı chargeback için refund API kesinlikle çağrılmaz. Panel kararı veya doğrulanmış provider olayı chargeback kaydı + suspend action yaratır; sonuç won/lost olur.
+- **Hesap silme:** delete_account action önce aktif provider aboneliklerini iptal eder. Başarı olmadan Auth/R2/uygulama verisi silinmez; retry ve destek görünürlüğü vardır. Mali kayıtlar cascade silinmez; yasal saklama politikasına göre kullanıcı kimliği pseudonymize edilir.
 
-## İade ve itiraz (chargeback) — bu fazda tasarlandı
+### Zemin yetkisi ve Deneme geçmişi
 
-İyzico'da iki farklı senaryo var, ayrı ele alınıyor:
+GET /api/backgrounds, zemin imzalı URL üretimi ve proje kaydı seçilen zemini backend'de aktif period.background_tier ile doğrular. Basic kullanıcı full zemin için URL veya proje kaydı alamaz; frontend gizlemesi güvenlik katmanı değildir.
 
-**1. Bizim başlattığımız iade (müşteri hizmeti kararı).** iyzico'nun `POST
-/payment/refund` API'si **merchant-tetiklemeli** — otomatik gelen bir webhook değil, biz
-çağırıyoruz. `POST /api/admin/subscriptions/{user_id}/refund` (yalnızca `admin_users`):
-iyzico refund API'sini çağırır → başarılıysa `billing_transactions`'a `type='refund'` satırı
-yazar → **aboneliği hemen** (dönem sonunu beklemeden) `canceled` yapıp `deneme` planına
-düşürür (para iade edildiği için erişimin devam etmesi mantıksız — iptal'in "dönem sonuna
-kadar erişim" kuralından bilinçli olarak farklı).
+Deneme hesabı yeni kayıt sonrası en çok 10 projeye indirilir. Kullanıcı projeleri transaction'da kilitlenir; en eskiler seçilir, R2 silme storage_deletion_jobs kuyruğuna eklenir, proje DB satırı ancak silme başarılı olunca kaldırılır. Başarısız R2 silmeleri retry/alarm ile çözülür.
 
-**2. Banka kaynaklı itiraz (chargeback/dispute).** İyzico dokümanları bunun öncelikle
-**Merchant Panel'de** (dashboard) bir bildirim/pop-up olarak yönetildiğini gösteriyor; genel
-"Merchant Notifications" webhook sistemi var ama itiraz için **kesin bir olay adı
-dokümanlarda net değildi** — bunu burada uydurmuyorum (v1'in tam olarak düştüğü hataya
-düşmemek için). Bu yüzden iki katmanlı tasarım:
-- **Manuel yol (her zaman çalışır):** biri Merchant Panel'deki itirazı görür, yukarıdaki
-  `/refund` admin uç noktasını (ya da erişimi doğrudan kesen ayrı bir `/admin/.../suspend`
-  varyantını) elle tetikler.
-- **Otomatik yol (implementasyon sırasında doğrulanacak):** gerçek iyzico hesabı açılıp
-  Merchant Panel'e erişilince, itiraz/chargeback için gerçekten bir webhook olay türü
-  yapılandırılabiliyorsa, aynı `POST /api/webhooks/iyzico` handler'ı genişletilip bu olay da
-  aynı "erişimi hemen kes" eylemini otomatik tetikler.
+## Bakım, reconciliation ve launch kapıları
 
-**Politika (launch kapısı, Codex P1-10'un kabul edilen kısmı):** iade/itiraz olduğunda erişim
-**hemen** kesilir, kalan kullanım hakkı yanar (geri ödenmez, zaten para iade edildi). Bu
-kural kod yazılmadan önce netleşmiş olmalı — netleşti.
+Hetzner'de deploy edilen billing-maintenance.service + billing-maintenance.timer her dakika reservation, checkout expiry, webhook/action retry işlemlerini; her gün iyzico reconciliation'ı çalıştırır. Timer uygulamanın DB modellerini doğrudan kullanır; pg_cron üzerinden belirsiz HTTP self-call yapılmaz.
 
-## Depolama saklama kuralı (Deneme planı) — Codex P2'nin belirsizliğini gideriyor
+Günlük reconciliation aktif provider aboneliklerini, son günün ödeme hareketlerini ve yerel billing_transactions/period durumlarını karşılaştırır. Eksik veya çelişkili kayıtlar otomatik erişim değiştirmek yerine alarm + manuel inceleme kuyruğuna gider.
 
-Deneme (ücretsiz) hesaplarda en fazla **son 10 kayıt** tutulur. **Kesin mekanik:** her yeni
-kayıt sonrası, toplam kayıt sayısı 10'u aşıyorsa **en eskiden başlayarak, toplam tam 10 olana
-kadar** siliniyor — tek seferde bir tane değil. Yani 100 kayıtla Deneme'ye düşmüş bir kullanıcı
-bir sonraki kaydı yaptığı anda 91 kayıt silinip 10'a iner (yavaş, "her kayıtta bir eksik"
-yakınsaması değil). Gerekçe: "Deneme hesabında asla 10'dan fazla kayıt yok" basit ve tutarlı
-bir değişmez kural; "geçmiş silinmez" sözü yalnızca **düşürme anının kendisini** korur, sonraki
-ilk kaydı korumaz. R2'den silme başarısız olursa DB satırı yine de silinir ve hata loglanır
-(mevcut `_delete_objects_quietly` deseniyle aynı — `projects.py`'de zaten var, tekrar
-icat edilmiyor).
+Production ödeme açılışından önce:
 
-## Maliyet modeli — iyzico oranı düzeltildi
+1. iyzico production hesabı, V3 imza, callback URL ve sandbox→production smoke test doğrulandı.
+2. Mesafeli satış ön bilgilendirmesi/sözleşmesi, kullanım koşulları ve KVKK hukukçu kontrolünden geçti; checkout kabulü doküman sürümü/hash'i, dil, zaman, plan sürümü ve session ile immutable kaydediliyor.
+3. E-fatura entegrasyonu Faz 7'de olabilir; ancak ödeme açılmadan manuel/e-arşiv fatura süreci, sorumlusu ve invoice_reference kaydı işletilebilir durumda.
+4. Reconciliation, action retry, alarm, pseudonymization ve R2 silme runbook'ları test edildi.
+
+## Maliyet modeli
 
 | Kalem | Sağlayıcı | Aylık |
 | --- | --- | --- |
-| Backend sunucusu (12-14 GB RAM) | Hetzner CX42 (16 GB) | ~$18,6 |
-| Veritabanı + Auth | Supabase Pro | $25 |
-| Nesne depolama | Cloudflare R2 | ~$0 (ilk 10 GB ücretsiz) |
-| Redis | Aynı sunucuda (Docker) | $0 |
-| Frontend | Vercel Hobby | $0 |
-| E-posta | Resend ücretsiz katman | $0 |
-| Domain | — | ~$1-2 |
-| **Toplam sabit gider** | | **~$45-65/ay** |
-| + iyzico komisyonu | Sabit değil | **kurumsal %4,29 + 0,25 TL, bireysel %4,49 + 0,25 TL** (BSMV dahil) — v1'deki %1,95-2,19 rakamı yanlış kaynaktan (muhtemelen promosyon/özel teklif) gelmişti, iyzico'nun kendi resmi sayfasından düzeltildi |
+| Backend (12–14 GB RAM) | Hetzner uygun güncel 16 GB plan | Bölge, IPv4 ve vergiyle doğrulanacak |
+| Veritabanı + Auth | Supabase Pro | $25 + kullanım aşımı |
+| Nesne depolama | Cloudflare R2 | Depolama, egress ve işlem kullanımına göre |
+| Redis + bakım worker | Aynı sunucu | Sunucu kaynağı içinde |
+| Frontend, e-posta, domain, gözlemlenebilirlik, backup | Vercel/Resend/diğer | Production teklifleriyle hesaplanacak |
+| iyzico | Başarılı işlem başı | Kamuya açık kurumsal tarife %4,29 + 0,25 TL; imzalı teklif varsa onunla güncellenir |
 
-Sunucu/DB/depolama kaynakları için tam liste ve linkler sohbet geçmişinde. iyzico oranı:
-[iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [Komisyon Oranları Hakkında](https://www.iyzico.com/blog/sanal-pos-komisyon-oranlari-hakkinda-merak-ettikleriniz).
+Kaynaklar: [iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [iyzico webhook](https://docs.iyzico.com/ek-servisler/webhook), [iyzico abonelik işlemleri](https://docs.iyzico.com/urunler/abonelik/abonelik-entegrasyonu/abonelik-islemleri).
 
-## Açık maddeler (bu spec kapsamında karara bağlanmadı)
+## Zorunlu kabul testleri
 
-1. **Fiyat ve kota rakamları** — düzeltilmiş maliyet modeli (özellikle daha yüksek iyzico
-   komisyonu) girdi olarak hazır; nihai TL tutarları ve kota sayıları kullanıcı tarafından
-   belirlenecek. Zeminler hazır olunca netleşecek bir bağımlılık var.
-2. **Gerçek e-fatura (resmi vergi faturası)** — Faz 7, ayrı bir entegratör gerektiriyor.
-3. **Mesafeli satış sözleşmesi metni** — `CLAUDE.md` açık takip maddesi 3 kapsamında.
-4. **Chargeback webhook'unun gerçek olay adı** — implementasyon sırasında, gerçek iyzico
-   Merchant Panel erişimiyle doğrulanacak (yukarıya bakın, uydurulmadı).
-5. **Günlük iyzico mutabakatı (reconciliation)** — Codex önerdi, bilinçli olarak bu spec'e
-   **eklenmedi** (YAGNI): webhook güvenilirliği konusunda henüz gerçek bir sorun gözlemlenmedi;
-   retry mekanizması (yukarıda) zaten kayıp webhook riskini büyük ölçüde azaltıyor. Gerçek
-   kullanımda tutarsızlık görülürse ayrı bir iyileştirme olarak eklenir.
+- Son kotada iki eşzamanlı inference: yalnız biri reservation alır.
+- OOM/timeout/restart: pending reservation yalnız bir kez serbest kalır.
+- Deneme aylık yenilenir; expired/past_due kullanıcı kota tüketemez.
+- Aynı checkout anahtarı ikinci provider aboneliği oluşturmaz; expired trial reservation serbest kalır.
+- Eski webhook yeni period'u değiştiremez; yanlış amount/currency/plan erişim veremez.
+- Plan yayınlama sonrası UI ve iyzico aynı yeni sürümü kullanır; eski snapshot değişmez.
+- Cancel/refund provider çağrısı ve DB yazısı arasındaki hata action retry ile toparlanır.
+- Chargeback refund çağırmaz; refund doğru transaction için yalnız bir kez uygulanır.
+- Hesap silme remote iptal başarısızken Auth/R2 verisini silmez; mali geçmiş korunur/pseudonymize edilir.
+- Basic kullanıcı direct API ile full zemin URL'i veya full zeminli proje alamaz.
+- Webhook retry ve günlük reconciliation eksik provider olayını alarm üretir.
+- R2 silme hatası storage_deletion job olarak tekrar denenir; DB projesi başarıdan önce silinmez.
 
 ## Görev bölüşümü
 
-- **Serhan (bu spec'in kapsamı):** yukarıdaki şema, API'ler, iyzico entegrasyonu, webhook
-  işleme + retry, kota rezervasyonu, iade/itiraz.
-- **Kaan (ayrı brainstorming turu gerektirir):** satın alma akışı arayüzü, kredi bakiyesi
-  gösterimi, `GET /api/billing/history`'e dayanan fatura/geçmiş sayfası.
+- **Serhan:** migration, iyzico adapter, webhook ingest + worker, dönem/kota, provider actions, iade/itiraz, reconciliation ve testler.
+- **Kaan:** satın alma, kredi bakiyesi, fatura/geçmiş ve backend sözleşmesine bağlı plan ekranları.
