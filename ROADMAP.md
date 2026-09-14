@@ -493,6 +493,8 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   `/api/projects/[id]/result` ile aynı kökenden (tuval kirlenmiyor, R2 CORS gerekmiyor);
   liste kullanıcıya bağlı (çıkışta önceki kullanıcının listesi bir an bile görünmüyor);
   küçük resim adreslerinin süresi dolunca liste yenileniyor.
+  Liste cursor tabanlı sayfalanıyor; ilk 100 kayıttan sonra kullanıcı "Daha eski
+  çalışmaları yükle" ile devam ediyor, tek istekte sınırsız geçmiş çekilmiyor.
 - **Hesap sayfası (`/hesap`):** profil bilgileri (hesap türü dahil), mevcut parolayla
   parola değiştirme, tüm cihazlardan çıkış, e-posta yazarak hesap silme. Silme backend'de
   (`DELETE /api/account`): önce kullanıcının R2 görselleri (`projects/<user_id>/`), sonra
@@ -502,19 +504,31 @@ Dal: `feature/faz4-kaan-arayuz` (PR #12'nin dalı üzerine; tek PR'da birleşiyo
   artık doğru olmayan cümleler (ana sayfa, Paketler, Teknik bilgiler, Hakkında) düzeltildi.
 - **Backend düzeltmesi:** `config.py` `.env`'yi çalışılan klasörden değil kendi
   konumundan buluyor (kök `CLAUDE.md` ders 18).
-- **Testler:** frontend 72 → 193. Backend'e oturum, hesap silme ve test veritabanı adres
-  koruması testleri eklendi (160 → 185); yerel Postgres'le henüz çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4).
+- **Testler:** frontend 72 → 203. Backend'e oturum, hesap silme, test veritabanı adres
+  koruması, cursor, erken auth, hesap-değişimi ve hız sınırı testleri eklendi
+  (160 → 201); tamamı izole yerel PostgreSQL üzerinde geçti.
+
+**Faz 4 kapanış düzeltmeleri (14.09.2026):** hesap silmede yazılan e-posta artık
+backend'de de doğrulanıyor; bekleyen sonuç/silme işlemleri başlatan kullanıcı
+kimliğine bağlanıyor; upload endpoint'lerinde IP + doğrulanmış kullanıcı hız
+sınırı ve multipart'tan önce JWT kontrolü var. Logo görseliyle beraber köşe,
+boyut ve saydamlık da tarayıcıda kalıyor. KVKK/Gizlilik/Kullanım Koşulları ile
+çekim rehberi sayfaları eklendi. Yasal bildirim/kabul sürümü sunucu zamanlı
+`user_consents` tablosunda tutuluyor ve eski metadata kayıtları migration'da
+backfill ediliyor.
 
 **Bekleyenler:**
 - R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).
-- Kullanım koşulları / KVKK metinleri ve değiştirilemez onay kaydı (açık takip maddesi 3).
+- Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son kontrolü
+  (kök `CLAUDE.md` açık takip maddesi 3).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
 yapıldı, kullanıcı onayladı). Kaan o sırada çalışmadığı için çakışma yok; ayrı
 dalda (`feature/ui-guncellemeleri`) yapılıp PR #12'ye eklendi.
 - Üst çubuk yüzen kapsüle çevrildi, bulunulan sayfa işaretleniyor, telefonda menü paneli eklendi.
-- Footer: marka, sayfa bağlantıları, yasal metin yerleri (henüz yazılmadı), sosyal medya simgeleri (adresler sonra eklenecek), telif satırı.
+- Footer: marka, sayfa bağlantıları, KVKK/Gizlilik/Kullanım Koşulları ve çekim
+  rehberi bağlantıları, sosyal medya simgeleri (adresler sonra eklenecek), telif satırı.
 - HEIC önizlemesi tarayıcıda (`heic-to`, LGPL-3.0, yalnızca HEIC seçilince yükleniyor).
 - Paketler sayfası yeniden düzenlendi, karşılaştırma tablosu eklendi.
 - Açılış bölümü iki sütuna alındı, 1440×900'de tek ekrana sığıyor.
@@ -545,10 +559,10 @@ gerektirmiyor; kullanıcı dördünü de denedi.
 Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `soft-fade`, kök
 `CLAUDE.md` "Arayüz tasarım dili").
 
-**Öneriler — hâlâ bekleyen:**
+**Öneriler:**
 
-6. **Çekim rehberi sayfası:** Telefonla mücevher çekme ipuçları (ışık, kadife, açı). Arama
-   motorlarından kuyumcu çeker ve sonuç kalitesini de artırır. (Kullanıcı: "6 kalsın".)
+6. ✅ **Çekim rehberi sayfası:** `/cekim-rehberi`, telefonla mücevher çekiminde
+   zemin, yumuşak ışık, kadraj, elde tutmama, netlik ve özgün dosya önerileri.
 7. **Ücretsiz planda filigran (11.09.2026, kullanıcı isteğiyle eklendi):** Deneme planında
    indirilen kesim/kompozisyona küçük bir "Vitrin AI" filigranı eklenir; ücretli planlarda
    filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —

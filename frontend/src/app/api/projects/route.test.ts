@@ -19,6 +19,13 @@ const PROJECT = {
   thumbnail_url: "https://r2.example/thumb.png?imza",
   expires_in: 3600,
 };
+const USER_ID = "8f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6d";
+
+function listRequest(cursor?: string): Request {
+  const url = new URL("http://localhost/api/projects");
+  if (cursor) url.searchParams.set("cursor", cursor);
+  return new Request(url);
+}
 
 async function loadRoute() {
   vi.resetModules();
@@ -39,7 +46,7 @@ describe("GET /api/projects", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { GET } = await loadRoute();
 
-    const response = await GET();
+    const response = await GET(listRequest());
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({ code: "auth_required" });
@@ -52,30 +59,53 @@ describe("GET /api/projects", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       url = String(input);
       header = new Headers(init?.headers).get("Authorization");
-      return Response.json([PROJECT]);
+      return Response.json({ items: [PROJECT], next_cursor: null });
     });
     const { GET } = await loadRoute();
 
-    const response = await GET();
-    const body = (await response.json()) as Array<Record<string, unknown>>;
+    const response = await GET(listRequest());
+    const body = (await response.json()) as {
+      items: Array<Record<string, unknown>>;
+      nextCursor: string | null;
+    };
 
     expect(header).toBe("Bearer gecerli-token");
     expect(url).toContain("/api/projects?limit=100");
-    expect(body[0]).toMatchObject({
+    expect(body.items[0]).toMatchObject({
       id: PROJECT.id,
       fileName: "yuzuk.png",
       resultUrl: `/api/projects/${PROJECT.id}/result`,
       thumbnailUrl: PROJECT.thumbnail_url,
     });
     // Backend'in alan adlari arayuze sizmiyor.
-    expect(body[0]).not.toHaveProperty("result_url");
+    expect(body.items[0]).not.toHaveProperty("result_url");
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("yalnizca istenen sayfayi getirip sonraki imleci istemciye aktarir", async () => {
+    let url = "";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      url = String(input);
+      return Response.json({ items: [PROJECT], next_cursor: "sonraki-sayfa" });
+    });
+    const { GET } = await loadRoute();
+
+    const response = await GET(listRequest("mevcut-sayfa"));
+    const body = (await response.json()) as {
+      items: Array<Record<string, unknown>>;
+      nextCursor: string | null;
+    };
+
+    expect(body.items).toHaveLength(1);
+    expect(body.nextCursor).toBe("sonraki-sayfa");
+    expect(url).toContain("cursor=mevcut-sayfa");
   });
 
   it("backend'e ulasilamazsa 502 doner", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     const { GET } = await loadRoute();
 
-    const response = await GET();
+    const response = await GET(listRequest());
 
     expect(response.status).toBe(502);
   });
@@ -87,7 +117,7 @@ describe("GET /api/projects", () => {
     );
     const { GET } = await loadRoute();
 
-    const response = await GET();
+    const response = await GET(listRequest());
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: detail });
@@ -103,7 +133,11 @@ describe("POST /api/projects", () => {
     form.append("isMocked", "true");
     form.append("durationSeconds", "1.2");
     extra?.(form);
-    return new Request("http://localhost/api/projects", { method: "POST", body: form });
+    return new Request("http://localhost/api/projects", {
+      method: "POST",
+      body: form,
+      headers: { "X-Expected-User-Id": USER_ID },
+    });
   }
 
   it("yalnizca bilinen alanlari backend adlariyla iletiyor", async () => {
@@ -122,6 +156,7 @@ describe("POST /api/projects", () => {
     expect(form.get("is_mocked")).toBe("true");
     expect(form.get("duration_seconds")).toBe("1.2");
     expect(form.get("result")).toBeInstanceOf(File);
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]?.[1])?.headers).get("X-Expected-User-Id")).toBe(USER_ID);
     // Istemcinin ekledigi alan backend'e ulasmiyor.
     expect(form.get("user_id")).toBeNull();
   });
@@ -148,7 +183,11 @@ describe("POST /api/projects", () => {
     form.append("fileName", "yuzuk.png");
 
     const response = await POST(
-      new Request("http://localhost/api/projects", { method: "POST", body: form }),
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        body: form,
+        headers: { "X-Expected-User-Id": USER_ID },
+      }),
     );
 
     expect(response.status).toBe(400);
@@ -161,7 +200,10 @@ describe("DELETE /api/projects", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     const { DELETE } = await loadRoute();
 
-    const response = await DELETE();
+    const response = await DELETE(new Request("http://localhost/api/projects", {
+      method: "DELETE",
+      headers: { "X-Expected-User-Id": USER_ID },
+    }));
 
     expect(response.status).toBe(204);
   });

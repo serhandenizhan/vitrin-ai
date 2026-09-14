@@ -49,9 +49,9 @@ localhost kayıtlı olduğu için telefondaki IP adresine dönmez; şifreyle gir
 Tarayıcı FastAPI'ye **doğrudan gitmiyor**; istek önce
 `src/app/api/remove-background/route.ts` route handler'ına geliyor. İki sebep var:
 
-1. Backend'de CORS middleware'i yok ve Faz 4'e kadar da eklenmeyecek (bkz. kök
-   `CLAUDE.md` "Açık takip maddesi").
-2. Faz 4/5'te auth ve kredi anahtarları devreye girdiğinde bunların tarayıcıya
+1. Backend CORS'u yalnızca açıkça izin verilen origin'lere doğrudan erişim
+   sınırını çizer; normal tarayıcı akışı yine backend adresini dışarı açmaz.
+2. Auth ve ileride kredi anahtarları devreye girdiğinde bunların tarayıcıya
    sızmaması gerekiyor — vekil o sınırı şimdiden kuruyor.
 
 Vekil ayrıca iki iş daha yapıyor:
@@ -191,10 +191,9 @@ yarısı ilk ekranın dışında kalıyordu. Şimdi geniş ekranda iki sütun ve
 genişliği ekran **yüksekliğinden** türetiliyor (`hero-visual.tsx`), 1440×900'de
 iki kare de bütün olarak görünüyor.
 
-**Footer'daki boş yerler.** Sosyal medya adresleri henüz yok (`site-footer.tsx`
-→ `SOSYAL` dizisinde `href: null`, simgeler tıklanamaz görünüyor). KVKK
-aydınlatma metni, gizlilik politikası ve kullanım koşulları da henüz yazılmadı;
-"yakında" olarak işaretli. Ödeme (Faz 5) açılmadan önce yazılmaları gerekiyor.
+**Footer.** Sosyal medya adresleri henüz yok (`site-footer.tsx` → `SOSYAL`
+dizisinde `href: null`, simgeler tıklanamaz görünüyor). KVKK Aydınlatma,
+Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
@@ -255,7 +254,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**193 test** (Faz 4 sonu). Faz 2-3 dosyaları:
+**203 test** (Faz 4 kapanış incelemesi). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -283,6 +282,8 @@ Faz 4'te eklenenler:
 | `components/auth-dialog.test.ts` | Kayıt formu: şirket alanlarının yalnızca şirket seçilince görünmesi, bireysel hesapta şirket bilgisinin Supabase'e yazılmaması, zorunlu alanlar |
 | `lib/overlays.test.ts` | Logo/etiket yerleşimi, gram biçimi, ürün kodu temizliği, aynı köşede üst üste binmeme |
 | `components/marketing/hero-before-after.test.ts` | Açılıştaki önce/sonra kaydıracı |
+| `lib/logo-storage.test.ts`, `lib/work-history.test.ts` | Logo görünümü kalıcılığı; cursor ve bekleyen mutasyonların kullanıcıya bağlanması |
+| `lib/legal-config.test.ts` | Yasal sürüm tek kaynağı ve production'da eksik veri sorumlusu bilgisinin build'i durdurması |
 
 Özellikle korunanlar:
 
@@ -340,7 +341,9 @@ sunucu bileşenleri, route handler'lar ve `src/proxy.ts` aynı oturumu okuyabili
 (bireysel / şirket)** — şirkette şirket adı + işletme türü —, şehir (81 il), isteğe
 bağlı telefon, zorunlu kullanım koşulları + KVKK onayı, ayrı ve isteğe bağlı ticari
 e-posta izni. Değerler Supabase `user_metadata`'da (`lib/profile.ts`); yalnızca
-görünüm için, yetki kararında kullanılmıyor. Ekranda görünen ad: şirket hesabında
+görünüm için, yetki kararında kullanılmıyor. Yasal bildirim/kabul sürümü ayrıca
+backend'in istemciye kapalı, sunucu zamanlı `user_consents` tablosuna yazılır.
+Ekranda görünen ad: şirket hesabında
 şirket adı, bireyselde kişinin adı (hesap türü seçilmemiş eski hesapta kişinin adı —
 yerine karar verilmiyor).
 
@@ -356,7 +359,9 @@ mesajı veriyor (`lib/auth-errors.ts`); kayıtlı adresle kayıtta ve sıfırlam
 "Arka planı kaldır"a basınca oturum yoksa giriş penceresi açılıyor, seçilen dosya
 yerinde kalıyor. Vekil oturumu 20 MB'lık gövdeyi okumadan önce kontrol ediyor.
 
-**Supabase paneli:** Redirect URLs'e `http://localhost:3000/auth/callback`
+**Supabase paneli:** access token süresi canlı projede `900` saniye ve
+`admin_users` tablosunda ilk yönetici kaydı doğrulandı (14.09.2026). Redirect
+URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
@@ -373,6 +378,11 @@ vekillerine gidiyor (Faz 2'deki IndexedDB geçici çözümü kapandı).
   başka kökenden gelen görsel tuvali kirletip dışa aktarmayı bozardı.
 - Liste **kullanıcıya bağlı** tutuluyor (`workspace-provider.tsx`): çıkışta ya da
   başka hesaba geçişte önceki kullanıcının listesi bir an bile görünmüyor.
+- Backend ve Next.js cursor'ı uçtan uca taşır; ilk 100 kayıttan sonra panel
+  "Daha eski çalışmaları yükle" ile bir sonraki sayfayı ister.
+- Uzun inference sırasında A hesabından çıkılıp B hesabına girilirse bekleyen
+  kayıt/silme mutasyonu, başlatan kullanıcı kimliği JWT'deki güncel kullanıcıyla
+  uyuşmadığı için `409` alır; A'nın görseli B'ye kaydedilemez.
 - Küçük resimler R2'nin süreli adresi; panel açıldığında süresi dolmuş kayıt varsa
   liste yenileniyor.
 - Silme sunucuda başarısız olursa kayıt listeden çıkarılmıyor.
@@ -755,7 +765,8 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   kirletebilir). Yüklenince uzun kenarı 600 px'e küçültülüp PNG veri URL'i olarak
   **tarayıcıda** (`localStorage`, `vitrin-ai:logo`) saklanıyor — hesaba kaydetmek R2
   isterdi. Veri URL'i aynı kökenden sayıldığı için tuval kirlenmiyor. Köşe, boyut
-  (kısa kenarın %8-35'i) ve saydamlık ayarlanıyor.
+  (kısa kenarın %8-35'i) ve saydamlık da ayrı, doğrulanan bir localStorage
+  kaydında tutulur; bozuk/sınır dışı değerler varsayılana döner.
 - **Ürün etiketi:** ayar (8K-24K), gram ("3,45" ya da "3.45"; en fazla iki ondalık),
   ürün kodu (en fazla 24 karakter, izinli karakterler) tek satırda:
   "22K · 3,45 gr · Kod A-102". Köşe ve koyu/açık görünüm seçiliyor. Metnin genişliği

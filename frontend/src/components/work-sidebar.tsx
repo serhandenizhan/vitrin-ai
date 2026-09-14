@@ -33,6 +33,9 @@ export function WorkSidebar() {
     closeSidebar,
     works,
     isHistoryLoaded,
+    hasMoreWorks,
+    isLoadingMoreWorks,
+    loadMoreWorks,
     removeWork,
     removeAllWorks,
     openWork,
@@ -131,6 +134,9 @@ export function WorkSidebar() {
               onOpen={openWork}
               onDelete={removeWork}
               onSignIn={openSignIn}
+              hasMore={hasMoreWorks}
+              isLoadingMore={isLoadingMoreWorks}
+              onLoadMore={loadMoreWorks}
             />
           )}
         </div>
@@ -222,6 +228,9 @@ function WorksPanel({
   onOpen,
   onDelete,
   onSignIn,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }: {
   works: WorkRecord[];
   isLoaded: boolean;
@@ -230,6 +239,9 @@ function WorksPanel({
   onOpen: (work: WorkRecord) => void;
   onDelete: (id: string) => void;
   onSignIn: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -278,6 +290,19 @@ function WorksPanel({
               />
             ))}
           </ul>
+
+          {hasMore ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isLoadingMore}
+              onClick={onLoadMore}
+              className="min-h-9 border-white/15 bg-transparent text-[#f5f5f7] hover:bg-white/10 hover:text-white"
+            >
+              {isLoadingMore ? "Yükleniyor…" : "Daha eski çalışmaları yükle"}
+            </Button>
+          ) : null}
 
           <p className="mt-2 border-t border-white/10 pt-3 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
             Çalışmalar hesabınızda saklanır. Yalnızca arka planı kaldırılmış

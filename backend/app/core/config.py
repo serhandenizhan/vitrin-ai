@@ -1,7 +1,7 @@
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Multipart zarfı (boundary delimiter'ları + her `part` için `Content-Disposition`/
@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     # yapılandırılabilir; `max_file_size_mb`'den türetilen bir hesaplamaya
     # bağımlı kalmak zorunlu değildir.
     max_request_body_bytes: int | None = None
+    # Yukleme endpoint'leri icin process basina kayan pencere. IP siniri JWT
+    # dogrulamasindan, kullanici siniri ise dogrulamadan sonra; ikisi de
+    # multipart govdesi okunmadan once uygulanir.
+    upload_rate_limit_window_seconds: int = Field(default=60, ge=1)
+    upload_ip_rate_limit_requests: int = Field(default=120, ge=1)
+    upload_user_rate_limit_requests: int = Field(default=30, ge=1)
     allowed_content_types: set[str] = {
         "image/jpeg",
         "image/png",

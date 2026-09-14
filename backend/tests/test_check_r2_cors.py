@@ -10,6 +10,7 @@ check_r2_cors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_r2_cors)
 
 missing_permissions = check_r2_cors.missing_permissions
+presigned_url = check_r2_cors._presigned_url
 
 PROD = "https://vitrin.example"
 LOCAL = "http://localhost:3000"
@@ -56,3 +57,32 @@ def test_does_not_combine_methods_across_separate_rules():
 
 def test_no_rules_means_everything_missing():
     assert missing_permissions([], [LOCAL]) == {LOCAL: ["GET", "HEAD"]}
+
+
+def test_live_checks_sign_each_http_method_separately():
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def generate_presigned_url(self, operation, **kwargs):
+            self.calls.append((operation, kwargs))
+            return f"https://signed.example/{operation}"
+
+    client = Client()
+
+    assert presigned_url(client, "bucket", "key.webp", "GET", 900).endswith(
+        "/get_object"
+    )
+    assert presigned_url(client, "bucket", "key.webp", "HEAD", 900).endswith(
+        "/head_object"
+    )
+    assert client.calls == [
+        (
+            "get_object",
+            {"Params": {"Bucket": "bucket", "Key": "key.webp"}, "ExpiresIn": 900},
+        ),
+        (
+            "head_object",
+            {"Params": {"Bucket": "bucket", "Key": "key.webp"}, "ExpiresIn": 900},
+        ),
+    ]

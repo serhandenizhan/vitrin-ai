@@ -453,7 +453,11 @@ function DeleteAccountCard({ email }: { email: string }) {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/account", { method: "DELETE" });
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: typed.trim() }),
+      });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         setError(payload?.error ?? "Hesabınız silinemedi.");

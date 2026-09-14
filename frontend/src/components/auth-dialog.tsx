@@ -32,6 +32,7 @@
  */
 
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { ArrowLeft, KeyRound, LoaderCircle, MailCheck, X } from "lucide-react";
 
 import { PasswordChecklist } from "@/components/password-checklist";
@@ -264,8 +265,9 @@ function AuthForm({ initialMode, onDone }: { initialMode: AuthMode; onDone: () =
               city,
               phone: phone.trim() ? normalizePhone(phone) : null,
               marketing_opt_in: marketingOptIn,
-              // Kolaylik kaydi; hukuki ispat icin degistirilemez bir tablo
-              // gerekiyor (bkz. lib/profile.ts "HUKUK SINIRI").
+              terms_accepted: true,
+              // Trigger bu surumu sunucu zamanli, istemcinin degistiremedigi
+              // `user_consents` tablosuna da kaydeder.
               terms_accepted_at: new Date().toISOString(),
               terms_version: TERMS_VERSION,
             },
@@ -497,7 +499,24 @@ function AuthForm({ initialMode, onDone }: { initialMode: AuthMode; onDone: () =
             <div className="space-y-2.5 pt-1">
               <Checkbox id={ids.terms} checked={acceptsTerms} onChange={setAcceptsTerms}>
                 <span>
-                  Kullanım koşullarını ve KVKK aydınlatma metnini okudum, kabul ediyorum.{" "}
+                  <Link
+                    href="/kullanim-kosullari"
+                    target="_blank"
+                    className="font-medium underline underline-offset-2"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    Kullanım koşullarını
+                  </Link>{" "}
+                  ve {" "}
+                  <Link
+                    href="/kvkk"
+                    target="_blank"
+                    className="font-medium underline underline-offset-2"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    KVKK aydınlatma metnini
+                  </Link>{" "}
+                  okudum; kullanım koşullarını kabul ediyorum.{" "}
                   <span className="text-muted-foreground">(Zorunlu)</span>
                 </span>
               </Checkbox>

@@ -14,7 +14,10 @@ from app.core.config import settings
 from app.core.db import engine
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
+from app.middleware.early_auth import EarlyAuthenticationMiddleware
+from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
+from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
 
 
@@ -39,6 +42,14 @@ async def r2_configuration_error_handler(_, exc: R2ConfigurationError) -> JSONRe
 # için bu, testlerin üretimde çalışan gerçek limiter'a doğrudan erişebilmesinin
 # tek yoludur — bkz. tests/test_remove_background_endpoint.py).
 admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_inferences)
+upload_ip_limiter = RequestRateLimiter(
+    settings.upload_ip_rate_limit_requests,
+    settings.upload_rate_limit_window_seconds,
+)
+upload_user_limiter = RequestRateLimiter(
+    settings.upload_user_rate_limit_requests,
+    settings.upload_rate_limit_window_seconds,
+)
 
 # Starlette `add_middleware`, her çağrıda listenin BAŞINA ekler (bkz.
 # `Starlette.add_middleware` kaynağı) — yani SONRA eklenen middleware daha
@@ -49,11 +60,24 @@ admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_inferences)
 app.add_middleware(
     BodySizeLimitMiddleware, max_body_bytes=settings.max_request_body_bytes
 )
+# Kimlik, multipart parser `receive()` ile ilk bayti okumadan once dogrulanir.
+# Admission katmani bunun disinda kalir: kapasite doluyken istek, JWT dogrulama
+# maliyetine bile girmeden 429 alir; yer varken auth yine govdeden once calisir.
+app.add_middleware(
+    EarlyAuthenticationMiddleware,
+    dependency_overrides_provider=app,
+    user_limiter=upload_user_limiter,
+    unauthenticated_limiter=upload_ip_limiter,
+)
 app.add_middleware(
     EndpointAdmissionLimiterMiddleware,
     limiter=admission_limiter,
     path=ROUTE_PATH,
 )
+# IP hizi JWT/JWKS maliyetinden de once sinirlanir. Kullanici hizi yukaridaki
+# early-auth katmaninda, dogrulanmis `sub` ile ve yine govde okunmadan uygulanir.
+app.add_middleware(UploadRateLimitMiddleware, limiter=upload_ip_limiter)
+# CORS en dista kalir ve OPTIONS isteklerini auth katmanina sokmadan yanitlar.
 # CORS EN DIŞTA (en son eklenen): tarayıcının OPTIONS ön kontrol isteği
 # gövdesiz geliyor ve admission/body-size katmanlarına hiç girmeden
 # yanıtlanmalı. Asıl istemci bugün Next.js vekili (sunucudan sunucuya, CORS
@@ -68,7 +92,7 @@ app.add_middleware(
     allow_origins=settings.cors_allowed_origin_list,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Expected-User-Id"],
     max_age=600,
 )
 app.include_router(remove_background_router)

@@ -15,13 +15,28 @@ Başkasına ait bir id için 403 değil 404 dönüyor: 403, o id'nin var olduğu
 söylemiş olurdu.
 """
 
+import base64
+import hmac
+import json
 import logging
 import uuid
+from datetime import datetime
 
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +66,43 @@ MAX_LIST_LIMIT = 100
 
 # Postgres SQLSTATE: foreign_key_violation.
 FOREIGN_KEY_VIOLATION = "23503"
+
+
+def _verify_expected_user(expected_user_id: uuid.UUID | None, user: CurrentUser) -> None:
+    """Uzun suren bir is sirasinda tarayicida hesap degistiyse mutasyonu durdurur."""
+    if not hmac.compare_digest(str(expected_user_id), str(user.id)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Oturum işlem sırasında değişti; çalışma kaydedilmedi.",
+        )
+
+
+def _encode_cursor(project: Project) -> str:
+    payload = json.dumps(
+        [project.created_at.isoformat(), str(project.id)],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        created_at_text, project_id_text = json.loads(
+            base64.b64decode(
+                padded.encode("ascii"), altchars=b"-_", validate=True
+            ).decode("utf-8")
+        )
+        created_at = datetime.fromisoformat(created_at_text)
+        if created_at.tzinfo is None:
+            raise ValueError("timezone gerekli")
+        return created_at, uuid.UUID(project_id_text)
+    except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz sayfalama imleci.",
+        ) from exc
 
 
 async def _read_validated(
@@ -133,10 +185,12 @@ async def create_project(
     # listesi her istekte 500 dönerdi. Veritabanı kısıtı da aynı şeyi
     # reddediyor (migration 0003).
     duration_seconds: float | None = Form(None, ge=0, allow_inf_nan=False),
+    expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict:
+    _verify_expected_user(expected_user_id, user)
     display_name = file_name.strip()
     if not display_name or len(display_name) > MAX_FILE_NAME_LENGTH:
         raise HTTPException(
@@ -217,17 +271,24 @@ async def create_project(
 @router.get("/api/projects")
 async def list_projects(
     limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    cursor: str | None = Query(None, min_length=1, max_length=512),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
-) -> list[dict]:
+) -> dict:
+    query = select(Project).where(Project.user_id == user.id)
+    if cursor:
+        created_at, project_id = _decode_cursor(cursor)
+        query = query.where(tuple_(Project.created_at, Project.id) < (created_at, project_id))
     result = await db.execute(
-        select(Project)
-        .where(Project.user_id == user.id)
-        .order_by(Project.created_at.desc(), Project.id)
-        .limit(limit)
+        query.order_by(Project.created_at.desc(), Project.id.desc()).limit(limit + 1)
     )
-    return [_serialize(project, storage) for project in result.scalars().all()]
+    projects = result.scalars().all()
+    page = projects[:limit]
+    return {
+        "items": [_serialize(project, storage) for project in page],
+        "next_cursor": _encode_cursor(page[-1]) if len(projects) > limit and page else None,
+    }
 
 
 @router.get("/api/projects/{project_id}")
@@ -244,10 +305,12 @@ async def get_project(
 @router.delete("/api/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: uuid.UUID,
+    expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> Response:
+    _verify_expected_user(expected_user_id, user)
     project = await _get_owned_project(db, project_id, user)
     keys = [project.result_r2_key, project.thumbnail_r2_key]
     await db.delete(project)
@@ -258,10 +321,12 @@ async def delete_project(
 
 @router.delete("/api/projects", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_all_projects(
+    expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> Response:
+    _verify_expected_user(expected_user_id, user)
     result = await db.execute(
         delete(Project)
         .where(Project.user_id == user.id)

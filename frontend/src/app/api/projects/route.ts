@@ -6,24 +6,31 @@
  * token burada ekleniyor ve yanit arayuzun kayit sekline cevriliyor.
  */
 import { authRequired, callBackend, jsonError } from "@/lib/backend-proxy";
-import { toWorkRecord, type BackendProject } from "@/lib/project-record";
+import {
+  toWorkRecord,
+  type BackendProject,
+  type BackendProjectPage,
+} from "@/lib/project-record";
 import { getAccessToken } from "@/lib/supabase/access-token";
 
 /** Backend'in izin verdigi en buyuk sayfa (projects.py `MAX_LIST_LIMIT`). */
 const LIST_LIMIT = 100;
 
-export async function GET(): Promise<Response> {
-  const call = await callBackend(`/api/projects?limit=${LIST_LIMIT}`, {
+export async function GET(request: Request): Promise<Response> {
+  const cursor = new URL(request.url).searchParams.get("cursor");
+  const query = new URLSearchParams({ limit: String(LIST_LIMIT) });
+  if (cursor) query.set("cursor", cursor);
+  const call = await callBackend(`/api/projects?${query}`, {
     fallbackError: "Çalışmalar yüklenemedi.",
   });
   if (!call.ok) return call.response;
 
-  const projects = (await call.response.json()) as BackendProject[];
+  const page = (await call.response.json()) as BackendProjectPage;
   const now = Date.now();
-  return Response.json(
-    projects.map((project) => toWorkRecord(project, now)),
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return Response.json({
+    items: page.items.map((project) => toWorkRecord(project, now)),
+    nextCursor: page.next_cursor,
+  }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -31,6 +38,8 @@ export async function POST(request: Request): Promise<Response> {
   // birinin yuklemesi hic okunmuyor. `callBackend` token'i yeniden aliyor;
   // bu kontrol yalnizca gereksiz govde okumayi onluyor.
   if (!(await getAccessToken())) return authRequired();
+  const expectedUserId = request.headers.get("X-Expected-User-Id");
+  if (!expectedUserId) return jsonError("Oturum kimliği eksik.", 409);
 
   let form: FormData;
   try {
@@ -62,6 +71,7 @@ export async function POST(request: Request): Promise<Response> {
   const call = await callBackend("/api/projects", {
     method: "POST",
     body: upstreamForm,
+    headers: { "X-Expected-User-Id": expectedUserId },
     fallbackError: "Çalışma kaydedilemedi.",
   });
   if (!call.ok) return call.response;
@@ -73,9 +83,12 @@ export async function POST(request: Request): Promise<Response> {
   });
 }
 
-export async function DELETE(): Promise<Response> {
+export async function DELETE(request: Request): Promise<Response> {
+  const expectedUserId = request.headers.get("X-Expected-User-Id");
+  if (!expectedUserId) return jsonError("Oturum kimliği eksik.", 409);
   const call = await callBackend("/api/projects", {
     method: "DELETE",
+    headers: { "X-Expected-User-Id": expectedUserId },
     fallbackError: "Çalışmalar silinemedi.",
   });
   if (!call.ok) return call.response;

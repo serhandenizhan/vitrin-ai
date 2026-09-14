@@ -5,6 +5,14 @@ vi.mock("@/lib/supabase/access-token", () => ({
 }));
 
 const ID = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
+const USER_ID = "8f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6d";
+
+function request(): Request {
+  return new Request("http://localhost", {
+    method: "DELETE",
+    headers: { "X-Expected-User-Id": USER_ID },
+  });
+}
 
 function context(id: string) {
   return { params: Promise.resolve({ id }) };
@@ -19,7 +27,7 @@ describe("DELETE /api/projects/[id]", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { DELETE } = await import("./route");
 
-    const response = await DELETE(new Request("http://localhost"), context("../admin"));
+    const response = await DELETE(request(), context("../admin"));
 
     expect(response.status).toBe(404);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -35,11 +43,12 @@ describe("DELETE /api/projects/[id]", () => {
     });
     const { DELETE } = await import("./route");
 
-    const response = await DELETE(new Request("http://localhost"), context(ID));
+    const response = await DELETE(request(), context(ID));
 
     expect(response.status).toBe(204);
     expect(url).toMatch(new RegExp(`/api/projects/${ID}$`));
     expect(method).toBe("DELETE");
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]?.[1])?.headers).get("X-Expected-User-Id")).toBe(USER_ID);
   });
 
   it("baskasinin kaydinda backend'in 404'unu aktariyor", async () => {
@@ -48,7 +57,7 @@ describe("DELETE /api/projects/[id]", () => {
     );
     const { DELETE } = await import("./route");
 
-    const response = await DELETE(new Request("http://localhost"), context(ID));
+    const response = await DELETE(request(), context(ID));
 
     expect(response.status).toBe(404);
   });

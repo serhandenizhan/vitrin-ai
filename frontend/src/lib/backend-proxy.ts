@@ -33,17 +33,25 @@ export type BackendCall =
 
 export async function callBackend(
   path: string,
-  init: { method?: string; body?: BodyInit; fallbackError: string },
+  init: {
+    method?: string;
+    body?: BodyInit;
+    headers?: HeadersInit;
+    fallbackError: string;
+  },
 ): Promise<BackendCall> {
   const token = await getAccessToken();
   if (!token) return { ok: false, response: authRequired() };
 
   let upstream: Response;
   try {
+    const headers = new Headers(init.headers);
+    // Cagiranin baska bir kullanicinin token'ini dayatmasina izin verme.
+    headers.set("Authorization", `Bearer ${token}`);
     upstream = await fetch(`${BACKEND_URL}${path}`, {
       method: init.method ?? "GET",
       body: init.body,
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
       cache: "no-store",
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });

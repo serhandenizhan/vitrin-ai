@@ -76,9 +76,10 @@ olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 
 yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
 
-**Faz 4 sonunda eklenen testler** (`test_account_endpoint.py`, `test_remove_background_endpoint.py`
-içindeki oturum testleri, `test_db_safety.py`'deki adres testleri) Postgres'i olan bir
-makinede henüz pytest ile çalıştırılmadı (kök `CLAUDE.md` açık takip maddesi 4). Toplam 185 test.
+**Faz 4 ve kapanış incelemesindeki testlerin tamamı** izole yerel PostgreSQL
+(`localhost:5434`) üzerinde çalıştırıldı: **200 test geçti**. Buna hesap,
+oturum/gövde, DB adres güvenliği, cursor, erken JWT, hesap değişimi ve hız
+sınırı testleri dahildir; gerçek Supabase test hedefi olarak kullanılmadı.
 
 Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
@@ -167,7 +168,7 @@ select id from auth.users where email = '<e-posta>';
 
 | Uç nokta | İş |
 | --- | --- |
-| `GET /api/projects?limit=50` | Kullanıcının projeleri, en yeni önce (en fazla 100) |
+| `GET /api/projects?limit=50&cursor=...` | Tek sayfa, en yeni önce; `{items, next_cursor}` (sayfa başına en fazla 100) |
 | `POST /api/projects` | Multipart: `result` (PNG), `thumbnail` (PNG/JPEG/WebP, ≤512 KB), `file_name`, `is_mocked`, `duration_seconds` → `201` |
 | `GET /api/projects/{id}` | Tek proje |
 | `DELETE /api/projects/{id}` | `204` |
@@ -178,6 +179,9 @@ Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 
 - **IDOR:** her sorgu `user_id = <token'daki kullanıcı>` filtresi taşıyor;
   başkasının projesi için `403` değil `404` dönüyor (varlığını doğrulamamak için).
+- **Hesap-değişimi yarışı:** POST/DELETE mutasyonları işlemi başlatan tarayıcı
+  kullanıcısını `X-Expected-User-Id` ile taşır. JWT'deki doğrulanmış kullanıcı
+  farklıysa `409`; A'nın bekleyen sonucu B'nin hesabına yazılamaz.
 - **R2 anahtarı:** `projects/<user_id>/<uuid>/result.png` — kullanıcının verdiği
   dosya adı anahtara hiç girmiyor (path traversal koruması), yalnızca
   görüntüleme metni olarak saklanıyor.
@@ -202,7 +206,8 @@ Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 
 ### Hesap silme
 
-`DELETE /api/account` (oturum gerekli, `204`). Kod: `app/api/routes/account.py`,
+`DELETE /api/account` (oturum + gövdede yazılmış hesap e-postası gerekli,
+`204`). Kod: `app/api/routes/account.py`,
 `app/services/supabase_admin.py`.
 
 **Sıra — her adım yarıda kalırsa tekrar denemek güvenli:**
@@ -231,18 +236,17 @@ anahtarları yalnızca `apikey` başlığıyla, eski `service_role` JWT'si ek ol
 ### Arka plan kaldırmada oturum
 
 `POST /api/remove-background` Faz 4'te **oturum istiyor** (ürün kararı, 12.09.2026):
-`get_current_user` bağımlılığı token'ı doğruluyor, geçersizse `401` ile BiRefNet'e hiç
-ulaşılmıyor. Sınır: FastAPI multipart gövdeyi bağımlılıklardan önce ayrıştırıyor,
-yani oturumsuz bir istek de gövde sınırına kadar okunuyor; Next.js vekili oturumu
-gövdeyi okumadan önce kontrol ettiği için normal akışta bu olmuyor, doğrudan backend'e
-gelen isteklere karşı asıl önlem Faz 7 rate limiting.
+`EarlyAuthenticationMiddleware` token'ı multipart gövdenin ilk baytından önce
+doğruluyor; geçersizse `401` ile gövde okunmadan ve BiRefNet'e ulaşılmadan
+reddediliyor. Aynı erken katman doğrulanmış kullanıcı hız sınırını uygular;
+Next.js vekili de oturumu kendi gövdesini okumadan kontrol eder.
 
 ### Veritabanı erişim modeli ve RLS
 
 Backend Postgres'e tablo **sahibi** olarak bağlanıyor ve RLS onu etkilemiyor;
 kullanıcı verisinin birinci koruması yukarıdaki sahiplik filtresi. RLS ikinci
 katman: Supabase'in `anon` anahtarı herkese açık ve Data API (PostgREST)
-tablolara ulaşabiliyor. Bu yüzden (migration 0003):
+tablolara ulaşabiliyor. Bu yüzden (migration 0003 ve 0004):
 
 - `public` şemasındaki **her** tabloda RLS açık — `alembic_version` dahil
   (varsayılan grant'lerin olduğu bir projede `anon` ona yazabilirdi).
@@ -253,7 +257,10 @@ tablolara ulaşabiliyor. Bu yüzden (migration 0003):
   ileride Data API'ye açılırsa geçerli olacak kurallar). **INSERT/UPDATE
   politikası bilinçli olarak yok:** istemci kendi satırına başka birinin R2
   anahtarını yazabilir ve backend o görsel için imzalı URL üretirdi.
-- `admin_users` ve `backgrounds` için politika yok — tam ret.
+- `admin_users`, `backgrounds` ve `user_consents` için politika yok — tam ret.
+- `user_consents`, kayıt metadata'sındaki sürümü trigger ile sunucu zamanında
+  kaydeder. Migration öncesi kullanıcılar `metadata_backfill` kaynağıyla
+  taşınır; istemci rollerinin tablo üzerinde hiçbir yetkisi yoktur.
 - `tests/test_rls.py`, `public`'teki her tablonun RLS'li olduğunu ve istemci
   rollerinin hiçbir yetkisi olmadığını genel olarak doğruluyor: RLS'siz yeni
   bir tablo eklenirse test kırmızı yanar.
@@ -311,6 +318,9 @@ sunucu/instance seçin.
 | `MAX_CONCURRENT_INFERENCES` | `1` | Aynı anda çalışabilecek BiRefNet inference sayısı (sürece/worker'a özgü) |
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
+| `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
+| `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
+| `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
@@ -333,9 +343,16 @@ Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
 
 `POST /api/remove-background` Faz 4'ten beri **oturum istiyor** (bkz. "Arka plan
 kaldırmada oturum"); kota/kredi kontrolü Faz 5'te gelecek. Oturumdan bağımsız olarak
-kaynak tüketimini sınırlayan üç katman var:
+kaynak tüketimini sınırlayan beş katman var:
 
-1. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf
+1. **Erken hız sınırı** — `UploadRateLimitMiddleware` oturumsuz/geçersiz
+   token denemelerini IP ile; `EarlyAuthenticationMiddleware` doğrulanmış
+   kullanıcıları `sub` ile kayan pencerede sınırlar. Aşım gövde okunmadan
+   `429` + `Retry-After` döner. Process-içi ilk savunmadır; Faz 7'de dağıtık
+   Redis/proxy sınırı gerekir.
+2. **Erken JWT** — korumalı üç POST uç noktasında token multipart parser'ın
+   ilk `receive()` çağrısından önce doğrulanır; 401/503 yanıtı gövdeyi tüketmez.
+3. **`BodySizeLimitMiddleware`** (`app/middleware/body_size_limit.py`) — saf
    ASGI middleware, `receive()` akışını sararak toplam istek gövdesi
    `MAX_REQUEST_BODY_BYTES` sınırını aşarsa Starlette'in multipart parser'ı
    gövdeyi tamamlamadan `413` döner. Bu sınır ayrı, açıkça yapılandırılabilir
@@ -343,14 +360,14 @@ kaynak tüketimini sınırlayan üç katman var:
    verilmezse `max_file_size_mb + 64KB` (multipart zarf overhead payı) olarak
    otomatik hesaplanır. Bu, uygulama-seviyesi bir yedektir — en erken/ucuz red
    reverse proxy'de (`SECURITY.md` 2.3) olmalı.
-2. **Piksel sınırı** (`app/validation/upload.py`) — `MAX_IMAGE_PIXELS`, küçük
+4. **Piksel sınırı** (`app/validation/upload.py`) — `MAX_IMAGE_PIXELS`, küçük
    byte boyutlu ama devasa çözünürlüklü ("decompression bomb") görselleri
    reddeder; PIL'in kendi `Image.MAX_IMAGE_PIXELS` global'ine güvenilmiyor.
    Görsel decode/verify aşamasında PIL'in fırlatabileceği tüm istisnalar
    (`SyntaxError`, `struct.error` vb. dahil — sadece `OSError`/
    `UnidentifiedImageError` değil) yakalanıp `UploadValidationError`'a çevrilir;
    bozuk/kasıtlı olarak bozulmuş dosyalar 500 yerine her zaman 400 üretir.
-3. **`EndpointAdmissionLimiterMiddleware`** (`app/middleware/admission_limiter.py`)
+5. **`EndpointAdmissionLimiterMiddleware`** (`app/middleware/admission_limiter.py`)
    — saf ASGI middleware, yalnızca `POST /api/remove-background`'a özgü.
    `InferenceCapacityLimiter`'ı (`app/services/concurrency.py`,
    `anyio.CapacityLimiter` tabanlı, gerçek non-blocking sözleşme) **multipart

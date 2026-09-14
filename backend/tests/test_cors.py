@@ -20,12 +20,13 @@ def test_preflight_from_allowed_origin_is_accepted():
         headers={
             "Origin": ALLOWED_ORIGIN,
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "authorization",
+            "Access-Control-Request-Headers": "authorization,x-expected-user-id",
         },
     )
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+    assert "x-expected-user-id" in response.headers["access-control-allow-headers"].lower()
     # Kimlik bilgisi çerezle değil Authorization başlığıyla taşınıyor;
     # credentials izni verilmiyor.
     assert "access-control-allow-credentials" not in response.headers

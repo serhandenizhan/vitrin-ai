@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import exists, select
@@ -178,7 +178,14 @@ def _unauthorized(detail: str) -> HTTPException:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    request: Request = None,
 ) -> CurrentUser:
+    # Multipart yuklemelerde JWT, govde okunmadan once middleware'de
+    # dogrulandi. Ayni token'i ve JWKS'i ikinci kez islemeye gerek yok.
+    early_user = getattr(request.state, "current_user", None) if request is not None else None
+    if isinstance(early_user, CurrentUser):
+        return early_user
+
     # Yapılandırma eksikse 401 değil 503: kullanıcı hiçbir şeyi yanlış yapmadı.
     # Sessizce "herkese açık" davranmak da bir seçenek değil (kök CLAUDE.md
     # ders 8'in tersi — geçici çözüm fark edilmeden kalıcı olurdu).

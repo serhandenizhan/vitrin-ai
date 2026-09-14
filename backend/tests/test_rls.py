@@ -64,7 +64,13 @@ async def test_every_public_table_has_rls_enabled(db_session):
     # grant'lerin olduğu bir projede anon ona yazabilirdi.
     tables = await _public_tables(db_session)
 
-    assert {"projects", "admin_users", "backgrounds", "alembic_version"} <= set(tables)
+    assert {
+        "projects",
+        "admin_users",
+        "backgrounds",
+        "user_consents",
+        "alembic_version",
+    } <= set(tables)
     assert [name for name, has_rls in tables.items() if not has_rls] == []
 
 
@@ -82,6 +88,18 @@ async def test_client_roles_have_no_privileges_on_any_public_table(db_session):
                     granted.append((role, table, privilege))
 
     assert granted == []
+
+
+async def test_client_roles_cannot_use_consent_identity_sequence(db_session):
+    for role in CLIENT_ROLES:
+        allowed = await db_session.scalar(
+            text(
+                "select has_sequence_privilege(:role, "
+                "'public.user_consents_id_seq', 'USAGE')"
+            ),
+            {"role": role},
+        )
+        assert not allowed, f"{role} user_consents sequence USAGE yetkisine sahip"
 
 
 async def test_policies_exist_only_where_intended(db_session):
@@ -174,3 +192,43 @@ async def test_deleting_user_cascades_to_projects_and_admin_role(
 
     assert await db_session.scalar(text("select count(*) from public.projects")) == 0
     assert await db_session.scalar(text("select count(*) from public.admin_users")) == 0
+
+
+async def test_signup_metadata_creates_server_timestamped_immutable_consent_records(
+    db_session,
+):
+    user_id = uuid.uuid4()
+    await db_session.execute(
+        text(
+            """
+            insert into auth.users (id, email, raw_user_meta_data)
+            values (:id, 'onay@test.example', cast(:metadata as jsonb))
+            """
+        ),
+        {
+            "id": user_id,
+            "metadata": json.dumps(
+                {"terms_accepted": True, "terms_version": "2026-09-14"}
+            ),
+        },
+    )
+    await db_session.commit()
+
+    rows = (
+        await db_session.execute(
+            text(
+                """
+                select document_type, document_version, recorded_at, source
+                from public.user_consents where user_id = :id
+                order by document_type
+                """
+            ),
+            {"id": user_id},
+        )
+    ).all()
+
+    assert [(row.document_type, row.document_version) for row in rows] == [
+        ("kvkk_notice", "2026-09-14"),
+        ("terms", "2026-09-14"),
+    ]
+    assert all(row.recorded_at is not None and row.source == "signup" for row in rows)
