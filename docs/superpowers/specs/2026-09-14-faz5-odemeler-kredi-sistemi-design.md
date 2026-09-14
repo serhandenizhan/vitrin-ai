@@ -150,6 +150,10 @@ hesabı silinse bile fatura/consent için zorunlu saklama kaydı, hukukçu ile b
 pseudonymization politikasıyla korunur; aktif kullanıcı verisi ve R2 içeriği ise ancak remote
 abonelik iptal action'ı başarılı olunca silinir.
 
+Checkout kabulü için mevcut user_consents benzersizlik kuralı checkout_session_id'yi de kapsar;
+aynı sözleşme sürümünün sonraki gerçek satın alımlarda kanıtı kaybolmaz. Kayıt/kullanım koşulu
+kabulü ile satış sözleşmesi kabulü aynı satıra veya aynı hukuki sebebe karıştırılmaz.
+
 ## API yüzeyi
 
 | Uç nokta | Açıklama |
@@ -178,6 +182,10 @@ abonelik iptal action'ı başarılı olunca silinir.
 GET /api/backgrounds, zemin imzalı URL üretimi ve proje kaydı seçilen zemini backend'de aktif period.background_tier ile doğrular. Basic kullanıcı full zemin için URL veya proje kaydı alamaz; frontend gizlemesi güvenlik katmanı değildir.
 
 Deneme hesabı yeni kayıt sonrası en çok 10 projeye indirilir. Kullanıcı projeleri transaction'da kilitlenir; en eskiler seçilir, R2 silme storage_deletion_jobs kuyruğuna eklenir, proje DB satırı ancak silme başarılı olunca kaldırılır. Başarısız R2 silmeleri retry/alarm ile çözülür.
+
+storage_deletion_jobs; id, project_id, r2_key, reason, status (pending/running/succeeded/failed),
+attempts, last_error, lease_until ve created_at alanlarını tutar. project_id için tek canlı iş
+vardır; worker lease ile işi alır ve R2 silme idempotent tamamlanınca project satırını siler.
 
 ## Bakım, reconciliation ve launch kapıları
 
