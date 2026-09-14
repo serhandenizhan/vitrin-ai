@@ -51,6 +51,9 @@ type WorkspaceValue = {
 
   works: WorkRecord[];
   isHistoryLoaded: boolean;
+  hasMoreWorks: boolean;
+  isLoadingMoreWorks: boolean;
+  loadMoreWorks: () => void;
   recordWork: (work: NewWork) => Promise<void>;
   removeWork: (id: string) => Promise<void>;
   removeAllWorks: () => Promise<void>;
@@ -261,8 +264,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<{
     userId: string | null;
     works: WorkRecord[];
-  }>({ userId: null, works: [] });
+    nextCursor: string | null;
+  }>({ userId: null, works: [], nextCursor: null });
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [isLoadingMoreWorks, setLoadingMoreWorks] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   // Yapilandirma yoksa beklenecek bir oturum da yok.
   const [isAuthLoaded, setAuthLoaded] = useState(!IS_AUTH_CONFIGURED);
@@ -340,9 +345,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    void listWorks().then((kayitlar) => {
+    void listWorks().then((page) => {
       if (cancelled) return;
-      setHistory({ userId, works: kayitlar });
+      setHistory({ userId, works: page.items, nextCursor: page.nextCursor });
     });
     return () => {
       cancelled = true;
@@ -352,6 +357,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const refreshWorks = useCallback(() => {
     setHistoryVersion((current) => current + 1);
   }, []);
+
+  const loadMoreWorks = useCallback(() => {
+    if (!userId || history.userId !== userId || !history.nextCursor) return;
+    const cursor = history.nextCursor;
+    setLoadingMoreWorks(true);
+    void listWorks(cursor).then((page) => {
+      setLoadingMoreWorks(false);
+      setHistory((current) => {
+        if (current.userId !== userId || current.nextCursor !== cursor) return current;
+        const knownIds = new Set(current.works.map((work) => work.id));
+        return {
+          userId,
+          works: [
+            ...current.works,
+            ...page.items.filter((work) => !knownIds.has(work.id)),
+          ],
+          nextCursor: page.nextCursor,
+        };
+      });
+    });
+  }, [history.nextCursor, history.userId, userId]);
 
   // "Hareketi azalt" secildiginde tum kaydirma animasyonlari kapaniyor.
   // Sinif kok elemana yaziliyor ki CSS tarafinda tek bir kural yetsin.
@@ -369,12 +395,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const recordWork = useCallback<WorkspaceValue["recordWork"]>(
     async (work) => {
       if (!settings.historyEnabled || !userId) return;
-      const kayit = await saveWork(work);
+      const kayit = await saveWork(work, userId);
       if (!kayit) return;
       // Kayit sirasinda kullanici degistiyse (cikis) listeye eklenmiyor.
       setHistory((current) =>
         current.userId === userId
-          ? { userId, works: [kayit, ...current.works] }
+          ? { ...current, works: [kayit, ...current.works] }
           : current,
       );
     },
@@ -382,19 +408,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const removeWork = useCallback(async (id: string) => {
+    if (!userId) return;
     // Sunucuda silinemediyse listede kalsin; "silindi" gorunup yeniden
     // acilista geri gelmesi kullaniciyi yaniltirdi.
-    if (!(await deleteWork(id))) return;
+    if (!(await deleteWork(id, userId))) return;
     setHistory((current) => ({
       ...current,
       works: current.works.filter((item) => item.id !== id),
     }));
-  }, []);
+  }, [userId]);
 
   const removeAllWorks = useCallback(async () => {
-    if (!(await clearWorks())) return;
-    setHistory((current) => ({ ...current, works: [] }));
-  }, []);
+    if (!userId || !(await clearWorks(userId))) return;
+    setHistory((current) => ({ ...current, works: [], nextCursor: null }));
+  }, [userId]);
 
   const openWork = useCallback((work: WorkRecord) => {
     for (const listener of openListenersRef.current) listener(work);
@@ -445,6 +472,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       toggleSidebar: () => setSidebarOpen((current) => !current),
       works,
       isHistoryLoaded,
+      hasMoreWorks: history.userId === userId && history.nextCursor !== null,
+      isLoadingMoreWorks,
+      loadMoreWorks,
       recordWork,
       removeWork,
       removeAllWorks,
@@ -492,6 +522,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isSidebarOpen,
       works,
       isHistoryLoaded,
+      history.userId,
+      history.nextCursor,
+      isLoadingMoreWorks,
+      loadMoreWorks,
       recordWork,
       removeWork,
       removeAllWorks,
@@ -503,6 +537,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       welcomeName,
       dismissWelcome,
       user,
+      userId,
       isAuthLoaded,
       signOut,
       settings,

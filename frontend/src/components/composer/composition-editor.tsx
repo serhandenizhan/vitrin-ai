@@ -43,6 +43,13 @@ import {
 } from "@/lib/composition";
 import type { Background } from "@/lib/backgrounds";
 import {
+  clearStoredLogo,
+  loadStoredLogo,
+  loadStoredLogoSettings,
+  storeLogo,
+  storeLogoSettings,
+} from "@/lib/logo-storage";
+import {
   CORNERS,
   DEFAULT_LABEL,
   DEFAULT_LOGO,
@@ -102,33 +109,6 @@ const EXPORT_ERROR_MESSAGE =
   "Görsel dışa aktarılamadı. Sayfayı yenileyip tekrar deneyin.";
 
 type PrintStatus = "idle" | "preparing" | "done" | { error: string };
-
-/**
- * Logo tarayicida hatirlaniyor (one alinan is, 13.09.2026). Hesaba kaydetmek
- * R2 + backend isterdi; onerinin kapsami "backend gerektirmeyenler". Veri
- * URL'i olarak saklandigi icin tuval "tainted" olmuyor (ayni kaynak).
- */
-const LOGO_STORAGE_KEY = "vitrin-ai:logo";
-
-function loadStoredLogo(): string | null {
-  try {
-    const value = window.localStorage.getItem(LOGO_STORAGE_KEY);
-    return value?.startsWith("data:image/") ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeLogo(dataUrl: string | null): boolean {
-  try {
-    if (dataUrl) window.localStorage.setItem(LOGO_STORAGE_KEY, dataUrl);
-    else window.localStorage.removeItem(LOGO_STORAGE_KEY);
-    return true;
-  } catch {
-    // Kota dolu ya da depolama kapali: logo bu oturumda yine calisir.
-    return false;
-  }
-}
 
 /**
  * Yuklenen logoyu en fazla `LOGO_STORAGE_MAX_EDGE` px'e kucultup PNG veri
@@ -192,7 +172,9 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
   const [logoUrl, setLogoUrl] = useState<string | null>(() =>
     typeof window === "undefined" ? null : loadStoredLogo(),
   );
-  const [logo, setLogo] = useState<LogoSettings>(DEFAULT_LOGO);
+  const [logo, setLogo] = useState<LogoSettings>(() =>
+    typeof window === "undefined" ? DEFAULT_LOGO : loadStoredLogoSettings(),
+  );
   const [logoMessage, setLogoMessage] = useState<string | null>(null);
   const [label, setLabel] = useState<ProductLabel>(DEFAULT_LABEL);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
@@ -542,19 +524,28 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
       const dataUrl = await prepareLogo(file);
       setLogoUrl(dataUrl);
       setLogoMessage(
-        storeLogo(dataUrl)
+        storeLogo(dataUrl, logo)
           ? null
           : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
       );
     } catch {
       setLogoMessage("Logo okunamadı. Başka bir dosya deneyin.");
     }
-  }, []);
+  }, [logo]);
 
   const removeLogo = useCallback(() => {
     setLogoUrl(null);
-    storeLogo(null);
+    setLogo(DEFAULT_LOGO);
+    clearStoredLogo();
     setLogoMessage(null);
+  }, []);
+
+  const updateLogo = useCallback((patch: Partial<LogoSettings>) => {
+    setLogo((current) => {
+      const next = { ...current, ...patch };
+      storeLogoSettings(next);
+      return next;
+    });
   }, []);
 
   /**
@@ -895,7 +886,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               <CornerPicker
                 label="Logo konumu"
                 value={logo.corner}
-                onChange={(corner) => setLogo((current) => ({ ...current, corner }))}
+                onChange={(corner) => updateLogo({ corner })}
               />
               <Slider
                 label="Logo boyutu"
@@ -904,7 +895,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
                 max={LOGO_SIZE_RANGE.max}
                 step={0.01}
                 format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(v) => setLogo((current) => ({ ...current, size: v }))}
+                onChange={(size) => updateLogo({ size })}
               />
               <Slider
                 label="Saydamlık"
@@ -913,7 +904,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
                 max={LOGO_OPACITY_RANGE.max}
                 step={0.05}
                 format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(v) => setLogo((current) => ({ ...current, opacity: v }))}
+                onChange={(opacity) => updateLogo({ opacity })}
               />
             </>
           ) : null}

@@ -17,25 +17,25 @@
  * "amacla sinirli, olculu veri" ilkesi: bu urun icin hicbiri gerekli degil.
  * Fatura bilgileri odeme (Faz 5) geldiginde ve yalnizca ucretli planda sorulur.
  *
- * NEREDE TUTULUYOR: Supabase `user_metadata`. Ayri tablo acilmadi; alanlar
- * yalnizca GORUNUM ve iletisim icin.
+ * NEREDE TUTULUYOR: Profil alanlari Supabase `user_metadata`'da; yalnizca
+ * GORUNUM ve iletisim icin. Yasal bildirim/kabul kaydi ayrica backend
+ * migration'indaki degistirilemez `user_consents` tablosuna yaziliyor.
  *
  * GUVENLIK / HUKUK SINIRI: `user_metadata` kullanicinin kendisi tarafindan
  * degistirilebilir (Supabase uyarisi). Bu yuzden:
  *  - Hicbir yetki karari bu alanlara dayanmiyor (yonetici: `admin_users`).
- *  - Onay kaydi (`terms_accepted_at`) burada yalnizca kolaylik icin duruyor;
- *    HUKUKEN ispat degeri icin onaylarin kullanicinin degistiremeyecegi bir
- *    tabloda (zaman, surum, IP) tutulmasi gerekiyor — Faz 7 / hukuki metinler
- *    yazilirken ele alinacak (bkz. ROADMAP).
+ *  - Metadata'daki `terms_accepted_at` yalnizca istemci kolayligi icin;
+ *    yetkili kayit sunucu zamanli `user_consents` tablosudur.
  *  - Isim React ile metin olarak ciziliyor; icine yazilan etiket calismaz.
  */
 import { TURKEY_CITIES, type TurkeyCity } from "@/lib/turkey-cities";
+import { LEGAL_DOCUMENT_VERSION } from "@/lib/legal-version";
 
 export const MAX_NAME_LENGTH = 50;
 export const MAX_BUSINESS_NAME_LENGTH = 100;
 
 /** Onaylanan kullanim kosullari + KVKK metninin surumu. Metin degisince artar. */
-export const TERMS_VERSION = "2026-09";
+export const TERMS_VERSION = LEGAL_DOCUMENT_VERSION;
 
 /**
  * Hesap turu (kullanici karari 13.09.2026). Ileride paketler buna gore

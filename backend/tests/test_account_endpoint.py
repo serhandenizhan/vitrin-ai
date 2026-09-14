@@ -74,7 +74,7 @@ def test_requires_session(tokens):
     storage, admin = FakeStorage(), FakeAdmin()
     client = _client(storage, admin, signed_in=False)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
 
     assert response.status_code == 401
     assert storage.deleted_prefixes == []
@@ -85,7 +85,7 @@ def test_deletes_only_own_images_then_user():
     storage, admin = FakeStorage(), FakeAdmin()
     client = _client(storage, admin)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": " TEST@test.example "})
 
     assert response.status_code == 204
     # Önek token'daki kullanıcıdan; sonunda "/" var (başka bir kimliğin
@@ -98,7 +98,7 @@ def test_missing_secret_key_deletes_nothing():
     storage, admin = FakeStorage(), FakeAdmin(configured=False)
     client = _client(storage, admin)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
 
     assert response.status_code == 503
     assert storage.deleted_prefixes == []
@@ -110,7 +110,7 @@ def test_r2_failure_keeps_account():
     storage, admin = FakeStorage(error=error), FakeAdmin()
     client = _client(storage, admin)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
 
     assert response.status_code == 502
     assert admin.deleted_users == []
@@ -123,7 +123,7 @@ def test_unconfigured_r2_returns_503_and_keeps_account():
     admin = FakeAdmin()
     client = _client(storage, admin)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
 
     assert response.status_code == 503
     assert admin.deleted_users == []
@@ -133,11 +133,23 @@ def test_supabase_failure_returns_502():
     storage, admin = FakeStorage(), FakeAdmin(error=SupabaseAdminError("hata"))
     client = _client(storage, admin)
 
-    response = client.delete("/api/account")
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
 
     assert response.status_code == 502
     # Görseller silindi; tekrar denemede önek boş geçilecek.
     assert storage.deleted_prefixes == [f"projects/{USER_ID}/"]
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"email": "baskasi@test.example"}])
+def test_requires_matching_email_confirmation(payload):
+    storage, admin = FakeStorage(), FakeAdmin()
+    client = _client(storage, admin)
+
+    response = client.request("DELETE", "/api/account", json=payload)
+
+    assert response.status_code in (400, 422)
+    assert storage.deleted_prefixes == []
+    assert admin.deleted_users == []
 
 
 # --- R2StorageService.delete_prefix -----------------------------------------

@@ -20,6 +20,7 @@ from app.core.db import Base
 from app.models.admin_user import AdminUser
 from app.models.background import Background  # noqa: F401 - Base.metadata'ya kaydolması için
 from app.models.project import Project  # noqa: F401 - Base.metadata'ya kaydolması için
+from app.models.user_consent import UserConsent  # noqa: F401 - Base.metadata'ya kaydolması için
 from tests.db_safety import (
     AUTH_SCHEMA_COMMENT_SQL,
     UnsafeTestDatabaseError,
@@ -177,7 +178,10 @@ class TokenFactory:
         )
 
     def headers(self, user_id: uuid.UUID, **token_options) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token(user_id, **token_options)}"}
+        return {
+            "Authorization": f"Bearer {self.token(user_id, **token_options)}",
+            "X-Expected-User-Id": str(user_id),
+        }
 
 
 @pytest.fixture

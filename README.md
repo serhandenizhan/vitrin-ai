@@ -48,7 +48,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 185 test (pytest; Faz 4'te eklenen 25'i yerel Postgres'le henüz çalıştırılmadı) · frontend 193 test (Vitest) |
+| Testler | backend 200 test (yerel PostgreSQL ile pytest) · frontend 203 test (Vitest) |
 | Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü ölçülerek doğrulandı) · Instagram dikey 1080×1350 · Pazaryeri 2000×2000 beyaz zemin |
 | Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
 | Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
@@ -66,7 +66,8 @@ RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
   R2 ile uçtan uca denendi.
 - Öne alınan işler: stüdyoda logo, ürün etiketi (ayar/gram/kod), Instagram dikey ve
   pazaryeri boyutları, WhatsApp'ta paylaşım; açılışta aracın gerçek çıktısıyla
-  sürüklenebilir önce/sonra; sitenin genelinde yumuşak geçişler.
+  sürüklenebilir önce/sonra; sitenin genelinde yumuşak geçişler; çekim rehberi;
+  KVKK, gizlilik ve kullanım koşulları sayfaları.
 
 Ayrıntı: `ROADMAP.md` Faz 4, `backend/README.md`, `frontend/README.md`.
 

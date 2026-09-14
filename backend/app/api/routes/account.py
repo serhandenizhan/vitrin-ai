@@ -17,9 +17,11 @@ kalırdı.
 """
 
 import logging
+import secrets
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, get_current_user
 from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
@@ -34,12 +36,34 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+class AccountDeletionConfirmation(BaseModel):
+    """Geri dondurulemez silme icin kullanicinin yazdigi e-posta."""
+
+    email: str = Field(min_length=1, max_length=254)
+
+
+def _same_email(left: str, right: str) -> bool:
+    return secrets.compare_digest(
+        left.strip().casefold().encode("utf-8"),
+        right.strip().casefold().encode("utf-8"),
+    )
+
+
 @router.delete("/api/account", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
+    confirmation: AccountDeletionConfirmation,
     user: CurrentUser = Depends(get_current_user),
     storage: R2StorageService = Depends(get_storage_service),
     admin: SupabaseAdminService = Depends(get_supabase_admin),
 ) -> Response:
+    # Arayuzdeki e-posta yazma adimi yalnizca bir gorunum engeli degil:
+    # dogrudan API istegi de ayni geri dondurulemez onayi kanitlamali.
+    if not user.email or not _same_email(confirmation.email, user.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hesabı silmek için oturumdaki e-posta adresini doğru yazın.",
+        )
+
     try:
         admin.ensure_configured()
     except SupabaseAdminConfigurationError as exc:

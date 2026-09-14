@@ -31,24 +31,33 @@ export type NewWork = {
   result: Blob;
 };
 
+export type WorkPage = {
+  items: WorkRecord[];
+  nextCursor: string | null;
+};
+
 /** Kenar cubugundaki onizleme icin kucuk kare. */
 const THUMB_SIZE = 128;
 
 /** Faz 2'deki tarayici deposunun adi. */
 const LEGACY_DB_NAME = "vitrin-ai";
 
-/** Kayitlari yeniden eskiye dogru dondurur. Oturum yoksa bos liste. */
-export async function listWorks(): Promise<WorkRecord[]> {
+/** Kayitlarin tek sayfasini yeniden eskiye dondurur. */
+export async function listWorks(cursor: string | null = null): Promise<WorkPage> {
   try {
-    const response = await fetch("/api/projects", { cache: "no-store" });
-    if (!response.ok) return [];
-    return (await response.json()) as WorkRecord[];
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    const response = await fetch(`/api/projects${query}`, { cache: "no-store" });
+    if (!response.ok) return { items: [], nextCursor: null };
+    return (await response.json()) as WorkPage;
   } catch {
-    return [];
+    return { items: [], nextCursor: null };
   }
 }
 
-export async function saveWork(work: NewWork): Promise<WorkRecord | null> {
+export async function saveWork(
+  work: NewWork,
+  expectedUserId: string,
+): Promise<WorkRecord | null> {
   try {
     const thumbnail = await makeThumbnail(work.result);
     const form = new FormData();
@@ -60,7 +69,11 @@ export async function saveWork(work: NewWork): Promise<WorkRecord | null> {
       form.append("durationSeconds", String(work.durationSeconds));
     }
 
-    const response = await fetch("/api/projects", { method: "POST", body: form });
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      body: form,
+      headers: { "X-Expected-User-Id": expectedUserId },
+    });
     if (!response.ok) return null;
     return (await response.json()) as WorkRecord;
   } catch {
@@ -69,10 +82,11 @@ export async function saveWork(work: NewWork): Promise<WorkRecord | null> {
 }
 
 /** Basarili olursa true; arayuz kaydi ancak o zaman listeden cikariyor. */
-export async function deleteWork(id: string): Promise<boolean> {
+export async function deleteWork(id: string, expectedUserId: string): Promise<boolean> {
   try {
     const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers: { "X-Expected-User-Id": expectedUserId },
     });
     // 404: kayit zaten yok (baska sekmede silindi) — sonuc ayni.
     return response.ok || response.status === 404;
@@ -81,9 +95,12 @@ export async function deleteWork(id: string): Promise<boolean> {
   }
 }
 
-export async function clearWorks(): Promise<boolean> {
+export async function clearWorks(expectedUserId: string): Promise<boolean> {
   try {
-    const response = await fetch("/api/projects", { method: "DELETE" });
+    const response = await fetch("/api/projects", {
+      method: "DELETE",
+      headers: { "X-Expected-User-Id": expectedUserId },
+    });
     return response.ok;
   } catch {
     return false;

@@ -28,11 +28,10 @@ async def remove_background(
     # doğruluyor; geçersizse 401 ile BiRefNet'e hiç ulaşılmıyor. Kota/kredi
     # (Faz 5) bu kullanıcıya bağlanacak.
     #
-    # Sınır: FastAPI multipart gövdeyi bağımlılıklardan önce ayrıştırıyor, yani
-    # oturumsuz bir istek de gövde sınırına kadar okunuyor. Next.js vekili
-    # oturumu gövdeyi okumadan önce kontrol ettiği için normal akışta bu
-    # gerçekleşmiyor; doğrudan backend'e gelen isteklere karşı asıl önlem Faz 7
-    # rate limiting.
+    # `EarlyAuthenticationMiddleware` bu dependency ile ayni token'i multipart
+    # govde okunmadan once dogrular ve kullaniciyi `request.state`e koyar.
+    # Buradaki dependency o sonucu yeniden kullanir; middleware atlanarak route
+    # test edilse bile auth zorunlulugu yerinde kalir.
     _user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     # Toplam istek gövdesi boyutu sınırı `BodySizeLimitMiddleware` tarafından,

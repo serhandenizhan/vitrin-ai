@@ -171,8 +171,8 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 - Kullanıcıların yüklediği jewelry fotoğrafları **ticari sır** niteliğinde olabilir —
   bir kullanıcının verisi başka bir kullanıcı tarafından hiçbir şekilde görülememeli
   (bkz. 3.2 Yetkilendirme).
-- KVKK (6698 sayılı kanun) kapsamında: Aydınlatma Metni ve Açık Rıza metni gerekli
-  (kayıt sırasında kullanıcıya gösterilir).
+- KVKK (6698 sayılı kanun) kapsamında Aydınlatma Metni yayımlanır; açık rıza
+  yalnızca rızanın uygun hukuki sebep olduğu ayrı amaçlar için alınır.
 - Kullanıcı hesabını silme talebinde bulunduğunda verisinin (fotoğraflar, projeler) makul
   bir sürede silinmesi için bir süreç tanımlanmalı ("right to erasure").
   **Uygulandı (Faz 4):** `/hesap` → "Hesabı sil" (`DELETE /api/account`) önce kullanıcının
@@ -184,9 +184,13 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   cinsiyet, T.C. kimlik no ve adres sorulmuyor. Özgün fotoğraf sunucuda saklanmıyor,
   yalnızca sonuç. Ticari e-posta izni zorunlu onaya bağlı değil, ayrı ve isteğe bağlı; hesap
   sayfasından her an geri alınabiliyor.
-- **Açık:** kayıttaki onay kutusunun atıf yaptığı kullanım koşulları ve KVKK aydınlatma
-  metni henüz yazılmadı; onay kaydı şu an kullanıcının düzenleyebildiği `user_metadata`'da
-  (bkz. `CLAUDE.md` açık takip maddesi 3).
+- **Uygulandı (14.09.2026):** `/kvkk`, `/gizlilik` ve
+  `/kullanim-kosullari` yayımlandı. Gösterilen sürümle kayıt metadata'sına
+  yazılan sürüm tek sabitten gelir; veritabanı trigger'ı kabul/bildirim kaydını
+  sunucu zamanıyla `user_consents` tablosuna ekler. `anon` ve `authenticated`
+  bu tabloyu okuyamaz/değiştiremez; migration eski kabul metadata'sını kaynağı
+  açıkça `metadata_backfill` olarak taşır. Production gerçek veri sorumlusu
+  unvanı/e-postası olmadan build durur; hukukçu son kontrolü hâlâ launch kapısıdır.
 - Üçüncü taraf servislere (Sentry, analytics) gönderilen veri minimize edilmeli — hata
   loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı.
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
@@ -234,13 +238,16 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   CORS (2.2), yönetici yetkisinin kullanıcı tarafından değiştirilemeyen bir tabloda
   tutulması. **Frontend'de yapılanlar:** çerezde oturum, token'ı ileten vekiller, açık
   yönlendirme ve kullanıcı numaralandırması koruması, parola kuralı, arka plan kaldırmada
-  oturum zorunluluğu, hesap silme (3.1, 3.2, 6). Supabase'de access token 15 dakika, parola
-  kuralı ve kısa e-posta bağlantı süresi ayarlandı. **Açık:** Supabase panelinden elle
-  silinen kullanıcının R2 görselleri otomatik temizlenmiyor; KVKK metinleri (bölüm 6).
+  oturum zorunluluğu, hesap silme (3.1, 3.2, 6). Upload'larda multipart'tan
+  önce JWT, toplam gövde sınırı, oturumsuz/geçersiz istekler için IP ve
+  doğrulanmış kullanıcı için kayan pencere hız sınırı uygulanıyor. Supabase'de
+  access token 15 dakika, parola kuralı ve kısa e-posta bağlantı süresi ayarlandı.
+  **Açık:** Supabase panelinden elle silinen kullanıcının R2 görselleri otomatik temizlenmiyor.
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency
 - **Faz 6:** Admin rol kontrolü backend seviyesinde
-- **Faz 7:** Penetrasyon testi / güvenlik taraması, rate limiting'in tamamı, dependency
-  audit, HTTPS/HSTS son kontrol, KVKK metinlerinin yayınlanması — **launch öncesi son kapı**
+- **Faz 7:** Penetrasyon testi / güvenlik taraması, dağıtık (çok worker/instance)
+  rate limiting, dependency audit, HTTPS/HSTS son kontrol ve yasal metinlerin
+  hukukçu kontrolü — **launch öncesi son kapı**
 
 ---
 
@@ -255,6 +262,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Backup + restore test edildi
 - [ ] iyzico webhook imza kontrolü + idempotency test edildi
 - [ ] `npm audit` / `pip-audit` temiz (kritik açık yok)
-- [ ] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
+- [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
+- [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
 - [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
 - [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor

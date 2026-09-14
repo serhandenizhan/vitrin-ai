@@ -43,6 +43,7 @@ const LINKS = [
   { href: "/#dene", label: "Deneyin" },
   { href: "/katalog", label: "Katalog" },
   { href: "/paketler", label: "Paketler" },
+  { href: "/cekim-rehberi", label: "Rehber" },
 ];
 
 /** Panel aciyor; sirasi menudeki gorunum sirasi. */

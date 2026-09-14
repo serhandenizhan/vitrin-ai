@@ -18,6 +18,11 @@ export type BackendProject = {
   expires_in: number;
 };
 
+export type BackendProjectPage = {
+  items: BackendProject[];
+  next_cursor: string | null;
+};
+
 export type WorkRecord = {
   id: string;
   fileName: string;
