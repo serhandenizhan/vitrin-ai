@@ -1,6 +1,6 @@
 # Faz 5 — Ödemeler ve kredi sistemi tasarımı
 
-**Tarih:** 2026-09-14 (v3 — ikinci Codex incelemesinden sonra revize edildi)
+**Tarih:** 2026-09-14 (v4 — üçüncü inceleme turundan sonra revize edildi)
 **Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü bu API sözleşmesine dayanır; arayüz tasarımı ayrı çalışmadır.
 
 ## v2 → v3: kilit düzeltmeler
@@ -14,6 +14,19 @@ v2; rezervasyon, checkout idempotency, gerçek webhook olay adları ve finansal 
 - İptal, plan değişimi, iade, itiraz ve hesap silme provider–DB action/outbox akışına bağlandı.
 - Webhook retry'nin hiç ulaşmayan event'i bulamayacağı kabul edildi; günlük reconciliation launch kapısıdır.
 - Basic/full zemin yetkisi backend'de zorunlu hale getirildi.
+
+## v3 → v4: üçüncü inceleme turunda bulunan üç nokta
+
+- **Plan değişiminde iyzico'nun kendi "upgrade" API'si kaldırıldı** — kendi oranlama
+  davranışını doğrulamadan güvenmek, "oranlama yok" kararımızı sessizce bozabilirdi. Her plan
+  değişimi artık aynı ürün olsa bile yeni checkout + eski aboneliğin iptali.
+- **Ücretli yenilemede webhook gecikmesi açıkça "bilinen sınır" olarak yazıldı** — uydurma bir
+  grace state eklemek yerine (v1'in aynı hatasına düşmemek için) gerçek güvenceler
+  (günlük reconciliation + manuel destek müdahalesi) ve implementasyon sırasında doğrulanacak
+  bir varsayım (iyzico'nun gerçek yenileme zamanlaması) açıkça ayrıştırıldı.
+- **Eşzamanlı çift deneme rezervasyonu artık veritabanı seviyesinde engelleniyor** —
+  `trial_used_at` checkout açılış anında yazılıyor ve `checkout_sessions` üzerinde kullanıcı
+  başına en fazla bir `reserved` trial'a izin veren kısmi unique index eklendi.
 
 ## Kilit kararlar
 
@@ -77,6 +90,8 @@ Her erişim dönemi immutable **subscription_periods** satırıdır:
 
 Kayıt trigger'ı yayımlanmış Deneme sürümüyle ilk aylık dönemi açar. Dönem sonrasında ilk yeni istekte, tek kısa transaction eski dönemi expired yapar ve yeni Deneme dönemi yaratır. Ücretli yenilemede ise yeni dönem yalnız doğrulanmış iyzico başarılı ödemesiyle yaratılır; ödeme yoksa yeni kota verilmez.
 
+**Bilinen sınır — ücretli yenilemede webhook gecikmesi.** Ücretli dönem tamamen webhook güdümlü olduğu için, iyzico'nun yenileme webhook'u dönem bitişinden birkaç dakika/saat geç gelirse, gerçekte ödemesi geçmiş bir müşteri bu aralıkta yeni kota göremeyebilir. iyzico'nun yenileme tahsilatını dönem bitiminden ne kadar önce/sonra denediği doğrulanmadı — bu yüzden burada uydurma bir "grace" durumu **eklenmiyor** (v1'in webhook isim hatasıyla aynı sınıfa düşmemek için). Bunun yerine iki gerçek güvence var: (1) aşağıdaki günlük reconciliation işi bu tür bir gecikmeyi en geç 24 saat içinde yakalayıp düzeltir, otomatik erişim değiştirmeden alarm üretir; (2) destek, bir kullanıcı "ödedim ama erişemiyorum" derse `POST /api/admin/subscriptions/{user_id}/suspend`'in tersi bir manuel düzeltme (dönemi elle `active` yapma) ile anında müdahale edebilir. iyzico'nun gerçek yenileme zamanlamasını (dönem bitiminden önce mi tahsil ediyor, tam sınırda mı) canlı hesapla doğrulamak implementasyonun bir adımı; gerçekten sistematik bir gecikme gözlenirse `ends_at`'e küçük bir teknik tampon eklemek ayrı bir iyileştirme olarak değerlendirilir.
+
 ### usage_reservations ve usage_events
 
 | Alan | Tip | Not |
@@ -112,6 +127,8 @@ Remove-background akışı:
 | created_at, expires_at, completed_at | timestamptz | 30 dakika sınır |
 
 Aynı kullanıcı+idempotency anahtarı pending ise aynı hosted URL döner; süresi dolmuş anahtar 409 döner ve yeni anahtar gerekir. Trial checkout açıldığında yalnız reserved olur; failed/expired session reservation'ı serbest kalır. Trial, yalnız doğrulanmış subscription.order.success sonrasında consumed olur.
+
+**Eşzamanlı çift rezervasyon koruması.** `subscriptions.trial_used_at`, bir `checkout_sessions` satırı `trial_status='reserved'` olarak açıldığı **anda**, aynı transaction'da yazılır — webhook onayını beklemez (v2'de bulunan, "webhook'a kadar bekleyip aynı anda birden fazla checkout ile birden fazla deneme kazanma" riskini kapatmak için). Bunu tek başına yeterli kılan şey: `checkout_sessions` üzerinde **`user_id` için `trial_status = 'reserved'` olan en fazla bir satıra izin veren kısmi unique index** (`CREATE UNIQUE INDEX ... WHERE trial_status = 'reserved'`). Aynı kullanıcı ikinci bir trial-uygun checkout açmaya çalışırsa (ilk hâlâ `reserved` iken) veritabanı seviyesinde reddedilir — uygulama kodundaki bir kontrolü atlamak mümkün değildir.
 
 Webhook erişim vermeden önce dört doğrulama yapar: V3 HMAC, eşleşen/bitmemiş customer_reference_code veya conversation reference, provider subscription ile pricing-plan referansının session plan sürümüyle eşleşmesi, provider ödeme kaydında beklenen tutar ve para birimi. Bir tanesi uyuşmazsa erişim, period ve finansal kayıt oluşmaz; event manuel incelemeye gider.
 
@@ -162,7 +179,7 @@ kabulü ile satış sözleşmesi kabulü aynı satıra veya aynı hukuki sebebe 
 | GET /api/subscriptions/me | Oturum ister; aktif dönem, kota, kullanım, access end ve status döner. |
 | POST /api/subscriptions/checkout | Oturum ister; plan_id ve idempotency_key alır. Fiyat/trial istemciden gelmez. |
 | POST /api/subscriptions/cancel | cancel_subscription action açar; provider iptali başarılı olunca erişim yalnız access_until kadar sürer. |
-| POST /api/subscriptions/change-plan | Aynı iyzico ürün/interval ise provider upgrade; değilse yeni checkout. Eski abonelik yeni ödeme doğrulanmadan iptal edilmez. |
+| POST /api/subscriptions/change-plan | Her zaman yeni checkout (iyzico'nun kendi "upgrade" API'si **kullanılmaz** — bkz. gerekçe aşağıda). Eski abonelik yeni ödeme doğrulanmadan iptal edilmez. |
 | GET /api/billing/history | Kullanıcının sayfalanmış billing_transactions geçmişi. |
 | POST /api/admin/billing/{transaction_id}/refund | Yalnız admin; belirli başarılı charge ve idempotency anahtarı alır. |
 | POST /api/admin/subscriptions/{user_id}/suspend | Yalnız admin; chargeback/dispute için erişimi keser, refund çağırmaz. |
@@ -172,7 +189,7 @@ kabulü ile satış sözleşmesi kabulü aynı satıra veya aynı hukuki sebebe 
 ### İptal, plan değişimi, iade, itiraz ve hesap silme
 
 - **İptal:** iyzico iptali action ile başarılı olmadan kullanıcıya iptal edildi denmez. Remote iptal gelecekteki tahsilatı durdurur; access_until satın alınmış dönemin erişimini korur. Süre sonunda period expired olur.
-- **Plan değişimi:** yeni ücretli charge doğrulanır, yeni period yaratılır; ancak sonra eski provider aboneliği için cancel action başlar. Cancel hata verirse retry ve alarm üretilir. Aynı plan sürümüne geçiş reddedilir.
+- **Plan değişimi:** yeni ücretli charge doğrulanır, yeni period yaratılır; ancak sonra eski provider aboneliği için cancel action başlar. Cancel hata verirse retry ve alarm üretilir. Aynı plan sürümüne geçiş reddedilir. **iyzico'nun kendi "abonelik yükseltme" (upgrade) API'si bilinçli olarak kullanılmıyor** — o API'nin kendi oranlama (proration) davranışını doğrulamadık ve "oranlama yok" kararımızı sessizce bozma riski var; bunun yerine her plan değişimi, ürün aynı olsa bile, yeni bir checkout + eski aboneliğin iptali olarak işleniyor. Daha fazla iyzico API çağrısı pahasına, davranışın tamamı bizim kontrolümüzde kalıyor.
 - **İade:** admin belirli bir charge için refund_payment action açar. Başarılı refund immutable refund kaydı oluşturur, erişimi derhal suspend eder ve aktif provider aboneliği için ayrı cancel action başlatır.
 - **Chargeback:** bankanın zaten uyguladığı chargeback için refund API kesinlikle çağrılmaz. Panel kararı veya doğrulanmış provider olayı chargeback kaydı + suspend action yaratır; sonuç won/lost olur.
 - **Hesap silme:** delete_account action önce aktif provider aboneliklerini iptal eder. Başarı olmadan Auth/R2/uygulama verisi silinmez; retry ve destek görünürlüğü vardır. Mali kayıtlar cascade silinmez; yasal saklama politikasına göre kullanıcı kimliği pseudonymize edilir.
