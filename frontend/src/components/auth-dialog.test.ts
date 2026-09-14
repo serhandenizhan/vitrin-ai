@@ -41,8 +41,8 @@ function completeAccountStep() {
   change("Ad", "Kaan");
   change("Soyad", "Şencan");
   change("E-posta", "kaan@ornek.com");
-  change("Parola", "Kuyumcu2026");
-  change("Parola (tekrar)", "Kuyumcu2026");
+  change("Parola", "Kuyumcu2026!");
+  change("Parola (tekrar)", "Kuyumcu2026!");
   fireEvent.click(screen.getByRole("button", { name: "Devam et" }));
 }
 

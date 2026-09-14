@@ -20,7 +20,7 @@ const MESSAGES: Record<string, string> = {
   email_not_confirmed:
     "E-posta adresiniz henüz doğrulanmadı. Size gönderdiğimiz bağlantıya tıklayın.",
   weak_password:
-    "Parola çok zayıf. En az 8 karakter kullanın; harf ve rakamı birlikte kullanmak daha güvenli.",
+    "Parola çok zayıf. En az 8 karakter; küçük harf, büyük harf, rakam ve bir sembol (!, @, # gibi) birlikte kullanın.",
   same_password: "Yeni parola eskisiyle aynı olamaz.",
   // Sifirlama baglantisinin actigi oturum suresi dolmus ya da hic yok.
   session_not_found:

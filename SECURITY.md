@@ -84,8 +84,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 - Session token'lar / JWT'ler kısa ömürlü (örn. 15dk access + refresh token deseni).
 - Parola sıfırlama linkleri tek kullanımlık ve süreli (15-60dk).
 - **Uygulandı (Faz 4):**
-  - Parola kuralı en az 8 karakter + küçük harf + büyük harf + rakam; Supabase ayarında
-    zorunlu, arayüzde yazarken canlı gösteriliyor (`frontend/src/lib/password-policy.ts`).
+  - Parola kuralı en az 8 karakter + küçük harf + büyük harf + rakam + sembol; Supabase
+    ayarında zorunlu, arayüzde yazarken canlı gösteriliyor (`frontend/src/lib/password-policy.ts`,
+    14.09.2026'da sembol eklendi — istemci kontrolü Dashboard'ın gerçek ayarından geride
+    kalmıştı, bkz. kök `CLAUDE.md` ders 19).
   - E-posta bağlantıları (doğrulama, sıfırlama) kısa süreli ve tek kullanımlık (Supabase
     ayarı); access token 15 dakika.
   - Kullanıcı numaralandırması kapalı: yanlış parola ile kayıtsız e-posta aynı mesajı veriyor;
