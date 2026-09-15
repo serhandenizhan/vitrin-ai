@@ -301,3 +301,111 @@ Kaynaklar: [iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [iyzi
 
 - **Serhan:** migration, iyzico adapter, webhook ingest + worker, dönem/kota, provider actions, iade/itiraz, reconciliation ve testler.
 - **Kaan:** satın alma, kredi bakiyesi, fatura/geçmiş ve backend sözleşmesine bağlı plan ekranları.
+
+## v5 sonrası: uygulama incelemesinde bulunan düzeltmeler (15.09.2026)
+
+v5 spec'i `codex/faz5-odemeler-implementation` dalında (o an henüz commit edilmemiş
+çalışma ağacı, `backend/app/services/billing/` + `backend/app/api/routes/billing.py`
++ ilgili frontend dosyaları) koda döküldü. Backend 242, frontend 216 test geçti; lint
+ve production build temiz — bunlar bağımsız olarak tekrar çalıştırılıp doğrulandı.
+Kod incelemesinde (Claude + Codex, iki turlu) bulunan ve **bir sonraki oturumda
+düzeltilmesi gereken** maddeler:
+
+### 1. P1 — Zemin listesi ödeme/kota kapısına bağlı, sessizce boşalıyor
+
+`GET /api/backgrounds` (`backend/app/api/routes/backgrounds.py`) oturumlu istekte
+`background_tier()`'i (`backend/app/services/billing/entitlements.py`) çağırıyor; bu
+fonksiyon dönem bittiyse/yenileniyorsa/abonelik `suspended`/`past_due` ise
+403/409 fırlatabiliyor. Next.js vekili (`frontend/src/app/api/backgrounds/route.ts`)
+backend'den gelen her `!ok` yanıtı için **boş liste** dönüyor; editör bunu "zemin
+yok" sayıp gradyan yer tutucuya düşüyor — hiçbir hata mesajı yok. Ödeme yenilenirken
+60 saniyelik `billing_renewal_pending` penceresinde bile gerçek bir ödemesi geçmiş
+müşteri zemin kütüphanesini kaybediyor.
+
+**Düzeltme:** zemin listeleme, kota/ödeme kararından tamamen ayrılmalı. `basic`
+zeminler oturum/plan durumundan bağımsız her zaman dönmeli; yalnızca `full` zeminler
+kullanıcının gerçek `background_tier`'ına göre filtrelenmeli (kota/abonelik hatası
+tier sorgusunu `full` isteyemez hâle getirmeli, listenin tamamını boşaltmamalı).
+Asıl kota/ödeme kapısı zaten `POST /api/remove-background`'daki rezervasyonda —
+listeleme uç noktasının bu kapıyı tekrarlamasına gerek yok.
+
+### 2. P2 — Arka plan kaldırmada gerçek idempotency yok
+
+`frontend/src/components/background-remover.tsx`, her `fetch` çağrısında
+`crypto.randomUUID()` üretiyor — iki hızlı tıklama ya da kullanıcının elle tekrar
+denemesi iki farklı `Idempotency-Key` ile gidip backend'de iki ayrı rezervasyon
+(iki kredi) açabiliyor. Backend'in atomik kota kodu doğru; eksik olan istemci
+tarafının "bu, aynı mantıksal iş" bilgisini taşımaması.
+
+**Düzeltme:** idempotency anahtarı dosya/iş oturumu başına (seçilen dosyayla
+birlikte) üretilip **backend'in kesin başarısız olduğunu ve kredinin iade
+edildiğini bildirdiği** durumda yeni bir anahtarla değiştirilmeli. Belirsiz bir ağ
+hatasında (bağlantı koptu, ne olduğu bilinmiyor) **aynı anahtar korunmalı** —
+aksi hâlde gerçekten başarılı olmuş ama yanıtı istemciye ulaşmamış bir işlem,
+`request_already_processed` hatasıyla kullanıcıya "başarısız" gibi görünüp farklı
+bir anahtarla tekrar denenir ve ikinci bir kredi yakar.
+
+### 3. `past_due` için kısa grace period + kart güncelleme e-postası eksik — kullanıcı kararına dönülüyor
+
+Brainstorming turunda açıkça seçilen karar: *"Kısa bir yeniden deneme süresi —
+abonelik `past_due` durumuna geçer, erişim birkaç gün (ör. 3 gün) daha devam eder,
+kullanıcıya kartını güncellemesi için e-posta gider."* v3'ten itibaren (bu spec'in
+kod tarafında değil, dokümanında) bu karardan sessizce uzaklaşıldı — şu anki
+`entitlements.py::ensure_period` `past_due` durumunda dönem hâlâ geçerli olsa bile
+anında 403 veriyor, e-posta hiç yok. **Kullanıcı bu turda kısa grace + e-posta
+kararını teyit etti — geri getirilecek.**
+
+**Düzeltme:**
+- `subscriptions.status='past_due'` olduğunda (yenileme denemesi başarısız
+  döndüğünde) erişim **anında kesilmez** — `access_until`'e (ya da yeni bir
+  `past_due_access_until` alanına) göre en fazla **3 gün** daha `full`/`basic`
+  zemin ve arka plan kaldırma erişimi sürer, kota yeni dönem kadar sıfırlanmaz
+  (var olan `used_this_period`'a devam edilir, yeni kredi verilmez).
+- 3 gün dolunca (bir bakım işi ya da `ensure_period`'ın kendisi) durum
+  `expired`'a döner, erişim kesilir.
+- `past_due`'ya geçişte kullanıcıya "ödemeniz alınamadı, kartınızı güncelleyin"
+  e-postası gönderilmeli (Resend, mevcut SMTP entegrasyonu — yeni bir sağlayıcı
+  gerekmiyor).
+- Bu, "sınırsız/uydurma bir entitlement grace'i" değil — süresi net (3 gün),
+  kullanıcının kendi seçtiği bir ürün kararı; v3-v5'in bu noktada karardan
+  sapması yanlıştı, spec'in kendisi düzeltiliyor.
+
+### 4. P3 — iyzico imza/istek varsayımları sandbox'ta doğrulanmalı (launch kapısı, kod değil)
+
+`backend/app/services/billing/provider.py::verify_webhook` (V3 imza alan sırası,
+hex/lowercase karşılaştırma) ve `Iyzico.request` (IYZWSv2 imzasında query string'in
+dışlanması) doğrulanmamış varsayımlar. Kod fail-closed (yanlışsa webhook reddedilir/
+istek 401 alır, sahte erişim açılmaz) — bu bir kod hatası değil, canlıya geçmeden
+**ilk** yapılacak gerçek merchant sandbox testi. `docs/billing-runbook.md`'nin
+açılış kapıları listesinde zaten var; orada kaldığından emin olunmalı.
+
+### 5. P3 — Ters proxy arkasında IP hız sınırı tek kovaya düşebilir
+
+`backend/app/services/billing/limits.py`, `request.client.host` kullanıyor.
+Hetzner'de nginx/Caddy arkasında güvenilir `X-Forwarded-For` yapılandırması
+olmadan bu, proxy'nin kendi IP'si olur — tüm public trafik (`limit_public`, 600/dk)
+tek kovayı paylaşır. **Düzeltme:** uvicorn `--proxy-headers` ve yalnızca gerçek
+proxy IP'sine `--forwarded-allow-ips` ile başlatılmalı; `docs/billing-runbook.md`'ye
+bu adım açıkça eklenmeli.
+
+### 6. P3 — `billing_signup` trigger'ı `SELECT ... INTO STRICT` ile kırılgan
+
+`backend/alembic/versions/0005_billing.sql::billing_signup()`, yayımlanmış aktif
+bir `deneme` plan sürümünü zorunlu bekliyor. Bu sürüm yanlışlıkla emekliye
+ayrılır/silinirse **tüm yeni kayıtlar** trigger hatasıyla kırılır. **Düzeltme:**
+`deneme` planının son yayımlanmış sürümünün emekliye ayrılmasını engelleyen bir
+DB kısıtı (ya da en azından admin plan-yayınlama uç noktasında açık bir kontrol)
+eklenmeli.
+
+### 7. P3 — Tek eşzamanlı pending checkout, kullanıcıya sessiz görünüyor
+
+`checkout_one_pending` kısmi unique index'i (doğru bir güvenlik kararı — çift
+abonelik önler) kullanıcıyı 30 dakika boyunca farklı bir plan denemekten
+alıkoyuyor ama arayüz bunu "devam eden bir ödeme var" diye açıklamıyor.
+**Düzeltme (P3, launch'ı bloklamaz):** `checkout_pending`/`idempotency_conflict`
+hatası geldiğinde frontend kullanıcıyı var olan `/odeme/{id}` sayfasına
+yönlendirmeli ve orada "bu işlemi iptal et, yeni plan seç" seçeneği sunmalı.
+
+**Öncelik sırası bir sonraki oturum için:** 1 ve 2 (P1/P2, davranış hatası) → 3
+(kullanıcı kararına dönüş) → 4 ve 5 (launch kapıları, runbook'ta izlenmeli) → 6 ve
+7 (P3, zaman kalırsa).
