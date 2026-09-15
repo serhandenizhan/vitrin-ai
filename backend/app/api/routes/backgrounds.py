@@ -1,3 +1,9 @@
+from typing import Literal
+from fastapi import Form, Request
+from app.core.auth import get_current_user
+from fastapi.security import HTTPAuthorizationCredentials
+from app.services.billing.entitlements import background_tier
+from app.services.billing.provider import get_provider
 import uuid
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -34,6 +40,7 @@ CONTENT_TYPE_TO_EXTENSION = {
 )
 async def create_background(
     file: UploadFile = File(...),
+    tier: Literal["basic", "full"] = Form("basic"),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict[str, str]:
@@ -76,7 +83,7 @@ async def create_background(
             detail="Arka plan depolamaya yüklenemedi.",
         ) from exc
 
-    db.add(Background(id=background_id, r2_key=r2_key))
+    db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
     await db.commit()
 
     return {"id": str(background_id)}
@@ -84,12 +91,20 @@ async def create_background(
 
 @router.get("/api/backgrounds")
 async def list_backgrounds(
+    request: Request,
+    provider=Depends(get_provider),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> list[dict[str, str | int]]:
+    tier = "basic"
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        user = await get_current_user(HTTPAuthorizationCredentials(scheme=scheme, credentials=token), request)
+        tier = await background_tier(db, user.id, provider)
     result = await db.execute(
         select(Background)
-        .where(Background.is_active.is_(True))
+        .where(Background.is_active.is_(True), Background.tier.in_(("basic", "full") if tier == "full" else ("basic",)))
         .order_by(Background.created_at)
     )
     backgrounds = result.scalars().all()

@@ -177,10 +177,11 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   yalnızca rızanın uygun hukuki sebep olduğu ayrı amaçlar için alınır.
 - Kullanıcı hesabını silme talebinde bulunduğunda verisinin (fotoğraflar, projeler) makul
   bir sürede silinmesi için bir süreç tanımlanmalı ("right to erasure").
-  **Uygulandı (Faz 4):** `/hesap` → "Hesabı sil" (`DELETE /api/account`) önce kullanıcının
-  R2'deki bütün görsellerini, sonra Supabase kullanıcısını siliyor; veritabanı satırları
-  cascade ile gidiyor. Supabase panelinden elle silinen bir kullanıcının R2 görselleri ise
-  hâlâ otomatik temizlenmiyor.
+  **Faz 5:** `/hesap` → `DELETE /api/account` 202 ile kalıcı talep oluşturur.
+  Önce provider iptalleri doğrulanır, ardından R2/Auth silinir. Mali ve kabul
+  kayıtlarının kimlik bağlantısı ayrılır; para kayıtları cascade silinmez.
+  Aktif ödemesi olan hesabın doğrudan Auth silmesi DB trigger'ıyla engellenir.
+  Ödemesiz hesabın panelden silinmesinde R2 temizliği operatör sorumluluğudur.
 - **Veri ölçülülüğü (Faz 4):** kayıtta yalnızca ürün için gerekli bilgiler soruluyor (ad,
   soyad, e-posta, hesap türü, şirket adı/türü, şehir, isteğe bağlı telefon); doğum tarihi,
   cinsiyet, T.C. kimlik no ve adres sorulmuyor. Özgün fotoğraf sunucuda saklanmıyor,
@@ -264,10 +265,25 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] CORS sadece bilinen origin'lere izin veriyor
 - [ ] DB ve Redis dışarıya kapalı
 - [ ] Backup + restore test edildi
-- [ ] iyzico webhook imza kontrolü + idempotency test edildi
+- [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
 - [ ] `npm audit` / `pip-audit` temiz (kritik açık yok)
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
 - [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
 - [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor
 - [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi (Faz 5'te sandbox aşaması — yalnızca kendi hesabına gönderim — kapatıldı; bu, gerçek müşterilere e-posta gitmesi için son adım — bkz. kök `CLAUDE.md` açık takip maddesi 4)
+
+## Faz 5 uygulama sınırları
+
+Plan, dönem ve mali kayıtlar kullanıcı metadata'sından türetilmez. Plan/mali/kabul
+snapshot'ları korunur; tutarlar tam sayı kuruş olarak tutulur. Kart alanları
+izole iyzico formunda kalır; backend kart almaz veya loglamaz. Webhook HMAC V3
+kontrolünden sonra kalıcı kaydedilir; erişim yalnızca provider detaylarıyla açılır.
+Checkout fiyat sürümü ve kabul hash'leri eşleşmelidir. Kota düşümü atomik ve
+request-id tekildir. Zemin seviyesi backend'de doğrulanır. Redis billing hız
+sınırları ve Next.js Origin kontrolü eklenmiştir.
+
+Hukuk/faturalama/retention onayları ile gerçek merchant/3DS ve alarm izleme
+kurulumu üretim açılış koşullarıdır. PCI kapsamı otomatik olarak sertifikalanmış
+sayılmaz. Belirsiz iadede otomatik tekrar durur; kanıtlı admin uzlaştırması gerekir.
+İşletim ve saklama prosedürü: [ödeme runbook'u](docs/billing-runbook.md).

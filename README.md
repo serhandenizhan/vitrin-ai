@@ -16,6 +16,11 @@ koruyor.
 **Faz 3 — arka plan kütüphanesi + kompozisyon editörü** ve **Faz 4 — veritabanı ve
 kullanıcı hesapları** tamamlandı.
 
+**Faz 5 uygulaması hazır:** dönem kotası, iyzico checkout/webhook, abonelik
+yönetimi, ödeme geçmişi ve bakım kuyrukları eklendi. Canlı ödeme açılışı için
+merchant sandbox doğrulaması ve işletim kurulumu bekliyor.
+[Ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
+
 - Faz 1: `POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
   gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
 - Faz 2: Next.js arayüzü — sürükle-bırak yükleme, istemci tarafı doğrulama,

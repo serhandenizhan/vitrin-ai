@@ -29,6 +29,7 @@ class Project(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     # Yalnızca GÖRÜNTÜLEME metni. R2 anahtarlarında hiçbir koşulda kullanılmaz
     # (path traversal koruması, SECURITY.md bölüm 4).
+    background_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     file_name: Mapped[str] = mapped_column(Text, nullable=False)
     is_mocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)

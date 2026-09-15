@@ -78,7 +78,11 @@ export async function callBackend(
       typeof payload?.detail === "string" && payload.detail.length > 0
         ? payload.detail
         : init.fallbackError;
-    return { ok: false, response: jsonError(message, upstream.status) };
+    const detail = payload?.detail as { code?: string; message?: string } | undefined;
+    const response = jsonError(typeof detail?.message === "string" ? detail.message : message, upstream.status, typeof detail?.code === "string" ? detail.code : undefined);
+    const retry = upstream.headers.get("Retry-After");
+    if (retry) response.headers.set("Retry-After", retry);
+    return { ok: false, response };
   }
 
   return { ok: true, response: upstream };

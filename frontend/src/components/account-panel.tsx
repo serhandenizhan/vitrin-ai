@@ -463,6 +463,10 @@ function DeleteAccountCard({ email }: { email: string }) {
         setError(payload?.error ?? "Hesabınız silinemedi.");
         return;
       }
+      if (response.status === 202) {
+        setError("Silme talebiniz alındı. Abonelik iptali tamamlandıktan sonra hesabınız ve görselleriniz silinecek.");
+        return;
+      }
       // Kullanici sunucuda silindi; bu cihazdaki cerezler de temizleniyor.
       await createClient().auth.signOut({ scope: "local" }).catch(() => undefined);
       returnToStart();

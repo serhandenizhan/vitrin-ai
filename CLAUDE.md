@@ -62,7 +62,10 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
 - **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme"). **Frontend tarafı:** tarayıcı token'ı hiç görmüyor; Next.js vekilleri (`src/lib/backend-proxy.ts`) çerezdeki oturumdan token'ı alıp `Authorization` başlığıyla iletiyor. `src/proxy.ts` her istekte oturumu yeniliyor ama **yetkilendirme sayılmaz** — asıl kontrol backend'de. Ekranda gösterilen profil bilgileri (ad, şirket, hesap türü) Supabase `user_metadata`'da ve kullanıcının düzenleyebildiği veri olduğu için hiçbir yetki kararında kullanılmaz.
-- **Ödemeler:** iyzico
+- **Ödemeler (Faz 5):** iyzico; iş kuralları `backend/app/services/billing` içinde.
+  Ödeme kodunu değiştirirken, migration yaparken veya canlı açılış/kurtarma
+  yürütürken önce [ödeme runbook’unu](docs/billing-runbook.md) okuyun.
+  Checkout varsayılan kapalı; yerel test başarısı merchant sandbox doğrulaması sayılmaz.
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
 
@@ -211,22 +214,9 @@ bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 
 Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
 e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"
-ekranı — bkz. `frontend/README.md` "Hesaplar"). Şu an hiçbir özel SMTP
-sağlayıcısı (Resend/Postmark/SendGrid vb.) bağlı değil; proje Supabase'in
-projeyle birlikte gelen **dahili e-posta servisini** kullanıyor.
-
-Bu servis yalnızca test/geliştirme için: saatte birkaç e-postayla sınırlı,
-genel bir Supabase alan adından gönderiliyor (spam'e düşme riski yüksek) ve
-Supabase'in kendisi de production'a çıkmadan önce özel bir SMTP
-bağlanmasını açıkça öneriyor.
-
-**14.09.2026'da gerçek bir kayıt denemesinde gözlemlendi:** doğrulama
-e-postası ne gelen kutusuna ne spam'e düştü, hiç ulaşmadı — rate limit'e
-takılmış olabilir ya da dahili servisin kendi bir sınırına. Kod tarafında
-zaten `over_email_send_rate_limit` diye ayrı bir hata mesajı var (bu
-senaryo öngörülmüştü) ama arayüzde bu hata da gösterilmedi; e-posta
-isteği sessizce mi başarısız oldu yoksa gönderilip mi kayboldu, Supabase
-Dashboard → Authentication → Logs'tan doğrulanmadı.
+ekranı — bkz. `frontend/README.md` "Hesaplar"). Resend özel SMTP sandbox
+entegrasyonu 14.09.2026'da bağlandı ve doğrulandı. Üretim için kendi alan adının
+SPF/DKIM doğrulaması ve gönderen adresinin değiştirilmesi bekliyor.
 
 **Çözüm iki aşamalı — sağlayıcı seçildi (Resend, 14.09.2026):**
 

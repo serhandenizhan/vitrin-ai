@@ -1,3 +1,4 @@
+import { getAccessToken } from "@/lib/supabase/access-token";
 /**
  * Arka plan kutuphanesi vekili (proxy).
  *
@@ -79,7 +80,9 @@ function createResponse(
 
 export async function GET(): Promise<Response> {
   try {
+    const token = await getAccessToken();
     const backendResponse = await fetch(`${BACKEND_URL}/api/backgrounds`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
       cache: "no-store",
     });

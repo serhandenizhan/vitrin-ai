@@ -1,3 +1,4 @@
+from app.services.billing.usage import get_usage_quota
 import asyncio
 import io
 import struct
@@ -78,12 +79,20 @@ def _signed_in_user() -> CurrentUser:
     return CurrentUser(id=uuid.uuid4(), email="test@test.example", session_id=None)
 
 
+class FakeQuota:
+    async def reserve(self, user_id, request_id):
+        return None
+    async def resolve(self, reservation_id, success):
+        return True
+
+
 def _client_with_fake_service(fake_service: FakeBackgroundRemovalService) -> TestClient:
     # Bu dosyadaki testler yükleme/doğrulama davranışını sınıyor; oturum
     # zorunluluğu aşağıdaki ayrı testlerde gerçek token doğrulamasıyla sınanıyor.
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
     app.dependency_overrides[get_current_user] = _signed_in_user
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
     return client
 
 
@@ -111,7 +120,8 @@ def test_rejects_request_without_session_with_401_and_service_not_called(tokens)
     # oturumsuz istek 401 alıyor ve BiRefNet HİÇ çağrılmıyor.
     fake_service = FakeBackgroundRemovalService()
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -125,7 +135,8 @@ def test_rejects_request_without_session_with_401_and_service_not_called(tokens)
 def test_rejects_invalid_token_with_401_and_service_not_called(tokens):
     fake_service = FakeBackgroundRemovalService()
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -141,7 +152,8 @@ def test_accepts_request_with_valid_token(tokens):
     # KABUL yolu (ders 15): override yok, gerçek JWT doğrulaması.
     fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -402,7 +414,8 @@ def test_returns_429_immediately_when_admission_capacity_is_full():
 
     app.dependency_overrides[get_background_removal_service] = lambda: BlockingService()
     app.dependency_overrides[get_current_user] = _signed_in_user
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     first_response: dict = {}
 
@@ -525,6 +538,7 @@ def test_validate_upload_runs_in_threadpool_without_blocking_event_loop(monkeypa
         fake_file = _FakeUploadFile(_jpeg_bytes(), "image/jpeg")
         fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
         response = await remove_background(
+            quota=FakeQuota(), request_id=uuid.uuid4(),
             file=fake_file, service=fake_service, _user=_signed_in_user()
         )
         assert response.status_code == 200

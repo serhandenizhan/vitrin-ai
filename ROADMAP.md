@@ -607,16 +607,18 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
    filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —
    ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
 
-### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
+### Faz 5 — Ödemeler ve kredi sistemi — Uygulandı; canlı açılış bekliyor (15.09.2026)
 
-- Serhan: kredi modeli mantığı, iyzico entegrasyonu, webhook'lar, kullanım bazlı düşüm
-- Kaan: satın alma akışı arayüzü, kredi bakiyesi gösterimi, fatura/geçmiş sayfası
-
-**Güvenlik gereksinimleri (bkz. `SECURITY.md` bölüm 5):**
-- Kredi kartı bilgisi hiçbir zaman kendi backend'imize dokunmaz; iyzico'nun hosted checkout/tokenization akışı kullanılır (PCI-DSS SAQ-A seviyesinde kalmak için)
-- Webhook'lar HMAC imza doğrulamasından geçmeden işlenmez
-- Webhook endpoint'i idempotent olmalı
-- Kart bilgisi hiçbir log'a yazılmaz
+- Dönem snapshot'ları, atomik kota rezervasyonu, ücretsiz aylık yenileme ve son
+  10 proje saklama sınırı; backend basic/full zemin yetkisi.
+- Doğrulanmış iyzico plan sürümleri, tek checkout/trial rezervasyonu, V3 webhook,
+  kayıp callback kurtarma, iptal/plan değişimi ve kalıcı provider kuyrukları.
+- Tam iade, chargeback kanıtları, değişmez mali kayıtlar, hesap silmede provider
+  iptali ve kimlikten ayrıştırılmış saklama; günlük ödeme/iptal/iade mutabakatı.
+- `/paketler`, `/odeme/{id}` ve `/hesap` kredi/ödeme geçmişi arayüzleri.
+- **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
+  hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
+  Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).
 
 ### Faz 6 — Admin paneli — ⏳ Planlanan
 

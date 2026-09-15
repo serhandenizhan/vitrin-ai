@@ -81,17 +81,20 @@ def test_requires_session(tokens):
     assert admin.deleted_users == []
 
 
-def test_deletes_only_own_images_then_user():
+async def test_queues_own_account_deletion_before_side_effects(db_session,create_user):
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    from app.services.billing.actions import claim_action, run_action
+    from unittest.mock import AsyncMock
+    uid = await create_user()
     storage, admin = FakeStorage(), FakeAdmin()
-    client = _client(storage, admin)
-
-    response = client.request("DELETE", "/api/account", json={"email": " TEST@test.example "})
-
-    assert response.status_code == 204
-    # Önek token'daki kullanıcıdan; sonunda "/" var (başka bir kimliğin
-    # önekiyle çakışmasın).
-    assert storage.deleted_prefixes == [f"projects/{USER_ID}/"]
-    assert admin.deleted_users == [USER_ID]
+    response = await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+        CurrentUser(id=uid,email="test@test.example",session_id=None),storage,admin,db_session)
+    assert response.status_code == 202
+    assert storage.deleted_prefixes == [] and admin.deleted_users == []
+    action = await claim_action(db_session)
+    await run_action(db_session,action,AsyncMock(),storage,admin)
+    assert storage.deleted_prefixes == [f"projects/{uid}/"]
+    assert admin.deleted_users == [uid]
 
 
 def test_missing_secret_key_deletes_nothing():
@@ -105,39 +108,23 @@ def test_missing_secret_key_deletes_nothing():
     assert admin.deleted_users == []
 
 
-def test_r2_failure_keeps_account():
-    error = ClientError({"Error": {"Code": "InternalError"}}, "ListObjectsV2")
-    storage, admin = FakeStorage(error=error), FakeAdmin()
-    client = _client(storage, admin)
-
-    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
-
-    assert response.status_code == 502
+@pytest.mark.parametrize("stage", ["r2", "configuration", "supabase"])
+async def test_deletion_worker_failure_is_retryable(db_session,create_user,stage):
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    from app.services.billing.actions import claim_action, run_action
+    from app.services.billing.db import one
+    from unittest.mock import AsyncMock
+    uid = await create_user()
+    storage = FakeStorage(error=RuntimeError("hata") if stage == "r2" else storage_module.R2ConfigurationError("yapılandırılmamış") if stage == "configuration" else None)
+    admin = FakeAdmin(error=SupabaseAdminError("hata") if stage == "supabase" else None)
+    response = await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+        CurrentUser(id=uid,email="test@test.example",session_id=None),storage,admin,db_session)
+    assert response.status_code == 202
+    action = await claim_action(db_session)
+    await run_action(db_session,action,AsyncMock(),storage,admin)
     assert admin.deleted_users == []
-
-
-def test_unconfigured_r2_returns_503_and_keeps_account():
-    # R2ConfigurationError bir RuntimeError; genel "silinemedi" (502) dalına
-    # düşmemeli — kullanıcıya yanlış sebep söylenirdi.
-    storage = FakeStorage(error=storage_module.R2ConfigurationError("R2 yapılandırılmamış"))
-    admin = FakeAdmin()
-    client = _client(storage, admin)
-
-    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
-
-    assert response.status_code == 503
-    assert admin.deleted_users == []
-
-
-def test_supabase_failure_returns_502():
-    storage, admin = FakeStorage(), FakeAdmin(error=SupabaseAdminError("hata"))
-    client = _client(storage, admin)
-
-    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
-
-    assert response.status_code == 502
-    # Görseller silindi; tekrar denemede önek boş geçilecek.
-    assert storage.deleted_prefixes == [f"projects/{USER_ID}/"]
+    assert (await one(db_session,'SELECT status FROM provider_actions WHERE id=:id',id=action['id']))['status']=='failed'
+    assert storage.deleted_prefixes == ([f"projects/{uid}/"] if stage == "supabase" else [])
 
 
 @pytest.mark.parametrize("payload", [None, {}, {"email": "baskasi@test.example"}])

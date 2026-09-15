@@ -1,0 +1,17 @@
+[Unit]
+Description=Vitrin AI billing maintenance
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vitrin
+Group=vitrin
+WorkingDirectory=/opt/vitrin-ai/backend
+EnvironmentFile=/etc/vitrin-ai/backend.env
+ExecStart=/opt/vitrin-ai/backend/.venv/bin/python -m app.services.billing.maintenance
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

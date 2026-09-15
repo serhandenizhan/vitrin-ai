@@ -1,3 +1,8 @@
+import uuid
+import anyio
+from fastapi import Header
+from app.services.billing.usage import UsageQuota, get_usage_quota
+from app.services.billing.errors import billing_error
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
@@ -33,6 +38,8 @@ async def remove_background(
     # Buradaki dependency o sonucu yeniden kullanir; middleware atlanarak route
     # test edilse bile auth zorunlulugu yerinde kalir.
     _user: CurrentUser = Depends(get_current_user),
+    request_id: uuid.UUID = Header(..., alias="Idempotency-Key"),
+    quota: UsageQuota = Depends(get_usage_quota),
 ) -> Response:
     # Toplam istek gövdesi boyutu sınırı `BodySizeLimitMiddleware` tarafından,
     # eşzamanlılık kapasitesi ise `EndpointAdmissionLimiterMiddleware`
@@ -72,6 +79,15 @@ async def remove_background(
     # event loop'unu tamamen bloke eder ve tek worker'lı bir süreçte aynı anda
     # başka hiçbir isteğe (health check dahil) cevap verilemez. `run_in_threadpool`
     # ile ayrı bir thread'e taşınır.
-    result_bytes = await run_in_threadpool(service.remove, content)
+    reservation_id = await quota.reserve(_user.id, request_id)
+    try:
+        result_bytes = await run_in_threadpool(service.remove, content)
+        if not await quota.resolve(reservation_id, True):
+            raise billing_error("reservation_expired", "İşlem süresi doldu; kredi iade edildi. Yeniden deneyin.")
+    except BaseException:
+        # İstemci kopsa bile kısa iade işlemi tamamlanır; process ölümünde bakım işi devralır.
+        with anyio.CancelScope(shield=True):
+            await quota.resolve(reservation_id, False)
+        raise
 
     return Response(content=result_bytes, media_type="image/png")

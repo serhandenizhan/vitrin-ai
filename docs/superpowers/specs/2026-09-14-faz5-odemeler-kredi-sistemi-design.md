@@ -3,6 +3,32 @@
 **Tarih:** 2026-09-14 (v5 — yenileme gecikmesi ve trial yarış düzeltmelerinden sonra revize edildi)
 **Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü bu API sözleşmesine dayanır; arayüz tasarımı ayrı çalışmadır.
 
+## v6 — Uygulama uyarlamaları (15.09.2026)
+
+Bu bölüm aşağıdaki taslak sözleşmelerden farklı olan sağlayıcı ayrıntılarında
+önceliklidir. Kullanıcı HTML/token checkout ve iki sağlayıcı planı uyarlamasını onayladı.
+
+- Hosted URL yerine backend sahiplik kontrollü `/odeme/{session_id}` sayfası ve
+  izole iyzico HTML iframe kullanılır. Callback ardından token/abonelik detayları
+  sunucudan doğrulanır; conversationId retrieve isteğinde gönderilen bir echo'dur.
+- Trial süresi checkout alanı değildir; normal ve 7 günlük denemeli pricing-plan
+  referansları immutable plan sürümünde ayrı tutulur ve ikisi de doğrulanır.
+  Trial başlangıcında tahsilat yoktur: ACTIVE abonelik + gerçek trial dönemi
+  doğrulanınca hak bir kez tüketilir, charge yalnızca gerçek başarılı order içindir.
+- Checkout isteği `expected_plan_version_id` taşır. Eski fiyatla onaydan sonra
+  sürüm değişmişse 409; yeni fiyat kullanıcıya tekrar gösterilmelidir.
+- Geç tahsilat erişim açmaz; gerçek mali kayıt + iptal/tam iade telafisi oluşturur.
+- iyzico conversationId idempotency garantilemez. Initialization timeout'u yeniden
+  gönderilmez; iade dispatch sonrası belirsizlik kalıcı uncertain + kanıtlı admin
+  uzlaştırması gerektirir. İstek imzasında GET query string bulunmaz.
+- Günlük mutabakat abonelik/order taraması ve önceki iki günün sayfalı
+  PAYMENT/REFUND/CANCEL raporlarını kapsar. Farklar alarmdır, otomatik kredi değildir.
+- Ücretsiz başlangıç kotası 10/ay olarak yayımlanır; admin yeni sürüm çıkarabilir.
+  Ücretli fiyatlar iş sahibi tarafından belirlenip doğrulanmadan yayımlanmaz.
+- Hesap silme 202 pending'dir. Kalıcı iş kuyruğu iptalleri doğrular, sonra R2/Auth
+  siler; mali/kabul kayıtlarını kimlikten ayırır. İşletim ve dış açılış koşulları
+  [ödeme runbook'unda](../../billing-runbook.md) tanımlıdır.
+
 ## v2 → v3: kilit düzeltmeler
 
 v2; rezervasyon, checkout idempotency, gerçek webhook olay adları ve finansal ledger ekledi. İkinci incelemede kalan açıklar bu sürümde kapatıldı:

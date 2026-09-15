@@ -137,7 +137,7 @@ export async function POST(request: Request): Promise<Response> {
     upstream = await fetch(`${BACKEND_URL}/api/remove-background`, {
       method: "POST",
       body: upstreamForm,
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}`, "Idempotency-Key": request.headers.get("Idempotency-Key") ?? crypto.randomUUID() },
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });
   } catch (error) {
@@ -160,7 +160,12 @@ export async function POST(request: Request): Promise<Response> {
   if (upstream.status === 401) return authRequired();
 
   if (!upstream.ok) {
-    return jsonError(await upstreamErrorMessage(upstream), upstream.status);
+    const payload = await upstream.clone().json().catch(() => null);
+    const detail = payload?.detail;
+    const result = jsonError(typeof detail?.message === "string" ? detail.message : await upstreamErrorMessage(upstream), upstream.status, typeof detail?.code === "string" ? detail.code : undefined);
+    const retry = upstream.headers.get("Retry-After");
+    if (retry) result.headers.set("Retry-After", retry);
+    return result;
   }
 
   const result = await upstream.arrayBuffer();

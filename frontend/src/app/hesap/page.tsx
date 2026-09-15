@@ -1,3 +1,4 @@
+import { BillingPanel } from "@/components/billing-panel";
 /**
  * Hesabim sayfasi (Faz 4, kullanici paneli).
  *
@@ -27,6 +28,7 @@ export default function AccountPage() {
           <h1 className="display-section text-balance">Hesabım</h1>
           <div className="mt-8">
             <AccountPanel />
+            <BillingPanel />
           </div>
         </div>
       </section>

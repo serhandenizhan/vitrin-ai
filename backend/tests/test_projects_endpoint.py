@@ -441,6 +441,6 @@ async def test_deleted_users_session_gets_401_and_uploaded_objects_are_removed(
     assert response.status_code == 401
     uploaded = {call.args[0] for call in storage.upload.await_args_list}
     removed = {call.args[0] for call in storage.delete.await_args_list}
-    assert len(uploaded) == 2
+    assert len(uploaded) == 0
     assert removed == uploaded
     assert await _project_ids(db_session) == set()

@@ -20,5 +20,6 @@ export async function DELETE(request: Request): Promise<Response> {
     fallbackError: "Hesabınız silinemedi.",
   });
   if (!call.ok) return call.response;
+  if (call.response.status === 202) return Response.json(await call.response.json(), { status: 202, headers: { "Cache-Control": "no-store" } });
   return new Response(null, { status: 204 });
 }

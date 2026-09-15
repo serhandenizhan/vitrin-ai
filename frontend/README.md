@@ -254,7 +254,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**210 test** (Faz 4 kapanış incelemesi + parola kuralına sembol eklenmesi, 14.09.2026). Faz 2-3 dosyaları:
+**216 test** (Faz 4 kapanış incelemesi + parola kuralına sembol eklenmesi, 14.09.2026). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -371,10 +371,9 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
-**Açık — e-posta teslimi (14.09.2026):** doğrulama e-postaları şu an Supabase'in
-dahili (test amaçlı, hız sınırlı) e-posta servisinden gidiyor; gerçek bir kayıt
-denemesinde e-posta ne gelen kutusuna ne spam'e ulaştı. Üretime çıkmadan önce
-özel bir SMTP sağlayıcısı bağlanmalı (bkz. kök `CLAUDE.md` açık takip maddesi 4).
+**E-posta teslimi:** Resend SMTP sandbox bağlantısı doğrulandı (14.09.2026).
+Üretimde kendi alan adının SPF/DKIM ve gönderen adresi kurulumu bekliyor;
+bkz. kök `CLAUDE.md` açık takip maddesi 4.
 
 ### Geçmiş sunucuda
 
@@ -794,3 +793,15 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   reddedebiliyor). `navigator.canShare({ files })` varsa (telefon) paylaşım menüsü
   görselin kendisiyle açılıyor; yoksa (masaüstü — WhatsApp Web'e bağlantıyla dosya
   eklenemiyor) görsel indiriliyor, WhatsApp Web açılıyor ve ne yapılacağı yazıyor.
+
+## Ödemeler (Faz 5)
+
+`/paketler` backend'in yayımladığı fiyat/kota sürümlerini gösterir; kabul edilen
+sözleşme hash'leri ve görülen plan sürümüyle checkout başlatır. `/odeme/{id}`
+iyzico HTML formunu izole iframe'de sunar, sonucu backend'den sorgular.
+`/hesap` kalan kredi, dönem, iptal ve sayfalı mali/fatura geçmişini gösterir.
+Hesap değişince önceki hesabın mali ekranı kaldırılır. Next.js rotaları auth ve
+Origin kontrolü yapan vekillerdir; kota/ödeme iş mantığı backend'dedir.
+Hesap silme yanıtı 202 bekleyen taleptir, tamamlanmış silme olarak gösterilmez.
+Yükleme vekili `Idempotency-Key`, billing hataları ve `Retry-After` bilgisini taşır.
+Canlı açılış ve gerçek iframe/3DS testi için [ödeme runbook'u](../docs/billing-runbook.md).

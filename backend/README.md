@@ -223,27 +223,11 @@ Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 
 ### Hesap silme
 
-`DELETE /api/account` (oturum + gövdede yazılmış hesap e-postası gerekli,
-`204`). Kod: `app/api/routes/account.py`,
-`app/services/supabase_admin.py`.
-
-**Sıra — her adım yarıda kalırsa tekrar denemek güvenli:**
-
-1. **Yapılandırma kontrolü.** `SUPABASE_SECRET_KEY` (ya da `SUPABASE_URL`) yoksa
-   **hiçbir şey silinmeden** `503`. R2 yapılandırılmamışsa da `503`.
-2. **R2 görselleri:** `projects/<user_id>/` önekiyle listelenip sayfa sayfa
-   siliniyor (`R2StorageService.delete_prefix`). Önek token'daki kullanıcıdan;
-   istemciden gelen hiçbir değer girmiyor. Boş ya da `/` ile bitmeyen önek
-   reddediliyor (`projects/u` başka bir kullanıcının `projects/u2/` önekiyle
-   eşleşebilirdi). Başarısızsa `502`, **hesap duruyor**.
-3. **Supabase kullanıcısı:** Auth yönetici API'si
-   (`DELETE <SUPABASE_URL>/auth/v1/admin/users/<id>`). Veritabanından
-   `delete from auth.users` yapılmıyor: `auth` şeması Supabase'e ait ve iç tabloları
-   değişebiliyor. `404` (zaten silinmiş) başarı sayılıyor. Başarısızsa `502`;
-   tekrar denemede R2 adımı boş önekle hızla geçiyor.
-
-Ters sıra (önce hesap) daha kötü olurdu: hesap silindikten sonra R2 hatası alınırsa
-sahibi artık giriş yapıp tekrar deneyemeyeceği için görseller yetim kalırdı.
+`DELETE /api/account` (oturum + gövdede hesap e-postası) artık **202 pending**
+döner. Kalıcı worker önce tüm provider aboneliklerini iptal eder, ardından R2
+öneklerini ve Supabase Auth kullanıcısını siler. Belirsiz ödeme/iptal sonucu
+çözülmeden hesap silinmez. Finansal ve kabul kayıtları cascade silinmez;
+kimlik bağlantısı ayrılır. Ayrıntı ve retry: [ödeme runbook'u](../docs/billing-runbook.md).
 
 **Gizli anahtar** RLS'i atlayan tam yetkili bir anahtar: yalnızca backend'de, hata
 mesajlarına ve loglara hiç yazılmıyor (testle korunuyor). Yeni `sb_secret_...`
@@ -360,7 +344,7 @@ Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF.
 ## Kaynak tüketimi korumaları
 
 `POST /api/remove-background` Faz 4'ten beri **oturum istiyor** (bkz. "Arka plan
-kaldırmada oturum"); kota/kredi kontrolü Faz 5'te gelecek. Oturumdan bağımsız olarak
+kaldırmada oturum"); Faz 5'te kredi kontrolü atomik dönem rezervasyonuyla uygulanır. Oturumdan bağımsız olarak
 kaynak tüketimini sınırlayan beş katman var:
 
 1. **Erken hız sınırı** — `UploadRateLimitMiddleware` oturumsuz/geçersiz
@@ -399,3 +383,15 @@ kaynak tüketimini sınırlayan beş katman var:
    özgüdür** — çoklu worker dağıtımında toplam kapasite `worker_sayısı ×
    MAX_CONCURRENT_INFERENCES` olur; kalıcı, süreçler-arası bir sınır için
    Celery/RQ + Redis kuyruğuna geçmek gerekir (bu PR'ın kapsamı dışında).
+
+## Ödemeler ve kredi (Faz 5)
+
+Kurulum, tüm açılış kapıları ve operasyon prosedürleri:
+[ödeme runbook'u](../docs/billing-runbook.md). Migration `0005`; yeni tabloların
+RLS/grant kısıtları aynı migration'dadır. İş kuralları `app/services/billing`,
+HTTP sözleşmesi `app/api/routes/billing.py` içindedir. PostgreSQL kalıcı kuyrukları
+`deploy/billing-maintenance.timer` işletir; ayrıca Celery gerektirmez.
+`POST /api/remove-background` UUID `Idempotency-Key` ister. Aynı anahtarla ikinci
+inference çalışmaz; hata/stale rezervasyon krediyi iade eder. Başarılı çıktı
+rezervasyonu tüketmeden kullanıcıya dönmez. Yeni billing testleri gerçek izole
+PostgreSQL kullanır, iyzico/R2 yan etkileri taklit edilir.

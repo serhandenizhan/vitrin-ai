@@ -175,6 +175,7 @@ export function BackgroundRemover() {
 
       const response = await fetch("/api/remove-background", {
         method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
         body,
       });
 
@@ -190,6 +191,7 @@ export function BackgroundRemover() {
         );
       }
 
+      window.dispatchEvent(new Event("billing-updated"));
       const blob = await response.blob();
       const mocked = response.headers.get("X-Mock-Response") === "true";
       const duration = (performance.now() - startedAt) / 1000;
