@@ -13,12 +13,12 @@ from app.core.config import settings
 # kırık bir görsel olarak ortaya çıkar — teşhis edilmesi en zor yer. Bu yüzden
 # ayarlar client oluşturulurken burada doğrulanıyor.
 #
-# Doğrulamanın `Settings` içinde değil BURADA olması bilinçli: R2 ayarları
-# yalnızca arka plan kütüphanesi için gerekli. `Settings` seviyesinde zorunlu
-# kılmak, yalnızca `/api/remove-background` kullanan bir geliştiricinin
-# (ve Faz 0-2 kurulumunun) uygulamayı hiç başlatamamasına yol açardı.
-# Ayrıca `GET /api/backgrounds` boş bir veritabanında hiç client oluşturmaz,
-# dolayısıyla R2'siz yerel geliştirme çalışmaya devam eder.
+# Doğrulamanın `Settings` içinde değil BURADA olması bilinçli: `Settings`
+# seviyesinde zorunlu kılmak, R2'si olmayan bir kurulumun uygulamayı hiç
+# başlatamamasına yol açardı. Eksik ayar, R2'ye gerçekten dokunan yolda açık
+# bir hataya dönüşüyor. Faz 5'ten beri o yollardan biri arka plan kaldırma:
+# sonucu idempotency için saklayamayacaksa `ensure_configured()` ile işi
+# baştan reddediyor (bkz. api/routes/remove_background.py).
 REQUIRED_R2_SETTINGS = (
     "r2_account_id",
     "r2_access_key_id",

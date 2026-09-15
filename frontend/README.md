@@ -407,8 +407,10 @@ vekillerine gidiyor (Faz 2'deki IndexedDB geçici çözümü kapandı).
 - Küçük resimler R2'nin süreli adresi; panel açıldığında süresi dolmuş kayıt varsa
   liste yenileniyor.
 - Silme sunucuda başarısız olursa kayıt listeden çıkarılmıyor.
-- Kayıt başarısız olursa (ör. backend'de R2 yapılandırılmamış) sessizce atlanıyor;
-  kesim ve indirme akışı etkilenmiyor.
+- Geçmişe kayıt başarısız olursa (ör. R2 o an yanıt vermedi) sessizce atlanıyor;
+  ekrandaki kesim ve indirme akışı etkilenmiyor. **R2'nin hiç yapılandırılmamış
+  olması artık bu duruma düşmez:** Faz 5'ten beri arka plan kaldırmanın kendisi
+  R2 istiyor (idempotency sonuç deposu) ve kesim o durumda hiç başlamaz.
 
 ### Durum nerede tutuluyor
 

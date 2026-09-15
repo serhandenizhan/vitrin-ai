@@ -637,6 +637,15 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   uygulanmış DB" yolundan upgrade'i doğruluyor.
   Her bulgu için regresyon testi eklendi ve testler eski koda karşı
   çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Backend 285, frontend 235.
+- **Tarayıcıda uçtan uca doğrulama (15.09.2026, yerel Postgres + gerçek Supabase
+  Auth + gerçek R2):** giriş ve kredi göstergesi, arka plan kaldırmada tam bir
+  kredi, bekleyen ödemenin iptalinde fail-closed (sağlayıcı yokken 503, token
+  hiç alınamamışken 409; iki durumda da oturum `pending` kaldı), zemin listesinin
+  askıdaki abonelikte boşalmaması ve `full` zeminin yalnız hak edene gelmesi.
+  Tur iki hata yakaladı ve ikisi de düzeltildi: `/odeme/{id}`'de iptal hatası
+  5 saniyelik durum yoklamasıyla aynı state'i paylaştığı için yazılır yazılmaz
+  siliniyordu (ders 21); `/paketler` ise PR'ın ilk halinde 393 satırlık
+  tasarımından düz bir listeye inmişti, geri getirildi (ders 20).
 - **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
   hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
   Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).

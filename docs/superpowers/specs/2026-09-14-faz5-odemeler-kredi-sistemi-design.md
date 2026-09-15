@@ -473,4 +473,15 @@ Ayrıca aynı incelemenin listedeki yedi maddenin dışında kalan bulguları:
   çalıştırılmaz. Düzeltmeler `0006_billing_review_fixes`'e taşındı ve test,
   "`0005` uygulanmış DB → `0006` upgrade" yolunu ayrıca doğruluyor.
 
+Tarayıcı turunda bulunan ve düzeltilen iki hata (spec'te öngörülmemişti):
+
+- **`/odeme/{id}` iptal mesajı görünmüyordu.** Backend doğru biçimde 503/409
+  döndürüyor ve oturumu kapatmıyordu, ama iptal hatası 5 saniyelik durum
+  yoklamasıyla tek bir state'i paylaşıyordu; yoklamanın başarı dalı mesajı
+  yazılır yazılmaz siliyordu. İptal hatası ayrı state'e alındı.
+- **`/paketler` tasarımı kaybolmuştu.** `d861d9c` 393 satırlık sayfayı üç düz
+  beyaz karta indirmişti. Sayfa geri getirildi; sunum metni statik, fiyat/kota/
+  satın alınabilirlik yalnız `GET /api/plans`ten geliyor, yayımlanmamış plan
+  "Yakında" kalıyor.
+
 Açık kalan tek madde 4'tür ve kod tarafı yoktur: gerçek merchant sandbox turu.
