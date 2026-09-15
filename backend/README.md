@@ -92,8 +92,8 @@ olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 
 yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
 
-**Faz 4 ve kapanış incelemesindeki testlerin tamamı** izole yerel PostgreSQL
-(`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **202
+**Faz 4 ve Faz 5 incelemesindeki testlerin tamamı** izole yerel PostgreSQL
+(`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **285
 test geçti**. Buna hesap, oturum/gövde, DB adres güvenliği, cursor, erken
 JWT, hesap değişimi ve dağıtık hız sınırı testleri dahildir; gerçek Supabase
 test hedefi olarak kullanılmadı.
@@ -333,6 +333,8 @@ sunucu/instance seçin.
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir — boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmadığı için R2'siz yerel geliştirme çalışmaya devam eder |
 | `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi. Aynı değer yanıtta `expires_in` alanı olarak da dönüyor — istemci yenileme zamanını buradan öğrenir, kendi tarafına sabitlemez |
+| `TRUSTED_PROXY_IPS` | boş | Virgülle ayrılmış, GÜVENİLEN ters proxy adresleri. `X-Forwarded-For` yalnızca bağlantı bu listedeki bir adresten geliyorsa okunur; boşken başlık hiç okunmaz (sahte başlıkla hız sınırı kovası değiştirilemez). Uvicorn'un `--forwarded-allow-ips` değeriyle aynı liste olmalı |
+| `RESEND_API_KEY` / `RESEND_BASE_URL` / `BILLING_EMAIL_FROM` | boş / `https://api.resend.com` / boş | "Ödemeniz alınamadı, kartınızı güncelleyin" e-postası. **Ücretli checkout'un açılış koşuludur**: eksikse `BILLING_CHECKOUT_ENABLED=true` olsa bile satın alma 503 döner — kullanıcıya vaat edilen 3 günlük grace penceresinin tek uyarısı bu e-posta. Gönderim yine de yapılamazsa sessiz kalmaz, `billing_alerts`'e `dunning_email_not_sent` yazılır. Gönderim isteği `provider_actions.id`'yi Resend'e `Idempotency-Key` başlığıyla taşır: timeout sonrası tekrar deneme çift e-posta göndermez |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
 değerlerle elle senkron tutulmalı (bkz. kök `CLAUDE.md`). Karşılığı Faz 2'de
@@ -391,7 +393,57 @@ Kurulum, tüm açılış kapıları ve operasyon prosedürleri:
 RLS/grant kısıtları aynı migration'dadır. İş kuralları `app/services/billing`,
 HTTP sözleşmesi `app/api/routes/billing.py` içindedir. PostgreSQL kalıcı kuyrukları
 `deploy/billing-maintenance.timer` işletir; ayrıca Celery gerektirmez.
-`POST /api/remove-background` UUID `Idempotency-Key` ister. Aynı anahtarla ikinci
-inference çalışmaz; hata/stale rezervasyon krediyi iade eder. Başarılı çıktı
-rezervasyonu tüketmeden kullanıcıya dönmez. Yeni billing testleri gerçek izole
-PostgreSQL kullanır, iyzico/R2 yan etkileri taklit edilir.
+`POST /api/remove-background` UUID `Idempotency-Key` ister. **Anahtar isteği
+değil İŞİ tanımlar** ve kredi anahtar başına yalnızca bir kez tüketilir:
+
+- başarılı PNG, `results/<user_id>/<request_id>.png` altında **geçici bir R2
+  nesnesi** olarak saklanır; `usage_reservations` satırı bu anahtarı ve son
+  kullanma zamanını tutar (`RESULT_RETENTION`, **24 saat**);
+- aynı `Idempotency-Key` tekrar gelirse **inference hiç çalışmaz**, saklanan
+  PNG döner, ikinci kredi harcanmaz. Yanıtı ağda kaybolan iş böylece
+  kurtarılabilir olur;
+- ilki hâlâ sürüyorsa ikinci istek `409 request_in_progress` alır (iki hızlı
+  tıklama iki kredi açamaz);
+- iş kesin başarısız olup kredi iade edildiyse (`released`) aynı anahtar yeni
+  bir denemeye açılır — o mantıksal iş henüz tamamlanmadı;
+- saklama süresi dolduysa `request_already_processed` döner ve bu bilinçli
+  olarak **`retry_safe` DEĞİLDİR**: istemcinin kendiliğinden yeni anahtara
+  geçip ikinci krediyi yakmaması için.
+
+Sıra önemli: sonuç **önce saklanır, sonra kredi tüketilir**. Tersi olsaydı
+saklama adımında çöken bir süreç krediyi harcanmış ama sonucu yok bırakırdı.
+
+**Sonuç deposu bir ön koşuldur.** İstek, R2 yapılandırılmamışsa inference'a
+hiç girmeden `503 result_storage_unavailable` döner; yükleme başarısız olursa
+kredi iade edilir ve yine aynı kod döner. Belirsiz bir sonucu yeniden
+inference'a bağlamak, aynı krediyi ikinci kez yakma riski demekti. **Yerel
+geliştirmede de R2 ayarları gerekiyor** (`R2_*`); yalnız arayüzü denemek için
+`frontend/.env.local` içindeki `USE_MOCK_BACKEND=true` kullanılabilir.
+
+Süresi dolan sonuçları bakım turu (`purge_expired_results`) R2'den siler; DB
+kaydı yalnız nesne gerçekten silindikten sonra temizlenir, silme başarısız
+olursa bir sonraki turda tekrar denenir. Hesap silmede `projects/<uid>/` ile
+birlikte `results/<uid>/` öneki de kaldırılır.
+
+**Hata yanıtlarında `retry_safe`:** kredinin hiç tüketilmediğini ya da iade
+edildiğini backend AÇIKÇA bildirir. İstemci yeni bir idempotency anahtarına
+yalnızca bu bayrakla geçer; bayrak yoksa anahtar korunur.
+
+**Zemin listelemesi kota kapısı değildir.** `GET /api/backgrounds` oturumluysa
+`background_tier()`'ı çağırır ama kota/abonelik hatasında (402/403/409) listeyi
+BOŞALTMAZ, `basic` seviyeye düşer; yalnız kimlik hatası (401) gerçek hatadır.
+Asıl kapı rezervasyondur.
+
+**`past_due` erişimi anında kesmez:** `past_due_access_until` bir kez ve tam 3
+gün sonrasına yazılır, o süre boyunca MEVCUT dönemin kalan kotası kullanılır
+(yeni dönem/kredi yok), sonra abonelik `expired` olur. Geçişte kullanıcıya
+kalıcı kuyruktan bir kez "kartınızı güncelleyin" e-postası gider.
+
+**İade/itiraz kapsamı dönem snapshot'ından belirlenir**
+(`billing_transactions.period_id` → `subscription_periods.provider_subscription_reference`):
+eski bir aboneliğin tahsilatını iade etmek kullanıcının güncel paketini kapatmaz.
+
+Yeni billing testleri gerçek izole PostgreSQL kullanır, iyzico/R2 yan etkileri
+taklit edilir. `subscription_periods` DB seviyesinde değişmez olduğu için
+testler zamanı geriye alırken korumayı yalnızca `tests/test_billing.py`
+içindeki `backdate_period` yardımcısında ve yalnız o işlem süresince kapatır.

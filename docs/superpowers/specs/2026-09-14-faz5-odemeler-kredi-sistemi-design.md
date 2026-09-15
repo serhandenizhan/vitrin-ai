@@ -432,6 +432,45 @@ alıkoyuyor ama arayüz bunu "devam eden bir ödeme var" diye açıklamıyor.
 hatası geldiğinde frontend kullanıcıyı var olan `/odeme/{id}` sayfasına
 yönlendirmeli ve orada "bu işlemi iptal et, yeni plan seç" seçeneği sunmalı.
 
-**Öncelik sırası bir sonraki oturum için:** 1 ve 2 (P1/P2, davranış hatası) → 3
-(kullanıcı kararına dönüş) → 4 ve 5 (launch kapıları, runbook'ta izlenmeli) → 6 ve
-7 (P3, zaman kalırsa).
+## v6 sonrası: inceleme bulguları kapatıldı (15.09.2026)
+
+Yukarıdaki yedi madde ile PR #17 incelemesindeki P1/P2 bulguları koda döküldü.
+Her bulgu için ayrı regresyon testi yazıldı ve her test ESKİ koda karşı
+çalıştırılıp kırmızı yandığı görüldü (kök `CLAUDE.md` ders 15). Backend 285,
+frontend 235 test geçiyor; lint ve production build temiz.
+
+| Bulgu | Düzeltme |
+|---|---|
+| 1 — Zemin listesi kota kapısına bağlıydı | `GET /api/backgrounds` artık kota/abonelik hatasında (402/403/409) listeyi boşaltmıyor, `basic`e düşüyor; `full` sızmıyor. Vekil de token reddedilirse oturumsuz bir kez daha soruyor. |
+| 2 — İstemci her istekte yeni idempotency anahtarı üretiyordu | Anahtar iş oturumu başına; yalnız backend `retry_safe` dediğinde yenileniyor, başka her durumda korunuyor. |
+| 3 — `past_due` grace + e-posta | `subscriptions.past_due_access_until` (3 gün, uzamaz), grace boyunca mevcut dönemin kalan kotası, süre dolunca `expired`; "kartınızı güncelleyin" e-postası kalıcı kuyruktan bir kez gidiyor. |
+| 4 — iyzico imza varsayımları | Kod değil launch kapısı; runbook'un "Sandbox kabul kontrolü" bölümünde ilk sıraya alındı. |
+| 5 — Proxy arkasında IP hız sınırı | `TRUSTED_PROXY_IPS` + `client_ip()`; başlık yalnız güvenilen proxy'den okunuyor. Runbook'a `--proxy-headers`/`--forwarded-allow-ips` adımı eklendi. |
+| 6 — Son ücretsiz plan sürümü korunmuyordu | `plan_versions` üzerinde DEFERRED constraint trigger: yayımlanmış `deneme` sürümü olmadan commit edilemiyor. |
+| 7 — Pending checkout sessizdi | Hata yanıtı `checkout_url` taşıyor; `/odeme/{id}` sayfasında "bu işlemi iptal et, yeni plan seç" var ve iptal fail-closed. |
+
+Ayrıca aynı incelemenin listedeki yedi maddenin dışında kalan bulguları:
+
+- **Eski tahsilatın iadesi/itirazı güncel aboneliği kapatmıyor.** Kapsam, mali
+  kaydın dönem snapshot'ındaki provider referansından belirleniyor.
+- **DB silme koruması worker'daki belirsiz initialization koşulunu da uyguluyor.**
+- **Hesap silme işi, Auth kullanıcısı silindikten sonra çökse bile** checkout
+  PII temizliğini tamamlıyor (`target_reference` üzerinden).
+- **Hesap silme vekilinde de Origin kontrolü var.**
+- **`subscription_periods` veritabanı seviyesinde değişmez**; yalnız `status`,
+  `closed_at`, `used_this_period` ve hesap silmedeki `user_id → NULL` serbest.
+- **Kota nedeniyle silme kuyruğundaki proje doğrudan GET'te de 404.**
+- **Gerçek idempotency (kullanıcı kararı, 15.09.2026):** başarılı PNG
+  `results/<user_id>/<request_id>.png` altında 24 saat saklanıyor; aynı anahtar
+  inference'ı HİÇ çalıştırmadan o nesneyi döndürüyor. Kredi anahtar başına
+  yalnızca bir kez tüketiliyor. Sonuç önce saklanıyor, kredi sonra tüketiliyor;
+  sonuç deposu kullanılamıyorsa iş hiç başlamıyor (`result_storage_unavailable`).
+  İlk tasarımda iş yeniden çalıştırılıyordu (3 tekrar/1 saat); kullanıcı bunu
+  reddetti — gereksiz CPU harcıyor ve sınır aşıldığında kullanıcıyı ikinci
+  krediye itiyordu.
+- **Migration yerinde düzenlenmedi.** İlk uygulamada `0005` değiştirilmişti;
+  kullanıcı reddetti: uygulanmış bir revizyon production'da yeniden
+  çalıştırılmaz. Düzeltmeler `0006_billing_review_fixes`'e taşındı ve test,
+  "`0005` uygulanmış DB → `0006` upgrade" yolunu ayrıca doğruluyor.
+
+Açık kalan tek madde 4'tür ve kod tarafı yoktur: gerçek merchant sandbox turu.

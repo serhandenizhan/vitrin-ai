@@ -5,14 +5,18 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from app.core.db import _session_factory, engine
-from app.services.billing.db import one, many, execute, alert
+from app.services.billing.db import one, many, execute, alert, enqueue
 from app.services.billing.provider import (
     get_provider,
     ProviderError,
     EvidenceMismatch,
     minor_units,
 )
-from app.services.billing.entitlements import expire_reservations, ensure_period
+from app.services.billing.entitlements import (
+    expire_reservations,
+    ensure_period,
+    PAST_DUE_GRACE,
+)
 from app.services.billing.checkout import expire_checkouts
 from app.services.billing.payments import verify_checkout, apply_subscription
 from app.services.billing.actions import claim_action, run_action, run_storage_job
@@ -66,12 +70,28 @@ async def process_webhook(db, provider):
         else:
             # Gecikmiş failure başarılı yenilemenin veya yeni planın erişimini kesemez.
             if order.get("orderStatus") == "FAILED":
-                await execute(
+                # Erişim anında kesilmez: `past_due` geçişinde kullanıcıya
+                # kartını güncellemesi için 3 günlük pencere açılır (ürün
+                # kararı). `COALESCE` pencereyi uzatmaz — art arda gelen
+                # başarısız tahsilatlar aynı pencereyi paylaşır ve bu, uyarı
+                # e-postasının idempotency anahtarını da sabit tutar.
+                changed = await one(
                     db,
-                    "UPDATE subscriptions SET status='past_due' WHERE user_id=:uid AND provider_subscription_reference=:ref AND access_until<=now() AND status NOT IN ('suspended','canceled')",
+                    f"""UPDATE subscriptions SET status='past_due',updated_at=now(),
+                    past_due_access_until=COALESCE(past_due_access_until,now()+interval '{PAST_DUE_GRACE}')
+                    WHERE user_id=:uid AND provider_subscription_reference=:ref AND access_until<=now()
+                    AND status NOT IN ('suspended','canceled') RETURNING id,past_due_access_until""",
                     uid=session["user_id"],
                     ref=payload["subscriptionReferenceCode"],
                 )
+                if changed:
+                    await enqueue(
+                        db,
+                        session["user_id"],
+                        "dunning_email",
+                        payload["subscriptionReferenceCode"],
+                        f"dunning:{session['user_id']}:{changed['past_due_access_until'].isoformat()}",
+                    )
         await execute(
             db,
             "UPDATE webhook_events SET processed_at=now(),last_error=NULL,lease_until=NULL WHERE id=:id",
@@ -248,8 +268,37 @@ async def claim_checkouts(db):
     return sessions
 
 
+async def purge_expired_results(db, storage):
+    """Saklama süresi dolmuş idempotency sonuçlarını R2'den siler.
+
+    DB kaydı YALNIZCA nesne gerçekten silindikten sonra temizlenir; silme
+    başarısız olursa kayıt kalır ve bir sonraki turda tekrar denenir.
+    """
+    rows = await many(
+        db,
+        """SELECT id,result_r2_key FROM usage_reservations
+        WHERE result_r2_key IS NOT NULL AND result_expires_at<=now()
+        ORDER BY result_expires_at LIMIT 200""",
+    )
+    await db.commit()
+    for row in rows:
+        try:
+            await storage.delete(row["result_r2_key"])
+        except Exception:  # noqa: BLE001 - R2 hatasi turu cesitli; kayit kalsin
+            await db.rollback()
+            continue
+        await execute(
+            db,
+            """UPDATE usage_reservations SET result_r2_key=NULL,result_expires_at=NULL
+            WHERE id=:id""",
+            id=row["id"],
+        )
+        await db.commit()
+
+
 async def maintenance(db, provider, storage):
     await expire_reservations(db)
+    await purge_expired_results(db, storage)
     # Callback kaybolsa da token üzerinden ilk ödeme/trial bulunur.
     sessions = await claim_checkouts(db)
     for session in sessions:

@@ -15,8 +15,10 @@ class UsageQuota:
     async def reserve(self, user_id, request_id):
         return await reserve(self.db, user_id, request_id, self.provider)
 
-    async def resolve(self, reservation_id, success):
-        return await resolve_reservation(self.db, reservation_id, success)
+    async def resolve(self, reservation_id, success, result_key=None):
+        return await resolve_reservation(
+            self.db, reservation_id, success, result_key=result_key
+        )
 
 
 def get_usage_quota(

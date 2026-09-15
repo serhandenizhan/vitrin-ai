@@ -1,8 +1,9 @@
-import { callBackend, jsonError } from "@/lib/backend-proxy";
+import { callBackend, foreignOrigin, jsonError } from "@/lib/backend-proxy";
 export async function billingProxy(path: string, request?: Request): Promise<Response> {
   let body: string | undefined;
   if (request) {
-    if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) return jsonError("Geçersiz istek kaynağı.", 403);
+    const rejected = foreignOrigin(request);
+    if (rejected) return rejected;
     const payload: unknown = await request.json().catch(() => null);
     if (!payload || JSON.stringify(payload).length > 16384) return jsonError("Geçersiz istek.", 400);
     body = JSON.stringify(payload);

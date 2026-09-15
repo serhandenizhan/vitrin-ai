@@ -74,3 +74,42 @@ describe("DELETE /api/account", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("DELETE /api/account — kaynak kontrolü", () => {
+  it("başka bir sitenin tetiklediği silmeyi backend'e göndermez", async () => {
+    // Oturum çerezde: tarayıcı, başka bir sitenin gönderdiği isteğe de çerezi
+    // ekler. Ödeme mutasyonlarında olan kontrol, geri döndürülemez hesap
+    // silmede yoktu (ayrı ayrı yazıldığı için gözden kaçmıştı).
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { DELETE } = await import("./route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Origin: "https://kotu.test" },
+        body: JSON.stringify({ email: "test@test.example" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("aynı origin'den gelen silmeyi geçirir", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ status: "pending" }, { status: 202 })),
+    );
+    const { DELETE } = await import("./route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+        body: JSON.stringify({ email: "test@test.example" }),
+      }),
+    );
+
+    expect(response.status).toBe(202);
+  });
+});

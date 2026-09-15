@@ -66,6 +66,45 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   Ödeme kodunu değiştirirken, migration yaparken veya canlı açılış/kurtarma
   yürütürken önce [ödeme runbook’unu](docs/billing-runbook.md) okuyun.
   Checkout varsayılan kapalı; yerel test başarısı merchant sandbox doğrulaması sayılmaz.
+  **Erişim kararlarında dört kural:** (1) *listeleme kota kapısı değildir* —
+  `GET /api/backgrounds` kota/abonelik hatasında `basic`e düşer, listeyi
+  boşaltmaz; asıl kapı `POST /api/remove-background`'daki rezervasyondur.
+  (2) *bir tahsilatın iadesi/itirazı yalnızca AİT OLDUĞU aboneliği kapatır* —
+  kapsam `billing_transactions.period_id → subscription_periods.provider_subscription_reference`
+  üzerinden belirlenir, hesap düzeyinde askıya alma yalnız güncel abonelik için.
+  (3) *ödeme alınamadığında erişim anında kesilmez* — `past_due` 3 gün
+  (`past_due_access_until`, uzamaz) mevcut dönemin KALAN kotasıyla sürer, yeni
+  kredi verilmez, sonra `expired`. (4) *idempotency anahtarı İŞİ tanımlar,
+  isteği değil* — kredi anahtar başına yalnızca bir kez tüketilir. Başarılı PNG
+  `results/<user_id>/<request_id>.png` altında 24 saat saklanır; aynı anahtar
+  tekrar gelirse **inference hiç çalışmaz**, saklanan nesne döner. Sonuç ÖNCE
+  saklanır, kredi SONRA tüketilir; sonuç deposu kullanılamıyorsa iş hiç başlamaz
+  (`503 result_storage_unavailable`) — belirsiz bir sonucu yeniden inference'a
+  bağlamak aynı krediyi ikinci kez yakardı. **Bunun sonucu: arka plan kaldırma
+  artık R2 olmadan çalışmıyor**, yerelde de `R2_*` ayarları gerekiyor (yalnız
+  arayüz için `USE_MOCK_BACKEND=true`). İstemci yeni bir anahtara YALNIZCA
+  backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
+  sonuç artık saklanmıyor) anahtar korunur.
+- **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
+  revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
+  değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema
+  düzeltmesi her zaman YENİ numaralı bir migration'a gider (Faz 5 inceleme
+  düzeltmeleri `0006_billing_review_fixes`'te; `0005`'teki iki fonksiyon orada
+  `CREATE OR REPLACE` ile güncelleniyor). Testin de yalnız boş DB'den
+  `upgrade head` yolunu değil, **"önceki revizyon uygulanmış DB → yeni
+  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`).
+- **Dönem snapshot'ı veritabanı seviyesinde değişmezdir** (`period_snapshot`
+  trigger'ı): plan sürümü, provider referansları, tarihler ve kota sonradan
+  güncellenemez; yalnız `status`, `closed_at`, `used_this_period` ve hesap
+  silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
+  korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
+  ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Hız sınırı kovası ters proxy arkasında doğru seçilmeli:** `request.client.host`
+  doğrudan okunursa tüm trafik proxy'nin tek kovasını paylaşır, `X-Forwarded-For`'a
+  körlemesine güvenmek ise sınırı tamamen kaldırır. Başlık yalnız bağlantı
+  `TRUSTED_PROXY_IPS` listesindeki bir adresten geliyorsa okunur; vekil arkasındaki
+  oturumlu uç noktalarda kova kullanıcıya bağlanır
+  (`backend/app/services/billing/limits.py`).
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
 
@@ -142,7 +181,7 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
 - **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). Backend'de R2 yapılandırılmamışsa kayıt sessizce atlanır, kesim ve indirme akışı etkilenmez.
 - **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 210 test). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi) ve açılıştaki önce/sonra için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 235 test). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
@@ -200,7 +239,25 @@ Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kura
 
 **Bilinçli karar (10.09.2026, kullanıcı onayı):** henüz bir production alan adı yok, bu yüzden bucket'a şimdilik yalnızca `http://localhost:3000` için GET/HEAD kuralı eklenecek (şablon `backend/README.md` → "R2 CORS"). **Deploy anında bu maddeye mutlaka geri dönülmeli** — asıl production alan adı belirlendiğinde kurala eklenmezse, canlıda çıkan her kompozisyon sessizce zeminsiz iner (yerelde fark edilmeyen bir hata modu, çünkü localhost zaten kuralda var). Doğrulama: `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli.
 
-### 3. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
+### 3. Ödeme bildirimi ve proxy ayarları deploy anında verilmeli — sahibi: Serhan
+
+İki ayar üretimde verilmezse sistem çalışır ama **sessizce eksik davranır**:
+
+- `RESEND_API_KEY` + `BILLING_EMAIL_FROM` yoksa "ödemeniz alınamadı, kartınızı
+  güncelleyin" e-postası hiç gitmez. Sessiz kalmıyor (`billing_alerts`'e
+  `dunning_email_not_sent` yazılıyor) ama kullanıcı 3 günlük grace penceresini
+  haberi olmadan tüketir.
+- `TRUSTED_PROXY_IPS` (ve uvicorn'un `--proxy-headers` / `--forwarded-allow-ips`
+  değerleri) verilmezse hız sınırı bütün public trafiği proxy'nin tek kovasına
+  koyar; sınır fiilen kalkar ve bunu yerelde fark etmenin yolu yoktur.
+
+Sağlayıcı yeni değil: aşağıdaki 5. maddede Supabase Auth için seçilen Resend'in
+aynısı. Fark, buradaki e-postanın Supabase'in gönderdiği kimlik doğrulama
+postası değil, uygulamanın kendi bildirimi olması — bu yüzden Supabase SMTP
+ayarından değil, kendi `RESEND_API_KEY`'imizle HTTP API'sinden gidiyor.
+Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
+
+### 4. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
 
 KVKK Aydınlatma Metni, Gizlilik Politikası ve Kullanım Koşulları yayımlandı;
 kayıtlar sunucu zamanlı, istemciden değiştirilemeyen `user_consents` tablosuna
@@ -210,7 +267,7 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
 
-### 4. Supabase'in kendi (built-in) e-posta servisi production için yeterli değil — sahibi: Serhan
+### 5. Supabase'in kendi (built-in) e-posta servisi production için yeterli değil — sahibi: Serhan
 
 Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
 e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"

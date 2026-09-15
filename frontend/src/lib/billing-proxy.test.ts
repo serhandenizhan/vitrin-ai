@@ -1,6 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ callBackend: vi.fn() }));
-vi.mock("@/lib/backend-proxy", () => ({ callBackend: mocks.callBackend, jsonError: (error: string, status: number) => Response.json({ error }, { status }) }));
+// `foreignOrigin`/`jsonError` GERÇEK olanlar: kaynak kontrolü paylaşılan bir
+// yardımcıya taşındı, testin doğruladığı şey de o yardımcının kendisi.
+vi.mock("@/lib/backend-proxy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/backend-proxy")>()),
+  callBackend: mocks.callBackend,
+}));
 import { billingProxy } from "./billing-proxy";
 afterEach(() => vi.clearAllMocks());
 it("başka origin'den ödeme mutasyonunu backend'e göndermez", async () => {

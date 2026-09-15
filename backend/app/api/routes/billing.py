@@ -13,7 +13,12 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.services.billing.db import one, many, execute, enqueue, alert
 from app.services.billing.errors import billing_error
-from app.services.billing.provider import get_provider, ProviderError, verify_webhook
+from app.services.billing.provider import (
+    get_provider,
+    ProviderError,
+    ProviderUnavailable,
+    verify_webhook,
+)
 from app.services.billing.checkout import start_checkout, documents
 from app.services.billing.entitlements import (
     current_period,
@@ -21,7 +26,7 @@ from app.services.billing.entitlements import (
     locked_subscription,
 )
 from app.services.billing.payments import verify_checkout
-from app.services.billing.actions import suspend, finish_refund
+from app.services.billing.actions import suspend, finish_refund, stale_reference
 
 from app.services.billing.limits import limit_checkout, limit_public
 
@@ -173,7 +178,79 @@ async def checkout_status(
     return result
 
 
-@router.post("/api/subscriptions/callback")
+@router.post("/api/subscriptions/checkout/{session_id}/cancel")
+async def cancel_checkout(
+    session_id: uuid.UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    provider=Depends(get_provider),
+):
+    """Devam eden satın almayı bırakıp başka bir plan seçebilmek için.
+
+    FAIL-CLOSED: oturum kapatılmadan önce sağlayıcıya sorulur. Sağlayıcı "böyle
+    bir ödeme yok" derse (kanıt uyuşmazlığı) oturum kapatılır; sağlayıcı CEVAP
+    VEREMİYORSA hiçbir şey yapılmaz — uzakta gerçekten açılmış bir aboneliğin
+    üstünü örtmek, kullanıcının iki abonelik ödemesi demek olurdu.
+    """
+    session = await one(
+        db,
+        "SELECT * FROM checkout_sessions WHERE id=:id AND user_id=:uid FOR UPDATE",
+        id=session_id,
+        uid=user.id,
+    )
+    if not session:
+        await db.commit()
+        raise billing_error("not_found", "Satın alma bulunamadı.", 404)
+    if session["status"] != "pending":
+        await db.commit()
+        return {"status": session["status"]}
+    if session["provider_subscription_reference"]:
+        await db.commit()
+        raise billing_error(
+            "checkout_completed",
+            "Bu ödeme için abonelik oluşturulmuş; iptal destek ile yapılır.",
+        )
+    await db.commit()
+    if not session["provider_checkout_token"]:
+        # Initialize gönderildi ama token hiç alınamadı: uzakta abonelik açılmış
+        # olabilir ve bunu buradan bilmenin yolu yok (runbook'taki elle
+        # uzlaştırma adımı).
+        raise billing_error(
+            "checkout_initialization_uncertain",
+            "Bu ödemenin sonucu doğrulanamıyor; destek ile iletişime geçin.",
+        )
+    try:
+        await verify_checkout(db, session, provider)
+    except ProviderUnavailable:
+        await db.rollback()
+        raise billing_error(
+            "billing_not_ready", "Ödeme sağlayıcısı şu anda doğrulanamıyor.", 503
+        )
+    except ProviderError:
+        # Sağlayıcı yanıt verdi ve bu forma bağlı bir abonelik/ödeme yok.
+        await db.rollback()
+    else:
+        await db.commit()
+        raise billing_error("checkout_completed", "Bu ödeme tamamlandı; iptal edilemez.")
+    closed = await one(
+        db,
+        """UPDATE checkout_sessions SET status='failed',
+        trial_status=CASE WHEN trial_status='reserved' THEN 'released' ELSE trial_status END,
+        checkout_form_content=NULL
+        WHERE id=:id AND user_id=:uid AND status='pending' AND provider_subscription_reference IS NULL
+        RETURNING id,status""",
+        id=session_id,
+        uid=user.id,
+    )
+    await db.commit()
+    if not closed:
+        raise billing_error("checkout_completed", "Bu ödeme tamamlandı; iptal edilemez.")
+    return {"status": closed["status"]}
+
+
+@router.post(
+    "/api/subscriptions/callback", dependencies=[Depends(limit_public)]
+)
 async def callback(
     token: str = Form(..., max_length=512),
     db: AsyncSession = Depends(get_db_session),
@@ -518,13 +595,18 @@ async def chargeback(
         original=charge["id"],
     )
     if payload.status != "won":
-        await suspend(db, charge["user_id"])
+        # İade akışıyla aynı kural: itiraz edilen tahsilat kullanıcının GÜNCEL
+        # aboneliğine ait değilse yalnızca o eski aboneliğin dönemleri kapanır,
+        # bugün ödediği paket kapanmaz.
+        stale = await stale_reference(db, charge)
+        await suspend(db, charge["user_id"], stale)
         await enqueue(
             db,
             charge["user_id"],
             "suspend_entitlement",
             charge["user_id"],
             "chargeback:" + payload.provider_reference,
+            {"provider_subscription_reference": stale} if stale else None,
         )
     await db.commit()
     return {"status": payload.status}

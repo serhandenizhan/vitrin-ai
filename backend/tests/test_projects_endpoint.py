@@ -444,3 +444,35 @@ async def test_deleted_users_session_gets_401_and_uploaded_objects_are_removed(
     assert len(uploaded) == 0
     assert removed == uploaded
     assert await _project_ids(db_session) == set()
+
+
+async def test_project_queued_for_deletion_is_hidden_from_direct_get(
+    db_session, tokens, create_user
+):
+    """Silme kuyruğundaki proje liste dışında olduğu gibi id ile de görünmez.
+
+    Liste uç noktası bu projeleri gizliyordu ama doğrudan GET aynı filtreyi
+    uygulamıyordu: worker nesneyi silene kadar kullanıcı imzalı URL almaya
+    devam edebiliyor, iki uç nokta aynı kaynak için farklı cevap veriyordu.
+    """
+    from sqlalchemy import text
+
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    await db_session.execute(
+        text(
+            """INSERT INTO storage_deletion_jobs(project_id,r2_key,thumbnail_r2_key,reason)
+            VALUES(:id,:result,:thumb,'free_history_limit')"""
+        ),
+        {
+            "id": project.id,
+            "result": project.result_r2_key,
+            "thumb": project.thumbnail_r2_key,
+        },
+    )
+    await db_session.commit()
+    client = _client(db_session, _storage_mock())
+
+    assert client.get("/api/projects", headers=tokens.headers(owner)).json()["items"] == []
+    response = client.get(f"/api/projects/{project.id}", headers=tokens.headers(owner))
+    assert response.status_code == 404

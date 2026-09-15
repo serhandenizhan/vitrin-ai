@@ -71,6 +71,19 @@ class R2StorageService:
             ContentType=content_type,
         )
 
+    def ensure_configured(self) -> None:
+        # Çağıranın, gerçek bir ağ çağrısı yapmadan önce deponun kullanılabilir
+        # olduğunu öğrenmesi için. Arka plan kaldırma bunu inference'tan ÖNCE
+        # soruyor: sonuç saklanamayacaksa ~15 saniyelik iş hiç başlamamalı.
+        _require_r2_settings()
+
+    async def download(self, key: str) -> bytes:
+        client = _get_client()
+        response = await run_in_threadpool(
+            client.get_object, Bucket=self._bucket_name, Key=key
+        )
+        return await run_in_threadpool(response["Body"].read)
+
     async def delete(self, key: str) -> None:
         # S3/R2'de olmayan bir anahtarı silmek hata değil (idempotent) —
         # yarım kalmış bir silmeyi tekrar denemek güvenli.

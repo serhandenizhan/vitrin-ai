@@ -133,6 +133,17 @@ class Settings(BaseSettings):
     billing_pre_information_text: str = ""
     billing_legal_approved: bool = False
     billing_invoice_process_ready: bool = False
+    # Ters proxy arkasında gerçek istemci IP'si. Hız sınırı kovaları buna göre
+    # ayrılıyor; liste BOŞKEN `X-Forwarded-For` hiç okunmaz (sahte başlıkla kova
+    # değiştirilemesin diye). Üretimde yalnızca nginx/Caddy'nin kendi adresi
+    # yazılır — uvicorn'un `--forwarded-allow-ips` değeriyle aynı liste.
+    trusted_proxy_ips: str = ""
+    # Ödeme alınamadığında gönderilen "kartınızı güncelleyin" e-postası.
+    # Anahtar yoksa e-posta gönderilmez; sessiz kalmaz, `billing_alerts`'e
+    # açık bir alarm yazılır (bkz. app/services/email.py).
+    resend_api_key: str = ""
+    resend_base_url: str = "https://api.resend.com"
+    billing_email_from: str = ""
 
     @property
     def max_file_size_bytes(self) -> int:
@@ -141,6 +152,10 @@ class Settings(BaseSettings):
     @property
     def cors_allowed_origin_list(self) -> list[str]:
         return _split_origins(self.cors_allowed_origins)
+
+    @property
+    def trusted_proxy_ip_list(self) -> frozenset[str]:
+        return frozenset(_split_origins(self.trusted_proxy_ips))
 
     @field_validator("cors_allowed_origins")
     @classmethod

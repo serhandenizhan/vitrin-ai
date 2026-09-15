@@ -227,8 +227,10 @@ async def apply_subscription(db, user_id, evidence, checkout_id=None):
         if activate:
             await execute(
                 db,
+                # Doğrulanmış tahsilat gelince `past_due` penceresi kapanır:
+                # sonraki başarısız bir yenileme yeniden tam 3 gün almalı.
                 """UPDATE subscriptions SET provider='iyzico',provider_subscription_reference=:ref,
-                access_until=:end,status=:status,updated_at=now() WHERE id=:id""",
+                access_until=:end,status=:status,past_due_access_until=NULL,updated_at=now() WHERE id=:id""",
                 ref=evidence["referenceCode"],
                 end=end,
                 status="trialing"

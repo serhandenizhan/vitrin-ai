@@ -50,6 +50,17 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   brute-force'a karşı sıkı limitlenmeli (örn. IP başına dakikada 5 login denemesi).
 - Kredi sistemi devreye girdiğinde rate limit + kredi kontrolü birlikte çalışmalı; biri
   bypass edilse bile diğeri korumalı.
+- **Ters proxy arkasında kova anahtarı doğru seçilmeli.** `request.client.host`
+  doğrudan okunursa nginx/Caddy arkasında proxy'nin kendi adresi gelir ve bütün
+  public trafik tek kovayı paylaşır — sınır fiilen kalkar. `X-Forwarded-For`'a
+  körlemesine güvenmek ise her isteğe ayrı kova verir, aynı sonucu doğurur.
+  Başlık YALNIZCA bağlantı güvenilen bir proxy'den geliyorsa okunur
+  (`TRUSTED_PROXY_IPS`; `backend/app/services/billing/limits.py::client_ip`).
+- **Vekil arkasındaki oturumlu uç noktalarda kova kullanıcıya bağlanır.** Zemin
+  listesi gibi uç noktalara tarayıcı doğrudan gelmiyor; backend bütün
+  kullanıcılar için AYNI adresi görüyor. Doğrulanmış kullanıcı kendi kovasını
+  alır, anonim trafik IP kovasında kalır (doğrulanmamış bir başlıkla kova
+  seçilemez).
 
 ### 2.2 CORS
 - Backend CORS ayarı sadece bilinen frontend origin'lerine (`localhost:3000` dev,
@@ -249,7 +260,15 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   "Kaynak tüketimi korumaları"). Supabase'de access token 15 dakika, parola
   kuralı ve kısa e-posta bağlantı süresi ayarlandı.
   **Açık:** Supabase panelinden elle silinen kullanıcının R2 görselleri otomatik temizlenmiyor.
-- **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency
+- **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency.
+  **Yapılanlar:** ödeme callback'i ve zemin listesi dahil bütün public uç
+  noktalarda hız sınırı (2.1); proxy arkasında gerçek istemci IP'si; hesap
+  silme vekilinde de ödeme mutasyonlarıyla aynı Origin kontrolü (CSRF);
+  değişmez dönem snapshot'ı (plan sürümü, provider referansları, tarihler ve
+  kota DB trigger'ıyla korunuyor); iade/itiraz kapsamının tahsilatın ait olduğu
+  aboneliğe bağlanması; silme kuyruğundaki projenin doğrudan GET'te de
+  gizlenmesi (IDOR/veri saklama tutarlılığı); Auth silindikten sonra çöken
+  silme işinin PII temizliğini tamamlaması.
 - **Faz 6:** Admin rol kontrolü backend seviyesinde
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
   son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**

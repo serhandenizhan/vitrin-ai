@@ -93,7 +93,9 @@ async def test_queues_own_account_deletion_before_side_effects(db_session,create
     assert storage.deleted_prefixes == [] and admin.deleted_users == []
     action = await claim_action(db_session)
     await run_action(db_session,action,AsyncMock(),storage,admin)
-    assert storage.deleted_prefixes == [f"projects/{uid}/"]
+    # Geçici idempotency sonuçları da aynı silmede gidiyor; aksi hâlde
+    # hesap silindikten sonra `results/<uid>/` yetim kalırdı.
+    assert storage.deleted_prefixes == [f"projects/{uid}/", f"results/{uid}/"]
     assert admin.deleted_users == [uid]
 
 
@@ -124,7 +126,9 @@ async def test_deletion_worker_failure_is_retryable(db_session,create_user,stage
     await run_action(db_session,action,AsyncMock(),storage,admin)
     assert admin.deleted_users == []
     assert (await one(db_session,'SELECT status FROM provider_actions WHERE id=:id',id=action['id']))['status']=='failed'
-    assert storage.deleted_prefixes == ([f"projects/{uid}/"] if stage == "supabase" else [])
+    assert storage.deleted_prefixes == (
+        [f"projects/{uid}/", f"results/{uid}/"] if stage == "supabase" else []
+    )
 
 
 @pytest.mark.parametrize("payload", [None, {}, {"email": "baskasi@test.example"}])

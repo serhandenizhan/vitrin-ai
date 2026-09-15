@@ -19,7 +19,23 @@ async def claim_action(db):
     return row
 
 
-async def suspend(db, user_id):
+async def suspend(db, user_id, reference=None):
+    """Erişimi kapatır; `reference` verilirse YALNIZCA o provider aboneliğini.
+
+    Hesap düzeyinde askıya alma, iadesi yapılan tahsilat kullanıcının GÜNCEL
+    aboneliğine aitse doğrudur. Kullanıcı A paketinden B'ye geçmişse A'nın eski
+    tahsilatını iade etmek B'yi kapatmamalı — o durumda yalnızca eski
+    aboneliğin kendi dönemleri kapatılır.
+    """
+    if reference:
+        await execute(
+            db,
+            """UPDATE subscription_periods SET status='suspended',closed_at=now()
+            WHERE user_id=:uid AND provider_subscription_reference=:ref AND status='active'""",
+            uid=user_id,
+            ref=reference,
+        )
+        return
     await execute(
         db,
         "UPDATE subscriptions SET status='suspended',updated_at=now() WHERE user_id=:uid",
@@ -30,6 +46,30 @@ async def suspend(db, user_id):
         "UPDATE subscription_periods SET status='suspended',closed_at=now() WHERE user_id=:uid AND status='active'",
         uid=user_id,
     )
+
+
+async def stale_reference(db, charge):
+    """Tahsilat güncel abonelikten BAŞKA bir aboneliğe aitse o referansı döner.
+
+    Bağ, mali kaydın dönem snapshot'ı üzerinden kurulur
+    (`billing_transactions.period_id` → `subscription_periods.provider_subscription_reference`);
+    dönem kaydı değişmez olduğu için bu bağ sonradan bozulmaz.
+    """
+    if not charge or not charge["period_id"] or not charge["user_id"]:
+        return None
+    period = await one(
+        db,
+        "SELECT provider_subscription_reference AS ref FROM subscription_periods WHERE id=:id",
+        id=charge["period_id"],
+    )
+    if not period or not period["ref"]:
+        return None
+    sub = await one(
+        db,
+        "SELECT provider_subscription_reference AS ref FROM subscriptions WHERE user_id=:uid",
+        uid=charge["user_id"],
+    )
+    return period["ref"] if sub and sub["ref"] != period["ref"] else None
 
 
 async def refund_action(db, action, provider):
@@ -132,6 +172,25 @@ async def finish_refund(db, transaction, action_id, suspend_access=True):
     )
     if not suspend_access:
         return
+    stale = await stale_reference(db, transaction)
+    if stale:
+        # Eski bir aboneliğin iadesi güncel erişimi kapatmaz; yalnızca o
+        # aboneliğin kendi dönemleri kapatılır ve uzak abonelik iptal edilir.
+        await suspend(db, transaction["user_id"], stale)
+        await enqueue(
+            db,
+            transaction["user_id"],
+            "cancel_subscription",
+            stale,
+            "refund-cancel:" + str(action_id),
+        )
+        await alert(
+            db,
+            "refund_old_subscription",
+            action_id,
+            "Eski aboneliğin iadesi güncel erişimi kapatmadı; hesap incelenmeli.",
+        )
+        return
     await suspend(db, transaction["user_id"])
     sub = await one(
         db, "SELECT * FROM subscriptions WHERE user_id=:uid", uid=transaction["user_id"]
@@ -146,9 +205,42 @@ async def finish_refund(db, transaction, action_id, suspend_access=True):
         )
 
 
+async def delete_user_objects(storage, user_id):
+    """Kullanıcının R2'deki bütün nesneleri: projeler + geçici sonuç kopyaları.
+
+    Idempotency sonuçları (`results/<uid>/`) proje geçmişinden ayrı bir önekte
+    duruyor; burada sayılmazsa hesap silindikten sonra yetim kalırlardı.
+    """
+    for prefix in (f"projects/{user_id}/", f"results/{user_id}/"):
+        await storage.delete_prefix(prefix)
+
+
+async def scrub_deleted_checkouts(db):
+    """Kimliği kopmuş checkout kayıtlarındaki kişisel/ödeme verisini siler.
+
+    Auth FK'leri `user_id`'yi NULL yapar ama form HTML'i, token ve müşteri
+    referansı satırda kalır; bunlar kişisel veri. `user_id IS NULL` üzerinden
+    çalıştığı için tekrar çalıştırılabilir (idempotent).
+    """
+    await execute(
+        db,
+        """UPDATE checkout_sessions SET checkout_form_content=NULL,provider_checkout_token=NULL,
+        customer_reference_code=NULL WHERE user_id IS NULL
+        AND (checkout_form_content IS NOT NULL OR provider_checkout_token IS NOT NULL
+             OR customer_reference_code IS NOT NULL)""",
+    )
+    await db.commit()
+
+
 async def delete_account_action(db, action, provider, storage, admin):
     uid = action["user_id"]
     if uid is None:
+        # Auth kullanıcısı silindikten SONRA çökmüş bir deneme buraya döner:
+        # FK `user_id`'yi NULL yaptığı için eylem kime aitti bilgisi yalnızca
+        # `target_reference`'ta kalır. Erken dönülürse checkout formu, token ve
+        # müşteri referansı kalıcı olarak temizlenmeden kalırdı.
+        await delete_user_objects(storage, action["target_reference"])
+        await scrub_deleted_checkouts(db)
         return
     pending = await one(
         db,
@@ -193,17 +285,54 @@ async def delete_account_action(db, action, provider, storage, admin):
         uid=uid,
     )
     await db.commit()
-    await storage.delete_prefix(f"projects/{uid}/")
+    await delete_user_objects(storage, uid)
     await admin.delete_user(uid)
     # Auth FK'leri kimliği null yapar; para ve kabul kayıtları cascade silinmez.
-    await execute(
-        db,
-        "UPDATE checkout_sessions SET checkout_form_content=NULL,provider_checkout_token=NULL,customer_reference_code=NULL WHERE user_id IS NULL",
+    await scrub_deleted_checkouts(db)
+
+
+async def dunning_email_action(db, action, admin, mailer):
+    """"Ödemeniz alınamadı" bildirimi; kuyruktan gittiği için bir kez gider."""
+    from app.services.email import (
+        EmailNotConfigured,
+        PAST_DUE_BODY,
+        PAST_DUE_SUBJECT,
     )
-    await db.commit()
+
+    if action["user_id"] is None:
+        return
+    try:
+        mailer.ensure_configured()
+    except EmailNotConfigured:
+        # Sessizce atlanmaz: gönderilmemiş bir ödeme uyarısı operatörün
+        # görmesi gereken bir durum. Eylem başarısız sayılıp 10 kez
+        # tekrarlanmaz — yapılandırma gelene kadar sonuç değişmeyecek.
+        await alert(
+            db,
+            "dunning_email_not_sent",
+            action["id"],
+            "Ödeme uyarısı e-postası yapılandırılmadığı için gönderilemedi.",
+        )
+        await db.commit()
+        return
+    email = await admin.get_user_email(action["user_id"])
+    if not email:
+        await alert(
+            db,
+            "dunning_email_not_sent",
+            action["id"],
+            "Kullanıcının e-posta adresi bulunamadı; ödeme uyarısı gönderilemedi.",
+        )
+        await db.commit()
+        return
+    # Kalıcı eylem kimliği hem yerel kuyruğun hem sağlayıcının idempotency
+    # anahtarı: lease süresi dolup iş yeniden alınsa da aynı değer gider.
+    await mailer.send(
+        email, PAST_DUE_SUBJECT, PAST_DUE_BODY, idempotency_key=str(action["id"])
+    )
 
 
-async def run_action(db, action, provider, storage=None, admin=None):
+async def run_action(db, action, provider, storage=None, admin=None, mailer=None):
     try:
         if action["kind"] == "cancel_subscription":
             await provider.cancel(action["target_reference"])
@@ -216,7 +345,13 @@ async def run_action(db, action, provider, storage=None, admin=None):
         elif action["kind"] == "refund_payment":
             await refund_action(db, action, provider)
         elif action["kind"] == "suspend_entitlement":
-            await suspend(db, action["user_id"])
+            # Referans varsa askıya alma o aboneliğe sınırlıdır (eski bir
+            # tahsilatın itirazı güncel paketi kapatmasın diye).
+            await suspend(
+                db,
+                action["user_id"],
+                action["payload"].get("provider_subscription_reference"),
+            )
         elif action["kind"] == "delete_account":
             await delete_account_action(
                 db,
@@ -224,6 +359,15 @@ async def run_action(db, action, provider, storage=None, admin=None):
                 provider,
                 storage or get_storage_service(),
                 admin or get_supabase_admin(),
+            )
+        elif action["kind"] == "dunning_email":
+            from app.services.email import get_email_service
+
+            await dunning_email_action(
+                db,
+                action,
+                admin or get_supabase_admin(),
+                mailer or get_email_service(),
             )
         await execute(
             db,

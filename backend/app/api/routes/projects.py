@@ -171,8 +171,18 @@ def _serialize(project: Project, storage: R2StorageService) -> dict:
 async def _get_owned_project(
     db: AsyncSession, project_id: uuid.UUID, user: CurrentUser
 ) -> Project:
+    # Silme kuyruğundaki proje liste uç noktasında zaten gizleniyor; doğrudan
+    # id ile de gizlenmeli. Aksi hâlde kullanıcı, kotası nedeniyle silinmek
+    # üzere kuyruğa alınmış bir çalışma için worker nesneyi silene kadar imzalı
+    # URL almaya devam ederdi — iki uç nokta aynı kaynak için farklı cevap verirdi.
     project = await db.scalar(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+        select(Project).where(
+            Project.id == project_id,
+            Project.user_id == user.id,
+            ~Project.id.in_(
+                text("SELECT project_id FROM storage_deletion_jobs WHERE project_id IS NOT NULL")
+            ),
+        )
     )
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proje bulunamadı.")

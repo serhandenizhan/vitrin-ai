@@ -78,14 +78,30 @@ function createResponse(
   });
 }
 
+function fetchBackgrounds(token: string | null): Promise<Response> {
+  return fetch(`${BACKEND_URL}/api/backgrounds`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
+    cache: "no-store",
+  });
+}
+
 export async function GET(): Promise<Response> {
   try {
     const token = await getAccessToken();
-    const backendResponse = await fetch(`${BACKEND_URL}/api/backgrounds`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
-      cache: "no-store",
-    });
+    let backendResponse = await fetchBackgrounds(token);
+
+    // Token bu arada gecersizlestiyse (suresi doldu, kullanici silindi) liste
+    // BOSALMAMALI: temel zeminler oturum istemiyor. Oturumsuz bir kez daha
+    // sorulur; editor gradyan yer tutucuya dusmek yerine `basic` kutuphaneyle
+    // calismaya devam eder. Kota/abonelik kararlari backend'de zaten listeyi
+    // bosaltmiyor (bkz. app/api/routes/backgrounds.py).
+    if (backendResponse.status === 401 && token) {
+      console.warn(
+        "[api/backgrounds] backend token'i reddetti; temel zeminler oturumsuz isteniyor",
+      );
+      backendResponse = await fetchBackgrounds(null);
+    }
 
     if (!backendResponse.ok) {
       console.warn(

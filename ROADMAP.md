@@ -526,7 +526,8 @@ sayacı paylaşıyor (bkz. `backend/app/services/rate_limit.py`,
 `backend/README.md` "Kaynak tüketimi korumaları"). `docker-compose.yml`'e bu
 amaçla Redis eklendi; asenkron iş kuyruğu (Celery/RQ) henüz kurulmadı, bu
 Redis örneği şimdilik yalnızca hız sınırlaması için kullanılıyor. Dağıtık
-davranışı doğrudan sınayan bir test eklendi (160 → 201 → **202**): iki ayrı
+davranışı doğrudan sınayan bir test eklendi (o gün 160 → 201 → **202**; güncel
+sayı için kök `README.md`'ye bakın): iki ayrı
 `RequestRateLimiter` nesnesi (iki ayrı worker'ı taklit eder) aynı Redis
 anahtarını paylaşınca sınırın da paylaşıldığını doğruluyor — process içi eski
 implementasyona karşı çalıştırılsaydı bu test kırmızı yanardı, çünkü iki ayrı
@@ -616,6 +617,26 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - Tam iade, chargeback kanıtları, değişmez mali kayıtlar, hesap silmede provider
   iptali ve kimlikten ayrıştırılmış saklama; günlük ödeme/iptal/iade mutabakatı.
 - `/paketler`, `/odeme/{id}` ve `/hesap` kredi/ödeme geçmişi arayüzleri.
+- **PR #17 incelemesinden gelen düzeltmeler (15.09.2026):** zemin listesi
+  kota/ödeme kapısından ayrıldı (hata artık listeyi boşaltmıyor, `basic`e
+  düşüyor); istemcinin idempotency anahtarı iş oturumu başına ve belirsiz ağ
+  hatasında korunuyor; `past_due` için 3 günlük erişim penceresi + "kartınızı
+  güncelleyin" e-postası (ürün kararına dönüş); ödeme callback'i ve zemin
+  listesi hız sınırına alındı; ters proxy arkasında gerçek istemci IP'si
+  (`TRUSTED_PROXY_IPS`); ücretsiz planın son yayımlanmış sürümü DB kısıtıyla
+  korunuyor; devam eden satın alma kullanıcı tarafından (fail-closed) iptal
+  edilebiliyor. Ayrıca: eski tahsilatın iadesi/itirazı güncel aboneliği
+  kapatmıyor, DB silme koruması belirsiz initialization'ı da kapsıyor, hesap
+  silme işi çökme sonrası PII temizliğini tamamlıyor, hesap silme vekilinde de
+  Origin kontrolü var, `subscription_periods` DB seviyesinde değişmez, silme
+  kuyruğundaki proje doğrudan GET'te de 404, ve arka plan kaldırmada gerçek
+  idempotency sözleşmesi: başarılı sonuç 24 saat geçici R2 nesnesinde saklanıyor,
+  aynı anahtar inference'ı hiç çalıştırmadan onu döndürüyor, kredi anahtar başına
+  yalnızca bir kez tüketiliyor. Düzeltmeler `0005` yerinde değiştirilmeden yeni
+  `0006_billing_review_fixes` migration'ında; test hem boş DB'den hem "`0005`
+  uygulanmış DB" yolundan upgrade'i doğruluyor.
+  Her bulgu için regresyon testi eklendi ve testler eski koda karşı
+  çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Backend 285, frontend 235.
 - **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
   hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
   Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).

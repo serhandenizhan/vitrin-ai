@@ -35,6 +35,12 @@ def ensure_checkout_ready():
         or not settings.billing_sales_document_version
         or not settings.billing_sales_document_text
         or not settings.billing_pre_information_text
+        # Kullanıcıya 3 günlük grace penceresi VAAT ediliyor ve o pencerenin
+        # tek uyarısı "kartınızı güncelleyin" e-postası. Gönderim
+        # yapılandırılmadan ödeme sistemi açılırsa kullanıcı pencereyi
+        # haberi olmadan tüketir; bu yüzden e-posta ayarı bir açılış koşulu.
+        or not settings.resend_api_key
+        or not settings.billing_email_from
         or callback.scheme != "https"
         or not callback.netloc
         or (
@@ -52,6 +58,20 @@ def serialize_session(session):
         "id": session["id"],
         "status": session["status"],
         "expires_at": session["expires_at"],
+        "checkout_url": "/odeme/" + str(session["id"]),
+    }
+
+
+def pending_location(session):
+    """Devam eden satın almanın kimliği ve adresi — hata yanıtına eklenir.
+
+    `checkout_one_pending` kısmi unique index'i doğru bir güvenlik kararı
+    (çift abonelik önler) ama kullanıcıyı 30 dakika boyunca başka bir plan
+    denemekten alıkoyuyordu ve arayüz bunu açıklayamıyordu: hata metni
+    kullanıcıyı devam eden işleme götüremez, adres gerekir.
+    """
+    return {
+        "checkout_session_id": str(session["id"]),
         "checkout_url": "/odeme/" + str(session["id"]),
     }
 
@@ -87,7 +107,9 @@ async def start_checkout(db, user, request, provider):
         await db.commit()
         if pending["plan_version_id"] != request.expected_plan_version_id:
             raise billing_error(
-                "idempotency_conflict", "Devam eden işlem başka bir plan sürümüne ait."
+                "idempotency_conflict",
+                "Devam eden işlem başka bir plan sürümüne ait.",
+                **pending_location(pending),
             )
         if pending["status"] != "pending":
             raise billing_error(
@@ -144,7 +166,11 @@ async def start_checkout(db, user, request, provider):
     if pending:
         await db.commit()
         if pending["plan_version_id"] != version["id"]:
-            raise billing_error("checkout_pending", "Devam eden satın alma işlemi var.")
+            raise billing_error(
+                "checkout_pending",
+                "Devam eden satın alma işlemi var.",
+                **pending_location(pending),
+            )
         return serialize_session(pending)
     live = await one(
         db,
