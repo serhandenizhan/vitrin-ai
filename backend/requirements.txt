@@ -26,3 +26,5 @@ cryptography==50.0.1
 # taşındı (dağıtık, çoklu worker/instance arasında paylaşılan durum) — bkz.
 # app/services/rate_limit.py. `redis.asyncio` bu sürümde yerleşik geliyor.
 redis==5.2.1
+# iyzico ve Supabase sunucu çağrıları (test bağımlılığından bağımsız).
+httpx==0.28.1

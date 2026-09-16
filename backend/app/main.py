@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routes.billing import router as billing_router
 from app.api.routes.account import router as account_router
 from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.health import router as health_router
@@ -19,6 +20,7 @@ from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
 from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
+from app.services.billing.limits import checkout_limiter, public_limiter
 
 
 @asynccontextmanager
@@ -29,6 +31,8 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     await upload_ip_limiter.aclose()
     await upload_user_limiter.aclose()
+    await checkout_limiter.aclose()
+    await public_limiter.aclose()
 
 
 app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)
@@ -98,8 +102,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origin_list,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Expected-User-Id"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "X-Expected-User-Id", "Idempotency-Key"],
     max_age=600,
 )
 app.include_router(remove_background_router)
@@ -107,3 +111,4 @@ app.include_router(backgrounds_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(account_router)
+app.include_router(billing_router)

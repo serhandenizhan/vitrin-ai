@@ -54,10 +54,16 @@ const MOCK_CUTOUT_PATH = path.join(
   "sample-cutout.png",
 );
 
-function jsonError(message: string, status: number, code?: string): Response {
-  return Response.json(code ? { error: message, code } : { error: message }, {
-    status,
-  });
+function jsonError(
+  message: string,
+  status: number,
+  code?: string,
+  extra?: Record<string, string | boolean>,
+): Response {
+  return Response.json(
+    { error: message, ...(code ? { code } : {}), ...(extra ?? {}) },
+    { status },
+  );
 }
 
 /**
@@ -137,7 +143,7 @@ export async function POST(request: Request): Promise<Response> {
     upstream = await fetch(`${BACKEND_URL}/api/remove-background`, {
       method: "POST",
       body: upstreamForm,
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}`, "Idempotency-Key": request.headers.get("Idempotency-Key") ?? crypto.randomUUID() },
       signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
     });
   } catch (error) {
@@ -160,7 +166,21 @@ export async function POST(request: Request): Promise<Response> {
   if (upstream.status === 401) return authRequired();
 
   if (!upstream.ok) {
-    return jsonError(await upstreamErrorMessage(upstream), upstream.status);
+    const payload = await upstream.clone().json().catch(() => null);
+    const detail = payload?.detail;
+    // `retry_safe`: kredinin hic tuketilmedigini ya da iade edildigini
+    // backend'in ACIKCA soylemesi. Arayuz yeni bir idempotency anahtarina
+    // yalnizca bu bayrakla geciyor; bayrak yoksa anahtar korunuyor, cunku
+    // sonuc belirsizken yeni anahtar ikinci krediyi yakardi.
+    const result = jsonError(
+      typeof detail?.message === "string" ? detail.message : await upstreamErrorMessage(upstream),
+      upstream.status,
+      typeof detail?.code === "string" ? detail.code : undefined,
+      detail?.retry_safe === true ? { retry_safe: true } : undefined,
+    );
+    const retry = upstream.headers.get("Retry-After");
+    if (retry) result.headers.set("Retry-After", retry);
+    return result;
   }
 
   const result = await upstream.arrayBuffer();

@@ -1,3 +1,8 @@
+from botocore.exceptions import ClientError
+
+from app.services.billing.entitlements import Reservation
+from app.services.billing.usage import get_usage_quota
+from app.services.storage import R2ConfigurationError, get_storage_service
 import asyncio
 import io
 import struct
@@ -78,12 +83,42 @@ def _signed_in_user() -> CurrentUser:
     return CurrentUser(id=uuid.uuid4(), email="test@test.example", session_id=None)
 
 
+class FakeQuota:
+    """Kotadan muaf kullanıcı: rezervasyon açılmaz, sonuç saklanmaz."""
+
+    async def reserve(self, user_id, request_id):
+        return Reservation()
+
+    async def resolve(self, reservation_id, success, result_key=None):
+        return True
+
+
+class FakeStorage:
+    """Sonuç deposu: yapılandırılmış sayılır, nesneleri bellekte tutar."""
+
+    def __init__(self, configured: bool = True):
+        self.configured = configured
+        self.objects: dict[str, bytes] = {}
+
+    def ensure_configured(self) -> None:
+        if not self.configured:
+            raise R2ConfigurationError("R2 depolama yapılandırılmamış")
+
+    async def upload(self, key: str, content: bytes, content_type: str) -> None:
+        self.objects[key] = content
+
+    async def download(self, key: str) -> bytes:
+        return self.objects[key]
+
+
 def _client_with_fake_service(fake_service: FakeBackgroundRemovalService) -> TestClient:
     # Bu dosyadaki testler yükleme/doğrulama davranışını sınıyor; oturum
     # zorunluluğu aşağıdaki ayrı testlerde gerçek token doğrulamasıyla sınanıyor.
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
     app.dependency_overrides[get_current_user] = _signed_in_user
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
     return client
 
 
@@ -111,7 +146,9 @@ def test_rejects_request_without_session_with_401_and_service_not_called(tokens)
     # oturumsuz istek 401 alıyor ve BiRefNet HİÇ çağrılmıyor.
     fake_service = FakeBackgroundRemovalService()
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -125,7 +162,9 @@ def test_rejects_request_without_session_with_401_and_service_not_called(tokens)
 def test_rejects_invalid_token_with_401_and_service_not_called(tokens):
     fake_service = FakeBackgroundRemovalService()
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -141,7 +180,9 @@ def test_accepts_request_with_valid_token(tokens):
     # KABUL yolu (ders 15): override yok, gerçek JWT doğrulaması.
     fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
     app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     response = client.post(
         "/api/remove-background",
@@ -402,7 +443,9 @@ def test_returns_429_immediately_when_admission_capacity_is_full():
 
     app.dependency_overrides[get_background_removal_service] = lambda: BlockingService()
     app.dependency_overrides[get_current_user] = _signed_in_user
-    client = TestClient(app)
+    app.dependency_overrides[get_usage_quota] = FakeQuota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
 
     first_response: dict = {}
 
@@ -525,6 +568,7 @@ def test_validate_upload_runs_in_threadpool_without_blocking_event_loop(monkeypa
         fake_file = _FakeUploadFile(_jpeg_bytes(), "image/jpeg")
         fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
         response = await remove_background(
+            quota=FakeQuota(), request_id=uuid.uuid4(), storage=FakeStorage(),
             file=fake_file, service=fake_service, _user=_signed_in_user()
         )
         assert response.status_code == 200
@@ -548,3 +592,127 @@ def test_validate_upload_runs_in_threadpool_without_blocking_event_loop(monkeypa
         f"{len(ticks_during_decode)} heartbeat tik'i kaydedildi (toplam "
         f"{len(heartbeat_ticks)})"
     )
+
+
+class RecordingQuota:
+    """Gerçek sözleşmeyi taklit eder: bir kredi, saklanan bir sonuç."""
+
+    def __init__(self, reservation: Reservation):
+        self.reservation = reservation
+        self.resolved: list[tuple[bool, str | None]] = []
+
+    async def reserve(self, user_id, request_id):
+        return self.reservation
+
+    async def resolve(self, reservation_id, success, result_key=None):
+        self.resolved.append((success, result_key))
+        return True
+
+
+def test_successful_result_is_stored_before_the_credit_is_consumed():
+    # Ters sırada, saklama adımında çöken bir süreç krediyi harcanmış ama
+    # sonucu yok bırakırdı.
+    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+    storage = FakeStorage()
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_current_user] = _signed_in_user
+    app.dependency_overrides[get_usage_quota] = lambda: quota
+    app.dependency_overrides[get_storage_service] = lambda: storage
+    try:
+        with TestClient(app) as client:
+            key = str(uuid.uuid4())
+            response = client.post(
+                "/api/remove-background",
+                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": key},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200 and response.content == b"cutout-png-bytes"
+    stored_key = next(iter(storage.objects))
+    assert stored_key.endswith(f"{key}.png") and storage.objects[stored_key] == b"cutout-png-bytes"
+    # Kredi, sonuç saklandıktan SONRA tüketiliyor ve anahtar kayda geçiyor.
+    assert quota.resolved == [(True, stored_key)]
+
+
+def test_stored_result_is_returned_without_running_inference_again():
+    fake_service = FakeBackgroundRemovalService(result=b"yeni-sonuc")
+    storage = FakeStorage()
+    storage.objects["results/onceki.png"] = b"saklanan-sonuc"
+    quota = RecordingQuota(Reservation(result_key="results/onceki.png"))
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_current_user] = _signed_in_user
+    app.dependency_overrides[get_usage_quota] = lambda: quota
+    app.dependency_overrides[get_storage_service] = lambda: storage
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/remove-background",
+                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": str(uuid.uuid4())},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.content == b"saklanan-sonuc"
+    # Inference HİÇ çalışmadı ve ikinci bir kredi hareketi olmadı.
+    assert fake_service.received_content is None
+    assert quota.resolved == []
+
+
+def test_missing_result_storage_stops_the_job_before_inference():
+    # Belirsiz sonucu yeniden inference'a bağlamak yerine açıkça durur.
+    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_current_user] = _signed_in_user
+    app.dependency_overrides[get_usage_quota] = lambda: quota
+    app.dependency_overrides[get_storage_service] = lambda: FakeStorage(configured=False)
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/remove-background",
+                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": str(uuid.uuid4())},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "result_storage_unavailable"
+    # Güvenli tekrar: hiç kredi tüketilmedi, istemci yeni anahtara geçebilir.
+    assert response.json()["detail"]["retry_safe"] is True
+    assert fake_service.received_content is None and quota.resolved == []
+
+
+def test_failed_result_upload_releases_the_credit():
+    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+
+    class BrokenStorage(FakeStorage):
+        async def upload(self, key, content, content_type):
+            raise ClientError(
+                {"Error": {"Code": "InternalError", "Message": "boom"}}, "PutObject"
+            )
+
+    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_current_user] = _signed_in_user
+    app.dependency_overrides[get_usage_quota] = lambda: quota
+    app.dependency_overrides[get_storage_service] = lambda: BrokenStorage()
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/remove-background",
+                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": str(uuid.uuid4())},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "result_storage_unavailable"
+    # Kredi iade edildi; aksi hâlde sonucu olmayan bir kredi yanardı.
+    assert quota.resolved == [(False, None)]

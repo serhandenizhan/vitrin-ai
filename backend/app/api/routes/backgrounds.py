@@ -1,3 +1,10 @@
+from typing import Literal
+from fastapi import Form, Request
+from app.core.auth import get_current_user
+from fastapi.security import HTTPAuthorizationCredentials
+from app.services.billing.entitlements import background_tier
+from app.services.billing.limits import limit_scoped
+from app.services.billing.provider import get_provider
 import uuid
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -34,6 +41,7 @@ CONTENT_TYPE_TO_EXTENSION = {
 )
 async def create_background(
     file: UploadFile = File(...),
+    tier: Literal["basic", "full"] = Form("basic"),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict[str, str]:
@@ -76,7 +84,7 @@ async def create_background(
             detail="Arka plan depolamaya yüklenemedi.",
         ) from exc
 
-    db.add(Background(id=background_id, r2_key=r2_key))
+    db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
     await db.commit()
 
     return {"id": str(background_id)}
@@ -84,12 +92,38 @@ async def create_background(
 
 @router.get("/api/backgrounds")
 async def list_backgrounds(
+    request: Request,
+    provider=Depends(get_provider),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> list[dict[str, str | int]]:
+    # LİSTELEME KOTA KAPISI DEĞİL. Asıl kapı `POST /api/remove-background`'daki
+    # rezervasyon; burada `background_tier()` hatası yalnızca "full zeminleri
+    # isteyemez" demektir, "hiç zemin yok" DEMEZ. Eskiden `background_tier`
+    # 403/409 fırlattığında vekil boş liste dönüyor ve editör sessizce gradyan
+    # yer tutucuya düşüyordu: ödemesi yenilenirken 60 saniyelik
+    # `billing_renewal_pending` penceresine denk gelen müşteri hiçbir hata
+    # mesajı görmeden zemin kütüphanesini kaybediyordu.
+    tier = "basic"
+    user = None
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        user = await get_current_user(HTTPAuthorizationCredentials(scheme=scheme, credentials=token), request)
+    await limit_scoped(request, "backgrounds", user.id if user else None)
+    if user:
+        try:
+            tier = await background_tier(db, user.id, provider)
+        except HTTPException as exc:
+            # Kimlik hatası (401) gerçek hatadır; kota/abonelik kararları
+            # (402/403/409) listeyi `basic`e düşürür, boşaltmaz.
+            if exc.status_code not in (402, 403, 409):
+                raise
+            await db.rollback()
+            tier = "basic"
     result = await db.execute(
         select(Background)
-        .where(Background.is_active.is_(True))
+        .where(Background.is_active.is_(True), Background.tier.in_(("basic", "full") if tier == "full" else ("basic",)))
         .order_by(Background.created_at)
     )
     backgrounds = result.scalars().all()

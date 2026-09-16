@@ -38,8 +38,7 @@ class SupabaseAdminService:
                 "Hesap silme yapılandırılmamış; sunucuda SUPABASE_SECRET_KEY ayarlanmalı."
             )
 
-    async def delete_user(self, user_id: uuid.UUID) -> None:
-        self.ensure_configured()
+    def _headers(self) -> dict[str, str]:
         key = settings.supabase_secret_key
         headers = {"apikey": key}
         # Eski `service_role` anahtarı bir JWT; `Authorization` başlığı da
@@ -47,6 +46,34 @@ class SupabaseAdminService:
         # `apikey` başlığıyla gönderiliyor (Supabase API anahtarları dokümanı).
         if key.startswith("eyJ"):
             headers["Authorization"] = f"Bearer {key}"
+        return headers
+
+    async def get_user_email(self, user_id: uuid.UUID) -> str | None:
+        """Bildirim göndermek için kullanıcının e-postası.
+
+        `auth.users` doğrudan SORGULANMIYOR: şema Supabase'e ait ve sürümden
+        sürüme değişebiliyor (bkz. modül açıklaması). Silme hangi yoldan
+        yapılıyorsa okuma da aynı yoldan yapılıyor.
+        """
+        self.ensure_configured()
+        url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}"
+        try:
+            async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise SupabaseAdminError("Kimlik doğrulama sunucusuna ulaşılamadı.") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise SupabaseAdminError(
+                f"Kullanıcı okunamadı (Supabase yanıtı: {response.status_code})."
+            )
+        email = response.json().get("email")
+        return email if isinstance(email, str) and email else None
+
+    async def delete_user(self, user_id: uuid.UUID) -> None:
+        self.ensure_configured()
+        headers = self._headers()
 
         url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}"
         try:

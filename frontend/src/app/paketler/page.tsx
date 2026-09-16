@@ -12,33 +12,37 @@
  * tablosu eklendi. Karsilastirma tablosu, kartlardaki madde listelerinin
  * "hangisinde ne var" sorusunu tek bakista cevaplamasi icin.
  *
- * FIYATLAR BILINCLI OLARAK YOK. Odeme sistemi yol haritasinda Faz 5'te; buraya
- * bir sayi yazmak karsiligi olmayan bir taahhut olurdu ve degistiginde guven
- * kaybettirirdi. Paketlerin ne ICERECEGI yaziliyor, fiyat "belirleniyor"
- * olarak isaretleniyor.
+ * FIYAT BU DOSYADA YAZILI DEGIL ve olmamali. Faz 5'te fiyatlar backend'de
+ * immutable plan surumlerinde tutuluyor; kartlardaki tutar ve aylik kota
+ * `GET /api/plans`ten geliyor (bkz. `components/billing-plans.tsx`). Burada
+ * yalnizca SUNUM var: planin ozeti, madde listesi ve hangisinin onerildigi.
+ * Yayimlanmamis bir plan kartta "Yakinda / Fiyat belirleniyor" olarak durur.
  *
- * Sunucu bileseni: istemciye hic inmiyor.
+ * 15.09.2026: PR #17'nin ilk hali bu sayfayi (393 satir) ucu duz beyaz kartlik
+ * bir listeye indirmisti; tasarim dili Faz 2'de kilitli bir karar oldugu icin
+ * sayfa geri getirildi ve kartlar dinamik fiyata baglandi.
+ *
+ * Sunucu bileseni; yalnizca kart izgarasi ve satin alma formu istemciye iniyor.
  */
 
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Check, Minus } from "lucide-react";
 
+import { BillingPlans, type PlanPresentation } from "@/components/billing-plans";
 import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
   title: "Paketler — Vitrin AI",
   description:
-    "Vitrin AI paketleri: deneme, atölye ve mağaza planları. Ödeme sistemi hazırlanıyor.",
+    "Vitrin AI paketleri: deneme, atölye ve mağaza planları. Aylık krediler ve güvenli ödeme.",
 };
 
 type Paket = {
+  /** Backend'deki plan kimligi; fiyat/kota bu id ile eslestiriliyor. */
+  id: string;
   ad: string;
   ozet: string;
-  fiyat: string;
-  fiyatNotu: string;
-  acik: boolean;
   vurgulu: boolean;
   /** Kartta GOSTERILEN madde listesi — Mağaza'da "Atölye'deki her şey" gibi
    * kasıtlı bir özet cümlesi içerebilir, karşılaştırma tablosunun kaynağı
@@ -74,21 +78,17 @@ const ATOLYE_OZELLIKLERI = [
 
 const PAKETLER: Paket[] = [
   {
+    id: "deneme",
     ad: "Deneme",
     ozet: "Ücretsiz bir hesapla, hemen",
-    fiyat: "Ücretsiz",
-    fiyatNotu: "Şu anda açık",
-    acik: true,
     vurgulu: false,
     maddeler: ORTAK_OZELLIKLER,
     tumOzellikler: ORTAK_OZELLIKLER,
   },
   {
+    id: "atolye",
     ad: "Atölye",
     ozet: "Her hafta ürün çeken kuyumcu için",
-    fiyat: "Yakında",
-    fiyatNotu: "Fiyat belirleniyor",
-    acik: false,
     vurgulu: true,
     maddeler: [
       "Aylık yüksek işlem hakkı",
@@ -101,11 +101,9 @@ const PAKETLER: Paket[] = [
     tumOzellikler: ATOLYE_OZELLIKLERI,
   },
   {
+    id: "magaza",
     ad: "Mağaza",
     ozet: "Birden fazla kişiyle çalışan ekipler için",
-    fiyat: "Yakında",
-    fiyatNotu: "Fiyat belirleniyor",
-    acik: false,
     vurgulu: false,
     maddeler: [
       "Atölye'deki her şey",
@@ -132,6 +130,15 @@ const PAKETLER: Paket[] = [
  * digerinde unutulmasi artik mumkun degil — tabloda gorunecek tek yer
  * `tumOzellikler`.
  */
+/** Istemci bilesenine gecen sunum verisi — fiyat ve kota ICERMEZ. */
+const SUNUM: PlanPresentation[] = PAKETLER.map(({ id, ad, ozet, vurgulu, maddeler }) => ({
+  id,
+  ad,
+  ozet,
+  vurgulu,
+  maddeler,
+}));
+
 const TUM_OZELLIKLER = Array.from(
   new Set(PAKETLER.flatMap((paket) => paket.tumOzellikler)),
 );
@@ -166,79 +173,6 @@ const SORULAR = [
   },
 ];
 
-function PlanCard({ paket }: { paket: Paket }) {
-  return (
-    <div
-      className={
-        "relative flex h-full flex-col rounded-[1.6rem] p-7 sm:p-8 " +
-        (paket.vurgulu
-          ? "paket-vurgulu bg-[#15130f] shadow-[0_30px_80px_-30px_rgba(212,175,110,0.45)]"
-          : "bg-white/[0.035] ring-1 ring-white/10")
-      }
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[1.25rem] font-semibold tracking-[-0.015em]">
-          {paket.ad}
-        </h2>
-        {paket.vurgulu ? (
-          <span className="bg-gold rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold text-black">
-            Önerilen
-          </span>
-        ) : null}
-      </div>
-
-      <p className="fine-print on-dark-muted mt-1">{paket.ozet}</p>
-
-      <div className="mt-8 border-b border-white/10 pb-7">
-        <p
-          className={
-            "text-[2.5rem] leading-none font-semibold tracking-[-0.03em] " +
-            (paket.acik ? "text-gold" : "text-[#f3f0eb]")
-          }
-        >
-          {paket.fiyat}
-        </p>
-        <p className="fine-print on-dark-muted mt-2.5">{paket.fiyatNotu}</p>
-      </div>
-
-      <ul className="mt-7 flex-1 space-y-3">
-        {paket.maddeler.map((madde) => (
-          <li key={madde} className="flex gap-3 text-[0.9375rem] leading-snug">
-            <span className="bg-gold/15 text-gold mt-px flex size-5 shrink-0 items-center justify-center rounded-full">
-              <Check className="size-3" strokeWidth={2.75} aria-hidden />
-            </span>
-            <span className="text-[#f3f0eb]/80">{madde}</span>
-          </li>
-        ))}
-      </ul>
-
-      {/* Calisir gibi gorunup hicbir sey yapmayan bir dugme kullaniciya kendi
-          hatasi hissi verir; kapali olan acikca kapali duruyor (bkz. kok
-          CLAUDE.md ders 8). */}
-      <div className="mt-9">
-        {paket.acik ? (
-          <Link
-            href="/#dene"
-            className="press bg-gold hover:bg-gold-soft flex min-h-12 items-center justify-center rounded-full px-5 text-[0.9375rem] font-medium text-black transition-colors"
-          >
-            Hemen deneyin
-          </Link>
-        ) : (
-          <span
-            className={
-              "flex min-h-12 items-center justify-center rounded-full text-[0.9375rem] " +
-              (paket.vurgulu
-                ? "bg-white/[0.06] text-[#f3f0eb]/70 ring-1 ring-white/15"
-                : "text-[#f3f0eb]/55 ring-1 ring-white/12")
-            }
-          >
-            Yakında açılacak
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function Cell({ deger }: { deger: boolean | string }) {
   if (typeof deger === "string") {
@@ -281,29 +215,15 @@ export default function PaketlerPage() {
                 İşinize göre bir plan
               </h1>
               <p className="lede on-dark-muted mx-auto mt-5 max-w-xl text-pretty">
-                Ödeme sistemi henüz açık değil. Fiyatları netleştirirken aracı
-                ücretsiz bir hesapla, sınır olmadan kullanabilirsiniz.
+                Her fotoğraf için bir kredi. Ücretsiz bir hesapla hemen
+                başlayabilir, aylık haklarınızı buradan yükseltebilirsiniz.
               </p>
             </div>
           </Reveal>
 
-          <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-3 lg:gap-6">
-            {PAKETLER.map((paket, sira) => (
-              <Reveal
-                key={paket.ad}
-                delay={sira * 90}
-                className={paket.vurgulu ? "lg:-my-4" : "lg:my-0"}
-              >
-                <PlanCard paket={paket} />
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal delay={300}>
-            <p className="fine-print on-dark-muted mt-12 text-center">
-              Fiyatlar belli olduğunda bu sayfada duyuracağız.
-            </p>
-          </Reveal>
+          {/* Kartlar ve satin alma formu istemci bileseninde: fiyat, kota ve
+              satin alinabilirlik backend'den geliyor, sunum metni buradan. */}
+          <BillingPlans catalog={SUNUM} />
         </div>
       </section>
 

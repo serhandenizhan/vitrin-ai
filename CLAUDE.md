@@ -9,7 +9,7 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 1. **Ekip ve iş akışı:** 2 kişilik ekip. Kişi başına yerel Claude Code kullanımı (sadece bulut değil) ve normal `git push`/`pull` ile GitHub üzerinden senkronizasyon. PR'lar Claude Code içinden `gh pr create` ile açılır ve diğer kişinin incelemesinden sonra birleştirilir. Her push'tan önce açık kullanıcı onayı gerekir.
 2. **Ürün tanımı:** kuyumcular için bir AI aracı. Kullanıcı bir ürün fotoğrafı yükler (yüzük, kolye vb.) → AI çok yüksek kenar hassasiyetiyle arka planı kaldırır → kullanıcı kesimi birçok özel arka plan tasarımından birinin üzerine yerleştirir ve ölçeklendirip döndürebilir, yeniden konumlandırabilir. Önce web uygulaması (konsepti doğrulamak için), asıl uzun vadeli hedef mobil uygulamadır.
 3. **AI model kararı (en yüksek riskli teknik karar, kilitli):** üç zorunlu gereksinime göre araştırıldı — ücretsiz/ucuz, ticari kullanım lisansı, ince/yansıtıcı kenarlarda çok yüksek doğruluk (mücevher, segmentasyonun en zor kategorilerinden biridir). Karar: **BiRefNet, orijinal `ZhengPeng7/BiRefNet` ağırlıkları (MIT lisansı)**. BRIA'nın "RMBG" ağırlıkları (aynı mimari, farklı eğitim verisi) açıkça elendi çünkü bu spesifik ağırlıklar sadece ticari olmayan kullanım içindir — bu, bu alanda tekrar eden bir tuzaktır.
-4. **Tüm teknoloji yığını birlikte kararlaştırıldı** — aşağıdaki teknoloji yığını tablosuna bakın. Ödeme sağlayıcısı (iyzico) özellikle hedef pazarın Türk kuyumcular olması nedeniyle seçildi. Kimlik doğrulama için Supabase Auth seçildi (Clerk değerlendirilip elendi) — detay için aşağıya bakın.
+4. **Tüm teknoloji yığını birlikte kararlaştırıldı** — aşağıdaki teknoloji yığını tablosuna bakın. Ödeme sağlayıcısı (iyzico) özellikle hedef pazarın Türk kuyumcular olması nedeniyle seçildi. Seçim öncesi yapılan karşılaştırma (PayTR, iyzico, Sipay, Param, Paddle, Stripe vd.; komisyon, valör, abonelik, webhook) `docs/research/payment-platform-research-2026-09-14.md`'de. Not: o rapor maliyet nedeniyle PayTR'yi ilk sıraya koyuyordu; iyzico olgun abonelik API'si, webhook, raporlama ve fraud altyapısı gerekçesiyle tercih edildi — bu tartışma yeniden açılırsa önce o belgeye bakın. Kimlik doğrulama için Supabase Auth seçildi (Clerk değerlendirilip elendi) — detay için aşağıya bakın.
 5. **Önceki iterasyonda gerçek fotoğraflarla doğrulanan teknik bulgular** (bu iterasyonda yeniden keşfedilmesine gerek yok, `ROADMAP.md` bölüm 2'de tam detay var):
    - `birefnet-general-lite` ve `u2net` gerçek ürün kullanımı için elendi (ya çok fazla RAM, ya çok düşük kalite). Üretim modeli: `birefnet-general`.
    - **CPU inference için en az 12–14 GB RAM gerekiyor** — üç ayrı ölçümle doğrulandı, en güncel ölçüm çalışan servisin kendisinde (uvicorn süreci) 12.0 GB tepe RSS gösterdi. 8 GB'lık bir sunucu bu modeli kaldırmaz.
@@ -34,6 +34,9 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 17. **Ders — stacked PR'da merge SIRASI işi kaybettirebilir.** PR #4'ün base'i `main` değil `feature/faz-2-web-frontend` idi. Önce PR #3 (alt dal → `main`), bir dakika sonra PR #4 (üst dal → alt dal) birleştirildi. Alt dal `main`'e zaten girmiş olduğu için PR #4'ün 8 commit'i **`main`'e hiç ulaşmadı** ve bu, GitHub'da her iki PR da "Merged" göründüğü için fark edilmedi; `main`'de sol panel, gerçek fotoğraflar ve 27 frontend testinin tamamı eksik kaldı. **Kural: stacked PR'lar her zaman ÜSTTEN ALTA birleştirilir (önce PR #4 alt dala, sonra alt dal `main`'e); ve bir merge'den sonra işin gerçekten `main`'de olduğu `git merge-base --is-ancestor <commit> origin/main` ile doğrulanır.** "Merged" rozeti, işin `main`'de olduğu anlamına gelmez.
 18. **Ders — `.env` dosyası çalışılan klasöre göre değil, kodun konumuna göre bulunmalı.** Faz 4'te backend repo kökünden (`--app-dir backend` ile) başlatıldığında `env_file=".env"` göreli yolu `backend/.env`'yi **hiç okumadı**: uygulama hatasız açıldı ama oturum isteyen her uç nokta "SUPABASE_URL ayarlanmalı" diye 503 döndü. Hata, ayarların eksik olduğu izlenimini veriyordu; asıl sebep dosyanın bulunamamasıydı. `app/core/config.py` artık `.env`'yi dosyanın kendi konumundan türettiği mutlak yoldan okuyor (`BACKEND_ENV_FILE`). Ders 11'in aynı sınıfı: yol, çalıştırma biçimine değil repo yapısına bağlanır.
 19. **Ders — bir istemci kontrolü, uzak bir servisin CANLI ayarının aynasıysa, o ayar koda gömülmeden önce doğrulanmalı; aksi hâlde ayar sessizce değişince kontrol de sessizce yanlış olur.** `frontend/src/lib/password-policy.ts`, Supabase Dashboard'ın parola kuralının "küçük harf + büyük harf + rakam" olduğunu VARSAYIYORDU (doğrulanmadan koda yazılmıştı). Gerçek Dashboard ayarı ise "...and symbols (recommended)" idi — sembolsüz bir parola istemci tarafında checklist'te tamamı yeşil görünüyor, "Devam et" tıklanabiliyordu ama Supabase sunucu tarafında `weak_password` ile reddediyordu. Kullanıcı "kurallara uyuyor ama kayıt olamıyorum" diye bildirdi; teşhis ekran görüntüsüyle Dashboard'daki gerçek ayar karşılaştırılarak bulundu. **Kural: bir uzak servisin ayarını yansıtan istemci kodu yazılırken o ayar canlı panelden BİREBİR doğrulanır ve koda "buradan alındı, X tarihinde doğrulandı" notu düşülür — "muhtemelen böyledir" varsayımı yeterli değildir.**
+20. **Ders — büyük bir PR'ın içinde, kilitli tasarım kararına ait bir sayfa sessizce yeniden yazılabiliyor ve kod incelemesi bunu kaçırıyor.** Faz 5 implementasyon commit'i (`d861d9c`), Faz 2'de kilitlenen tasarım dilini taşıyan 393 satırlık `/paketler` sayfasını 3 satıra indirip üç düz beyaz karta çevirdi. Commit ödeme sistemi hakkındaydı; sayfa yan etki olarak değişti. İki turlu kod incelemesi (Claude + Codex) güvenlik ve spec bulgularına odaklandığı için bunu görmedi; kullanıcı tarayıcıda "çok iyi bir tasarımla paketler sayfası vardı, neden bozdun" diye fark etti. **Kural: bir PR incelenirken `git diff --stat` içinde `frontend/src/app/**/page.tsx` ya da tasarım dili bölümündeki bir dosyada büyük silme varsa, bunun bilinçli bir karar mı yoksa yan etki mi olduğu ayrıca sorulur.** Ekrana dokunan bir değişikliğin incelemesi, sayfaya tarayıcıda bir kez bakmadan tamamlanmış sayılmaz.
+21. **Ders — bir bileşen hem periyodik yoklama hem kullanıcı eylemi yapıyorsa, ikisi aynı hata state'ini paylaşmamalı; paylaşıyorsa testi yoklamanın bir turunu da beklemeli.** `/odeme/{id}` sayfası ödeme durumunu 5 saniyede bir yokluyor ve başarı dalında `setError("")` çağırıyordu. "Bu işlemi iptal et" düğmesinin hatası da aynı `error` state'ine yazıldığı için mesaj yazılır yazılmaz bir sonraki yoklamada siliniyordu: backend doğru biçimde 503 dönüp oturumu korurken kullanıcı hiçbir şey görmedi ve düğmeye dört kez bastı. Mevcut test ("hatayı gösterir") mesajı tıklamadan hemen sonra kontrol ettiği için geçiyordu — yoklama hiç çalışmadan (ders 15'in aynı sınıfı: testin baktığı yerin dışında kalan hata). **Kural: eylem sonucunu yazan state, yoklamanın dokunduğu state'ten ayrı tutulur; test de sahte zamanlayıcıyla en az bir yoklama turu ilerletip sonucun hâlâ ekranda olduğunu doğrular.**
+22. **Ders — yakaladığınız özel istisnanın üretim kodunda GERÇEKTEN fırlatıldığını kanıtlayın; mock'a istisna fırlattıran test hiçbir şey kanıtlamaz.** Faz 5'te checkout iptalini fail-closed yapan düzeltme, oturumu yalnızca `CheckoutAbsent` yakalandığında kapatıyordu. Ama `CheckoutAbsent` üretim kodunda hiç fırlatılmıyordu: sınıf tanımı, `except` bloğu ve testteki `provider.checkout.side_effect = CheckoutAbsent(...)` — hepsi bu. Gerçek `Iyzico.request` yalnızca `ProviderUnavailable` ve `ProviderError("provider_rejected")`, `verify_checkout` ise `EvidenceMismatch` fırlatıyor. Sonuç: özellik üretimde her koşulda 409 dönüyordu, üstelik her deneme bir manuel inceleme alarmı üretiyordu; buna rağmen testi yeşildi, çünkü test sağlayıcının hiç üretemeyeceği bir istisna tipini kendisi uyduruyordu. **Kural: bir `except` bloğu eklerken `grep -rn "raise <İstisna>" app` ile o istisnanın üretim yolunda fırlatıldığını doğrulayın; dış servis testleri istisna TİPİNİ değil, servisin döndürdüğü gerçek YANIT GÖVDESİNİ taklit etsin ki hatayı üreten kod da sınanmış olsun.** (Ders 15'in kardeşi: yeşil test, hatanın yokluğunu göstermez.)
 
 ## Proje genel bakış
 
@@ -62,7 +65,49 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
 - **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme"). **Frontend tarafı:** tarayıcı token'ı hiç görmüyor; Next.js vekilleri (`src/lib/backend-proxy.ts`) çerezdeki oturumdan token'ı alıp `Authorization` başlığıyla iletiyor. `src/proxy.ts` her istekte oturumu yeniliyor ama **yetkilendirme sayılmaz** — asıl kontrol backend'de. Ekranda gösterilen profil bilgileri (ad, şirket, hesap türü) Supabase `user_metadata`'da ve kullanıcının düzenleyebildiği veri olduğu için hiçbir yetki kararında kullanılmaz.
-- **Ödemeler:** iyzico
+- **Ödemeler (Faz 5):** iyzico; iş kuralları `backend/app/services/billing` içinde.
+  Ödeme kodunu değiştirirken, migration yaparken veya canlı açılış/kurtarma
+  yürütürken önce [ödeme runbook’unu](docs/billing-runbook.md) okuyun.
+  Checkout varsayılan kapalı; yerel test başarısı merchant sandbox doğrulaması sayılmaz.
+  **Erişim kararlarında dört kural:** (1) *listeleme kota kapısı değildir* —
+  `GET /api/backgrounds` kota/abonelik hatasında `basic`e düşer, listeyi
+  boşaltmaz; asıl kapı `POST /api/remove-background`'daki rezervasyondur.
+  (2) *bir tahsilatın iadesi/itirazı yalnızca AİT OLDUĞU aboneliği kapatır* —
+  kapsam `billing_transactions.period_id → subscription_periods.provider_subscription_reference`
+  üzerinden belirlenir, hesap düzeyinde askıya alma yalnız güncel abonelik için.
+  (3) *ödeme alınamadığında erişim anında kesilmez* — `past_due` 3 gün
+  (`past_due_access_until`, uzamaz) mevcut dönemin KALAN kotasıyla sürer, yeni
+  kredi verilmez, sonra `expired`. (4) *idempotency anahtarı İŞİ tanımlar,
+  isteği değil* — kredi anahtar başına yalnızca bir kez tüketilir. Başarılı PNG
+  `results/<user_id>/<request_id>.png` altında 24 saat saklanır; aynı anahtar
+  tekrar gelirse **inference hiç çalışmaz**, saklanan nesne döner. Sonuç ÖNCE
+  saklanır, kredi SONRA tüketilir; sonuç deposu kullanılamıyorsa iş hiç başlamaz
+  (`503 result_storage_unavailable`) — belirsiz bir sonucu yeniden inference'a
+  bağlamak aynı krediyi ikinci kez yakardı. **Bunun sonucu: arka plan kaldırma
+  artık R2 olmadan çalışmıyor**, yerelde de `R2_*` ayarları gerekiyor (yalnız
+  arayüz için `USE_MOCK_BACKEND=true`). İstemci yeni bir anahtara YALNIZCA
+  backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
+  sonuç artık saklanmıyor) anahtar korunur.
+- **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
+  revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
+  değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema
+  düzeltmesi her zaman YENİ numaralı bir migration'a gider (Faz 5 inceleme
+  düzeltmeleri `0006_billing_review_fixes`'te; `0005`'teki iki fonksiyon orada
+  `CREATE OR REPLACE` ile güncelleniyor). Testin de yalnız boş DB'den
+  `upgrade head` yolunu değil, **"önceki revizyon uygulanmış DB → yeni
+  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`).
+- **Dönem snapshot'ı veritabanı seviyesinde değişmezdir** (`period_snapshot`
+  trigger'ı): plan sürümü, provider referansları, tarihler ve kota sonradan
+  güncellenemez; yalnız `status`, `closed_at`, `used_this_period` ve hesap
+  silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
+  korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
+  ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Hız sınırı kovası ters proxy arkasında doğru seçilmeli:** `request.client.host`
+  doğrudan okunursa tüm trafik proxy'nin tek kovasını paylaşır, `X-Forwarded-For`'a
+  körlemesine güvenmek ise sınırı tamamen kaldırır. Başlık yalnız bağlantı
+  `TRUSTED_PROXY_IPS` listesindeki bir adresten geliyorsa okunur; vekil arkasındaki
+  oturumlu uç noktalarda kova kullanıcıya bağlanır
+  (`backend/app/services/billing/limits.py`).
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E)
 - **Mobil (sonra):** React Native + Expo
 
@@ -137,9 +182,9 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Mobil kontrol (13.09.2026):** sayfalar 375 px'te taşma ve dokunma hedefi için tarandı. Tuzak: yüzen üst çubuk `z-50`; üstüne açılan her katman (çekmece `z-[55]`, perdesi `z-[52]`, giriş penceresi `z-60`) daha yüksek olmalı, yoksa çubuk katmanın başlığını ve kapat düğmesini örter.
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
-- **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). Backend'de R2 yapılandırılmamışsa kayıt sessizce atlanır, kesim ve indirme akışı etkilenmez.
+- **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). **Faz 5'ten beri R2 zorunlu:** arka plan kaldırma başarılı sonucu idempotency için geçici bir R2 nesnesi olarak saklamadan krediyi tüketmiyor; R2 yapılandırılmamışsa kesim hiç başlamaz ve `503 result_storage_unavailable` döner (eskiden bu cümle "kesim ve indirme akışı etkilenmez" diyordu). Yalnız arayüzü denemek için `USE_MOCK_BACKEND=true`.
 - **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 210 test). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi) ve açılıştaki önce/sonra için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 235 test). Kapsam; yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
@@ -166,7 +211,7 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Uygulama:** yardımcı sınıflar `frontend/src/app/globals.css` içinde (`display-hero`, `display-section`, `display-feature`, `lede`, `fine-print`, `surface-*`, `section-rhythm`, `reveal`, `press`). Yüzey renkleri bilinçli olarak **sabit**, token değil — bir bölüm "koyu" işaretlendiğinde açık temada da koyu kalmalı, dönüşümlü ritim buna dayanıyor. Punto değerleri `clamp` ile akışkan; alt/üst sınırlar Apple'ın mobil/masaüstü değerleriyle aynı. Ayrıntı ve ölçüm tablosu: `frontend/README.md` → "Tasarım dili".
 
-**Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı. (İstisna, 13.09.2026: açılıştaki önce/sonra kaydıracı `marketing/hero-before-after.tsx` küçük bir istemci parçası; çerçevesi `hero-visual.tsx` sunucu bileşeni olarak kaldı.)
+**Durum taşıyan tek istemci bileşeni `background-remover.tsx`;** tanıtım bölümlerinin hepsi sunucu bileşeni ve istemciye hiç inmiyor. Yeni bölüm eklenirken bu ayrım korunmalı. (İstisnalar: 13.09.2026 — açılıştaki önce/sonra kaydıracı `marketing/hero-before-after.tsx` küçük bir istemci parçası, çerçevesi `hero-visual.tsx` sunucu bileşeni olarak kaldı. 15.09.2026 — `/paketler`'de yalnız kart ızgarası ve satın alma formu (`billing-plans.tsx`) istemcide, çünkü fiyat/kota `GET /api/plans`ten geliyor ve satın alma etkileşimli; hero, karşılaştırma tablosu ve SSS sunucu bileşeni olarak kaldı. `/odeme/{id}` sayfasının içi (`checkout-page.tsx`) de durum yoklaması yaptığı için istemcide.)
 
 **Yumuşak geçişler (13.09.2026, kullanıcı isteği: "tak diye açılıyor").** Bir ekran, pencere ya da katman belirirken `soft-enter` (hafif yükselip belirme) ya da `soft-fade` sınıfları kullanılıyor; tanımlar `globals.css`'in sonunda. Yalnızca giriş animasyonu, eğri sitenin geri kalanıyla aynı (`cubic-bezier(0.16, 1, 0.3, 1)`), "hareketi azalt" açıkken kapalı. Yeni bir koşullu ekran eklenirken aynı sınıflar kullanılmalı. **Doğrulama tuzağı:** gömülü tarayıcı paneli gizliyken kare üretilmediği için bu animasyonlar ilerlemez ve öğe görünmez kalır gibi ölçülür (ders 13); ölçmek için Web Animations API ile zaman ilerletilir.
 
@@ -197,7 +242,26 @@ Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kura
 
 **Bilinçli karar (10.09.2026, kullanıcı onayı):** henüz bir production alan adı yok, bu yüzden bucket'a şimdilik yalnızca `http://localhost:3000` için GET/HEAD kuralı eklenecek (şablon `backend/README.md` → "R2 CORS"). **Deploy anında bu maddeye mutlaka geri dönülmeli** — asıl production alan adı belirlendiğinde kurala eklenmezse, canlıda çıkan her kompozisyon sessizce zeminsiz iner (yerelde fark edilmeyen bir hata modu, çünkü localhost zaten kuralda var). Doğrulama: `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli.
 
-### 3. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
+### 3. Ödeme bildirimi ve proxy ayarları deploy anında verilmeli — sahibi: Serhan
+
+İki ayar üretimde verilmezse sistem çalışır ama **sessizce eksik davranır**:
+
+- `RESEND_API_KEY` + `BILLING_EMAIL_FROM` yoksa "ödemeniz alınamadı, kartınızı
+  güncelleyin" e-postası hiç gitmez. Sessiz kalmıyor (`billing_alerts`'e
+  `dunning_email_not_sent` yazılıyor); action `succeeded` sayılmıyor, sınırlı
+  retry/manual inceleme için açık kalıyor. Yine de operatör alarmı çözmezse
+  kullanıcı 3 günlük grace penceresini haberi olmadan tüketebilir.
+- `TRUSTED_PROXY_IPS` (ve uvicorn'un `--proxy-headers` / `--forwarded-allow-ips`
+  değerleri) verilmezse hız sınırı bütün public trafiği proxy'nin tek kovasına
+  koyar; sınır fiilen kalkar ve bunu yerelde fark etmenin yolu yoktur.
+
+Sağlayıcı yeni değil: aşağıdaki 5. maddede Supabase Auth için seçilen Resend'in
+aynısı. Fark, buradaki e-postanın Supabase'in gönderdiği kimlik doğrulama
+postası değil, uygulamanın kendi bildirimi olması — bu yüzden Supabase SMTP
+ayarından değil, kendi `RESEND_API_KEY`'imizle HTTP API'sinden gidiyor.
+Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
+
+### 4. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
 
 KVKK Aydınlatma Metni, Gizlilik Politikası ve Kullanım Koşulları yayımlandı;
 kayıtlar sunucu zamanlı, istemciden değiştirilemeyen `user_consents` tablosuna
@@ -206,3 +270,49 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` ile verilmeli ve metinler Türkiye'de yetkili
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
+
+### 5. Supabase'in kendi (built-in) e-posta servisi production için yeterli değil — sahibi: Serhan
+
+Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
+e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"
+ekranı — bkz. `frontend/README.md` "Hesaplar"). Resend özel SMTP sandbox
+entegrasyonu 14.09.2026'da bağlandı ve doğrulandı. Üretim için kendi alan adının
+SPF/DKIM doğrulaması ve gönderen adresinin değiştirilmesi bekliyor.
+
+**Çözüm iki aşamalı — sağlayıcı seçildi (Resend, 14.09.2026):**
+
+1. **Sandbox aşaması — ✅ tamamlandı ve doğrulandı (14.09.2026).** Resend
+   hesabı + API key ile Supabase'e özel SMTP bağlandı. Gerçek bir kayıt
+   denemesiyle uçtan uca test edildi: e-posta ulaştı, Resend Dashboard →
+   Logs'ta gönderim kaydı görüldü — SMTP entegrasyonunun kendisi çalışıyor.
+   (İlk denemede e-posta hiç gelmemişti; sebep SMTP değil, o adresle
+   `serhandenizhan404@gmail.com` zaten kayıtlı bir kullanıcı vardı —
+   Supabase var olan kullanıcı için numaralandırma korumasıyla sessizce
+   yeni e-posta göndermiyor. `+` etiketli farklı bir adresle tekrar
+   denenince e-posta ulaştı.)
+
+   **Bilinen sınırlama — son UX kontrolünde hatırlanmalı:** e-posta
+   **spam'e düşüyor**. Beklenen bir durum: `onboarding@resend.dev` Resend'in
+   paylaşılan/genel gönderen adresi, kendi alan adımızın SPF/DKIM kaydı
+   yok. Aşağıdaki 2. aşama (kendi alan adını doğrulama) bunu da düzeltmesi
+   beklenen bir yan etki — ayrı bir iş değil, aynı adımın parçası.
+2. **Tam üretim aşaması (henüz yapılamaz — sahibi: Serhan, dış girdiye
+   bağlı):** proje bir alan adı alınca, o alan adı Resend'de doğrulanmalı
+   (DNS'e SPF/DKIM kaydı) ve gönderen adresi kendi alan adına çevrilmeli.
+   Bu olmadan gerçek müşterilere e-posta gitmez (ve spam'e düşme sorunu da
+   sürer) — R2 CORS ve production domain maddesiyle (açık takip maddesi 2)
+   aynı dış girdiye bağlı, o
+   yüzden bu ikinci aşama de facto Faz 7'nin "launch öncesi son kapı"
+   listesine düşüyor.
+
+### 6. README'de logo yok — Faz 6 kapanışında eklenmeli, sahibi: Kaan
+
+Kök `README.md` şu an logosuz (kullanıcı kararı, 16.09.2026: "şimdilik logosuz
+yap, bir sonraki faz biterken hatırlat"). Depoda ayrı bir logo dosyası yok;
+marka işareti `frontend/src/components/brand-mark.tsx` içinde inline SVG olarak
+duruyor ve `currentColor` ile geldiği için tek başına bir dosyaya çıkarıldığında
+rengi elle verilmeli.
+
+**Faz 6 biterken yapılacak:** işaret `docs/brand/` altına bir SVG olarak dışa
+aktarılır (kaynağı `brand-mark.tsx`, dosyanın başına bunun notu düşülür) ve
+README'nin başına konur. İkili dosya, kaynağı belirtilmeden commit edilmez.

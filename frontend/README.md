@@ -254,7 +254,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**210 test** (Faz 4 kapanış incelemesi + parola kuralına sembol eklenmesi, 14.09.2026). Faz 2-3 dosyaları:
+**235 test** (Faz 5 uygulama incelemesindeki düzeltmeler, 15.09.2026). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -284,6 +284,17 @@ Faz 4'te eklenenler:
 | `components/marketing/hero-before-after.test.ts` | Açılıştaki önce/sonra kaydıracı |
 | `lib/logo-storage.test.ts`, `lib/work-history.test.ts` | Logo görünümü kalıcılığı; cursor ve bekleyen mutasyonların kullanıcıya bağlanması |
 | `lib/legal-config.test.ts` | Yasal sürüm tek kaynağı ve production'da eksik veri sorumlusu bilgisinin build'i durdurması |
+
+Faz 5 incelemesinde eklenenler:
+
+| dosya | kapsam |
+| --- | --- |
+| `components/background-remover.test.ts` | Idempotency anahtarı: belirsiz ağ hatasında korunuyor, kesin sunucu hatasında yenileniyor, `request_in_progress`'te korunuyor, başka fotoğrafta yenileniyor |
+| `app/api/backgrounds/session-fallback.test.ts` | Token reddedilirse temel zeminlerin oturumsuz istenmesi; ikisi de başarısızsa yer tutucu |
+| `lib/backend-proxy.test.ts` | Devam eden satın almanın adresinin arayüze geçirilmesi, yabancı adresin geçirilmemesi (açık yönlendirme), paylaşılan Origin kontrolü |
+| `app/api/account/route.test.ts` (ek) | Hesap silmede Origin kontrolü — yabancı origin backend'e hiç gitmiyor |
+| `components/checkout-page.test.ts` (ek) | Bekleyen ödemenin iptali ve sağlayıcı doğrulanamazken oturumun AÇIK kalması (fail-closed) |
+| `components/billing-plans.test.ts` (ek) | `checkout_pending` hatasında devam eden ödemeye bağlantı gösterilmesi |
 
 Özellikle korunanlar:
 
@@ -371,6 +382,10 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
+**E-posta teslimi:** Resend SMTP sandbox bağlantısı doğrulandı (14.09.2026).
+Üretimde kendi alan adının SPF/DKIM ve gönderen adresi kurulumu bekliyor;
+bkz. kök `CLAUDE.md` açık takip maddesi 4.
+
 ### Geçmiş sunucuda
 
 `src/lib/work-history.ts`'in fonksiyonları aynı, gövdesi `/api/projects`
@@ -392,8 +407,10 @@ vekillerine gidiyor (Faz 2'deki IndexedDB geçici çözümü kapandı).
 - Küçük resimler R2'nin süreli adresi; panel açıldığında süresi dolmuş kayıt varsa
   liste yenileniyor.
 - Silme sunucuda başarısız olursa kayıt listeden çıkarılmıyor.
-- Kayıt başarısız olursa (ör. backend'de R2 yapılandırılmamış) sessizce atlanıyor;
-  kesim ve indirme akışı etkilenmiyor.
+- Geçmişe kayıt başarısız olursa (ör. R2 o an yanıt vermedi) sessizce atlanıyor;
+  ekrandaki kesim ve indirme akışı etkilenmiyor. **R2'nin hiç yapılandırılmamış
+  olması artık bu duruma düşmez:** Faz 5'ten beri arka plan kaldırmanın kendisi
+  R2 istiyor (idempotency sonuç deposu) ve kesim o durumda hiç başlamaz.
 
 ### Durum nerede tutuluyor
 
@@ -789,3 +806,53 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   reddedebiliyor). `navigator.canShare({ files })` varsa (telefon) paylaşım menüsü
   görselin kendisiyle açılıyor; yoksa (masaüstü — WhatsApp Web'e bağlantıyla dosya
   eklenemiyor) görsel indiriliyor, WhatsApp Web açılıyor ve ne yapılacağı yazıyor.
+
+## Ödemeler (Faz 5)
+
+**`/paketler` tasarımı geri getirildi (15.09.2026).** PR #17'nin ilk hali bu
+sayfayı (393 satır) üç düz beyaz kartlık bir listeye indirmişti; tasarım dili
+Faz 2'de kilitli bir karar olduğu için hero (koyu zemin + altın ışık),
+karşılaştırma tablosu ve SSS bölümleri geri alındı. Fark: kartlar artık statik
+değil. **Sunum** (özet, madde listesi, hangi planın önerildiği) `paketler/page.tsx`
+içinde statik kalıyor — bunlar pazarlama metni, veritabanında yoklar. **Fiyat,
+kota ve satın alınabilirlik** yalnızca `GET /api/plans`ten geliyor; yayımlanmamış
+bir plan "Yakında / Fiyat belirleniyor" olarak durur ve çalışır gibi görünen bir
+düğme almaz. Depoda uydurma fiyat bulunmaz.
+
+`/paketler` backend'in yayımladığı fiyat/kota sürümlerini gösterir; kabul edilen
+sözleşme hash'leri ve görülen plan sürümüyle checkout başlatır. `/odeme/{id}`
+iyzico HTML formunu izole iframe'de sunar, sonucu backend'den sorgular.
+`/hesap` kalan kredi, dönem, iptal ve sayfalı mali/fatura geçmişini gösterir.
+Hesap değişince önceki hesabın mali ekranı kaldırılır. Next.js rotaları auth ve
+Origin kontrolü yapan vekillerdir; kota/ödeme iş mantığı backend'dedir.
+Hesap silme yanıtı 202 bekleyen taleptir, tamamlanmış silme olarak gösterilmez.
+Yükleme vekili `Idempotency-Key`, billing hataları ve `Retry-After` bilgisini taşır.
+
+**Idempotency anahtarı iş oturumu başınadır, istek başına değil**
+(`components/background-remover.tsx`). Her `fetch`te yeni anahtar üretmek iki
+hızlı tıklamada iki kredi açıyordu. Anahtar artık seçilen dosyaya bağlı ve
+yenileme kuralı TEK: backend yanıtında **`retry_safe: true`** varsa yeni anahtar
+üretilir; bu bayrak, kredinin hiç tüketilmediğini ya da iade edildiğini
+sunucunun açıkça söylemesidir. Başka her durumda — bağlantı koptu, iş hâlâ
+sürüyor, sonuç artık saklanmıyor — anahtar KORUNUR. Backend aynı anahtar için
+başarılı sonucu 24 saat sakladığından, yanıtı ulaşmamış bir işlem aynı anahtarla
+saklanan PNG'yi geri verir; yeni bir anahtar ikinci krediyi yakardı. Kural
+istemci tarafında tahmin EDİLMEZ (kök `CLAUDE.md` ders 19): bayrağın tek kaynağı
+backend, vekil yalnız aktarır.
+
+**Zemin listesi ödeme durumundan bağımsızdır.** Backend kota/abonelik hatasında
+listeyi boşaltmıyor; vekil de token reddedilirse (401) temel zeminleri bir kez
+oturumsuz istiyor. Editörün gradyan yer tutucuya düşmesi artık yalnızca backend
+gerçekten erişilemezken oluyor.
+
+**Devam eden satın alma görünür.** `checkout_pending`/`idempotency_conflict`
+hatası `checkout_url` taşıyor; `/paketler` kullanıcıyı oraya yönlendiriyor ve
+`/odeme/{id}` "bu işlemi iptal et, yeni plan seç" seçeneği sunuyor. İptal
+fail-closed: sağlayıcı doğrulanamıyorsa veya dönen abonelik kanıtı
+conversation/müşteri/planla uyuşmuyorsa oturum kapatılmıyor, hata gösteriliyor.
+Yalnızca sağlayıcının kesin "checkout oluşmadı" sonucu yeni plan seçimini açıyor.
+
+**Hesap silme vekilinde de ödeme mutasyonlarıyla aynı Origin kontrolü var**
+(`lib/backend-proxy.ts::foreignOrigin`) — kontrol ayrı ayrı yazıldığı için
+geri döndürülemez olan işlemde eksik kalmıştı.
+Canlı açılış ve gerçek iframe/3DS testi için [ödeme runbook'u](../docs/billing-runbook.md).

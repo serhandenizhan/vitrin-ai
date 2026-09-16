@@ -36,7 +36,7 @@ from fastapi import (
     status,
 )
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import delete, select, tuple_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +46,11 @@ from app.core.db import get_db_session
 from app.models.project import Project
 from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
 from app.validation.upload import UploadValidationError, validate_upload
+
+from app.services.billing.entitlements import locked_subscription, background_tier
+from app.services.billing.actions import prune_projects
+from app.services.billing.provider import get_provider
+from app.models.background import Background
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -166,8 +171,18 @@ def _serialize(project: Project, storage: R2StorageService) -> dict:
 async def _get_owned_project(
     db: AsyncSession, project_id: uuid.UUID, user: CurrentUser
 ) -> Project:
+    # Silme kuyruğundaki proje liste uç noktasında zaten gizleniyor; doğrudan
+    # id ile de gizlenmeli. Aksi hâlde kullanıcı, kotası nedeniyle silinmek
+    # üzere kuyruğa alınmış bir çalışma için worker nesneyi silene kadar imzalı
+    # URL almaya devam ederdi — iki uç nokta aynı kaynak için farklı cevap verirdi.
     project = await db.scalar(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+        select(Project).where(
+            Project.id == project_id,
+            Project.user_id == user.id,
+            ~Project.id.in_(
+                text("SELECT project_id FROM storage_deletion_jobs WHERE project_id IS NOT NULL")
+            ),
+        )
     )
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proje bulunamadı.")
@@ -185,12 +200,22 @@ async def create_project(
     # listesi her istekte 500 dönerdi. Veritabanı kısıtı da aynı şeyi
     # reddediyor (migration 0003).
     duration_seconds: float | None = Form(None, ge=0, allow_inf_nan=False),
+    background_id: uuid.UUID | None = Form(None),
+    provider=Depends(get_provider),
     expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict:
     _verify_expected_user(expected_user_id, user)
+    await locked_subscription(db, user.id)
+    await db.commit()
+    if background_id:
+        tier = await background_tier(db, user.id, provider)
+        background = await db.scalar(select(Background).where(Background.id == background_id, Background.is_active.is_(True)))
+        if background is None or (background.tier == "full" and tier != "full"):
+            raise HTTPException(status_code=403, detail="Bu zemin için planınızı yükseltin.")
+    await db.commit()
     display_name = file_name.strip()
     if not display_name or len(display_name) > MAX_FILE_NAME_LENGTH:
         raise HTTPException(
@@ -240,13 +265,17 @@ async def create_project(
         id=project_id,
         user_id=user.id,
         file_name=display_name,
+        background_id=background_id,
         is_mocked=is_mocked,
         duration_seconds=duration_seconds,
         result_r2_key=result_key,
         thumbnail_r2_key=thumbnail_key,
     )
-    db.add(project)
     try:
+        await locked_subscription(db, user.id)
+        db.add(project)
+        await db.flush()
+        await prune_projects(db, user.id)
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
@@ -263,6 +292,10 @@ async def create_project(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
         raise
+    except Exception:
+        await db.rollback()
+        await _delete_objects_quietly(storage, uploaded)
+        raise
     # `created_at` sunucu varsayılanı; commit sonrası nesnede yok.
     await db.refresh(project)
     return _serialize(project, storage)
@@ -276,7 +309,8 @@ async def list_projects(
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict:
-    query = select(Project).where(Project.user_id == user.id)
+    query = select(Project).where(Project.user_id == user.id,
+        ~Project.id.in_(text("SELECT project_id FROM storage_deletion_jobs WHERE project_id IS NOT NULL")))
     if cursor:
         created_at, project_id = _decode_cursor(cursor)
         query = query.where(tuple_(Project.created_at, Project.id) < (created_at, project_id))

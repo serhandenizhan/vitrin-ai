@@ -17,6 +17,7 @@ class Background(Base):
     # R2'deki nesne anahtarı; kullanıcı dosya adından değil, sunucuda üretilen
     # UUID'den türetilir (path traversal koruması, bkz. kök SECURITY.md böl. 4).
     r2_key: Mapped[str] = mapped_column(unique=True, nullable=False)
+    tier: Mapped[str] = mapped_column(default="basic", server_default="basic", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

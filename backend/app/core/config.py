@@ -119,6 +119,32 @@ class Settings(BaseSettings):
     # docker-compose.yml'deki yerel Redis'e işaret ediyor.
     redis_url: str = "redis://localhost:6379/0"
 
+    # Ödeme açılışı dış doğrulamalar tamamlanmadan etkinleştirilmez.
+    iyzico_api_key: str = ""
+    iyzico_secret_key: str = ""
+    iyzico_merchant_id: str = ""
+    iyzico_base_url: str = "https://sandbox-api.iyzipay.com"
+    billing_checkout_enabled: bool = False
+    billing_production_verified: bool = False
+    billing_callback_url: str = ""
+    billing_frontend_url: str = "http://localhost:3000"
+    billing_sales_document_version: str = ""
+    billing_sales_document_text: str = ""
+    billing_pre_information_text: str = ""
+    billing_legal_approved: bool = False
+    billing_invoice_process_ready: bool = False
+    # Ters proxy arkasında gerçek istemci IP'si. Hız sınırı kovaları buna göre
+    # ayrılıyor; liste BOŞKEN `X-Forwarded-For` hiç okunmaz (sahte başlıkla kova
+    # değiştirilemesin diye). Üretimde yalnızca nginx/Caddy'nin kendi adresi
+    # yazılır — uvicorn'un `--forwarded-allow-ips` değeriyle aynı liste.
+    trusted_proxy_ips: str = ""
+    # Ödeme alınamadığında gönderilen "kartınızı güncelleyin" e-postası.
+    # Anahtar yoksa e-posta gönderilmez; sessiz kalmaz, `billing_alerts`'e
+    # açık bir alarm yazılır (bkz. app/services/email.py).
+    resend_api_key: str = ""
+    resend_base_url: str = "https://api.resend.com"
+    billing_email_from: str = ""
+
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
@@ -126,6 +152,10 @@ class Settings(BaseSettings):
     @property
     def cors_allowed_origin_list(self) -> list[str]:
         return _split_origins(self.cors_allowed_origins)
+
+    @property
+    def trusted_proxy_ip_list(self) -> frozenset[str]:
+        return frozenset(_split_origins(self.trusted_proxy_ips))
 
     @field_validator("cors_allowed_origins")
     @classmethod

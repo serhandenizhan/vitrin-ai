@@ -526,7 +526,8 @@ sayacı paylaşıyor (bkz. `backend/app/services/rate_limit.py`,
 `backend/README.md` "Kaynak tüketimi korumaları"). `docker-compose.yml`'e bu
 amaçla Redis eklendi; asenkron iş kuyruğu (Celery/RQ) henüz kurulmadı, bu
 Redis örneği şimdilik yalnızca hız sınırlaması için kullanılıyor. Dağıtık
-davranışı doğrudan sınayan bir test eklendi (160 → 201 → **202**): iki ayrı
+davranışı doğrudan sınayan bir test eklendi (o gün 160 → 201 → **202**; güncel
+sayı için kök `README.md`'ye bakın): iki ayrı
 `RequestRateLimiter` nesnesi (iki ayrı worker'ı taklit eder) aynı Redis
 anahtarını paylaşınca sınırın da paylaşıldığını doğruluyor — process içi eski
 implementasyona karşı çalıştırılsaydı bu test kırmızı yanardı, çünkü iki ayrı
@@ -541,10 +542,25 @@ canlı ayar aslında "...and symbols (recommended)" idi. İstemci kontrolüne
 sembol kuralı eklendi, ilgili tüm dokümanlar ve testler (203 → **210**)
 güncellendi. Bkz. kök `CLAUDE.md` ders 19.
 
-**Bekleyenler:**
-- R2 CORS kuralına production alan adı (kök `CLAUDE.md` açık takip maddesi 2).
-- Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son kontrolü
-  (kök `CLAUDE.md` açık takip maddesi 3).
+**Bekleyenler (launch anına bağlı, Faz 7'ye taşındı — kullanıcı kararı
+14.09.2026):** R2 CORS'a production alan adı eklenmesi ve production veri
+sorumlusu/hukukçu onayı, ikisi de henüz gerçekleşmemiş dış girdilere
+(alan adı, hukukçu) bağlı olduğu için Faz 7 "launch öncesi son kapı"
+kontrol listesine taşındı — bkz. aşağıda Faz 7 ve kök `CLAUDE.md` açık
+takip maddeleri 2-3.
+
+**Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
+Resend bağlandı; dahili e-posta servisi bir kayıt denemesinde e-postayı hiç
+teslim etmemişti (kök CLAUDE.md açık takip maddesi 4). **Sandbox aşaması**
+(hesap + API key + Supabase'e bağlama) gerçek bir kayıt denemesiyle uçtan
+uca doğrulandı — e-posta ulaştı, Resend Logs'ta kayıt görüldü. **Bilinen
+sınırlama:** e-posta şu an spam'e düşüyor (kendi alan adımız yok, Resend'in
+paylaşılan gönderen adresi kullanılıyor) — son UX kontrolünde hatırlanacak,
+aşağıdaki alan adı doğrulama adımıyla birlikte düzelmesi bekleniyor.
+
+**Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
+bağlı — bu kısım Faz 7'nin launch listesine ekleniyor (bkz. kök
+`CLAUDE.md` açık takip maddesi 4).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -592,16 +608,59 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
    filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —
    ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
 
-### Faz 5 — Ödemeler ve kredi sistemi — ⏳ Planlanan
+### Faz 5 — Ödemeler ve kredi sistemi — Uygulandı; canlı açılış bekliyor (15.09.2026)
 
-- Serhan: kredi modeli mantığı, iyzico entegrasyonu, webhook'lar, kullanım bazlı düşüm
-- Kaan: satın alma akışı arayüzü, kredi bakiyesi gösterimi, fatura/geçmiş sayfası
-
-**Güvenlik gereksinimleri (bkz. `SECURITY.md` bölüm 5):**
-- Kredi kartı bilgisi hiçbir zaman kendi backend'imize dokunmaz; iyzico'nun hosted checkout/tokenization akışı kullanılır (PCI-DSS SAQ-A seviyesinde kalmak için)
-- Webhook'lar HMAC imza doğrulamasından geçmeden işlenmez
-- Webhook endpoint'i idempotent olmalı
-- Kart bilgisi hiçbir log'a yazılmaz
+- Dönem snapshot'ları, atomik kota rezervasyonu, ücretsiz aylık yenileme ve son
+  10 proje saklama sınırı; backend basic/full zemin yetkisi.
+- Doğrulanmış iyzico plan sürümleri, tek checkout/trial rezervasyonu, V3 webhook,
+  kayıp callback kurtarma, iptal/plan değişimi ve kalıcı provider kuyrukları.
+- Tam iade, chargeback kanıtları, değişmez mali kayıtlar, hesap silmede provider
+  iptali ve kimlikten ayrıştırılmış saklama; günlük ödeme/iptal/iade mutabakatı.
+- `/paketler`, `/odeme/{id}` ve `/hesap` kredi/ödeme geçmişi arayüzleri.
+- **PR #17 incelemesinden gelen düzeltmeler (15.09.2026):** zemin listesi
+  kota/ödeme kapısından ayrıldı (hata artık listeyi boşaltmıyor, `basic`e
+  düşüyor); istemcinin idempotency anahtarı iş oturumu başına ve belirsiz ağ
+  hatasında korunuyor; `past_due` için 3 günlük erişim penceresi + "kartınızı
+  güncelleyin" e-postası (ürün kararına dönüş); ödeme callback'i ve zemin
+  listesi hız sınırına alındı; ters proxy arkasında gerçek istemci IP'si
+  (`TRUSTED_PROXY_IPS`); ücretsiz planın son yayımlanmış sürümü DB kısıtıyla
+  korunuyor; devam eden satın alma kullanıcı tarafından (fail-closed) iptal
+  edilebiliyor; yalnızca sağlayıcının kesin "oluşmadı" sonucu oturumu kapatıyor,
+  kanıt uyuşmazlığı alarm verip oturumu açık tutuyor. Gönderilemeyen
+  `past_due` e-postası da başarılı sayılmıyor; retry/manual incelemeye kalıyor.
+  Ayrıca: eski tahsilatın iadesi/itirazı güncel aboneliği
+  kapatmıyor, DB silme koruması belirsiz initialization'ı da kapsıyor, hesap
+  silme işi çökme sonrası PII temizliğini tamamlıyor, hesap silme vekilinde de
+  Origin kontrolü var, `subscription_periods` DB seviyesinde değişmez, silme
+  kuyruğundaki proje doğrudan GET'te de 404, ve arka plan kaldırmada gerçek
+  idempotency sözleşmesi: başarılı sonuç 24 saat geçici R2 nesnesinde saklanıyor,
+  aynı anahtar inference'ı hiç çalıştırmadan onu döndürüyor, kredi anahtar başına
+  yalnızca bir kez tüketiliyor. Düzeltmeler `0005` yerinde değiştirilmeden yeni
+  `0006_billing_review_fixes` migration'ında; test hem boş DB'den hem "`0005`
+  uygulanmış DB" yolundan upgrade'i doğruluyor.
+  Her bulgu için regresyon testi eklendi ve testler eski koda karşı
+  çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Son bağımsız
+  incelemenin checkout fail-closed regresyonuyla backend 286, frontend 235.
+- **Fix doğrulamasında bulunan ölü özellik (16.09.2026):** checkout iptalini
+  fail-closed yapan düzeltme oturumu yalnızca `CheckoutAbsent` yakalandığında
+  kapatıyordu, ama bu istisna üretim kodunda HİÇ fırlatılmıyordu (yalnız tanım,
+  `except` ve testteki sahte `side_effect`). Sonuç: gerçek sağlayıcıyla iptal
+  her koşulda 409 döner, yani 7. madde çözülmemiş kalır ve her deneme bir
+  operatör alarmı üretirdi; yeşil test bunu gizliyordu (ders 22). `verify_checkout`
+  artık kesin "oluşmadı" durumunu yanıtın yapısından türetip `CheckoutAbsent`
+  fırlatıyor; testler sahte istisna yerine gerçek sağlayıcı gövdesi veriyor.
+- **Tarayıcıda uçtan uca doğrulama (15.09.2026, yerel Postgres + gerçek Supabase
+  Auth + gerçek R2):** giriş ve kredi göstergesi, arka plan kaldırmada tam bir
+  kredi, bekleyen ödemenin iptalinde fail-closed (sağlayıcı yokken 503, token
+  hiç alınamamışken 409; iki durumda da oturum `pending` kaldı), zemin listesinin
+  askıdaki abonelikte boşalmaması ve `full` zeminin yalnız hak edene gelmesi.
+  Tur iki hata yakaladı ve ikisi de düzeltildi: `/odeme/{id}`'de iptal hatası
+  5 saniyelik durum yoklamasıyla aynı state'i paylaştığı için yazılır yazılmaz
+  siliniyordu (ders 21); `/paketler` ise PR'ın ilk halinde 393 satırlık
+  tasarımından düz bir listeye inmişti, geri getirildi (ders 20).
+- **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
+  hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
+  Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).
 
 ### Faz 6 — Admin paneli — ⏳ Planlanan
 
@@ -615,6 +674,21 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Launch öncesi son kapı, dış girdiye bağlı olduğu için buraya taşındı
+  (kullanıcı kararı 14.09.2026):**
+  - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
+    takip maddesi 2) — production alan adı belirlenince.
+  - Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son
+    kontrolü (kök `CLAUDE.md` açık takip maddesi 3) — hukukçu onayı
+    verilince.
+  - Baskı (CMYK) profili üretime konması (kök `CLAUDE.md` açık takip
+    maddesi 1, Faz 3'ten kalma) — profil lisansı/matbaa koşulu doğrulanınca.
+  - Resend'de alan adı doğrulama (SPF/DKIM) ve gönderen adresinin kendi
+    alan adına çevrilmesi — Faz 5'te yalnızca sandbox (kendi hesabına
+    gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan
+    sonra gider. **Son UX kontrolünde hatırlanmalı:** sandbox e-postaları
+    şu an spam'e düşüyor, bu adım muhtemelen bunu da düzeltecek
+    (kök `CLAUDE.md` açık takip maddesi 4).
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
 

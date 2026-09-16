@@ -126,6 +126,9 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         # Testler birbirinden bağımsız kalsın diye her testten sonra temizle
         # (ayrı bir test-DB'si kurmak yerine aynı yerel Postgres kullanılıyor —
         # 2 kişilik ekip için bu, getirisi düşük bir ek altyapı olurdu).
+        await session.execute(text("TRUNCATE billing_alerts,billing_runs,storage_deletion_jobs,provider_actions,webhook_events,billing_transactions,checkout_sessions,usage_events,usage_reservations,subscription_periods,subscriptions CASCADE"))
+        await session.execute(text("DELETE FROM plan_versions WHERE plan_id <> 'deneme' OR version > 1"))
+        await session.execute(text("UPDATE plan_versions SET retired_at=NULL WHERE plan_id='deneme' AND version=1"))
         for table in reversed(Base.metadata.sorted_tables):
             await session.execute(table.delete())
         # `auth.users` uygulamanın metadata'sında yok (Supabase'e ait); yerelde

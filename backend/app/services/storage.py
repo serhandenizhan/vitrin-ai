@@ -13,12 +13,12 @@ from app.core.config import settings
 # kırık bir görsel olarak ortaya çıkar — teşhis edilmesi en zor yer. Bu yüzden
 # ayarlar client oluşturulurken burada doğrulanıyor.
 #
-# Doğrulamanın `Settings` içinde değil BURADA olması bilinçli: R2 ayarları
-# yalnızca arka plan kütüphanesi için gerekli. `Settings` seviyesinde zorunlu
-# kılmak, yalnızca `/api/remove-background` kullanan bir geliştiricinin
-# (ve Faz 0-2 kurulumunun) uygulamayı hiç başlatamamasına yol açardı.
-# Ayrıca `GET /api/backgrounds` boş bir veritabanında hiç client oluşturmaz,
-# dolayısıyla R2'siz yerel geliştirme çalışmaya devam eder.
+# Doğrulamanın `Settings` içinde değil BURADA olması bilinçli: `Settings`
+# seviyesinde zorunlu kılmak, R2'si olmayan bir kurulumun uygulamayı hiç
+# başlatamamasına yol açardı. Eksik ayar, R2'ye gerçekten dokunan yolda açık
+# bir hataya dönüşüyor. Faz 5'ten beri o yollardan biri arka plan kaldırma:
+# sonucu idempotency için saklayamayacaksa `ensure_configured()` ile işi
+# baştan reddediyor (bkz. api/routes/remove_background.py).
 REQUIRED_R2_SETTINGS = (
     "r2_account_id",
     "r2_access_key_id",
@@ -70,6 +70,19 @@ class R2StorageService:
             Body=content,
             ContentType=content_type,
         )
+
+    def ensure_configured(self) -> None:
+        # Çağıranın, gerçek bir ağ çağrısı yapmadan önce deponun kullanılabilir
+        # olduğunu öğrenmesi için. Arka plan kaldırma bunu inference'tan ÖNCE
+        # soruyor: sonuç saklanamayacaksa ~15 saniyelik iş hiç başlamamalı.
+        _require_r2_settings()
+
+    async def download(self, key: str) -> bytes:
+        client = _get_client()
+        response = await run_in_threadpool(
+            client.get_object, Bucket=self._bucket_name, Key=key
+        )
+        return await run_in_threadpool(response["Body"].read)
 
     async def delete(self, key: str) -> None:
         # S3/R2'de olmayan bir anahtarı silmek hata değil (idempotent) —

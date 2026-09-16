@@ -68,6 +68,24 @@ export function BackgroundRemover() {
    * da yeni secilen baska bir dosya) ekranin uzerine yaziyordu.
    */
   const sessionRef = useRef(0);
+  /**
+   * Bu is icin idempotency anahtari — HER istekte yeniden uretilmez.
+   *
+   * Eskiden her `fetch` cagrisinda `crypto.randomUUID()` uretiliyordu: iki
+   * hizli tiklama ya da elle tekrar deneme iki AYRI anahtarla gidip backend'de
+   * iki rezervasyon (iki kredi) aciyordu. Anahtar artik secilen dosyaya bagli.
+   *
+   * Yenileme kurali TEK: backend `retry_safe` diyerek kredinin hic
+   * tuketilmedigini ya da iade edildigini ACIKCA bildirirse yeni anahtar
+   * uretilir. Baska her durumda — ag koptu, sonuc bilinmiyor, is hala
+   * suruyor, sonuc artik saklanmiyor — anahtar KORUNUR. Basarili olmus ama
+   * yaniti ulasmamis bir islem ayni anahtarla saklanan PNG'yi geri verir;
+   * yeni bir anahtar ikinci krediyi yakardi.
+   */
+  const requestKeyRef = useRef("");
+  const newRequestKey = useCallback(() => {
+    requestKeyRef.current = crypto.randomUUID();
+  }, []);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor;
   // aksi halde her yeni fotografta bir oncekinin blob'u bellekte kaliyor.
@@ -87,6 +105,7 @@ export function BackgroundRemover() {
     // Suren bir onizleme cozumu ya da arka plan kaldirma istegi varsa
     // sonucu artik kimseye ait degil.
     sessionRef.current += 1;
+    newRequestKey();
     setIsPreparingPreview(false);
     setStatus("idle");
     setFile(null);
@@ -96,7 +115,7 @@ export function BackgroundRemover() {
     setElapsedSeconds(null);
     setErrorMessage(null);
     setOpenedFileName(null);
-  }, []);
+  }, [newRequestKey]);
 
   const handleFileSelected = useCallback(
     (selected: File) => {
@@ -104,6 +123,8 @@ export function BackgroundRemover() {
       // bekleyen bir onizleme ya da arka plan kaldirma istegi varsa artik
       // bu ekrana yazamaz.
       const session = ++sessionRef.current;
+      // Yeni dosya = yeni mantiksal is: yeni anahtar.
+      newRequestKey();
       setIsPreparingPreview(false);
 
       const validationError = validateFile(selected);
@@ -145,7 +166,7 @@ export function BackgroundRemover() {
         setIsPreparingPreview(false);
       });
     },
-    [trackObjectUrl],
+    [trackObjectUrl, newRequestKey],
   );
 
   const handleRemoveBackground = useCallback(async () => {
@@ -173,8 +194,10 @@ export function BackgroundRemover() {
       const body = new FormData();
       body.append("file", file);
 
+      if (!requestKeyRef.current) newRequestKey();
       const response = await fetch("/api/remove-background", {
         method: "POST",
+        headers: { "Idempotency-Key": requestKeyRef.current },
         body,
       });
 
@@ -182,14 +205,19 @@ export function BackgroundRemover() {
         const payload = (await response.json().catch(() => null)) as {
           error?: string;
           code?: string;
+          retry_safe?: boolean;
         } | null;
         // Oturum bu arada dustu (suresi doldu, baska sekmede cikis yapildi).
         if (payload?.code === "auth_required") openSignIn();
+        // YALNIZCA backend krediye dokunulmadigini/iade edildigini acikca
+        // soylediginde yeni anahtar.
+        if (payload?.retry_safe === true) newRequestKey();
         throw new Error(
           payload?.error ?? "Arka plan kaldırma işlemi başarısız oldu.",
         );
       }
 
+      window.dispatchEvent(new Event("billing-updated"));
       const blob = await response.blob();
       const mocked = response.headers.get("X-Mock-Response") === "true";
       const duration = (performance.now() - startedAt) / 1000;
@@ -217,7 +245,7 @@ export function BackgroundRemover() {
       );
       setStatus("error");
     }
-  }, [file, trackObjectUrl, recordWork, user, openSignIn]);
+  }, [file, trackObjectUrl, recordWork, user, openSignIn, newRequestKey]);
 
   /**
    * Kenar cubugundan bir calisma acilinca onu ekrana getir.
