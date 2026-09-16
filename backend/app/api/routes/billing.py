@@ -15,6 +15,7 @@ from app.services.billing.db import one, many, execute, enqueue, alert
 from app.services.billing.errors import billing_error
 from app.services.billing.provider import (
     get_provider,
+    CheckoutAbsent,
     ProviderError,
     ProviderUnavailable,
     verify_webhook,
@@ -226,9 +227,25 @@ async def cancel_checkout(
         raise billing_error(
             "billing_not_ready", "Ödeme sağlayıcısı şu anda doğrulanamıyor.", 503
         )
-    except ProviderError:
-        # Sağlayıcı yanıt verdi ve bu forma bağlı bir abonelik/ödeme yok.
+    except CheckoutAbsent:
+        # Yalnızca sağlayıcının kesin "oluşmadı" sonucu yerel korumayı açar.
         await db.rollback()
+    except ProviderError as exc:
+        # Kanıt uyuşmazlığı veya genel provider reddi, uzakta abonelik
+        # olmadığını kanıtlamaz. Çift abonelik riskine karşı fail-closed.
+        await db.rollback()
+        await alert(
+            db,
+            "checkout_cancellation_review",
+            session_id,
+            "Checkout iptali için uzak sonuç kesinleştirilemedi; manuel inceleme gerekli.",
+        )
+        await db.commit()
+        raise billing_error(
+            "checkout_verification_uncertain",
+            "Bu ödemenin sonucu kesinleştirilemedi; oturum açık tutuldu.",
+            409,
+        ) from exc
     else:
         await db.commit()
         raise billing_error("checkout_completed", "Bu ödeme tamamlandı; iptal edilemez.")

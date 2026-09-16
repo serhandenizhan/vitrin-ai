@@ -27,6 +27,7 @@ from app.services.billing.entitlements import (
 from app.services.billing.provider import (
     verify_webhook,
     get_provider,
+    CheckoutAbsent,
     EvidenceMismatch,
     ProviderUnavailable,
     Iyzico,
@@ -1653,6 +1654,12 @@ async def test_dunning_email_goes_out_and_alerts_when_unconfigured(
     mailer = Mock()
     mailer.ensure_configured = Mock(side_effect=EmailNotConfigured("yok"))
     mailer.send = AsyncMock()
+    await execute(
+        db_session,
+        "UPDATE provider_actions SET status='running',attempts=1 WHERE id=:id",
+        id=action["id"],
+    )
+    await db_session.commit()
     await run_action(
         db_session, dict(action) | {"status": "running"}, provider, None, admin, mailer
     )
@@ -1663,8 +1670,18 @@ async def test_dunning_email_goes_out_and_alerts_when_unconfigured(
             "SELECT count(*) AS n FROM billing_alerts WHERE kind='dunning_email_not_sent'",
         )
     )["n"] == 1
+    failed = await one(
+        db_session, "SELECT status FROM provider_actions WHERE id=:id", id=action["id"]
+    )
+    assert failed["status"] == "failed"
 
     mailer.ensure_configured = Mock(return_value=None)
+    await execute(
+        db_session,
+        "UPDATE provider_actions SET status='running',lease_until=NULL WHERE id=:id",
+        id=action["id"],
+    )
+    await db_session.commit()
     await run_action(
         db_session, dict(action) | {"status": "running"}, provider, None, admin, mailer
     )
@@ -1843,7 +1860,7 @@ async def test_pending_checkout_can_be_cancelled_when_provider_says_unpaid(
     uid, version, old, _ = paid
     await execute(db_session, "DELETE FROM checkout_sessions WHERE id=:id", id=old["id"])
     session = await open_checkout(db_session, uid, version["id"])
-    provider.checkout.side_effect = EvidenceMismatch("checkout_mismatch")
+    provider.checkout.side_effect = CheckoutAbsent("checkout_absent")
     response = await client.post(
         f"/api/subscriptions/checkout/{session['id']}/cancel",
         headers=tokens.headers(uid),
@@ -1851,6 +1868,32 @@ async def test_pending_checkout_can_be_cancelled_when_provider_says_unpaid(
     assert response.status_code == 200 and response.json()["status"] == "failed"
     row = await one(db_session, "SELECT * FROM checkout_sessions WHERE id=:id", id=session["id"])
     assert row["trial_status"] == "released" and row["checkout_form_content"] is None
+
+
+async def test_pending_checkout_cancel_keeps_session_on_evidence_mismatch(
+    client, db_session, paid, tokens, provider
+):
+    """Uyuşmayan kanıt, uzakta abonelik olmadığını kanıtlamaz."""
+    uid, version, old, _ = paid
+    await execute(db_session, "DELETE FROM checkout_sessions WHERE id=:id", id=old["id"])
+    session = await open_checkout(db_session, uid, version["id"])
+    provider.checkout.side_effect = EvidenceMismatch("checkout_mismatch")
+    response = await client.post(
+        f"/api/subscriptions/checkout/{session['id']}/cancel",
+        headers=tokens.headers(uid),
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "checkout_verification_uncertain"
+    row = await one(
+        db_session, "SELECT status FROM checkout_sessions WHERE id=:id", id=session["id"]
+    )
+    assert row["status"] == "pending"
+    review = await one(
+        db_session,
+        "SELECT id FROM billing_alerts WHERE kind='checkout_cancellation_review' AND reference=:ref",
+        ref=str(session["id"]),
+    )
+    assert review
 
 
 async def test_pending_checkout_cancel_is_fail_closed(

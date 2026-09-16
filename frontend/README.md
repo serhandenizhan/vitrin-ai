@@ -848,7 +848,9 @@ gerçekten erişilemezken oluyor.
 **Devam eden satın alma görünür.** `checkout_pending`/`idempotency_conflict`
 hatası `checkout_url` taşıyor; `/paketler` kullanıcıyı oraya yönlendiriyor ve
 `/odeme/{id}` "bu işlemi iptal et, yeni plan seç" seçeneği sunuyor. İptal
-fail-closed: sağlayıcı doğrulanamıyorsa oturum kapatılmıyor, hata gösteriliyor.
+fail-closed: sağlayıcı doğrulanamıyorsa veya dönen abonelik kanıtı
+conversation/müşteri/planla uyuşmuyorsa oturum kapatılmıyor, hata gösteriliyor.
+Yalnızca sağlayıcının kesin "checkout oluşmadı" sonucu yeni plan seçimini açıyor.
 
 **Hesap silme vekilinde de ödeme mutasyonlarıyla aynı Origin kontrolü var**
 (`lib/backend-proxy.ts::foreignOrigin`) — kontrol ayrı ayrı yazıldığı için

@@ -6,6 +6,10 @@ from app.services.storage import get_storage_service
 from app.services.supabase_admin import get_supabase_admin
 
 
+class DunningEmailDeferred(RuntimeError):
+    """Ödeme uyarısı gönderilemedi; eylem retry/manual inceleme için açık kalır."""
+
+
 async def claim_action(db):
     row = await one(
         db,
@@ -304,9 +308,8 @@ async def dunning_email_action(db, action, admin, mailer):
     try:
         mailer.ensure_configured()
     except EmailNotConfigured:
-        # Sessizce atlanmaz: gönderilmemiş bir ödeme uyarısı operatörün
-        # görmesi gereken bir durum. Eylem başarısız sayılıp 10 kez
-        # tekrarlanmaz — yapılandırma gelene kadar sonuç değişmeyecek.
+        # Alarm operatörü bilgilendirir; eylem `succeeded` sayılmaz. Worker
+        # sınırlı retry yapar, sonra admin incelemesiyle yeniden açılabilir.
         await alert(
             db,
             "dunning_email_not_sent",
@@ -314,7 +317,7 @@ async def dunning_email_action(db, action, admin, mailer):
             "Ödeme uyarısı e-postası yapılandırılmadığı için gönderilemedi.",
         )
         await db.commit()
-        return
+        raise DunningEmailDeferred("email_not_configured")
     email = await admin.get_user_email(action["user_id"])
     if not email:
         await alert(
@@ -324,7 +327,7 @@ async def dunning_email_action(db, action, admin, mailer):
             "Kullanıcının e-posta adresi bulunamadı; ödeme uyarısı gönderilemedi.",
         )
         await db.commit()
-        return
+        raise DunningEmailDeferred("email_missing")
     # Kalıcı eylem kimliği hem yerel kuyruğun hem sağlayıcının idempotency
     # anahtarı: lease süresi dolup iş yeniden alınsa da aynı değer gider.
     await mailer.send(

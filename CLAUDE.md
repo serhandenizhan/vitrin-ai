@@ -247,8 +247,9 @@ Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kura
 
 - `RESEND_API_KEY` + `BILLING_EMAIL_FROM` yoksa "ödemeniz alınamadı, kartınızı
   güncelleyin" e-postası hiç gitmez. Sessiz kalmıyor (`billing_alerts`'e
-  `dunning_email_not_sent` yazılıyor) ama kullanıcı 3 günlük grace penceresini
-  haberi olmadan tüketir.
+  `dunning_email_not_sent` yazılıyor); action `succeeded` sayılmıyor, sınırlı
+  retry/manual inceleme için açık kalıyor. Yine de operatör alarmı çözmezse
+  kullanıcı 3 günlük grace penceresini haberi olmadan tüketebilir.
 - `TRUSTED_PROXY_IPS` (ve uvicorn'un `--proxy-headers` / `--forwarded-allow-ips`
   değerleri) verilmezse hız sınırı bütün public trafiği proxy'nin tek kovasına
   koyar; sınır fiilen kalkar ve bunu yerelde fark etmenin yolu yoktur.

@@ -625,7 +625,10 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   listesi hız sınırına alındı; ters proxy arkasında gerçek istemci IP'si
   (`TRUSTED_PROXY_IPS`); ücretsiz planın son yayımlanmış sürümü DB kısıtıyla
   korunuyor; devam eden satın alma kullanıcı tarafından (fail-closed) iptal
-  edilebiliyor. Ayrıca: eski tahsilatın iadesi/itirazı güncel aboneliği
+  edilebiliyor; yalnızca sağlayıcının kesin "oluşmadı" sonucu oturumu kapatıyor,
+  kanıt uyuşmazlığı alarm verip oturumu açık tutuyor. Gönderilemeyen
+  `past_due` e-postası da başarılı sayılmıyor; retry/manual incelemeye kalıyor.
+  Ayrıca: eski tahsilatın iadesi/itirazı güncel aboneliği
   kapatmıyor, DB silme koruması belirsiz initialization'ı da kapsıyor, hesap
   silme işi çökme sonrası PII temizliğini tamamlıyor, hesap silme vekilinde de
   Origin kontrolü var, `subscription_periods` DB seviyesinde değişmez, silme
@@ -636,7 +639,8 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   `0006_billing_review_fixes` migration'ında; test hem boş DB'den hem "`0005`
   uygulanmış DB" yolundan upgrade'i doğruluyor.
   Her bulgu için regresyon testi eklendi ve testler eski koda karşı
-  çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Backend 285, frontend 235.
+  çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Son bağımsız
+  incelemenin checkout fail-closed regresyonuyla backend 286, frontend 235.
 - **Tarayıcıda uçtan uca doğrulama (15.09.2026, yerel Postgres + gerçek Supabase
   Auth + gerçek R2):** giriş ve kredi göstergesi, arka plan kaldırmada tam bir
   kredi, bekleyen ödemenin iptalinde fail-closed (sağlayıcı yokken 503, token

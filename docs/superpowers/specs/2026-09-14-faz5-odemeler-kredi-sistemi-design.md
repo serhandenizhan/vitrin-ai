@@ -1,7 +1,9 @@
 # Faz 5 — Ödemeler ve kredi sistemi tasarımı
 
 **Tarih:** 2026-09-14 (v5 — yenileme gecikmesi ve trial yarış düzeltmelerinden sonra revize edildi)
-**Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü bu API sözleşmesine dayanır; arayüz tasarımı ayrı çalışmadır.
+**Kapsam:** Faz 5 abonelik/kota modeli, iyzico entegrasyonu, webhook, kullanım, iade/itiraz ve mutabakat. ROADMAP'teki "kredi", ayrı satılan veya devreden bir cüzdan değil, planın aylık kullanım kotasıdır. Kaan'ın satın alma, kredi bakiyesi ve fatura/geçmiş arayüzü aynı Faz 5 teslimine dahil edilmiş, bu API sözleşmesine dayanır.
+
+**Faz sınırı notu:** Plan sürümü yayınlama, iade ve abonelik askıya alma için gereken dar admin endpoint'leri ödeme sisteminin güvenli işletimi için Faz 5'e öne alındı. Faz 6'daki genel kullanıcı, kredi ve kullanım istatistiği admin API'leri ile admin arayüzü kapsam dışıdır. Hesap silme, hukuki kanıt ve R2 temizleme bağlantıları yeni ürün özelliği değil; tahsilat ve saklama kayıtlarını güvenli kapatmak için zorunlu entegrasyonlardır.
 
 ## v6 — Uygulama uyarlamaları (15.09.2026)
 
@@ -110,6 +112,7 @@ Her ticari değişiklik yeni immutable **plan_versions** satırı yaratır:
 | access_until | timestamptz, null | Provider iptal edilse de satın alınmış erişim sonu |
 | trial_used_at | timestamptz, null | Kullanıcı yaşamında yalnız bir trial |
 | renewal_check_after | timestamptz, null | Dönem sonu iyzico doğrulamasını kullanıcı başına en fazla dakikada bir başlatır |
+| past_due_access_until | timestamptz, null | Başarısız tahsilattan sonra bir kez açılan, uzamayan 3 günlük erişim sonu |
 | created_at, updated_at | timestamptz | |
 
 Her erişim dönemi immutable **subscription_periods** satırıdır:
@@ -132,17 +135,22 @@ Kayıt trigger'ı yayımlanmış Deneme sürümüyle ilk aylık dönemi açar. D
 kontrol eder. Yeni dönem yoksa `subscriptions` satırı kilitlenir ve `renewal_check_after` koşullu
 olarak `now() + 60 saniye` yapılır; yalnız kazanan istek iyzico'dan subscription/son ödeme
 durumunu sunucu tarafında, kısa timeout ile sorgular. Ağ çağrısı DB transaction'ı dışında yapılır.
-Sonra ikinci kısa transaction şu iki sonuçtan yalnız birini yazar:
+Sonra ikinci kısa transaction şu üç sonuçtan yalnız birini yazar:
 
 1. iyzico tahsilatı başarılı ve provider referansı/planı/tutarı/currency'si beklenenle eşleşiyorsa,
    webhook handler ile **aynı idempotent dönem-açma fonksiyonu** yeni paid period'u ve charge
    ledger kaydını yaratır. Geç gelen webhook daha sonra no-op olur.
-2. Tahsilat başarısız, pending veya iyzico erişilemezse mevcut dönem uzatılmaz ve yeni kredi
-   verilmez. İstemci `409 billing_renewal_pending` ve en fazla 60 saniyelik `Retry-After` alır;
-   önceki dönemde kullanılmamış kota da period bitmiş olduğu için harcanamaz.
+2. Tahsilat pending veya iyzico erişilemezse mevcut dönem uzatılmaz ve yeni kredi
+   verilmez. İstemci `409 billing_renewal_pending` ve en fazla 60 saniyelik `Retry-After` alır.
+3. Tahsilatın başarısız olduğu doğrulanırsa abonelik `past_due` olur ve
+   `past_due_access_until` ilk geçişte `now() + 3 gün` olarak yazılır; sonraki
+   başarısızlıklar bu tarihi uzatmaz. Yeni period/kredi açılmaz, kullanıcı mevcut
+   dönemin yalnızca kalan kotasını bu pencere boyunca kullanır ve kalıcı kuyruktan
+   idempotent "kartınızı güncelleyin" e-postası gönderilir. Pencere sonunda durum
+   `expired` olur ve erişim kesilir.
 
-Bu, sınırsız/uydurma bir entitlement grace'i değildir: müşteri yalnız provider'da gerçekten
-başarılı görünen ödeme ile yeni kotaya geçer. `renewal_check_after` içindeki diğer istekler aynı
+Bu, sınırsız/uydurma bir entitlement grace'i değildir: üç gün sabittir ve yeni
+kota vermez; müşteri yalnız provider'da gerçekten başarılı görünen ödeme ile yeni kotaya geçer. `renewal_check_after` içindeki diğer istekler aynı
 pending cevabı alır; bakım worker'ı zamanı gelince doğrulamayı yeniden dener. Günlük
 reconciliation hâlâ kaçırılmış olaylar için alarm ve manuel inceleme güvenlik ağıdır, erişimin
 tek onarım yolu değildir.
@@ -306,11 +314,13 @@ Kaynaklar: [iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [iyzi
 
 - Son kotada iki eşzamanlı inference: yalnız biri reservation alır.
 - OOM/timeout/restart: pending reservation yalnız bir kez serbest kalır.
-- Deneme aylık yenilenir; expired/past_due kullanıcı kota tüketemez.
+- Deneme aylık yenilenir; `past_due` kullanıcı uzamayan 3 gün boyunca yalnızca
+  mevcut dönemin kalan kotasını kullanır, yeni kota alamaz; süre dolunca `expired` olur.
 - iyzico'da başarılı görünen yenileme webhook'tan önce kullanım isteğiyle doğrulanırsa tek yeni
   period ve tek charge kaydı yaratılır; geç gelen webhook no-op olur.
-- iyzico yenilemesi pending/başarısız/erişilemezken yeni period veya kredi yaratılmaz ve istek
-  `billing_renewal_pending` + en fazla 60 saniye `Retry-After` alır.
+- iyzico yenilemesi pending/erişilemezken yeni period veya kredi yaratılmaz ve istek
+  `billing_renewal_pending` + en fazla 60 saniye `Retry-After` alır. Doğrulanmış
+  başarısızlık 3 günlük `past_due` penceresini ve tek e-posta eylemini açar.
 - Aynı checkout anahtarı ikinci provider aboneliği oluşturmaz; farklı anahtarlı iki eşzamanlı
   trial isteği tek reserved session/hosted URL üretir. Expired/failed session released olur ve
   `trial_used_at` null kalır; yalnız doğrulanmış başarı onu bir kez set eder.
@@ -328,14 +338,15 @@ Kaynaklar: [iyzico Sanal POS](https://www.iyzico.com/isim-icin/sanal-pos), [iyzi
 - **Serhan:** migration, iyzico adapter, webhook ingest + worker, dönem/kota, provider actions, iade/itiraz, reconciliation ve testler.
 - **Kaan:** satın alma, kredi bakiyesi, fatura/geçmiş ve backend sözleşmesine bağlı plan ekranları.
 
-## v5 sonrası: uygulama incelemesinde bulunan düzeltmeler (15.09.2026)
+## Uygulama incelemesinde bulunan ve kapatılan maddeler (15.09.2026)
 
 v5 spec'i `codex/faz5-odemeler-implementation` dalında (o an henüz commit edilmemiş
 çalışma ağacı, `backend/app/services/billing/` + `backend/app/api/routes/billing.py`
 + ilgili frontend dosyaları) koda döküldü. Backend 242, frontend 216 test geçti; lint
 ve production build temiz — bunlar bağımsız olarak tekrar çalıştırılıp doğrulandı.
-Kod incelemesinde (Claude + Codex, iki turlu) bulunan ve **bir sonraki oturumda
-düzeltilmesi gereken** maddeler:
+Kod incelemesinde (Claude + Codex, iki turlu) aşağıdaki maddeler bulundu.
+Bu bölüm tarihsel gerekçeyi korur; normatif davranış yukarıdaki ana bölümlere
+işlendi ve kapanışlar bölümün sonundaki tabloda kaydedildi.
 
 ### 1. P1 — Zemin listesi ödeme/kota kapısına bağlı, sessizce boşalıyor
 
@@ -436,7 +447,7 @@ yönlendirmeli ve orada "bu işlemi iptal et, yeni plan seç" seçeneği sunmal�
 
 Yukarıdaki yedi madde ile PR #17 incelemesindeki P1/P2 bulguları koda döküldü.
 Her bulgu için ayrı regresyon testi yazıldı ve her test ESKİ koda karşı
-çalıştırılıp kırmızı yandığı görüldü (kök `CLAUDE.md` ders 15). Backend 285,
+çalıştırılıp kırmızı yandığı görüldü (kök `CLAUDE.md` ders 15). Backend 286,
 frontend 235 test geçiyor; lint ve production build temiz.
 
 | Bulgu | Düzeltme |
@@ -447,7 +458,16 @@ frontend 235 test geçiyor; lint ve production build temiz.
 | 4 — iyzico imza varsayımları | Kod değil launch kapısı; runbook'un "Sandbox kabul kontrolü" bölümünde ilk sıraya alındı. |
 | 5 — Proxy arkasında IP hız sınırı | `TRUSTED_PROXY_IPS` + `client_ip()`; başlık yalnız güvenilen proxy'den okunuyor. Runbook'a `--proxy-headers`/`--forwarded-allow-ips` adımı eklendi. |
 | 6 — Son ücretsiz plan sürümü korunmuyordu | `plan_versions` üzerinde DEFERRED constraint trigger: yayımlanmış `deneme` sürümü olmadan commit edilemiyor. |
-| 7 — Pending checkout sessizdi | Hata yanıtı `checkout_url` taşıyor; `/odeme/{id}` sayfasında "bu işlemi iptal et, yeni plan seç" var ve iptal fail-closed. |
+| 7 — Pending checkout sessizdi | Hata yanıtı `checkout_url` taşıyor; `/odeme/{id}` sayfasında "bu işlemi iptal et, yeni plan seç" var. İptal yalnızca sağlayıcının kesin "oluşmadı" sonucunda oturumu kapatıyor; kanıt uyuşmazlığı ve genel provider hatası fail-closed/manual review. |
+
+Bağımsız son incelemede kapanan iki ek nokta:
+
+- Checkout iptali artık genel `ProviderError`/`EvidenceMismatch` durumunu "uzakta
+  abonelik yok" kanıtı saymıyor. `checkout_cancellation_review` alarmı üretiliyor,
+  pending koruması açık kalıyor; böylece ikinci abonelik başlatılamıyor.
+- Yapılandırma veya kullanıcı e-postası eksikken `dunning_email` action'ı
+  `succeeded` olmuyor. Alarm + sınırlı retry sonrası manuel yeniden açma yolu
+  korunuyor; Resend idempotency anahtarı tekrar gönderimde çift e-postayı önlüyor.
 
 Ayrıca aynı incelemenin listedeki yedi maddenin dışında kalan bulguları:
 

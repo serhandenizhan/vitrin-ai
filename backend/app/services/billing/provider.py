@@ -21,6 +21,12 @@ class ProviderUnavailable(ProviderError):
     pass
 
 
+class CheckoutAbsent(ProviderError):
+    """Sağlayıcı checkout/abonelik oluşmadığını kesin olarak bildirdi."""
+
+    pass
+
+
 class EvidenceMismatch(ProviderError):
     pass
 

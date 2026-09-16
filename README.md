@@ -53,7 +53,7 @@ yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 285 test (yerel PostgreSQL + Redis ile pytest) · frontend 235 test (Vitest) |
+| Testler | backend 286 test (yerel PostgreSQL + Redis ile pytest) · frontend 235 test (Vitest) |
 | Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü ölçülerek doğrulandı) · Instagram dikey 1080×1350 · Pazaryeri 2000×2000 beyaz zemin |
 | Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
 | Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |

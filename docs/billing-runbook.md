@@ -50,8 +50,9 @@ kurulumu bu depodaki otomatik testlerin dışında kalan açılış adımlarıd�
    `BILLING_CHECKOUT_ENABLED=true` olsa bile satın alma açılmaz (503). Gerekçe,
    kullanıcıya 3 günlük bir grace penceresi vaat edilmesi ve o pencerenin tek
    uyarısının bu e-posta olması. Gönderim yine de yapılamazsa sessiz kalmaz:
-   `billing_alerts` tablosuna `dunning_email_not_sent` yazılır ve
-   `GET /api/admin/billing/operations` üzerinde görünür. İstek, kalıcı
+   `billing_alerts` tablosuna `dunning_email_not_sent` yazılır, eylem
+   `succeeded` sayılmaz ve sınırlı retry'dan sonra admin incelemesine kalır.
+   Durum `GET /api/admin/billing/operations` üzerinde görünür. İstek, kalıcı
    `provider_actions.id`'yi Resend'e `Idempotency-Key` başlığıyla taşır —
    timeout sonrası yeniden deneme kullanıcıya ikinci e-postayı göndermez.
 7. **R2 sonuç deposu ödemeden bağımsız bir ön koşuldur.** Arka plan kaldırma,
@@ -133,11 +134,16 @@ Raporlama API izni merchant hesabında açık olmalıdır.
   geldiğinde pencere temizlenir; bir sonraki başarısızlık yeniden tam 3 gün alır.
 - **Devam eden bir satın alma kullanıcı tarafından iptal edilebilir**
   (`POST /api/subscriptions/checkout/{id}/cancel`). Fail-closed: oturum
-  kapatılmadan önce sağlayıcıya sorulur. Sağlayıcı "böyle bir ödeme yok" derse
-  oturum `failed` olur ve trial rezervasyonu serbest bırakılır; sağlayıcı cevap
-  veremiyorsa 503 döner ve oturum AÇIK kalır. Token hiç alınamamış (belirsiz
+  kapatılmadan önce sağlayıcıya sorulur. Yalnızca sağlayıcının kesin "böyle
+  bir checkout/abonelik oluşmadı" sonucu oturumu `failed` yapıp trial rezervasyonunu
+  serbest bırakır. Sağlayıcı cevap veremiyorsa 503; dönen kanıt conversation,
+  müşteri veya planla uyuşmuyorsa 409 + `checkout_cancellation_review` alarmı
+  döner ve oturum AÇIK kalır. Token hiç alınamamış (belirsiz
   initialization) bir oturum bu yolla kapatılamaz — o, yukarıdaki elle
-  uzlaştırma adımına gider.
+  uzlaştırma adımına gider. Provider adapter'ının kesin "oluşmadı"
+  sonucunu hangi sandbox hata kodundan üreteceği gerçek merchant kabul turunda
+  kanıtlanmadan `CheckoutAbsent` eşlemesi eklenmez; bilinmeyen hata kodu genel
+  `ProviderError` olarak fail-closed kalır.
 - **İade/itiraz, tahsilatın ait olduğu aboneliği kapatır.** Bağ, mali kaydın
   dönem snapshot'ı üzerinden kurulur (`billing_transactions.period_id` →
   `subscription_periods.provider_subscription_reference`). Kullanıcı A'dan B
