@@ -1,140 +1,205 @@
-# vitrin-ai
+# Vitrin AI
 
-Kuyumcular için AI destekli ürün fotoğrafı platformu. Kullanıcı bir ürün fotoğrafı
-(yüzük, kolye vb.) yükler; AI çok yüksek kenar hassasiyetiyle arka planı kaldırır,
-ardından kullanıcı kesimi özel arka plan tasarımlarından birinin üzerine yerleştirip
-ölçeklendirebilir, döndürebilir ve yeniden konumlandırabilir. Önce web uygulaması
-(MVP), uzun vadeli hedef mobil uygulama.
+**Kuyumcular için yapay zekâ destekli ürün görseli platformu.**
 
-Bu, projenin ikinci iterasyonudur — kod tabanı sıfırdan yazılıyor, ancak önceki
-iterasyonda alınan teknik kararlar (bkz. `CLAUDE.md` ve `ROADMAP.md`) geçerliliğini
-koruyor.
+Telefonla çekilmiş tek bir fotoğraftan satışa hazır ürün görseli üretir: yapay
+zekâ arka planı ince zincirlere ve yansıtıcı taşlara kadar temiz kenarlarla
+kaldırır, ardından kullanıcı kesimi hazır bir zeminin üzerine yerleştirip
+ölçekler, döndürür, gölge ve ışık ekler, istediği ölçüde indirir.
 
-## Durum
+Önce web uygulaması, uzun vadeli hedef mobil uygulama.
 
-**Faz 0 — Kurulum**, **Faz 1 — backend/AI motoru**, **Faz 2 — web frontend MVP**,
-**Faz 3 — arka plan kütüphanesi + kompozisyon editörü** ve **Faz 4 — veritabanı ve
-kullanıcı hesapları** tamamlandı.
+```
+fotoğraf yükle  →  arka plan kalksın  →  zemine yerleştir  →  satışa hazır görseli indir
+```
 
-**Faz 5 uygulaması hazır:** dönem kotası, iyzico checkout/webhook, abonelik
-yönetimi, ödeme geçmişi ve bakım kuyrukları eklendi. Canlı ödeme açılışı için
-merchant sandbox doğrulaması ve işletim kurulumu bekliyor.
-[Ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
+---
 
-- Faz 1: `POST /api/remove-background` endpoint'i çalışıyor, birim testleri yeşil,
-  gerçek mücevher fotoğraflarıyla doğrulandı, Docker build başarıyla derleniyor.
-- Faz 2: Next.js arayüzü — sürükle-bırak yükleme, istemci tarafı doğrulama,
-  sunucu tarafı vekil, demo (mock) modu, önce/sonra karşılaştırması ve PNG
-  indirme. Üzerine apple.com'dan uyarlanan tasarım dili, sol panel (çalışma
-  geçmişi + ayarlar), logo ve Vitest testleri geldi. Ayrıntı için
-  `frontend/README.md`.
-- Faz 3 (backend): `backgrounds` tablosu (Postgres + Alembic), Cloudflare R2
-  depolama (presigned URL, sunucuda üretilen UUID anahtar), `POST /api/admin/backgrounds`
-  ve `GET /api/backgrounds`. Gerçek bir R2 bucket'ına karşı uçtan uca doğrulandı.
-- Faz 3 (frontend): kesim hazır olduğunda önce/sonra sürgüsüyle inceleme ekranı;
-  "Arka plan ekle" ile açılan tam ekran **stüdyo** — zemin seç, ürünü
-  sürükle/ölçekle/döndür, parlaklık/kontrast/doygunluk ayarla, gölge ve ışık
-  havuzu uygula, 2000×2000 PNG/JPEG indir. Backend zemin döndürmediğinde
-  ya da hiç ayakta olmadığında yer tutucu zeminlere sessizce düşüyor; imzalı
-  URL'ler ömrünün %75'inde yenileniyor.
+## İçindekiler
 
-**Kilometre taşı 1 tamamlandı:** fotoğraf yükle → arka plan kalksın → indir
-akışı uçtan uca çalışıyor. **Faz 3 ile ürünün tam vaadi kapandı:** fotoğraf
-yükle → arka plan kalksın → zemine yerleştir → satışa hazır görseli indir.
+- [Ürün](#ürün) · [Durum](#durum) · [Ölçümler](#ölçümler)
+- [Teknoloji](#teknoloji) · [Mimari kararlar](#mimari-kararlar)
+- [Kurulum](#kurulum) · [Testler](#testler)
+- [Depo yapısı](#depo-yapısı) · [Dokümantasyon](#dokümantasyon)
+- [Ekip](#ekip) · [Lisans](#lisans)
 
-### Ölçümler
+## Ürün
 
 | | |
 | --- | --- |
-| BiRefNet CPU inference | ~15 sn/fotoğraf, ilk istekte ~30-35 sn (model yükleme) |
+| **Arka plan kaldırma** | BiRefNet ile yüksek kenar hassasiyeti; ince zincir, tırnak montür ve küçük taşlar korunur |
+| **Kompozisyon stüdyosu** | Zemin seç, ürünü sürükle/ölçekle/döndür; parlaklık, kontrast, doygunluk; gölge ve ışık havuzu |
+| **Hazır ölçüler** | Kare 2000×2000, Instagram (kare, dikey, hikâye), pazaryeri beyaz zemin, A4 katalog sayfası |
+| **Baskıya uygun çıktı** | ICC profili gömülü CMYK TIFF/JPEG |
+| **Marka öğeleri** | Logo yerleşimi, ürün etiketi (ayar, gram, ürün kodu) |
+| **Hesap ve geçmiş** | Supabase Auth ile giriş; çalışmalar sunucuda saklanır, cihazdan bağımsız |
+| **Abonelik ve kota** | iyzico ile aylık paket; dönem başına fotoğraf hakkı, fatura geçmişi |
+
+Hedef kitle Türkiye'deki kuyumcular; arayüz, yasal metinler ve ödeme altyapısı
+buna göre seçildi.
+
+## Durum
+
+**Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
+bekliyor.**
+
+| Faz | Kapsam | Durum |
+| --- | --- | --- |
+| 0 | Kurulum ve planlama | ✅ |
+| 1 | AI motoru — `POST /api/remove-background` | ✅ |
+| 2 | Web arayüzü MVP | ✅ |
+| 3 | Zemin kütüphanesi ve kompozisyon stüdyosu | ✅ |
+| 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
+| 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
+| 6 | Admin paneli | ⏳ |
+| 7 | Test, optimizasyon, sağlamlaştırma | ⏳ |
+| 8 | Mobil uygulama | ⏳ |
+
+Faz 5'in kodu hazır ve testleri yeşil; ücretli satın alma **varsayılan olarak
+kapalı**. Açılmadan önce gerçek iyzico merchant sandbox turu ile e-posta ve ters
+proxy ayarları tamamlanmalı. Ayrıntı:
+[ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
+
+### Ölçümler
+
+Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
+
+| | |
+| --- | --- |
+| BiRefNet CPU inference | ~15 sn/fotoğraf, ilk istekte ~30–35 sn (model yükleme) |
 | BiRefNet tepe RAM | **12–14 GB** — 8 GB'lık sunucu bu modeli kaldırmaz |
 | Arayüz ilk yükleme | **386 KB** (JS 176 · font 131 · görsel 56 · CSS 12 · HTML 11) |
-| Editör (Konva) | **312 KB, ayrı parça** — ilk yüklemede inmiyor, stüdyo açılınca geliyor |
+| Editör (Konva) | **312 KB, ayrı parça** — stüdyo açılınca yükleniyor |
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
-| Responsive | 320–1920 px arası yatay taşma yok (üç sayfada da 320 px'te doğrulandı); 32 px altında dokunma hedefi yok |
-| Testler | backend 286 test (yerel PostgreSQL + Redis ile pytest) · frontend 235 test (Vitest) |
-| Kompozisyon çıktısı | Kare 2000×2000 · Katalog 1240×1754 · Instagram 1080×1080 ve 1080×1920 (dördü ölçülerek doğrulandı) · Instagram dikey 1080×1350 · Pazaryeri 2000×2000 beyaz zemin |
-| Baskı çıktısı | CMYK TIFF/JPEG, ICC profili gömülü |
-| Katalog sayfası | A4 oranı 1240×1754 (150 dpi) |
+| Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
+| Testler | backend **286** (pytest + gerçek PostgreSQL/Redis) · frontend **235** (Vitest) |
+| Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
-RAM ve süre ölçümlerinin tam geçmişi için `ROADMAP.md` bölüm 2; arayüz
-ölçümleri için `frontend/README.md`.
+RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
+`frontend/README.md` içinde.
 
-- Faz 4 (backend): Supabase JWT doğrulaması (JWKS), kullanıcı projeleri API'si
-  (`/api/projects`), `admin_users` ile gerçek yönetici yetkisi (Faz 3'ün geçici
-  `X-Admin-Secret`'ı kaldırıldı), `public`'teki her tabloda RLS, CORS, hesap silme
-  (`DELETE /api/account`) ve arka plan kaldırmada oturum zorunluluğu.
-- Faz 4 (frontend): iki adımlı kayıt (bireysel / şirket hesabı), giriş, parola
-  sıfırlama, "Hoş geldiniz" bildirimi, sunucuda çalışma geçmişi ve `/hesap` sayfası
-  (profil, parola değiştirme, tüm cihazlardan çıkış, hesap silme). Gerçek Supabase +
-  R2 ile uçtan uca denendi.
-- Öne alınan işler: stüdyoda logo, ürün etiketi (ayar/gram/kod), Instagram dikey ve
-  pazaryeri boyutları, WhatsApp'ta paylaşım; açılışta aracın gerçek çıktısıyla
-  sürüklenebilir önce/sonra; sitenin genelinde yumuşak geçişler; çekim rehberi;
-  KVKK, gizlilik ve kullanım koşulları sayfaları.
+## Teknoloji
 
-Ayrıntı: `ROADMAP.md` Faz 4, `backend/README.md`, `frontend/README.md`.
+| Katman | Seçim |
+| --- | --- |
+| Backend | Python · FastAPI · SQLAlchemy · Alembic |
+| AI | BiRefNet (`ZhengPeng7/BiRefNet`, MIT ağırlıklar) · onnxruntime |
+| Veritabanı | PostgreSQL (production: Supabase) |
+| Nesne depolama | Cloudflare R2, imzalı URL |
+| Frontend | Next.js · TypeScript · Tailwind · shadcn/ui · Konva.js |
+| Kimlik doğrulama | Supabase Auth (JWKS ile doğrulanan JWT) |
+| Ödemeler | iyzico (abonelik, V3 webhook) |
+| Kuyruklar | PostgreSQL tabanlı kalıcı kuyruk + systemd timer |
+| Test | pytest · Vitest · Playwright (Faz 7) |
+| Mobil (Faz 8) | React Native · Expo |
 
-## Ekip
+## Mimari kararlar
 
-- **Serhan** — Backend, AI/ML, veritabanı, ödemeler, altyapı
-- **Kaan** — Frontend, canvas editörü, kullanıcı deneyimi
+Bu kararlar tartışılıp kapatıldı; gerekçeleri `ROADMAP.md` ve `CLAUDE.md`
+içinde ayrıntılı.
 
-## Teknoloji yığını
+- **AI modeli BiRefNet, yalnızca orijinal MIT ağırlıklarıyla.** BRIA'nın "RMBG"
+  ağırlıkları aynı mimariyi kullanıyor ama ticari kullanıma kapalı; bu alanda
+  sık düşülen bir tuzak olduğu için açıkça elendi.
+- **Tüm iş mantığı FastAPI'de.** Next.js yalnızca arayüz ve vekil; mobil
+  uygulama aynı API'yi kullanacak.
+- **Row Level Security zorunlu.** Supabase'in `anon` anahtarı tasarım gereği
+  herkese açık olduğundan, RLS'siz bir tablo internete açık tablo demektir;
+  tablo ve politikası her zaman aynı migration'da gider.
+- **Ödeme kanıta dayanır.** Erişim yalnızca sağlayıcıdan doğrulanmış ödemeyle
+  açılır; callback tek başına kanıt sayılmaz, mali kayıtlar değişmezdir.
+- **Uygulanmış migration yerinde düzenlenmez;** şema değişikliği her zaman yeni
+  bir revizyon olarak eklenir.
+- **Arayüz tasarım dili apple.com/tr ürün sayfalarından uyarlandı** (ölçek,
+  ritim, dönüşümlü koyu/açık bölümler); vurgu rengi altın, hedef kitle kuyumcu.
 
-- Backend: Python, FastAPI, Celery/RQ + Redis (Redis şimdilik yalnızca dağıtık
-  yükleme hız sınırlaması için kurulu; Celery/RQ kuyruğu henüz kurulmadı)
-- AI modeli: BiRefNet (`ZhengPeng7/BiRefNet`, MIT lisanslı ağırlıklar)
-- Veritabanı: PostgreSQL (production'da Supabase)
-- Nesne depolama: Cloudflare R2
-- Frontend: Next.js, TypeScript, Tailwind, shadcn/ui, Konva.js
-- Kimlik doğrulama: Supabase Auth
-- Ödemeler: iyzico
+## Kurulum
 
-Tam gerekçe ve karar geçmişi için `ROADMAP.md`, güvenlik standartları için
-`SECURITY.md`, geliştirme rehberi için `CLAUDE.md` dosyalarına bakın.
-
-## Depo yapısı
-
-```
-/backend    FastAPI uygulaması, AI inference servisi (Faz 1 tamamlandı — bkz. backend/README.md)
-/frontend   Next.js web uygulaması (Faz 2-3 tamamlandı — bkz. frontend/README.md)
-/mobile     React Native uygulaması (Faz 8'de eklenecek)
-```
-
-## Yerel geliştirme
+Gereksinimler: Docker, Python 3.11+, Node.js 20+.
 
 ```bash
-cp .env.example .env   # değerleri düzenleyin
-docker compose up -d   # yerel PostgreSQL + Redis'i başlatır
+git clone https://github.com/serhandenizhan/vitrin-ai.git
+cd vitrin-ai
+docker compose up -d          # PostgreSQL + Redis
 ```
 
-### VS Code ile tek tıkla
+**Backend**
 
-Projeyi VS Code'da açıp **`Ctrl+Shift+B`** — backend ve frontend birlikte kalkar,
-her biri kendi terminalinde. Durdurmak için ilgili terminalde `Ctrl+C`.
-Tanımlar: `.vscode/tasks.json`.
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env          # değerleri doldurun
+alembic upgrade head
+uvicorn app.main:app --reload
+```
 
-Diğer görevler `Ctrl+Shift+P` → "Tasks: Run Task" altında: yalnızca frontend
-(demo modu, backend gerekmez) ve "Kontrol: lint + test + build".
-
-### Elle
-
-Frontend'i başlatmak için:
+**Frontend**
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local   # USE_MOCK_BACKEND=true ile backend olmadan çalışır
-npm run dev
+cp .env.example .env.local
+npm run dev                   # http://localhost:3000
 ```
 
-Giriş yapabilmek (ve arka plan kaldırabilmek) için `frontend/.env.local`'e Supabase
-proje adresi ve publishable anahtarı, `backend/.env`'e Supabase ve R2 değerleri
-yazılmalı; ayrıntı `frontend/README.md` → "Hesaplar" ve `backend/README.md` →
-"Ortam değişkenleri".
+Tek komutla ikisi birden: repo kökünde `./execute.sh` (macOS/Linux) ya da
+VS Code'da <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.
 
-Gerçek uçtan uca akış için backend'i ayrı bir terminalde başlatın ve
-`frontend/.env.local` içinde `USE_MOCK_BACKEND=false` yapın. Ayrıntılar için
-`backend/README.md` ve `frontend/README.md`.
+**Ortam değişkenleri.** Giriş yapabilmek için `frontend/.env.local` içine
+Supabase proje adresi ve publishable anahtarı, `backend/.env` içine Supabase
+ayarları gerekir. **Arka plan kaldırma R2 ister:** başarılı sonuç idempotency
+için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
+`R2_*` ayarları yerelde de gereklidir. Yalnızca arayüzü denemek için
+`frontend/.env.local` içinde `USE_MOCK_BACKEND=true` yeterlidir. Tam liste:
+`backend/README.md` → "Ortam değişkenleri".
+
+## Testler
+
+```bash
+cd backend && pytest             # 286 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 235 test
+cd frontend && npm run kontrol   # lint + test + build
+```
+
+Backend testleri gerçek bir PostgreSQL'e karşı çalışır ve **bağlandıkları
+veritabanını sıfırlar**. `tests/db_safety.py` adresi ve şemayı kontrol eder;
+hedef yerel bir test veritabanı değilse oturum hiçbir şeye dokunmadan durur.
+
+## Depo yapısı
+
+```
+backend/     FastAPI uygulaması, AI inference, ödeme servisleri, migration'lar
+frontend/    Next.js arayüzü, kompozisyon stüdyosu, katalog editörü
+mobile/      React Native uygulaması (Faz 8)
+docs/        Ödeme runbook'u, tasarım kayıtları, araştırma notları
+```
+
+## Dokümantasyon
+
+| Dosya | İçerik |
+| --- | --- |
+| [`ROADMAP.md`](ROADMAP.md) | Fazlar, teknoloji kararlarının gerekçeleri, ölçüm geçmişi |
+| [`CLAUDE.md`](CLAUDE.md) | Geliştirme rehberi, kalıcı kurallar, çıkarılan dersler |
+| [`SECURITY.md`](SECURITY.md) | Katman katman güvenlik standartları ve launch kontrol listesi |
+| [`docs/billing-runbook.md`](docs/billing-runbook.md) | Ödeme kurulumu, işletim, kurtarma ve açılış kapıları |
+| [`backend/README.md`](backend/README.md) | API, ortam değişkenleri, kimlik doğrulama, kota sözleşmesi |
+| [`frontend/README.md`](frontend/README.md) | Tasarım dili, bileşenler, test kapsamı |
+
+## Ekip
+
+| | | |
+| --- | --- | --- |
+| **Serhan Denizhan** | Backend, AI/ML, veritabanı, ödemeler, altyapı | [@serhandenizhan](https://github.com/serhandenizhan) |
+| **Kaan Şencan** | Frontend, kompozisyon editörü, kullanıcı deneyimi | [@kaaannnsencan](https://github.com/kaaannnsencan) |
+
+İş bölümünün gerekçesi `ROADMAP.md` bölüm 5'te.
+
+## Lisans
+
+Bu depo özel bir projedir. **Tüm hakları saklıdır.** Kodun kopyalanması,
+dağıtılması ya da türev çalışma üretilmesi için yazılı izin gerekir.
+
+Üçüncü taraf bileşenler kendi lisanslarına tabidir; BiRefNet ağırlıkları MIT
+lisanslıdır ve ticari kullanıma açıktır.

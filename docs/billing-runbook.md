@@ -140,10 +140,16 @@ Raporlama API izni merchant hesabında açık olmalıdır.
   müşteri veya planla uyuşmuyorsa 409 + `checkout_cancellation_review` alarmı
   döner ve oturum AÇIK kalır. Token hiç alınamamış (belirsiz
   initialization) bir oturum bu yolla kapatılamaz — o, yukarıdaki elle
-  uzlaştırma adımına gider. Provider adapter'ının kesin "oluşmadı"
-  sonucunu hangi sandbox hata kodundan üreteceği gerçek merchant kabul turunda
-  kanıtlanmadan `CheckoutAbsent` eşlemesi eklenmez; bilinmeyen hata kodu genel
-  `ProviderError` olarak fail-closed kalır.
+  uzlaştırma adımına gider.
+  **Kesin "oluşmadı" koşulu hata koduna değil yanıtın YAPISINA bağlı:**
+  sağlayıcı başarılı yanıt verdiyse (`status=success`; aksi hâlde istek zaten
+  `ProviderError`), `conversationId` bizim oturumumuzsa ve yanıtta abonelik
+  `referenceCode`'u YOKSA, o forma bağlı abonelik oluşmamıştır —
+  `verify_checkout` burada `CheckoutAbsent` fırlatır. Referans VARKEN plan,
+  müşteri veya conversation uyuşmazlığı "oluşmadı" kanıtı sayılmaz ve
+  fail-closed kalır. Bu kural bilinmeyen sandbox hata kodlarına bağlı
+  olmadığı için merchant turunu beklemez; tur yine de gerçek yanıt
+  gövdelerini doğrulamalıdır.
 - **İade/itiraz, tahsilatın ait olduğu aboneliği kapatır.** Bağ, mali kaydın
   dönem snapshot'ı üzerinden kurulur (`billing_transactions.period_id` →
   `subscription_periods.provider_subscription_reference`). Kullanıcı A'dan B

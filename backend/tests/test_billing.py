@@ -27,7 +27,6 @@ from app.services.billing.entitlements import (
 from app.services.billing.provider import (
     verify_webhook,
     get_provider,
-    CheckoutAbsent,
     EvidenceMismatch,
     ProviderUnavailable,
     Iyzico,
@@ -1860,7 +1859,16 @@ async def test_pending_checkout_can_be_cancelled_when_provider_says_unpaid(
     uid, version, old, _ = paid
     await execute(db_session, "DELETE FROM checkout_sessions WHERE id=:id", id=old["id"])
     session = await open_checkout(db_session, uid, version["id"])
-    provider.checkout.side_effect = CheckoutAbsent("checkout_absent")
+    # GERÇEK sağlayıcı yanıtı taklit ediliyor, hata tipi uydurulmuyor: istek
+    # başarılı döndü, conversationId bizim oturumumuz, ama forma bağlı bir
+    # abonelik referansı yok. `CheckoutAbsent`i üretim kodu bu gövdeden
+    # türetmeli — mock'a doğrudan istisna fırlattırmak, sağlayıcının hiç
+    # üretemeyeceği bir tipi test etmek olurdu (kök CLAUDE.md ders 15).
+    provider.checkout.return_value = {
+        "status": "success",
+        "conversationId": str(session["conversation_reference"]),
+        "data": {"pricingPlanReferenceCode": "paid-plan"},
+    }
     response = await client.post(
         f"/api/subscriptions/checkout/{session['id']}/cancel",
         headers=tokens.headers(uid),
@@ -1877,7 +1885,17 @@ async def test_pending_checkout_cancel_keeps_session_on_evidence_mismatch(
     uid, version, old, _ = paid
     await execute(db_session, "DELETE FROM checkout_sessions WHERE id=:id", id=old["id"])
     session = await open_checkout(db_session, uid, version["id"])
-    provider.checkout.side_effect = EvidenceMismatch("checkout_mismatch")
+    # Abonelik referansı VAR ama plan referansı tutmuyor: uzakta bir abonelik
+    # oluşmuş olabilir, dolayısıyla bu "oluşmadı" kanıtı değildir.
+    provider.checkout.return_value = {
+        "status": "success",
+        "conversationId": str(session["conversation_reference"]),
+        "data": {
+            "referenceCode": "uzak-abonelik",
+            "customerReferenceCode": "customer",
+            "pricingPlanReferenceCode": "baska-plan",
+        },
+    }
     response = await client.post(
         f"/api/subscriptions/checkout/{session['id']}/cancel",
         headers=tokens.headers(uid),

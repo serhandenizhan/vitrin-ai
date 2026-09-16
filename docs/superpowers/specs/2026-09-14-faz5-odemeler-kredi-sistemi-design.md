@@ -458,7 +458,7 @@ frontend 235 test geçiyor; lint ve production build temiz.
 | 4 — iyzico imza varsayımları | Kod değil launch kapısı; runbook'un "Sandbox kabul kontrolü" bölümünde ilk sıraya alındı. |
 | 5 — Proxy arkasında IP hız sınırı | `TRUSTED_PROXY_IPS` + `client_ip()`; başlık yalnız güvenilen proxy'den okunuyor. Runbook'a `--proxy-headers`/`--forwarded-allow-ips` adımı eklendi. |
 | 6 — Son ücretsiz plan sürümü korunmuyordu | `plan_versions` üzerinde DEFERRED constraint trigger: yayımlanmış `deneme` sürümü olmadan commit edilemiyor. |
-| 7 — Pending checkout sessizdi | Hata yanıtı `checkout_url` taşıyor; `/odeme/{id}` sayfasında "bu işlemi iptal et, yeni plan seç" var. İptal yalnızca sağlayıcının kesin "oluşmadı" sonucunda oturumu kapatıyor; kanıt uyuşmazlığı ve genel provider hatası fail-closed/manual review. |
+| 7 — Pending checkout sessizdi | Hata yanıtı `checkout_url` taşıyor; `/odeme/{id}` sayfasında "bu işlemi iptal et, yeni plan seç" var. İptal yalnızca sağlayıcının kesin "oluşmadı" sonucunda oturumu kapatıyor: başarılı yanıt + eşleşen `conversationId` + abonelik referansının YOKLUĞU (`CheckoutAbsent`). Kanıt uyuşmazlığı ve genel provider hatası fail-closed/manual review. |
 
 Bağımsız son incelemede kapanan iki ek nokta:
 

@@ -2,7 +2,12 @@
 
 from datetime import datetime, timezone
 from app.services.billing.db import one, execute, alert, enqueue
-from app.services.billing.provider import EvidenceMismatch, provider_time, minor_units
+from app.services.billing.provider import (
+    CheckoutAbsent,
+    EvidenceMismatch,
+    provider_time,
+    minor_units,
+)
 
 
 def validated_orders(evidence, version):
@@ -275,9 +280,17 @@ async def verify_checkout(db, session, provider):
     evidence = result.get("data", {})
     if str(result.get("conversationId")) != str(session["conversation_reference"]):
         raise EvidenceMismatch("conversation_mismatch")
+    if not evidence.get("referenceCode"):
+        # Sağlayıcı bu forma bağlı bir aboneliğin OLUŞMADIĞINI kesin olarak
+        # bildirdi: istek başarılı döndü (`status=success`, aksi hâlde
+        # `Iyzico.request` zaten `ProviderError` fırlatırdı), `conversationId`
+        # bizim oturumumuz ve yanıtta abonelik referansı yok. Bekleyen
+        # checkout'u kullanıcının iptal edebilmesi YALNIZCA bu kesinlikte
+        # açılır; referans varken alanların uyuşmaması uzakta abonelik
+        # olmadığını KANITLAMAZ ve fail-closed kalmalıdır.
+        raise CheckoutAbsent("checkout_absent")
     if (
         evidence.get("pricingPlanReferenceCode") != session["pricing_plan_reference"]
-        or not evidence.get("referenceCode")
         or not evidence.get("customerReferenceCode")
     ):
         raise EvidenceMismatch("checkout_mismatch")

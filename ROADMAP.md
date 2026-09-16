@@ -641,6 +641,14 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   Her bulgu için regresyon testi eklendi ve testler eski koda karşı
   çalıştırılıp kırmızı yandığı doğrulandı (ders 15). Son bağımsız
   incelemenin checkout fail-closed regresyonuyla backend 286, frontend 235.
+- **Fix doğrulamasında bulunan ölü özellik (16.09.2026):** checkout iptalini
+  fail-closed yapan düzeltme oturumu yalnızca `CheckoutAbsent` yakalandığında
+  kapatıyordu, ama bu istisna üretim kodunda HİÇ fırlatılmıyordu (yalnız tanım,
+  `except` ve testteki sahte `side_effect`). Sonuç: gerçek sağlayıcıyla iptal
+  her koşulda 409 döner, yani 7. madde çözülmemiş kalır ve her deneme bir
+  operatör alarmı üretirdi; yeşil test bunu gizliyordu (ders 22). `verify_checkout`
+  artık kesin "oluşmadı" durumunu yanıtın yapısından türetip `CheckoutAbsent`
+  fırlatıyor; testler sahte istisna yerine gerçek sağlayıcı gövdesi veriyor.
 - **Tarayıcıda uçtan uca doğrulama (15.09.2026, yerel Postgres + gerçek Supabase
   Auth + gerçek R2):** giriş ve kredi göstergesi, arka plan kaldırmada tam bir
   kredi, bekleyen ödemenin iptalinde fail-closed (sağlayıcı yokken 503, token
