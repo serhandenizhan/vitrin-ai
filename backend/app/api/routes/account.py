@@ -25,7 +25,7 @@ class AccountDeletionConfirmation(BaseModel):
     email: str = Field(min_length=1, max_length=254)
 
 
-def _same_email(left: str, right: str) -> bool:
+def same_email(left: str, right: str) -> bool:
     return secrets.compare_digest(
         left.strip().casefold().encode("utf-8"),
         right.strip().casefold().encode("utf-8"),
@@ -42,7 +42,7 @@ async def delete_account(
 ) -> Response:
     # Arayuzdeki e-posta yazma adimi yalnizca bir gorunum engeli degil:
     # dogrudan API istegi de ayni geri dondurulemez onayi kanitlamali.
-    if not user.email or not _same_email(confirmation.email, user.email):
+    if not user.email or not same_email(confirmation.email, user.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hesabı silmek için oturumdaki e-posta adresini doğru yazın.",

@@ -273,7 +273,13 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   aboneliğe bağlanması; silme kuyruğundaki projenin doğrudan GET'te de
   gizlenmesi (IDOR/veri saklama tutarlılığı); Auth silindikten sonra çöken
   silme işinin PII temizliğini tamamlaması.
-- **Faz 6:** Admin rol kontrolü backend seviyesinde
+- **Faz 6:** Admin rol kontrolü backend seviyesinde (`require_admin`, her
+  istekte `admin_users` tablosundan — arayüzün bir düğmeyi gizlemesi
+  yetkilendirme sayılmaz); admin eylemlerinin **yalnızca eklemeye açık**
+  denetim günlüğü (`admin_audit_log`, DB trigger'ı `UPDATE`/`DELETE`'i
+  reddeder); admin uçlarında hız sınırının yönü uca göre seçilir (okuma
+  fail-open, kredi/silme/rol fail-closed); geri döndürülemez admin silme
+  işleminde kullanıcının e-postasının yazılarak doğrulanması
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
   son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
 

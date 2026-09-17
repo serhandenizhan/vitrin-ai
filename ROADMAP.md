@@ -761,9 +761,42 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
   Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
-### Faz 6 — Admin paneli — ⏳ Planlanan
+### Faz 6 — Admin paneli — 🔄 Sürüyor
 
 - Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
+
+**Serhan'ın backend'i — PR 1 uygulandı (17.09.2026).** Dal
+`feature/faz-6-admin-api`, migration `0007`. Kullanıcı onayıyla kapsam dört
+madde genişletildi (zemin yönetimi uçları, denetim günlüğü, yönetici
+ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
+
+- **Kredi modeli kararı — bonus krediler ayrı tabloda (`credit_grants`).**
+  `subscription_periods.quota_snapshot`, `0006`'daki `period_snapshot`
+  trigger'ıyla değişmez; dönem bir kanıt kaydı ve öyle kalıyor. Admin'in
+  verdiği kredi dönemin DIŞINDA durur ve yalnız dönem kotası tükendiğinde
+  harcanır. Erişimi kapalı (`suspended`/`expired`) bir aboneliği **diriltmez** —
+  kredi bir erişim kapısı değil, bir bakiye. `usage_reservations.grant_id`
+  kaynağı tutuyor: başarısız bir iş kredisini **alındığı** kovaya iade ediyor
+  (aksi hâlde dönem sayacı olduğundan düşük kalır ve kullanıcı aynı dönemde bir
+  kredi fazla kullanırdı).
+- **`used_this_period`'i elle düşürmek bilinçli olarak EKLENMEDİ.** "Yanlış
+  harcanan krediyi geri ver" ihtiyacı bonus kredi verilerek karşılanıyor; dönem
+  sayacı gerçekte ne olduğunu anlatmaya devam ediyor ve düzeltmenin izi
+  `credit_grants` + `admin_audit_log`'ta kalıyor.
+- **`admin_audit_log` yalnızca eklemeye açık** (DB trigger'ı). `actor_id`'nin
+  FK'si yok: kredi vermiş bir yöneticinin hesabı silinse de iz kalmalı.
+  `credit_grants.granted_by` ise `ON DELETE SET NULL` olduğu için değişmezlik
+  kuralından NULL yönüne muaf — yasaklansaydı o yöneticinin hesabı hiç
+  silinemezdi (testler bu hatayı yakaladı).
+- **Kullanıcı e-postaları Supabase'in yönetici API'sinden** okunuyor; `auth`
+  şemasını doğrudan sorgulamama kararı (Faz 4) korundu.
+- **Açık madde:** GoTrue'nun `filter` (arama) parametresi canlı projeye karşı
+  doğrulanmadı — yerelde `SUPABASE_SECRET_KEY` yok. Dönen sayfa sunucuda bir
+  kez daha süzülüyor, yani sonuç eksik olabilir ama yanlış olamaz. Ders 19
+  gereği canlı doğrulama yapılıp not güncellenecek.
+- Testler: 25 yeni backend testi (toplam 324). `0006 uygulanmış DB → 0007`
+  yolu ayrıca doğrulandı; kredi iadesinin doğru kovaya gittiğini sınayan test
+  eski (bozuk) davranışa karşı çalıştırılıp kırmızı yandığı görüldü.
 - Kaan: rol tabanlı `/admin` arayüzü, arka plan yükleme/yönetim paneli
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:

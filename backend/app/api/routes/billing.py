@@ -22,6 +22,7 @@ from app.services.billing.provider import (
 )
 from app.services.billing.checkout import start_checkout, documents
 from app.services.billing.entitlements import (
+    available_credit_grants,
     current_period,
     ensure_period,
     locked_subscription,
@@ -130,6 +131,9 @@ async def subscription_me(
     return {
         "subscription": sub,
         "period": period,
+        # Admin'in verdiği bonus krediler dönem kotasının DIŞINDA duruyor
+        # (migration 0007); dönem sayacına bakan bir arayüz bunları göremezdi.
+        "bonus_credits": await available_credit_grants(db, user.id),
         "admin_exempt": is_admin,
         "billing_issue": pending,
     }

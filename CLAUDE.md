@@ -100,6 +100,19 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   arayüz için `USE_MOCK_BACKEND=true`). İstemci yeni bir anahtara YALNIZCA
   backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
   sonuç artık saklanmıyor) anahtar korunur.
+- **Admin paneli (Faz 6):** backend uçları `backend/app/api/routes/admin.py`,
+  şema migration `0007`. **Üç kural:** (1) *admin'in verdiği kredi dönem
+  kotasını BÜYÜTMEZ* — `quota_snapshot` değişmez bir kanıt kaydıdır; bonus
+  krediler `credit_grants` tablosunda durur, yalnız dönem kotası tükendiğinde
+  harcanır ve erişimi kapalı bir aboneliği **diriltmez**.
+  `usage_reservations.grant_id` kaynağı tutar, çünkü başarısız bir iş kredisini
+  **alındığı** kovaya iade etmeli. (2) *`admin_audit_log` yalnızca eklemeye
+  açıktır* (DB trigger'ı `UPDATE`/`DELETE`'i reddeder) — yöneticinin
+  düzenleyebildiği bir denetim kaydı denetim kaydı değildir; `actor_id`'nin
+  FK'si bilinçli olarak yoktur ki admin hesabı silinse de iz kalsın.
+  (3) *admin uçlarında hız sınırı yönü uca göre seçilir*: okuma fail-open,
+  yazma (kredi, silme, rol) fail-closed. Kullanıcı e-postaları `auth.users`'tan
+  değil Supabase'in yönetici API'sinden okunur.
 - **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
   revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
   değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema

@@ -489,3 +489,52 @@ Yeni billing testleri gerçek izole PostgreSQL kullanır, iyzico/R2 yan etkileri
 taklit edilir. `subscription_periods` DB seviyesinde değişmez olduğu için
 testler zamanı geriye alırken korumayı yalnızca `tests/test_billing.py`
 içindeki `backdate_period` yardımcısında ve yalnız o işlem süresince kapatır.
+
+## Admin API (Faz 6)
+
+Migration `0007`; iki yeni tablonun RLS/grant kısıtları aynı migration'dadır.
+HTTP sözleşmesi `app/api/routes/admin.py`, denetim yazımı
+`app/services/admin_audit.py`. Her uç `require_admin`'e bağlı — rol kontrolü
+backend'de ve her istekte `admin_users` tablosundan yapılır.
+
+| Uç | Ne yapar |
+|---|---|
+| `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
+| `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
+| `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır |
+| `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
+| `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
+| `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
+
+**Bonus krediler dönem kotasının DIŞINDADIR.** `subscription_periods.quota_snapshot`
+migration `0006`'daki `period_snapshot` trigger'ıyla değişmez — dönem bir kanıt
+kaydıdır. Admin'in verdiği kredi `credit_grants` tablosunda durur ve
+`reserve()` yalnızca **dönem kotası tükendiğinde** ona başvurur; erişimi kapalı
+(`suspended`/`expired`) bir aboneliği **diriltmez**, süresi geçmiş ve iptal
+edilmiş krediler hiç sayılmaz, en yakında biten kredi önce harcanır.
+`usage_reservations.grant_id` krediyi hangi kovadan aldığını tutar: başarısız
+bir iş kredisini **alındığı** kovaya iade eder. Kullanılabilir bakiye
+`GET /api/subscriptions/me` yanıtında `bonus_credits` altında döner.
+
+`credit_grants` de değişmezdir: yalnız `used`, `revoked_at` ve hesap silmede
+`user_id`/`granted_by` → `NULL` serbesttir (bu iki sütun `auth.users`'a
+`ON DELETE SET NULL` ile bağlı; yasaklansaydı kredi vermiş bir yöneticinin
+hesabı hiç silinemezdi). Kimin verdiği bilgisi kalıcı olarak
+`admin_audit_log.actor_id`'de durur — o sütunun FK'si bilinçli olarak yoktur.
+
+**`admin_audit_log` yalnızca eklemeye açıktır** (`admin_audit_append_only`
+trigger'ı her `UPDATE`/`DELETE`'i reddeder). Yöneticinin sonradan
+düzenleyebildiği bir kayıt, "bu krediyi kim, ne zaman, neden verdi" sorusunu
+cevaplayamaz.
+
+**Hız sınırı yönü uca göre seçilir:** okuma uçları `limit_scoped` ile
+**fail-open** (Redis arızası panelin bütün sayfalarını karartmasın), yazan
+uçlar `limit_admin` ile **fail-closed** (kredi verme ve hesap silme para/erişim
+yüzeyidir).
+
+**Açık madde — kullanıcı aramasının canlı doğrulaması.** `list_users`,
+GoTrue'nun `filter` parametresini gönderiyor ama bu parametre projeye karşı
+CANLI DENENMEDİ (yerelde `SUPABASE_SECRET_KEY` yok). Dönen sayfa bu yüzden
+sunucuda bir kez daha e-posta üzerinden süzülüyor: `filter` desteklenmiyorsa
+sonuç eksik olabilir, ama asla yanlış olmaz. Canlı doğrulama yapıldığında
+`app/services/supabase_admin.py`'deki not sonucuyla güncellenmeli.

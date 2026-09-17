@@ -71,6 +71,63 @@ class SupabaseAdminService:
         email = response.json().get("email")
         return email if isinstance(email, str) and email else None
 
+    async def get_user(self, user_id: uuid.UUID) -> dict | None:
+        """Yönetici ekleme ve hesap silme onayı için kullanıcının kendi kaydı."""
+        self.ensure_configured()
+        url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}"
+        try:
+            async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise SupabaseAdminError("Kimlik doğrulama sunucusuna ulaşılamadı.") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise SupabaseAdminError(
+                f"Kullanıcı okunamadı (Supabase yanıtı: {response.status_code})."
+            )
+        return response.json()
+
+    async def list_users(
+        self, page: int, per_page: int, query: str | None = None
+    ) -> list[dict]:
+        """Admin panelinin kullanıcı listesi (Faz 6).
+
+        `auth.users` DOĞRUDAN SORGULANMIYOR — gerekçe modül açıklamasında.
+
+        ARAMA HAKKINDA BİR UYARI: GoTrue'nun `filter` parametresi bu projeye
+        karşı CANLI DOĞRULANMADI (yerelde `SUPABASE_SECRET_KEY` yok). Bu yüzden
+        dönen sayfa burada bir kez daha e-posta üzerinden süzülüyor: `filter`
+        desteklenmiyorsa sonuç EKSİK olabilir ama asla YANLIŞ olmaz — arama
+        kutusuna yazılanla eşleşmeyen bir kullanıcı listeye giremez. Canlı
+        doğrulama yapıldığında bu yorum, sonucuyla birlikte güncellenmeli
+        (kök `CLAUDE.md` ders 19).
+        """
+        self.ensure_configured()
+        url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users"
+        params: dict[str, str | int] = {"page": page, "per_page": per_page}
+        if query:
+            params["filter"] = query
+        try:
+            async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=self._headers(), params=params)
+        except httpx.HTTPError as exc:
+            raise SupabaseAdminError("Kimlik doğrulama sunucusuna ulaşılamadı.") from exc
+        if response.status_code >= 400:
+            raise SupabaseAdminError(
+                f"Kullanıcılar listelenemedi (Supabase yanıtı: {response.status_code})."
+            )
+        users = response.json().get("users") or []
+        if query:
+            needle = query.strip().casefold()
+            users = [
+                user
+                for user in users
+                if needle in str(user.get("email") or "").casefold()
+                or needle == str(user.get("id") or "").casefold()
+            ]
+        return users
+
     async def delete_user(self, user_id: uuid.UUID) -> None:
         self.ensure_configured()
         headers = self._headers()

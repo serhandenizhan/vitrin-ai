@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 checkout_limiter = RequestRateLimiter(10, 60, redis_url=settings.redis_url)
 public_limiter = RequestRateLimiter(600, 60, redis_url=settings.redis_url)
+#: Faz 6 admin panelinin MUTASYON uçları (kredi verme, silme, rol değişikliği).
+#: Okuma uçları bu kovayı kullanmaz; onlar `limit_scoped` ile fail-open.
+admin_limiter = RequestRateLimiter(60, 60, redis_url=settings.redis_url)
 
 
 def client_ip(request: Request) -> str:
@@ -64,6 +67,22 @@ async def limit_checkout(user: CurrentUser = Depends(get_current_user)):
     if retry:
         raise billing_error(
             "rate_limited", "Çok fazla satın alma isteği. Biraz bekleyin.", 429, retry
+        )
+
+
+async def limit_admin(admin: CurrentUser = Depends(get_current_user)):
+    """Admin panelinin yazan uçları — **fail-closed**, bilinçli.
+
+    Burada korunan şey okuma trafiği değil: kredi verme, hesap silme ve rol
+    değişikliği. Redis arızasında sınırın sessizce kalkması, yetkisi ele
+    geçirilmiş tek bir admin oturumunun sınırsız hızla kredi basabilmesi
+    demek olurdu. Panelin OKUMA uçları aynı gerekçeyle ters yöne kuruldu
+    (`limit_scoped`, fail-open): orada kaybedilen şey yalnızca görünürlük.
+    """
+    retry = await admin_limiter.retry_after("billing:admin:" + str(admin.id))
+    if retry:
+        raise billing_error(
+            "rate_limited", "Çok fazla yönetici isteği. Biraz bekleyin.", 429, retry
         )
 
 
