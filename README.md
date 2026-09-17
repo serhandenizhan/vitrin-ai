@@ -62,6 +62,12 @@ kapalı**. Açılmadan önce gerçek iyzico merchant sandbox turu ile e-posta ve
 proxy ayarları tamamlanmalı. Ayrıntı:
 [ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
 
+Stüdyo arayüzü 17.09.2026'da yeniden düzenlendi (faza ait olmayan iş): sağdaki
+beyaz panel yerine **koyu araç yüzeyi, sağda yüzen bir denetçi ve altta camlı
+bir dock** var. Denetçi o adımın araçlarını listeliyor, dock seçili aracın
+paletini gösteriyor. Ayrıntı: [frontend README](frontend/README.md) →
+"Stüdyo düzeni".
+
 Faz 6'da admin API'sinin ilk bölümü (kullanıcılar, bonus krediler, kullanım
 istatistikleri) uygulandı. Admin'in verdiği krediler dönem kotasını
 büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde harcanır; her

@@ -63,15 +63,22 @@ export function Studio() {
         basilamiyordu. (Kok CLAUDE.md ders 13'un ayni sinifi: esit
         ozgullukte/oncelikte kazanani SIRA belirler.)
       */
-      className="soft-fade fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white"
+      /*
+        KOYU ARAC YUZEYI (17.09.2026, Serhan). Studyo bir SAYFA degil bir ARAC:
+        koyu zemin urunun kendi rengini dogru gosteriyor (beyaz panelin
+        yanindaki altin, urunun uzerindeki altini yaniltiyordu) ve camli
+        denetci/dock tuvali tamamen ortmeden uzerinde durabiliyor. Kilitli
+        tasarim dili iptal edilmedi; bkz. kok CLAUDE.md "arac yuzeyi".
+      */
+      className="soft-fade surface-black fixed inset-0 z-[60] flex flex-col overflow-y-auto"
     >
-      <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-black/8 bg-white/85 px-4 backdrop-blur-xl sm:px-6">
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-white/10 bg-[#0c0b0a]/80 px-4 backdrop-blur-xl sm:px-6">
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={closeStudio}
-          className="press -ml-1 rounded-full bg-white"
+          className="press -ml-1 rounded-full border-white/20 bg-white/5 text-[#f3f0eb] hover:bg-white/10 hover:text-[#f3f0eb]"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
           Geri
@@ -95,15 +102,20 @@ export function Studio() {
           variant="outline"
           size="sm"
           onClick={returnToStart}
-          className="press -mr-1 rounded-full bg-white"
+          className="press -mr-1 rounded-full border-white/20 bg-white/5 text-[#f3f0eb] hover:bg-white/10 hover:text-[#f3f0eb]"
         >
           <Home className="size-4" strokeWidth={1.75} aria-hidden />
           Ana menü
         </Button>
       </header>
 
-      {/* Daha genis calisma alani (Kaan, 17.09.2026): tuval ve panel ortada. */}
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+      {/*
+        Editor artik kendi duzenini kuruyor (yuzen denetci + alt dock), bu
+        yuzden eski `max-w-7xl` + padding sarmalayicisi kaldirildi: dock'un
+        tuvalin uzerinde dogru yerde durabilmesi icin kapsayicinin tam
+        genislikte ve konumlandirma baglami olmasi gerekiyor.
+      */}
+      <div className="relative w-full flex-1">
         <CompositionEditor
           cutoutUrl={studio.cutoutUrl}
           fileName={studio.fileName}

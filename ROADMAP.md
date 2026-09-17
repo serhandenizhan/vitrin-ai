@@ -553,16 +553,20 @@ takip maddeleri 2-3.
 
 **Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
 Resend bağlandı; dahili e-posta servisi bir kayıt denemesinde e-postayı hiç
-teslim etmemişti (kök CLAUDE.md açık takip maddesi 4). **Sandbox aşaması**
-(hesap + API key + Supabase'e bağlama) gerçek bir kayıt denemesiyle uçtan
-uca doğrulandı — e-posta ulaştı, Resend Logs'ta kayıt görüldü. **Bilinen
-sınırlama:** e-posta şu an spam'e düşüyor (kendi alan adımız yok, Resend'in
-paylaşılan gönderen adresi kullanılıyor) — son UX kontrolünde hatırlanacak,
-aşağıdaki alan adı doğrulama adımıyla birlikte düzelmesi bekleniyor.
+teslim etmemişti (kök CLAUDE.md açık takip maddesi 5). **Sandbox aşaması**
+(hesap + API key + Supabase'e bağlama) 14.09.2026'da hesap sahibinin KENDİ
+adresiyle test edildi — e-posta ulaştı, Resend Logs'ta kayıt görüldü.
+
+**Düzeltme (17.09.2026): o test yanıltıcıydı, sandbox gerçekte HİÇBİR
+harici kullanıcıya e-posta iletmiyor** — "spam'e düşüyor" değil, `onboarding@resend.dev`
+Resend'in yalnızca hesap sahibinin kendi adresine teslimat yapan test alan
+adı olduğu için Kaan'ın gerçek kayıt/parola sıfırlama denemesinde Resend
+403, Supabase 500 döndü. Kök sebep ve geçici kilit açma çözümü kök
+`CLAUDE.md` açık takip maddesi 5'te.
 
 **Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
 bağlı — bu kısım Faz 7'nin launch listesine ekleniyor (bkz. kök
-`CLAUDE.md` açık takip maddesi 4).
+`CLAUDE.md` açık takip maddesi 5).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -845,6 +849,18 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     söylüyor. İkisi aynı işin iki aşaması, çelişki değil.
 - **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
 
+### Faza ait olmayan iş — stüdyo arayüzü yeniden düzenlendi (17.09.2026, Serhan)
+
+Bir fazın kapsamında değil; Serhan'ın açık isteğiyle yapıldı (kural 6 gereği
+önce söylendi). Stüdyonun sağındaki düz beyaz panel kaldırılıp yerine **koyu
+araç yüzeyi + sağda yüzen denetçi + altta camlı dock** kondu; bekleme ve
+inceleme ekranları da aynı yüzeye alındı. Tasarım dili iptal edilmedi, yanına
+"araç yüzeyi" diye ayrı bir madde eklendi (kök `CLAUDE.md`).
+
+Yeni: hazır görünüm ayarları (Doğal/Parlak/Sıcak/Net/Yumuşak). Kaydıraç elle
+oynatılınca ön ayar işareti kalkıyor. Ayrıntı ve tarayıcıda alınan ölçümler:
+`frontend/README.md` → "Stüdyo düzeni".
+
 ### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
@@ -897,9 +913,10 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
   - Resend'de alan adı doğrulama (SPF/DKIM) ve gönderen adresinin kendi
     alan adına çevrilmesi — Faz 5'te yalnızca sandbox (kendi hesabına
     gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan
-    sonra gider. **Son UX kontrolünde hatırlanmalı:** sandbox e-postaları
-    şu an spam'e düşüyor, bu adım muhtemelen bunu da düzeltecek
-    (kök `CLAUDE.md` açık takip maddesi 4).
+    sonra gider. **17.09.2026'da doğrulandı: bu adımdan önce gerçek
+    kullanıcıların hiçbiri e-posta alamıyor** (spam değil, sandbox'ın
+    hesap sahibi dışına hiç göndermemesi) — bkz. kök `CLAUDE.md` açık
+    takip maddesi 5.
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
 

@@ -76,7 +76,7 @@ export function ComparisonView({
           <img
             src={resultUrl}
             alt="Arka planı kaldırılmış ürün görseli"
-            className="checkerboard aspect-square w-full rounded-2xl object-contain ring-1 ring-black/10"
+            className="checkerboard aspect-square w-full rounded-2xl object-contain ring-1 ring-white/12"
           />
           <figcaption className="fine-print mt-2 text-center opacity-70">
             Özgün fotoğraf burada gösterilemediği için yalnızca kesim
@@ -192,7 +192,7 @@ export function ComparisonView({
 
 function Detay({ baslik, deger }: { baslik: string; deger: string }) {
   return (
-    <div className="bg-white px-2 py-3">
+    <div className="px-2 py-3">
       <dt className="fine-print opacity-55">{baslik}</dt>
       <dd className="mt-0.5 text-[0.8125rem] font-medium tabular-nums">
         {deger}
@@ -266,7 +266,7 @@ function OnceSonra({
     <div className="mx-auto w-full max-w-md">
       <div
         ref={kapsayiciRef}
-        className="checkerboard relative aspect-square w-full touch-none overflow-hidden rounded-2xl ring-1 ring-black/10 select-none"
+        className="checkerboard relative aspect-square w-full touch-none overflow-hidden rounded-2xl ring-1 ring-white/12 select-none"
         onPointerDown={(olay) => {
           surukleniyorRef.current = true;
           try {

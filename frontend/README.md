@@ -198,6 +198,77 @@ Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
+## Stüdyo düzeni: yüzen denetçi + alt dock (17.09.2026)
+
+Stüdyo artık beyaz bir ekranda sağda düz bir panel değil: **koyu bir araç
+yüzeyi**, sağda **yüzen bir denetçi** ve altta **camlı bir dock**. Serhan'ın
+kararı; gerekçe ve palet kök `CLAUDE.md` → "Araç yüzeyi".
+
+**İş bölümü tek bir kurala dayanıyor:** *dock = gözle seçilenler, denetçi =
+okunarak ayarlananlar.* Denetçi o adımın araçlarını listeler, dock seçili
+aracın paletini gösterir.
+
+| Adım | Denetçideki araçlar | Dock paleti | Denetçide kalan |
+| --- | --- | --- | --- |
+| 1 | Boyut · **Zemin** | biçim kartları / zemin galerisi | — |
+| 2 | Yerleşim · Görünüm | hızlı eylemler / hazır ayarlar + gölge, yansıma | boyut, parlaklık, kontrast, doygunluk |
+| 3 | Logo · Etiket · İndir | logo eylemleri + köşe / etiket köşe-tema / çıktı türleri | saydamlık, ayar, gram, ürün kodu |
+
+1. adımda varsayılan araç bilinçli olarak ilk araç değil **Zemin**: biçim zaten
+makul bir varsayılanla (A4) açılıyor, kullanıcının ilk gerçek kararı zemin.
+
+### Zemin paleti
+
+- Seçili zemin **altın ince halka VE adıyla** belli oluyor; yalnızca renge
+  güvenilmiyor.
+- Seçili zemin şeritte **görünür duruma kaydırılıyor**. Bu bir süsleme değil:
+  tarayıcıda ölçüldüğünde açılışta seçili zemin altın halkayı taşıyordu ama
+  kaydırma alanının dışında kalıyordu, yani karar pratikte hiçbir şey
+  göstermiyordu. (`scrollIntoView` jsdom'da yok, çağrı `?.` ile korunuyor.)
+- Kategoriler sürekli bir chip satırı kaplamıyor; başlıktaki
+  `Doku & desen · 17` düğmesi bir menü açıyor.
+- Son kart yarım görünüyor (`palette-fade`): devamı olduğu belli olsun.
+
+### Hazır görünüm ayarları
+
+`appearance-presets.ts`: Doğal · Parlak · Sıcak · Net · Yumuşak. Değerler
+kaydıraçların kendi sınırları içinde. Kaydıraç elle oynatılınca seçili ön ayar
+işareti **kalkıyor** — arayüzün "Parlak" derken değerlerin başka bir şey olması,
+ekranın söylediğiyle dosyanın içindekinin ayrışması demekti. Gölge ve yansımaya
+ön ayar dokunmuyor: ikisi de kullanıcının kendi açtığı/kapattığı şeyler.
+
+### Örtme ve başarım
+
+Dock tuvalin **üzerinde** duruyor ve ürüne dokunulunca silikleşip geri
+çekiliyor (`dock-quiet`, yalnızca masaüstünde — telefonda dock zaten tuvalin
+altında). Bunun bilinen bedeli: ürün sürüklenmezken kompozisyonun alt şeridi
+camın arkasında kalıyor.
+
+**`backdrop-filter` maliyeti ölçüldü, tahmin edilmedi** (1440×900, iki camlı
+yüzey, tuvalin altındaki bölge her karede kirletilerek): ortalama kare süresi
+camla **16,67 ms**, camsız **16,66 ms**. Fark yok, kare düşmüyor. Ölçüm dikey
+senkrona takılı olduğu için 16,7 ms'nin altındaki bir maliyeti ayırt edemez;
+bulanıklık yarıçapı büyütülürse ölçüm tekrarlanmalı.
+
+### Telefon
+
+Denetçi dock'un **üstünde** ve kısa bir çekmece olarak açılıyor; tuval yukarıda
+**yapışkan** kalıyor, yani ayar yapılırken sonuç görünüyor.
+
+**İki tuzak tarayıcıda ölçülerek bulundu:**
+
+1. Yapışkanlık, tuvali saran kısa bir kapsayıcıda **hiç çalışmıyor** — kayacak
+   yer kalmıyor ve tuval ekranın dışına çıkıyordu (çerçeve üst kenarı −101 px).
+   Yapışkan olan öğe, uzun olan kök kapsayıcının doğrudan çocuğu olmalı.
+2. Yapışkan öğe **konumlandırılmış** olduğu için statik kardeşlerinin üzerine
+   boyanıyor ve tuval denetçiyi örtüyordu; denetçi ve dock `relative z-10`
+   taşıyor (kök `CLAUDE.md` ders 13'ün aynı sınıfı: kazananı boyama sırası
+   belirliyor).
+
+Tuvalin ekrana sığması için ayrılan dikey pay `--studio-reserved` ile veriliyor
+(telefon 15rem, masaüstü 12rem); tek bir satır içi `style` iki düzeni birden
+karşılayamıyor.
+
 ## Üst çubuk
 
 **11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda
@@ -393,9 +464,16 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
-**E-posta teslimi:** Resend SMTP sandbox bağlantısı doğrulandı (14.09.2026).
-Üretimde kendi alan adının SPF/DKIM ve gönderen adresi kurulumu bekliyor;
-bkz. kök `CLAUDE.md` açık takip maddesi 4.
+**E-posta teslimi — gerçek kullanıcılara HİÇ ulaşmıyor (17.09.2026'da
+doğrulandı).** Resend'in gönderen adresi hâlâ `onboarding@resend.dev`; bu
+alan adı yalnızca Resend hesap sahibinin kendi e-postasına teslimat yapıyor.
+Yerelde başka bir kullanıcıyla kayıt/parola sıfırlama denenirse Supabase
+Auth Logs'ta `/auth/v1/signup` veya `/auth/v1/recover` **500**, Resend
+Logs'ta karşılık gelen istek **403** görünür — 14.09.2026'daki "doğrulama"
+hesap sahibinin kendi adresiyle yapılmıştı, sandbox kısıtına hiç çarpmamıştı.
+Kök sebep, kaynaklar ve geçici kilit açma yolu (Supabase yönetici API'siyle
+parolayı e-postasız doğrudan ayarlamak) kök `CLAUDE.md` açık takip maddesi
+5'te.
 
 ### Geçmiş sunucuda
 

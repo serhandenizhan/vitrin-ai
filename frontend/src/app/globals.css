@@ -795,3 +795,101 @@ html.reduce-motion .soft-fade {
     padding-bottom: 2.75rem;
   }
 }
+
+/* --------------------------------------------------------------------------
+   ARAC YUZEYI — studyo ve ona giden ekranlar (17.09.2026, Serhan)
+
+   Kilitli tasarim dili (apple.com/tr uyarlamasi) iptal EDILMEDI; bu, onun
+   yaninda duran ayri bir yuzey turu. Gerekce: studyo bir SAYFA degil bir ARAC.
+   Koyu zemin urunun kendi rengini dogru gosteriyor (beyaz panelin yanindaki
+   altin, urunun uzerindeki altini yaniltiyordu) ve camli yuzeyler tuvali
+   tamamen ortmeden uzerinde durabiliyor.
+
+   Yeni renk UYDURULMADI: degerler `surface-black` / `surface-charcoal` ve
+   `--color-hairline`'in aynisi.
+   -------------------------------------------------------------------------- */
+
+/* Sagda yuzen denetci ve altta yuzen dock'un ortak zemini. */
+@utility glass-panel {
+  background-color: color-mix(in srgb, #1a1917 78%, transparent);
+  color: #f3f0eb;
+  border: 1px solid var(--color-hairline);
+  /* `backdrop-filter` tuvalin uzerinde teorik olarak pahali: bulanik alan,
+     Konva her kareyi yeniden cizerken de yeniden hesaplaniyor. TAHMIN
+     EDILMEDI, OLCULDU (17.09.2026, 1440x900, iki camli yuzey, tuvalin altindaki
+     bolge her karede kirletilerek): ortalama kare suresi camla 16.67 ms,
+     camsiz 16.66 ms — fark 0.01 ms, yani olculebilir bir bedel yok ve kare
+     dusmuyor. Olcum dikey senkrona takili oldugu icin 16.7 ms'nin ALTINDAKI
+     bir maliyeti ayirt edemez; soyledigi sey "bu kurulumda kare kaybi yok".
+     Yaricap buyutulurse olcum tekrarlanmali. */
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.06) inset,
+    0 24px 48px -24px rgb(0 0 0 / 0.65);
+}
+
+/* Dock, tuvalin UZERINDE duruyor (Serhan'in karari). Urune dokunuldugu anda
+   geri cekiliyor ki kompozisyonun alti gorunsun.
+
+   BILESIK SECICI zorunlu (ders 13): `.glass-dock` ve `.dock-quiet` ikisi de
+   `@utility` olsaydi ayni ozgullukte olur ve kazanani uretilen dosyadaki SIRA
+   belirlerdi — sol cekmecede bu hata birebir yasandi. */
+@utility glass-dock {
+  transition:
+    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* YALNIZCA MASAUSTUNDE (lg ve ustu). Telefonda dock tuvalin uzerinde degil,
+   akista ve tuvalin ALTINDA duruyor; orada silikleşmesinin bir karsiligi yok,
+   tersine kullanici ayar yaparken dock'un kaybolmasi kafa karistirirdi. */
+@media (min-width: 64rem) {
+  .glass-dock.dock-quiet {
+    opacity: 0.18;
+    transform: translateY(0.75rem);
+    /* Silikken tiklamayi yutmamali: altindaki tuval calisiyor olabilir. */
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-dock {
+    transition: none;
+  }
+}
+
+html.reduce-motion .glass-dock {
+  transition: none;
+}
+
+/* Tuvalin ekrana sigmasi icin ayrilan dikey pay.
+   TELEFONDA denetci ve dock tuvalin ALTINDA akista duruyor, masaustunde ise
+   uzerinde yuzuyor — yani ayrilmasi gereken yer iki durumda cok farkli.
+   Tek bir satir ici `style` bunu yapamadigi icin deger bir degiskene alindi.
+
+   TARAYICIDA OLCULDU: telefonda pay ayrilmadan tuval 496 px cikiyor, denetci
+   ve dock ile birlikte gorus alanini asiyor ve tuval yukari kayip EKRANIN
+   DISINDA kaliyordu (cerceve ust kenari -101 px). "Ayar yaparken sonucu gor"
+   karari boylece hic islemiyordu. */
+@utility stage-fit {
+  /* TELEFON: tuval, denetci ve dock'un TAMAMINI ayni anda gostermeye
+     calismak yanlis yol — 375x667'de olculdu, tuval 155 px'e dusuyor ve yine
+     sigmiyordu. Karar (Serhan): tuval YAPISKAN, sayfa kaysin. Buradaki pay
+     yalnizca baslik + tuvalin kendi payi. */
+  --studio-reserved: 15rem;
+}
+
+@media (min-width: 64rem) {
+  .stage-fit {
+    --studio-reserved: 12rem;
+  }
+}
+
+/* Yatay paletin sag kenari: son kart YARIM gorunsun ve devaminin oldugu
+   belli olsun (Serhan'in istegi). Maske yalnizca kaydirma varken anlamli,
+   bu yuzden kartlarin kendisi kirpilmiyor — yalnizca solma ekleniyor. */
+@utility palette-fade {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+}
