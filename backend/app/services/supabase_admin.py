@@ -1,4 +1,4 @@
-"""Supabase Auth yönetici API'si (Faz 4) — şu an yalnızca kullanıcı silme.
+"""Supabase Auth yönetici API'si: kullanıcı silme (Faz 4), okuma/listeleme (Faz 6).
 
 NEDEN veritabanından `delete from auth.users` DEĞİL: `auth` şeması Supabase'e
 ait ve iç tabloları (oturumlar, kimlikler, yenileme token'ları) sürümden sürüme
@@ -35,7 +35,9 @@ class SupabaseAdminService:
         # silinmiş bir hesapla kalırdı.
         if not settings.supabase_url or not settings.supabase_secret_key:
             raise SupabaseAdminConfigurationError(
-                "Hesap silme yapılandırılmamış; sunucuda SUPABASE_SECRET_KEY ayarlanmalı."
+                # Mesaj eylem adı içermiyor: aynı kontrol hesap silmede de,
+                # admin panelinin kullanıcı uçlarında da çalışıyor.
+                "Kullanıcı yönetimi yapılandırılmamış; sunucuda SUPABASE_SECRET_KEY ayarlanmalı."
             )
 
     def _headers(self) -> dict[str, str]:
