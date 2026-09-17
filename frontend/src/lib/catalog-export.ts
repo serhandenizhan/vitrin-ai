@@ -13,6 +13,7 @@
  * yapilamiyor (canvas yalnizca RGB uretir, PNG CMYK'yi hic desteklemez).
  */
 
+import { type LogoSettings, logoBox } from "@/lib/overlays";
 import {
   type CatalogTexts,
   type SlotTransform,
@@ -35,7 +36,15 @@ export type CatalogContent = {
   template: Template;
   slots: RenderSlot[];
   texts: CatalogTexts;
+  /** Kuyumcunun logosu (veri URL'i) ve yerlesimi; yoksa cizilmez. */
+  logo?: { url: string; settings: LogoSettings } | null;
 };
+
+/**
+ * PNG: CMYK donusumune giden kayipsiz ara cikti. JPEG: dogrudan indirme
+ * (17.09.2026, Kaan: katalog PNG degil JPEG ve CMYK olsun).
+ */
+export type CatalogImageType = "png" | "jpeg";
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -47,8 +56,11 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function renderCatalog(content: CatalogContent): Promise<string> {
-  const { template, slots, texts } = content;
+export async function renderCatalog(
+  content: CatalogContent,
+  type: CatalogImageType = "png",
+): Promise<string> {
+  const { template, slots, texts, logo } = content;
 
   const canvas = document.createElement("canvas");
   canvas.width = CATALOG_WIDTH;
@@ -153,5 +165,25 @@ export async function renderCatalog(content: CatalogContent): Promise<string> {
   }
 
   ctx.textAlign = "left";
-  return canvas.toDataURL("image/png");
+
+  // Logo EN USTTE, studyodaki ayni geometriyle (lib/overlays.ts `logoBox`):
+  // sayfanin kisa kenarina gore boyut, secilen kosede kenar payiyla.
+  if (logo) {
+    const logoImage = await loadImage(logo.url);
+    const box = logoBox(
+      logoImage.width,
+      logoImage.height,
+      logo.settings,
+      CATALOG_WIDTH,
+      CATALOG_HEIGHT,
+    );
+    ctx.save();
+    ctx.globalAlpha = logo.settings.opacity;
+    ctx.drawImage(logoImage, box.x, box.y, box.width, box.height);
+    ctx.restore();
+  }
+
+  return type === "jpeg"
+    ? canvas.toDataURL("image/jpeg", 0.92)
+    : canvas.toDataURL("image/png");
 }

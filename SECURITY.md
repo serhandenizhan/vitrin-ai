@@ -257,7 +257,11 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   doğrulanmış kullanıcı için kayan pencere hız sınırı uygulanıyor — sayaçlar
   Redis'te tutuluyor, **dağıtık** (birden fazla worker/instance aynı sayacı
   paylaşır; PR #13 incelemesinde Faz 7'den öne alındı, bkz. `backend/README.md`
-  "Kaynak tüketimi korumaları"). Supabase'de access token 15 dakika, parola
+  "Kaynak tüketimi korumaları"). **Redis arızasında davranış uç noktaya göre
+  ayrı** (PR #18 incelemesi): para, sağlayıcı geri dönüşü ve webhook yüzeyleri
+  fail-CLOSED (sınır kalkmasın), zemin LİSTELEME fail-OPEN (sınırlayıcının
+  arızası ürünün çekirdek özelliğini kapatmasın) — gerekçe ve iki yönün testi
+  `backend/app/services/billing/limits.py` ile `tests/test_backgrounds_endpoint.py`. Supabase'de access token 15 dakika, parola
   kuralı ve kısa e-posta bağlantı süresi ayarlandı.
   **Açık:** Supabase panelinden elle silinen kullanıcının R2 görselleri otomatik temizlenmiyor.
 - **Faz 5:** iyzico webhook imza doğrulama, PCI kapsam netleştirme, idempotency.

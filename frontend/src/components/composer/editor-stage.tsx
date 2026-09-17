@@ -43,6 +43,7 @@ import {
   labelMetrics,
   labelText,
   logoBox,
+  logoSettingsFromBox,
   placeInCorner,
   stackLabelBox,
 } from "@/lib/overlays";
@@ -51,13 +52,18 @@ import {
 import {
   OUTPUT_SIZE,
   type Appearance,
+  REFLECTION,
+  SHADOW,
   STAGE_SIZE,
   FIT_MARGIN,
   type Transform,
+  coverCrop,
   fitToStage,
   fitTransform,
+  reflectionPlacement,
   snapToCenter,
 } from "@/lib/composition";
+import { useLoadedImage } from "@/components/composer/use-loaded-image";
 
 export { OUTPUT_SIZE, STAGE_SIZE, FIT_MARGIN, fitTransform };
 export type { Transform };
@@ -76,63 +82,13 @@ export type EditorStageProps = {
   logoUrl: string | null;
   logo: LogoSettings;
   label: ProductLabel;
+  /** Logo sahnede surukleyip kose karelerinden boyutlandirilinca. */
+  onLogoChange?: (patch: Pick<LogoSettings, "size" | "position">) => void;
   onTransformChange: (transform: Transform) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onCutoutSize: (size: { width: number; height: number }) => void;
   onStageReady: (stage: Konva.Stage | null) => void;
 };
-
-/**
- * Bir URL'den `HTMLImageElement` yukler.
- *
- * `useImage` benzeri bir paket eklemek yerine elle yaziliyor: tek ihtiyacimiz
- * olan sey bu ve `crossOrigin` ayarini kendimiz kontrol etmemiz gerekiyor —
- * R2'den gelen imzali URL'ler farkli bir kaynaktan geliyor ve `crossOrigin`
- * ayarlanmazsa canvas "tainted" hale gelir; Konva bu durumda SecurityError'i
- * kendisi yakalayip BOS bir veri URL'i dondurur (bkz. composition-editor.tsx).
- *
- * `crossOrigin` ayarliyken bucket'in CORS kurali o origin'i icermiyorsa ise
- * tarayici gorseli HIC yuklemiyor: `onerror` calisiyor ve sahne gradyana
- * dusuyor. Kucuk onizleme CSS arka plani oldugu icin (CORS gerektirmiyor)
- * yine gorunuyor — yani eksik kural gozle fark edilmiyor, cikti zeminsiz
- * iniyor. Tarayicida sahte bir CORS'suz origin'le birebir olculdu. Kuralin
- * gercek bucket'ta dogrulanmasi: `backend/scripts/check_r2_cors.py`.
- */
-function useLoadedImage(url: string | null): HTMLImageElement | null {
-  // Yuklenen gorsel, GELDIGI URL ile birlikte saklaniyor. Yalnizca gorseli
-  // saklasaydik, URL degistigi anda (zemin degistirildiginde) yenisi yuklenene
-  // kadar EKSIGININ yerine bir onceki zemin gorunurdu. URL'i yaninda tutmak,
-  // "bu gorsel su anki url'e mi ait" sorusunu render sirasinda cevaplatiyor;
-  // boylece efekt icinde senkron `setState` cagirmaya da gerek kalmiyor
-  // (React Compiler bunu hakli olarak uyariyor: kaskad render uretir).
-  const [loaded, setLoaded] = useState<{
-    url: string;
-    image: HTMLImageElement;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!url) return;
-
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-
-    let cancelled = false;
-    img.onload = () => {
-      if (!cancelled) setLoaded({ url, image: img });
-    };
-    // `onerror` bilincli olarak state'e dokunmuyor: zemin yuklenemezse
-    // `loaded.url` bu url'e hic esitlenmiyor ve asagidaki karsilastirma
-    // `null` donuyor — cagiran taraf gradyana dusuyor. Kirik bir gorsel
-    // gostermektense zemini yok saymak daha az yaniltici.
-    img.src = url;
-
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  return loaded !== null && loaded.url === url ? loaded.image : null;
-}
 
 export function EditorStage({
   cutoutUrl,
@@ -145,6 +101,7 @@ export function EditorStage({
   logoUrl,
   logo,
   label,
+  onLogoChange,
   onTransformChange,
   onCutoutSize,
   onStageReady,
@@ -152,8 +109,16 @@ export function EditorStage({
   const stageRef = useRef<Konva.Stage | null>(null);
   const cutoutRef = useRef<Konva.Image | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
+  const logoRef = useRef<Konva.Image | null>(null);
+  const logoTransformerRef = useRef<Konva.Transformer | null>(null);
 
-  const [isSelected, setIsSelected] = useState(true);
+  // Secim urun ile logo arasinda: ikisinin tutamaklari ayni anda gorunmuyor.
+  const [selection, setSelection] = useState<"cutout" | "logo" | null>("cutout");
+  const isSelected = selection === "cutout";
+  const setIsSelected = useCallback(
+    (selected: boolean) => setSelection(selected ? "cutout" : null),
+    [],
+  );
 
   /**
    * Cift parmakla yakinlastirma.
@@ -171,6 +136,7 @@ export function EditorStage({
   const cutout = useLoadedImage(cutoutUrl);
   const backgroundImage = useLoadedImage(
     background.type === "server" ? background.url : null,
+    { keepPrevious: true },
   );
   const logoImage = useLoadedImage(logoUrl);
 
@@ -211,7 +177,9 @@ export function EditorStage({
       placeInCorner(label.corner, width, height, stageWidth, stageHeight),
       label.corner,
       logoRect,
-      logoRect ? logo.corner : null,
+      // Serbest konumlu logo bir koseye ait degil; etiket yalnizca ayni
+      // koseye yaslanmis logodan kaciyor.
+      logoRect && !logo.position ? logo.corner : null,
     );
     return { logoRect, labelRect, text, metrics };
   }, [logoImage, logo, label, stageWidth, stageHeight, fontFamily]);
@@ -240,6 +208,27 @@ export function EditorStage({
     transformer.getLayer()?.batchDraw();
   }, [isSelected, cutout, transform]);
 
+  useEffect(() => {
+    const transformer = logoTransformerRef.current;
+    if (!transformer) return;
+    transformer.nodes(selection === "logo" && logoRef.current ? [logoRef.current] : []);
+    transformer.getLayer()?.batchDraw();
+  }, [selection, logoImage, overlay.logoRect]);
+
+  /** Logo birakilinca: Konva olcegi genislige katlanip ayar olarak bildiriliyor. */
+  const reportLogo = useCallback(() => {
+    const node = logoRef.current;
+    if (!node || !onLogoChange) return;
+    const box = {
+      x: node.x(),
+      y: node.y(),
+      width: node.width() * node.scaleX(),
+      height: node.height() * node.scaleY(),
+    };
+    node.scale({ x: 1, y: 1 });
+    onLogoChange(logoSettingsFromBox(box, stageWidth, stageHeight));
+  }, [onLogoChange, stageWidth, stageHeight]);
+
   const displayScale = displayWidth / stageWidth;
   const displayHeight = stageHeight * displayScale;
 
@@ -251,16 +240,30 @@ export function EditorStage({
     [displayScale],
   );
 
-  const reportTransform = useCallback(() => {
+  /**
+   * Surukleme/olcekleme SIRASINDAKI anlik yerlesim — yalnizca yansima icin.
+   *
+   * Parent'a her harekette haber verilmiyor (geri alma yiginina yuzlerce adim
+   * dusmesin diye yalnizca birakilinca bildiriliyor); ama yansima urunu anlik
+   * takip etmezse surukleme boyunca eski yerinde kalip "kopuk" gorunuyor.
+   */
+  const [liveTransform, setLiveTransform] = useState<Transform | null>(null);
+
+  const readNode = useCallback((): Transform | null => {
     const node = cutoutRef.current;
-    if (!node) return;
-    onTransformChange({
-      x: node.x(),
-      y: node.y(),
-      scale: node.scaleX(),
-      rotation: node.rotation(),
-    });
-  }, [onTransformChange]);
+    if (!node) return null;
+    return { x: node.x(), y: node.y(), scale: node.scaleX(), rotation: node.rotation() };
+  }, []);
+
+  const reportTransform = useCallback(() => {
+    const next = readNode();
+    setLiveTransform(null);
+    if (next) onTransformChange(next);
+  }, [onTransformChange, readNode]);
+
+  const trackLiveTransform = useCallback(() => {
+    if (appearance.reflection) setLiveTransform(readNode());
+  }, [appearance.reflection, readNode]);
 
   // Konva'da filtreler YALNIZCA cache'lenmis bir node uzerinde calisir: filtre
   // zinciri, node'un onbellege alinmis tuvaline uygulaniyor. Cache bir kez
@@ -268,18 +271,44 @@ export function EditorStage({
   // onbellegi kendisi yeniden isliyor, tekrar cache() cagirmak gerekmiyor —
   // her kaydirac hareketinde cache almak buyuk gorsellerde gozle gorulur bir
   // takilma yaratirdi.
-  useEffect(() => {
-    const node = cutoutRef.current;
-    if (!node || !cutout) return;
-    node.cache();
-    node.getLayer()?.batchDraw();
-  }, [cutout]);
-
   const placement = useMemo(() => {
     if (transform) return transform;
     if (!cutout) return null;
     return fitToStage(stageWidth, stageHeight, cutout.width, cutout.height);
   }, [transform, cutout, stageWidth, stageHeight]);
+
+  // Onbellege GOLGE PAYI ekleniyor: onbellek varsayilan olarak yalnizca
+  // gorselin kendi sinirlarini kapsiyor; guclendirilmis golgenin bulanikligi
+  // ve kaymasi o sinirin disina tasiyor. Pay urun olcegine bagli oldugu icin
+  // olcek degisince onbellek yeniden aliniyor (birakildiginda, harekette degil).
+  //
+  // Golge ONBELLEGE ISLENIYOR: yalnizca filtre parametreleri Konva'da onbellegi
+  // kendiliginden yeniliyor, `shadowEnabled` yenilemiyor. Golge acilip
+  // kapatildiginda onbellek yeniden alinmazsa eski hali ekranda kaliyordu
+  // (Kaan: "golge hep sabit kaliyor", 17.09.2026).
+  const cacheScale = placement?.scale ?? 1;
+  const shadowOn = appearance.shadow;
+  useEffect(() => {
+    const node = cutoutRef.current;
+    if (!node || !cutout) return;
+    node.clearCache();
+    node.cache({ offset: Math.ceil((SHADOW.blur + SHADOW.offsetY) / (cacheScale || 1)) + 4 });
+    node.getLayer()?.batchDraw();
+  }, [cutout, cacheScale, shadowOn]);
+
+  const reflection = useMemo(() => {
+    const source = liveTransform ?? placement;
+    if (!appearance.reflection || !cutout || !source) return null;
+    return reflectionPlacement(source, cutout.width, cutout.height);
+  }, [appearance.reflection, cutout, liveTransform, placement]);
+
+  const backgroundCrop = useMemo(
+    () =>
+      backgroundImage
+        ? coverCrop(backgroundImage.width, backgroundImage.height, stageWidth, stageHeight)
+        : null,
+    [backgroundImage, stageWidth, stageHeight],
+  );
 
   return (
     <Stage
@@ -327,8 +356,15 @@ export function EditorStage({
       }}
     >
       <Layer listening={false}>
-        {backgroundImage ? (
-          <KonvaImage image={backgroundImage} width={stageWidth} height={stageHeight} />
+        {backgroundImage && backgroundCrop ? (
+          // `crop`: zemin ESNETILMEDEN bicimi kapliyor (lib/composition.ts
+          // `coverCrop`). Onceden dogrudan sahne olcusune zorlaniyordu.
+          <KonvaImage
+            image={backgroundImage}
+            width={stageWidth}
+            height={stageHeight}
+            crop={backgroundCrop}
+          />
         ) : (
           <Rect
             width={stageWidth}
@@ -343,31 +379,40 @@ export function EditorStage({
           />
         )}
 
-        {/*
-          Isik havuzu: zeminin ustune dusen yumusak radyal aydinlanma. Vitrin
-          fotografciliginin en yaygin hilesi — goz once aydinlik bolgeye gidiyor,
-          urun zeminden ayrisiyor. Zemin katmaninda duruyor ki urunun ONUNE
-          gecmesin; urunun uzerine dusen bir vinyet urunu soluklastirirdi.
-        */}
-        {appearance.spotlight ? (
-          <Rect
-            width={stageWidth}
-            height={stageHeight}
-            fillRadialGradientStartPoint={{ x: stageWidth / 2, y: stageHeight / 2 }}
-            fillRadialGradientEndPoint={{ x: stageWidth / 2, y: stageHeight / 2 }}
-            fillRadialGradientStartRadius={0}
-            fillRadialGradientEndRadius={Math.max(stageWidth, stageHeight) * 0.62}
-            fillRadialGradientColorStops={[
-              0,
-              "rgba(255,255,255,0.30)",
-              0.55,
-              "rgba(255,255,255,0.06)",
-              1,
-              "rgba(0,0,0,0.34)",
-            ]}
-          />
-        ) : null}
       </Layer>
+
+      {/*
+        Yansima (17.09.2026, "isik havuzu"nun yerine). AYRI KATMAN sart:
+        silikleştirme `destination-in` ile yapiliyor ve bu birlesim modu
+        katmanin tum tuvaline uygulaniyor — urunle ayni katmanda olsaydi urunu
+        de silerdi. Konva'da olculerek dogrulandi: eksenin hemen altinda
+        belirgin, gradyanin sonunda tamamen kayboluyor.
+      */}
+      {reflection && cutout ? (
+        <Layer listening={false}>
+          <KonvaImage
+            image={cutout}
+            x={reflection.x}
+            y={reflection.y}
+            offsetX={cutout.width / 2}
+            offsetY={cutout.height / 2}
+            scaleX={reflection.scaleX}
+            scaleY={reflection.scaleY}
+            rotation={reflection.rotation}
+            opacity={REFLECTION.opacity}
+          />
+          <Rect
+            x={0}
+            y={reflection.axisY}
+            width={stageWidth}
+            height={reflection.fadeHeight}
+            fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+            fillLinearGradientEndPoint={{ x: 0, y: reflection.fadeHeight }}
+            fillLinearGradientColorStops={[0, "rgba(0,0,0,1)", 1, "rgba(0,0,0,0)"]}
+            globalCompositeOperation="destination-in"
+          />
+        </Layer>
+      ) : null}
 
       <Layer>
         {cutout && placement ? (
@@ -399,9 +444,9 @@ export function EditorStage({
             // sabit piksel verilseydi buyuk urunlerde golge kaybolurdu.
             shadowEnabled={appearance.shadow}
             shadowColor="#000000"
-            shadowBlur={38 / (placement.scale || 1)}
-            shadowOpacity={0.32}
-            shadowOffsetY={26 / (placement.scale || 1)}
+            shadowBlur={SHADOW.blur / (placement.scale || 1)}
+            shadowOpacity={SHADOW.opacity}
+            shadowOffsetY={SHADOW.offsetY / (placement.scale || 1)}
             dragBoundFunc={(position) => {
               // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
               // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
@@ -413,6 +458,8 @@ export function EditorStage({
             }}
             onMouseDown={() => setIsSelected(true)}
             onTouchStart={() => setIsSelected(true)}
+            onDragMove={trackLiveTransform}
+            onTransform={trackLiveTransform}
             onDragEnd={reportTransform}
             onTransformEnd={reportTransform}
           />
@@ -458,22 +505,52 @@ export function EditorStage({
       </Layer>
 
       {/*
-        Logo ve urun etiketi EN USTTE ve `listening={false}`: surukleme ve
-        secim urune ait; etiketin ustune tiklamak urunu secmeyi engellemesin.
-        Sahnenin parcasi olduklari icin disa aktarmaya (PNG/JPEG/CMYK/WhatsApp)
-        kendiliginden giriyorlar.
+        Logo urun gibi suruklenip kose karelerinden boyutlandiriliyor (Kaan,
+        17.09.2026: kaydirac yerine). Donme yok, oran korunuyor. Tutamaklar
+        disa aktarmada diger Transformer'larla birlikte gizleniyor.
       */}
-      <Layer listening={false}>
+      <Layer>
         {logoImage && overlay.logoRect ? (
           <KonvaImage
+            ref={logoRef}
             image={logoImage}
             x={overlay.logoRect.x}
             y={overlay.logoRect.y}
             width={overlay.logoRect.width}
             height={overlay.logoRect.height}
             opacity={logo.opacity}
+            draggable={Boolean(onLogoChange)}
+            onMouseDown={() => setSelection("logo")}
+            onTouchStart={() => setSelection("logo")}
+            onDragEnd={reportLogo}
+            onTransformEnd={reportLogo}
           />
         ) : null}
+        <Transformer
+          ref={logoTransformerRef}
+          rotateEnabled={false}
+          enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
+          keepRatio
+          anchorSize={screenPixels(9)}
+          anchorCornerRadius={0}
+          anchorStroke="#b08d4f"
+          anchorFill="#ffffff"
+          anchorStrokeWidth={screenPixels(1.25)}
+          borderStroke="#b08d4f"
+          borderStrokeWidth={screenPixels(1)}
+          borderDash={[screenPixels(4), screenPixels(4)]}
+          boundBoxFunc={(oldBox, newBox) =>
+            newBox.width < 12 || newBox.height < 12 ? oldBox : newBox
+          }
+        />
+      </Layer>
+
+      {/*
+        Urun etiketi EN USTTE ve `listening={false}`: etiketin ustune tiklamak
+        urunu secmeyi engellemesin. Sahnenin parcasi oldugu icin disa aktarmaya
+        (PNG/JPEG/CMYK/WhatsApp) kendiliginden giriyor.
+      */}
+      <Layer listening={false}>
 
         {overlay.text && overlay.labelRect && overlay.metrics ? (
           <Group x={overlay.labelRect.x} y={overlay.labelRect.y}>

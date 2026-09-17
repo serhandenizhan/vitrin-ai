@@ -6,7 +6,7 @@
  *  - Bastaki inis ve cikis  -> V
  *  - Ortadaki yuksek tepe   -> A
  *  - Sondaki kisa yukselis  -> ı
- *  - Soldaki ayri nokta     -> İ'nin noktasi
+ *  - Soldaki ayri elmas     -> İ'nin noktasi
  *
  * Bu yuzden oranlar keyfi degil: ortadaki tepe belirgin sekilde daha YUKSEK
  * (harf olarak okunmasi buna bagli), soldaki vadi derin ve dar (V), sagdaki
@@ -39,8 +39,16 @@ export function BrandMark({ className }: BrandMarkProps) {
       className={className}
       focusable="false"
     >
-      {/* İ'nin noktasi — cizgiden ayri duruyor. */}
-      <circle cx="2.8" cy="21.5" r="2.7" fill="currentColor" />
+      {/* İ'nin noktasi ELMAS (Kaan, 17.09.2026): kuyumcu markasina yakisan kucuk
+          bir pirlanta silueti — ustu duz tabla, alti sivri. Dalganin sol ucu
+          hizasinda ve cizgiye degmiyor. */}
+      <polygon
+        points="1.75,13.5 3.85,13.5 4.85,14.7 2.8,17.3 0.75,14.7"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="0.45"
+        strokeLinejoin="round"
+      />
 
       <path
         d="M9.5 13

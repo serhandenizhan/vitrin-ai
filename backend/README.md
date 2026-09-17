@@ -285,6 +285,48 @@ verilmiyor; `*` ve yol içeren değerler uygulama başlarken reddediliyor
 sunucuya, CORS gerektirmez); bu katman tarayıcıdan doğrudan erişilen her durum
 için sınırı baştan çiziyor.
 
+## Zemin kütüphanesi toplu yükleme (17.09.2026)
+
+Zemin yönetim paneli Faz 6'da; ilk kütüphane (93 zemin) o panel olmadan
+`scripts/upload_backgrounds.py` ile yüklendi (Kaan'ın onayıyla öne alınan iş).
+
+- **Ne yapar:** her görseli yönetici yükleme ucuyla aynı `validate_upload`
+  kontrollerinden geçirir, aynı çözünürlükte JPEG %92'ye çevirir (93 zemin 225 MB → 75 MB),
+  ~480 px önizleme üretir, önce R2'ye (`backgrounds/<id>.jpg` ve
+  `backgrounds/thumbs/<id>.jpg`) sonra `backgrounds` tablosuna yazar. Yükleme ya da satır
+  yazma yarıda kalırsa o ana kadar yüklenen nesneleri geri siler (önizleme yüklemesi
+  patladığında ana görselin yetim kalması PR #18 incelemesinde bulundu).
+  Manifestteki dosyayı tekrar yüklemez.
+- **Yeniden çalıştırma güvenliği manifestten DEĞİL, kimlikten gelir:** zemin kimliği
+  kaynak dosya adından türetiliyor (UUIDv5, `background_id_for`). Manifest ile DB
+  commit'i arasında süreç ölse bile yeniden çalıştırma aynı kimliği ve aynı R2
+  anahtarını üretir; içerik aynıysa yükleme hiç tekrarlanmaz, var olan satır tekrar
+  eklenmez. Rastgele UUID ile bu pencerede kalan bir çökme aynı görsel için ikinci bir
+  kayıt ve ikinci bir nesne çifti üretiyordu (`tests/test_upload_backgrounds_script.py`).
+- **`--batch` ve içerik kontrolü — yalnız dosya adı KALICI bir kimlik değildir.**
+  Başka bir klasörde aynı adı taşıyan farklı bir görsel aynı kimliği üretir; kontrolsüz
+  bırakılsa ikinci çalıştırma var olan zeminin nesnesini sessizce ezer ve kategori/baskı
+  uyarısı eski görsele ait kalırdı (PR #18 ikinci inceleme turunda bulundu). İki katman:
+  (1) yeni parti yüklerken `--batch <kalıcı-parti-adı>` verilir, kimlik ondan da türer —
+  parti adı verilmediğinde kimlik ilk kütüphaneyle bire bir aynı kalır; (2) kimlik zaten
+  varsa R2'deki içerik karşılaştırılır, **farklıysa betik durur** (fail-closed) ve hangi
+  seçeneği kullanacağını söyler. Bilinçli değiştirme için `--allow-overwrite`.
+- **Veritabanı yapısı değişmez:** kategori ve baskı uyarısı `--catalog-out` ile
+  `frontend/src/lib/background-catalog.ts`'e yazılır.
+- **Güvenlik kilidi:** gerçek yükleme `--yes` olmadan çalışmaz; önce `--dry-run` hiçbir şey
+  yüklemeden bütün dosyaları kontrol eder. Betik gerçek `.env`'i (Supabase + R2) kullanır.
+- **Önizleme sözleşmesi:** `GET /api/backgrounds` her kayıt için `thumbnail_url` döner;
+  anahtar zeminin anahtarından türetilir (`app/services/background_images.py`), DB'de ayrı
+  alan yoktur. `POST /api/admin/backgrounds` da önizlemeyi aynı anahtara yükler.
+
+```bash
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --dry-run
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --yes
+# Yeni bir parti: kalıcı ad alanı verin (aynı dosya adının çakışmasını önler)
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --batch 2026-10-sonbahar --yes
+python scripts/upload_backgrounds.py --manifest manifest.json --catalog-out ../frontend/src/lib/background-catalog.ts
+```
+
 ## Docker
 
 ```bash
@@ -322,7 +364,7 @@ sunucu/instance seçin.
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
 | `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
 | `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
-| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır |
+| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri fail-closed, zemin listeleme fail-open (bkz. `app/services/billing/limits.py`) |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |

@@ -312,11 +312,13 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   **Ertelenmiş açık madde — sahibi: Kaan.** Profil yolu `CMYK_ICC_PATH` ile
   veriliyor ve varsayılanı yok. Profilsiz bir "CMYK" çevrimi matbaada yanlış
   renk verir, bunu sessizce yapmak özelliği hiç sunmamaktan kötüdür.
-  Geliştirmede işletim sisteminin profili kullanılıyor; **üretime çıkmadan
-  depoya serbest lisanslı bir profil konmalı** (örneğin ECI'nin
-  `ISOcoated_v2_eci.icc`) ya da matbaanın kendi profili alınmalı. Bu iş
-  mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
-  baskı koşulu doğrulanarak tamamlanacak.
+  **Güncelleme (16.09.2026):** profil seçildi, ECI **PSO Coated v3** (FOGRA51,
+  kuşe kâğıda ofset; ECI'nin güncel profili, `ISOcoated_v2` artık "eski
+  sürümler"de). Lisans doğrulandı: profil gömülebilir ve paylaşılabilir ama
+  ECI'nin yazılı izni olmadan **dağıtılamaz**; depo herkese açık olduğu için
+  **depoya konmadı** (`*.icc` `.gitignore`'da), depo dışında durup
+  `CMYK_ICC_PATH` ile veriliyor. Kalan: canlı sunucuya profilin konması
+  (Vercel'de yerel yol okunamaz — kök `CLAUDE.md` açık takip maddesi 1).
 
   **Kod standardı — Türkçe identifierlar İngilizceye taşındı (10.09.2026).**
   Kompozisyon editörü, katalog, zemin kaynağı ve stüdyo sözleşmesindeki
@@ -661,11 +663,134 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
   hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
   Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).
+- **Öne alınan iş — zemin kütüphanesi (Kaan'ın onayı, 17.09.2026).** Zemin
+  yükleme/yönetim paneli Faz 6'da (Kaan); ilk kütüphane panel olmadan yüklendi.
+  Faz dışı olduğu önceden söylendi ve onaylandı (kural 6).
+  - 93 zemin (bir kısmı Gemini/ChatGPT ile üretildi; görünür filigran yok) R2 +
+    `backgrounds` tablosuna, hepsi `basic`, `backend/scripts/upload_backgrounds.py`
+    ile. Aynı çözünürlükte JPEG %92 (225 MB → 75 MB) ve 480 px önizlemeler.
+  - **Veritabanı yapısı değişmedi** (Kaan'ın kararı). Kategori ve baskı uyarısı
+    `frontend/src/lib/background-catalog.ts`'te; Faz 6 paneli gelince tabloya
+    taşınması değerlendirilmeli.
+  - Stüdyoda 4 kategori sekmesi: Sade (41), Doku & desen (22), Doğal & çiçekli (16),
+    Lüks & koyu (14). Düşük çözünürlüklü 4 ChatGPT zemininde CMYK indirmeden önce
+    onay penceresi.
+  - **PR #18 inceleme düzeltmeleri (17.09.2026, Codex incelemesi + bağımsız doğrulama):**
+    - Backend testleri yerel Postgres + Redis ile çalıştırıldı: **299 test geçiyor**
+      (yeni: önizleme yüklemesinin hata yolu, DB hatasında temizlik, Redis arızası,
+      toplu yükleme betiği). Frontend **281 test**, lint ve `next build` de geçti.
+    - Redis çökerse `GET /api/backgrounds`'ın 500 verip kütüphaneyi sessizce
+      gradyanlara düşürmesi **kapatıldı**: zemin listelemenin hız sınırı artık
+      fail-open (para/webhook yüzeyleri fail-closed kalıyor, `limits.py`). Ayrıca
+      arayüz "kütüphane hazırlanıyor" ile "yüklenemedi"yi ayırıyor ve tekrar
+      deneme sunuyor; geçici arızada eldeki liste silinmiyor.
+    - Zemin yüklenemediğinde sahnenin ÖNCEKİ zemini süresiz göstermesi kapatıldı
+      (CLAUDE.md ders 23) — kullanıcı seçtiğinden başka bir zeminle dosya
+      indirebiliyordu.
+    - Önizleme yüklemesi ya da DB yazma patladığında R2'de kalan yetim nesne
+      temizleniyor (ders 25); betiğin yeniden çalıştırma güvenliği manifest
+      yerine determinist kimliğe (UUIDv5) bağlandı (ders 24).
+    - Ayrıca kopya logo akışı ortak hook'a alındı ve stüdyodan üç sorumluluk ayrı
+      modüllere çıkarıldı (JSX'e dokunulmadan; `frontend/README.md`).
+    - **Tarayıcı doğrulaması tamamlandı** (Playwright, gerçek oturum ve 93
+      gerçek R2 zemini; 1440 ve 375 px). Doğrulananlar: editörün açılması ve
+      sahne ölçümü (tuval 665×940, yani 240 başlangıç değerinin üstünde),
+      kategori sayımları (Sade 46 / Doku 17 / Doğal 5 / Lüks 2 — A4 dikeyde
+      yön süzmesi doğru), zemin geçişlerinde tuvalin değişmesi, üç adım,
+      gölge ve yansıma (katman bazında ölçüldü), logonun sürüklenmesi
+      (`position` yazılıyor) ve köşeden boyutlandırılması (`size` 0.18 → 0.29),
+      indirme sonrası iki soru ("şablona eklemek ister misiniz" → "ana menüye
+      dönmek ister misiniz"), telefonda gerçek dokunma olaylarıyla sürükleme,
+      hiçbir turda konsol hatası olmaması. Katalog tarafında logo akışı
+      (yükleme, çevirme, köşeler, kaldırma) ve `useLogoBox` geometrisi
+      (dört köşe 0.04/0.78 × 0.028/0.908) ayrıca ölçüldü.
+    - **Redis düzeltmesi canlı yığında kanıtlandı:** Redis durdurulduğunda
+      düzeltmeli kod 93 zemini döndürüyor ve uyarı log'luyor; düzeltme
+      geçici olarak geri alındığında backend 500, vekilden 0 zemin.
+    - **R2 denetimi:** bucket DB'ye karşı tarandı (ana 94 / önizleme 93 /
+      DB 93). Tek yetim nesne (`backgrounds/efde7ee1-….webp`, önizlemesi yok,
+      uzantısı `.webp` olduğu için admin ucundan gelmiş) kullanıcı onayıyla
+      silindi; sonuç 93/93. Ters yönde eksik yok (DB'de olup R2'de olmayan: 0).
+    - **Yönetici hesabı** `admin_users` tablosuna eklendi (Serhan, 17.09.2026):
+      UUID elle yazılmadan e-postadan seçen, tekrar çalıştırmaya güvenli
+      `insert … on conflict do nothing` ile.
+    - **Ölçüm tuzakları — üç kez yanlış alarm verildi ve üçü de ölçüm
+      aracından çıktı** (ders 13'ün aynı sınıfı): (1) Konva her katman için
+      ayrı `<canvas>` üretiyor, yalnızca ilkine bakmak gölge/yansımayı
+      "çalışmıyor" gösteriyor; (2) `getClientRect()` zaten görüntü pikseli
+      döndürüyor, bir kez daha sahne ölçeğiyle çarpmak logo tutamağını
+      ıskalatıyor (tutamak ayrıca yalnızca logo SEÇİLİ iken çiziliyor);
+      (3) JavaScript'in `/i` bayrağı Türkçe **İ** (U+0130) ile `i`'yi
+      eşleştirmiyor, "İndirme işlemi başarıyla tamamlandı" metni aranan
+      yerde duruyor olmasına rağmen bulunamıyor.
+    - **İkinci inceleme turu (17.09.2026) — düzeltmelerin kendisi iki yeni
+      high üretmişti, ikisi de doğrulanıp kapatıldı:**
+      - `useLoadedImage` hata işaretini `onerror`'da koyuyor ama `onload`'da
+        silmiyordu: geçici bir hatadan sonra o zemine geri dönen kullanıcı,
+        imzalı URL yenilenene kadar zemini hiç göremiyordu. "Yanlış zemin"
+        hatasının yerine "hiç zemin yok" hatası geçmişti.
+      - Determinist kimlik yalnız dosya ADINA dayandığı için, başka bir
+        partide aynı adı taşıyan farklı bir görsel var olan zeminin nesnesini
+        sessizce ezebiliyordu (içerik 535 → 542 bayt değiştiği ölçüldü);
+        kategori ve baskı uyarısı eski görsele ait kalıyordu. Rastgele UUID
+        ile bu mümkün değildi, yani düzeltme yeni bir hata sınıfı açmıştı.
+        Çözüm: `--batch` kalıcı parti ad alanı + kimlik zaten varsa içerik
+        karşılaştırması (aynıysa yükleme tekrarlanmaz, farklıysa betik durur;
+        bilinçli değiştirme için `--allow-overwrite`).
+    - **Açık bırakılan (bilinçli):** Türkçe iç anahtarlar
+      (`sade`/`doku`/`dogal`/`luks`, bülten ve katalog sekme değerleri) —
+      kod incelemesi bunları dil kuralı ihlali olarak raporladı, kullanıcı
+      17.09.2026'da bu hâliyle kabul etti, yeniden adlandırılmayacak.
+- **Öne alınan iş — stüdyo ve katalog düzenlemeleri (Kaan'ın onayı, 17.09.2026).** Stüdyo
+  ve katalog Faz 3'te bitmişti; faz dışı olduğu önceden söylendi ve onaylandı.
+  - Stüdyo A4 ile açılıyor, "Kare 2000×2000" kaldırıldı; düzenleme üç adım (Boyut ve zemin →
+    Ürün → Bitir); daha geniş, ortalanmış ve ekran yüksekliğine sığan tuval.
+  - Zemin artık esnetilmiyor (ortadan kırparak kaplıyor). Fotoğraf/desenli zeminler biçimin
+    yönüne göre listeleniyor (32 dikey, 61 yatay); Sade her biçimde. Sonuç: dikey biçimlerde
+    "Lüks & koyu" yalnızca 2 zemin gösteriyor.
+  - "Işık havuzu" yerine yansıma; gölge ölçülerek güçlendirildi (eski gölge koyu zeminde
+    görünmüyordu).
+  - Katalog: PNG yerine JPEG ve baskıya uygun CMYK (TIFF/JPEG), logo ekleme.
+  - Hata düzeltmesi (Faz 4): sol panelden eski çalışma Paketler/Katalog sayfalarında açılmıyordu.
+  - Sonraki turlar: indirme sonrası soru (ana menü / kataloğa aktar), katalogda "Tam sayfa" dahil
+    6 şablon, sayfa ve metin rengi, sürükle/köşeden boyutlandır logo, logo renklerini çevirme;
+    stüdyoda gölge kapalı başlıyor. Logo ve favicon elmaslı işaretle yenilendi.
+- **Öne alınan iş — Bülten (Kaan'ın onayı, 17.09.2026).** Üst çubukta `/bulten`: görselli
+  paylaşımlar (güncelleme notu, duyuru, yakında) ve gözden kaçabilecek özellikler. İçerik kodda
+  (`frontend/src/lib/bulletin.ts`), veritabanına dokunmuyor. Altın kuru eklenip KALDIRILDI:
+  ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
+  Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
 ### Faz 6 — Admin paneli — ⏳ Planlanan
 
 - Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
 - Kaan: rol tabanlı `/admin` arayüzü, arka plan yükleme/yönetim paneli
+- **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
+  17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
+  ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
+  **Kaan** — PR #18'in yorumunda iş Serhan'dan istenmişti, sahiplik burada
+  netleşiyor (kök `CLAUDE.md` açık takip maddesi 1 ile aynı sahip).
+  - **Profil seçimi zaten kapalı:** ECI **PSO Coated v3** (16.09.2026, Kaan —
+    kök `CLAUDE.md` açık takip maddesi 1). `ISOcoated_v2` yalnızca ECI'nin
+    "eski sürümler" bölümünde duran önceki öneri; yeniden tartışılmaz. Burada
+    kalan iş profili SEÇMEK değil, doğrulamak ve üretime koymak.
+  - Profil dosyası depoya konmaz (lisansı gömmeye izin veriyor, dağıtmaya
+    vermiyor; depo herkese açık). Sunucuya konup `CMYK_ICC_PATH` ayarlanır;
+    Vercel kullanılacaksa dosyanın çalışma anında nereden alınacağına karar
+    verilir (henüz yazılmadı).
+  - Profil yerine konduktan sonra doğrulanacaklar: TIFF'in Acrobat/Photoshop
+    preflight kontrolü, TAC'ın %300'ü aşmadığının teyidi, matbaadan prova,
+    matbaanın gerçekten PSO Coated v3 istediğinin teyidi, gömülü profilin
+    2,2 MB'lik boyutunun kabul edilip edilmeyeceği kararı ve 40 MP dönüşümün
+    canlı sunucudaki süre/bellek yükünün ölçülmesi. (Renk doğruluğu şimdiye
+    kadar yalnızca sayısal olarak kontrol edildi.)
+  - **Zaten doğrulanmış olan (PR #18, 17.09.2026):** profil ayarlı değilken
+    `POST /api/cmyk` doğru mesajla 503 dönüyor
+    (`"Baskı profili yapılandırılmamış. Sunucuda CMYK_ICC_PATH ayarlanmalı."`).
+    Route'un ikinci 503 dalı (yol geçersiz) da mevcut.
+  - Faz 7'deki "launch öncesi son kapı" maddesi bu işin **üretime çıkmasını**
+    bekletiyor; buradaki madde ise doğrulamaların Faz 6'da yapılacağını
+    söylüyor. İkisi aynı işin iki aşaması, çelişki değil.
 - **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
 
 ### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
@@ -683,6 +808,20 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
     verilince.
   - Baskı (CMYK) profili üretime konması (kök `CLAUDE.md` açık takip
     maddesi 1, Faz 3'ten kalma) — profil lisansı/matbaa koşulu doğrulanınca.
+  - **Zemin görsellerinin kaynak ve lisans teyidi (ekip, PR #18'den).**
+    93 zeminin bir kısmı Gemini ve ChatGPT ile üretildi; bu servislerin
+    güncel **ticari kullanım** koşulları doğrulanmadı. Kalan **66 görselin
+    kaynağı ve lisansı** da teyit edilmedi. Kaynağı belirsiz bir zemin
+    yayına alınmaz: teyit edilemeyen görsel kütüphaneden çıkarılır
+    (`backgrounds.is_active = false` yeterli, DB'den silmek gerekmez).
+    Bu iş dış girdiye bağlı olduğu için launch kapısında.
+  - **Hukukçuya sorulacak iki soru (PR #18'den, veri sorumlusu
+    görüşmesiyle birlikte):** (1) ticari bir sitede HEIC/HEVC çözmek patent
+    lisansı gerektiriyor mu — gerekiyorsa HEIC desteği kaldırılıp JPEG
+    istenebilir; (2) yapay zekâyla üretilmiş zeminler ticari sitede
+    kullanılabilir mi. Lisans tarafı ayrıca incelendi ve ücret/ayrı anlaşma
+    isteyen bir kod kütüphanesi bulunmadı (npm ~685, Python 80 paket);
+    açık olan yalnızca bu iki patent/kullanım sorusu.
   - Resend'de alan adı doğrulama (SPF/DKIM) ve gönderen adresinin kendi
     alan adına çevrilmesi — Faz 5'te yalnızca sandbox (kendi hesabına
     gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan

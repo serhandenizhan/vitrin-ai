@@ -15,7 +15,7 @@ describe("logo storage", () => {
   beforeEach(() => localStorage.clear());
 
   it("gorseli ve kose, boyut, saydamlik ayarlarini birlikte hatirlar", () => {
-    const settings = { corner: "top-left" as const, size: 0.27, opacity: 0.45 };
+    const settings = { corner: "top-left" as const, size: 0.27, opacity: 0.45, position: { x: 0.3, y: 0.7 } };
 
     expect(storeLogo("data:image/png;base64,AAAA", settings)).toBe(true);
 

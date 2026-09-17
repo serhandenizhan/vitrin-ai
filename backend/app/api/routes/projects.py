@@ -18,7 +18,6 @@ söylemiş olurdu.
 import base64
 import hmac
 import json
-import logging
 import uuid
 from datetime import datetime
 
@@ -44,7 +43,11 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.models.project import Project
-from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
+from app.services.storage import (
+    R2StorageService,
+    delete_objects_quietly,
+    get_storage_service,
+)
 from app.validation.upload import UploadValidationError, validate_upload
 
 from app.services.billing.entitlements import locked_subscription, background_tier
@@ -53,7 +56,6 @@ from app.services.billing.provider import get_provider
 from app.models.background import Background
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 # Sonuç, arka plan kaldırma servisinin ürettiği saydam PNG; başka bir tür
 # gelmesi ya istemci hatası ya kötü niyet.
@@ -134,18 +136,6 @@ async def _read_validated(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"{label}: {exc.reason}"
         ) from exc
     return content
-
-
-async def _delete_objects_quietly(storage: R2StorageService, keys: list[str]) -> None:
-    # R2 silmesi başarısız olursa kullanıcıya hata DÖNÜLMÜYOR: veritabanı
-    # satırı zaten silindi, kullanıcının gözünde proje gitti. Kalan nesne
-    # yetim (maliyet) ama erişilemez — anahtarı bilen tek yer silinen satırdı
-    # ve imzalı URL üretilemez. Sessiz de değil: log'a yazılıyor.
-    for key in keys:
-        try:
-            await storage.delete(key)
-        except (BotoCoreError, ClientError, R2ConfigurationError):
-            logger.warning("R2 nesnesi silinemedi, yetim kaldı: %s", key)
 
 
 def _serialize(project: Project, storage: R2StorageService) -> dict:
@@ -255,7 +245,7 @@ async def create_project(
         await storage.upload(thumbnail_key, thumbnail_content, thumbnail.content_type)
         uploaded.append(thumbnail_key)
     except (BotoCoreError, ClientError) as exc:
-        await _delete_objects_quietly(storage, uploaded)
+        await delete_objects_quietly(storage, uploaded)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Proje görselleri depolamaya yüklenemedi.",
@@ -281,7 +271,7 @@ async def create_project(
         await db.rollback()
         # Görseller yüklendi ama satır yazılamadı: geri silinmezse erişilemez
         # yetim nesneler olarak kalırlar.
-        await _delete_objects_quietly(storage, uploaded)
+        await delete_objects_quietly(storage, uploaded)
         if getattr(exc.orig, "sqlstate", None) == FOREIGN_KEY_VIOLATION:
             # Kullanıcı Supabase'den silinmiş, ama access token'ı süresi
             # dolana kadar geçerli (Supabase silmede token'ları iptal etmiyor).
@@ -294,7 +284,7 @@ async def create_project(
         raise
     except Exception:
         await db.rollback()
-        await _delete_objects_quietly(storage, uploaded)
+        await delete_objects_quietly(storage, uploaded)
         raise
     # `created_at` sunucu varsayılanı; commit sonrası nesnede yok.
     await db.refresh(project)
@@ -349,7 +339,7 @@ async def delete_project(
     keys = [project.result_r2_key, project.thumbnail_r2_key]
     await db.delete(project)
     await db.commit()
-    await _delete_objects_quietly(storage, keys)
+    await delete_objects_quietly(storage, keys)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -368,5 +358,5 @@ async def delete_all_projects(
     )
     keys = [key for row in result.all() for key in row]
     await db.commit()
-    await _delete_objects_quietly(storage, keys)
+    await delete_objects_quietly(storage, keys)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

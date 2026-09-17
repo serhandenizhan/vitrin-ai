@@ -17,7 +17,12 @@ from app.core.auth import require_admin
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.models.background import Background
-from app.services.storage import R2StorageService, get_storage_service
+from app.services.background_images import make_thumbnail, thumbnail_key
+from app.services.storage import (
+    R2StorageService,
+    delete_objects_quietly,
+    get_storage_service,
+)
 from app.validation.upload import UploadValidationError, validate_upload
 
 router = APIRouter()
@@ -76,16 +81,35 @@ async def create_background(
 
     # Önce R2'ye yükle, DB satırı YALNIZCA yükleme başarılıysa yazılır — R2
     # başarısız olursa yetim bir DB kaydı oluşmasın diye sıra bilinçli.
+    # Stüdyodaki zemin seçici için küçük önizleme (bkz. services/background_images.py).
+    # Anahtar zeminin anahtarından türetiliyor; veritabanına yeni sütun yok.
+    thumbnail = await run_in_threadpool(make_thumbnail, content)
+
+    # İki ayrı yükleme var ve YETİMLİK İKİ YÖNE de işliyor: ikinci yükleme
+    # (küçük önizleme) ya da DB satırı başarısız olduğunda ilk nesne R2'ye
+    # çoktan yazılmış olur, ama anahtarını bilen hiçbir kayıt kalmaz — nesne
+    # erişilemez biçimde yer tutmaya devam eder. (PR #18 incelemesinde
+    # bucket'ta gerçek bir örneği bulundu.) Bu yüzden başarıyla yüklenen her
+    # anahtar takip ediliyor ve hata yolunda geri siliniyor.
+    uploaded: list[str] = []
     try:
         await storage.upload(r2_key, content, file.content_type)
+        uploaded.append(r2_key)
+        await storage.upload(thumbnail_key(r2_key), thumbnail, "image/jpeg")
+        uploaded.append(thumbnail_key(r2_key))
     except (BotoCoreError, ClientError) as exc:
+        await delete_objects_quietly(storage, uploaded)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Arka plan depolamaya yüklenemedi.",
         ) from exc
 
-    db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
-    await db.commit()
+    try:
+        db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
+        await db.commit()
+    except Exception:
+        await delete_objects_quietly(storage, uploaded)
+        raise
 
     return {"id": str(background_id)}
 
@@ -142,6 +166,10 @@ async def list_backgrounds(
         {
             "id": str(bg.id),
             "url": storage.generate_presigned_url(bg.r2_key),
+            # Önizleme anahtarı zeminin anahtarından türetiliyor. Önizlemesi
+            # olmayan eski bir kayıtta bu adres 404 verir; frontend o durumda
+            # tam boyutlu `url`e düşüyor.
+            "thumbnail_url": storage.generate_presigned_url(thumbnail_key(bg.r2_key)),
             "expires_in": settings.background_url_expiry_seconds,
         }
         for bg in backgrounds

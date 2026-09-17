@@ -51,6 +51,10 @@ function BillingPlansForUser({ catalog }: { catalog: PlanPresentation[] }) {
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState("");
   const [pending, setPending] = useState("");
+  // Telefonda gosterilen plan; onerilen plan ile acilir.
+  const [mobilePlan, setMobilePlan] = useState(
+    () => (catalog.find((sunum) => sunum.vurgulu) ?? catalog[0])?.id ?? "",
+  );
   useEffect(() => { billingFetch<Plan[]>("/api/plans").then(setPlans).catch(error => setError(error.message)); }, []);
   async function choose(plan: Plan) {
     if (!user) { openSignIn(); return; }
@@ -85,9 +89,26 @@ function BillingPlansForUser({ catalog }: { catalog: PlanPresentation[] }) {
   return <>
     {error && <p role="alert" className="mx-auto my-8 max-w-2xl rounded-2xl bg-white/[0.05] p-5 text-[0.9375rem] ring-1 ring-white/15">{error}{pending && <> <Link className="underline" href={pending}>Devam eden ödemeye git</Link></>}</p>}
 
-    <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-3 lg:gap-6">
+    {/* Telefonda plan SEKMELERI (Kaan, 17.09.2026): uc uzun kart alt alta
+        cok yer kapliyordu; ayni anda tek kart, secim ustte. */}
+    <div role="tablist" aria-label="Paketler" className="mx-auto mt-8 flex max-w-sm rounded-full bg-white/[0.06] p-1 ring-1 ring-white/10 sm:hidden">
+      {catalog.map((sunum) => (
+        <button
+          key={sunum.id}
+          type="button"
+          role="tab"
+          aria-selected={mobilePlan === sunum.id}
+          onClick={() => setMobilePlan(sunum.id)}
+          className={"min-h-10 flex-1 rounded-full text-[0.875rem] font-medium transition-colors " + (mobilePlan === sunum.id ? "bg-white text-black" : "text-white/70")}
+        >
+          {sunum.ad}
+        </button>
+      ))}
+    </div>
+
+    <div className="mt-5 grid items-stretch gap-5 sm:mt-16 lg:grid-cols-3 lg:gap-6">
       {catalog.map((sunum, sira) => (
-        <Reveal key={sunum.id} delay={sira * 90} className={sunum.vurgulu ? "lg:-my-4" : "lg:my-0"}>
+        <Reveal key={sunum.id} delay={sira * 90} className={(sunum.vurgulu ? "lg:-my-4" : "lg:my-0") + (mobilePlan === sunum.id ? "" : " max-sm:hidden")}>
           <PlanCard sunum={sunum} plan={yayimlanan.get(sunum.id)} onChoose={choose} />
         </Reveal>
       ))}

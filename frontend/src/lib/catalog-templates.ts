@@ -45,7 +45,7 @@ export type Rule = {
   opacity: number;
 };
 
-export type TemplateName = "duo" | "cover" | "trio";
+export type TemplateName = "duo" | "cover" | "trio" | "full" | "quad" | "feature";
 
 export type CatalogTexts = { eyebrow: string; title: string; footer: string };
 
@@ -220,7 +220,186 @@ export const TEMPLATES: Record<TemplateName, Template> = {
       { box: { x: 0.075, y: 0.198, width: 0.85, height: 0.0008 }, color: "ink", opacity: 0.14 },
     ],
   },
+
+  /* --- Dortlu izgara: dort esit urun ------------------------------------- */
+  // 17.09.2026, Kaan: iki sablon daha, galeri 3'erli iki sira.
+  quad: {
+    name: "quad",
+    fileSlug: "dortlu",
+    title: "Dörtlü ızgara",
+    summary: "Dört ürün, eşit kareler",
+    paper: PAPER,
+    ink: INK,
+    muted: MUTED,
+    accent: GOLD,
+    slots: [
+      { x: 0.075, y: 0.235, width: 0.412, height: 0.31 },
+      { x: 0.513, y: 0.235, width: 0.412, height: 0.31 },
+      { x: 0.075, y: 0.565, width: 0.412, height: 0.31 },
+      { x: 0.513, y: 0.565, width: 0.412, height: 0.31 },
+    ],
+    texts: [
+      {
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.08, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "left",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
+      },
+      {
+        field: "title",
+        box: { x: 0.075, y: 0.118, width: 0.85, height: 0.06 },
+        fontSizeRatio: 0.048,
+        align: "left",
+        color: "ink",
+      },
+      {
+        field: "footer",
+        box: { x: 0.075, y: 0.915, width: 0.85, height: 0.03 },
+        fontSizeRatio: 0.014,
+        align: "center",
+        color: "muted",
+        uppercase: true,
+        letterSpacing: 0.1,
+      },
+    ],
+    rules: [
+      { box: { x: 0.075, y: 0.198, width: 0.85, height: 0.0008 }, color: "ink", opacity: 0.14 },
+    ],
+  },
+
+  /* --- One cikan: solda buyuk urun, sagda iki kucuk; baslik ortada ------- */
+  feature: {
+    name: "feature",
+    fileSlug: "one-cikan",
+    title: "Öne çıkan",
+    summary: "Bir büyük dikey, iki küçük",
+    paper: PAPER,
+    ink: INK,
+    muted: MUTED,
+    accent: GOLD,
+    slots: [
+      { x: 0.075, y: 0.26, width: 0.5, height: 0.62 },
+      { x: 0.6, y: 0.26, width: 0.325, height: 0.3 },
+      { x: 0.6, y: 0.58, width: 0.325, height: 0.3 },
+    ],
+    texts: [
+      {
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.085, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "center",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
+      },
+      {
+        field: "title",
+        box: { x: 0.075, y: 0.125, width: 0.85, height: 0.065 },
+        fontSizeRatio: 0.052,
+        align: "center",
+        color: "ink",
+      },
+      {
+        field: "footer",
+        box: { x: 0.075, y: 0.92, width: 0.85, height: 0.03 },
+        fontSizeRatio: 0.014,
+        align: "center",
+        color: "muted",
+        uppercase: true,
+        letterSpacing: 0.1,
+      },
+    ],
+    rules: [
+      { box: { x: 0.3, y: 0.215, width: 0.4, height: 0.0008 }, color: "ink", opacity: 0.2 },
+    ],
+  },
+
+  /* --- Tam sayfa: gorsel A4'un tamamini kapliyor ------------------------- */
+  // Studyoda katalog boyutunda hazirlanan gorsel buraya geliyor (Kaan,
+  // 17.09.2026, secenek A): gorsel sayfayi kapliyor, baslik ve logo ustunde
+  // duruyor ve duzenlenebiliyor. Gorselin zemini zaten kendi sayfasi oldugu
+  // icin cizgi yok.
+  full: {
+    name: "full",
+    fileSlug: "tam-sayfa",
+    title: "Tam sayfa",
+    summary: "Görsel sayfanın tamamında",
+    paper: PAPER,
+    ink: INK,
+    muted: MUTED,
+    accent: GOLD,
+    slots: [{ x: 0, y: 0, width: 1, height: 1 }],
+    texts: [
+      {
+        field: "eyebrow",
+        box: { x: 0.075, y: 0.06, width: 0.85, height: 0.035 },
+        fontSizeRatio: 0.019,
+        align: "left",
+        color: "accent",
+        uppercase: true,
+        letterSpacing: 0.16,
+      },
+      {
+        field: "title",
+        box: { x: 0.075, y: 0.1, width: 0.85, height: 0.065 },
+        fontSizeRatio: 0.052,
+        align: "left",
+        color: "ink",
+      },
+    ],
+    rules: [],
+  },
 };
+
+/* --------------------------------------------------------------------------
+   Renk secenekleri (Kaan, 17.09.2026): sayfa rengi ve metin rengi.
+   -------------------------------------------------------------------------- */
+
+export const PAPER_COLORS: { id: string; label: string; color: string }[] = [
+  { id: "ivory", label: "Fildişi", color: "#f4f1ec" },
+  { id: "white", label: "Beyaz", color: "#ffffff" },
+  { id: "sand", label: "Kum", color: "#e8dcc8" },
+  { id: "blush", label: "Pudra", color: "#ecd9d3" },
+  { id: "sage", label: "Adaçayı", color: "#d9dfd2" },
+  { id: "navy", label: "Lacivert", color: "#1c2433" },
+  { id: "emerald", label: "Zümrüt", color: "#173a30" },
+  { id: "black", label: "Siyah", color: "#1a1917" },
+];
+
+export type TextTone = "auto" | "dark" | "light";
+
+/**
+ * Secilen sayfa ve metin rengini sablona uyguluyor. Onizleme ve disa aktarma
+ * ayni turetilmis sablonu kullandigi icin ikisi ayrisamaz. "auto": metin rengi
+ * sayfanin parlakligina gore siyah ya da beyaz; altin vurgu her durumda kaliyor.
+ */
+export function applyTemplateColors(
+  template: Template,
+  paper: string | null,
+  tone: TextTone,
+): Template {
+  const nextPaper = paper ?? template.paper;
+  const resolved: "dark" | "light" =
+    tone !== "auto" ? tone : relativeLuminance(nextPaper) > 0.5 ? "dark" : "light";
+  return {
+    ...template,
+    paper: nextPaper,
+    ink: resolved === "dark" ? INK : DARK_INK,
+    muted: resolved === "dark" ? MUTED : DARK_MUTED,
+  };
+}
+
+/** #rrggbb -> 0-1 goreli parlaklik (yaklasik, sRGB agirliklari). */
+export function relativeLuminance(hex: string): number {
+  const value = Number.parseInt(hex.replace("#", ""), 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
 
 /* --------------------------------------------------------------------------
    Yuva donusumu — kullanicinin gorseli buyutup kaydirmasi

@@ -42,6 +42,13 @@ export type CatalogPageViewProps = {
   onSlotMove?: (slot: number, x: number, y: number) => void;
   /** Tekerlekle olcek: carpani gunceller. */
   onSlotScale?: (slot: number, scale: number) => void;
+  /** Kuyumcunun logosu; kutu sayfaya gore 0-1 oraninda (disa aktarmayla ayni geometri). */
+  logo?: { url: string; box: Box; opacity: number } | null;
+  /**
+   * Verilirse logo sayfada surukleniyor ve kose karelerinden boyutlandiriliyor
+   * (Kaan, 17.09.2026: urun gibi, kaydirac olmadan). Kutu sayfaya gore 0-1.
+   */
+  onLogoChange?: (box: Box) => void;
 };
 
 /** 0-1 orani -> yuzde CSS'i. */
@@ -65,12 +72,29 @@ export function CatalogPageView({
   onSlotClear,
   onSlotMove,
   onSlotScale,
+  logo = null,
+  onLogoChange,
 }: CatalogPageViewProps) {
+  const pageRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <div
+      ref={pageRef}
       className="relative h-full w-full overflow-hidden"
       style={{ backgroundColor: template.paper }}
     >
+      {logo && editable && onLogoChange ? (
+        <LogoHandle logo={logo} pageRef={pageRef} onChange={onLogoChange} />
+      ) : logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logo.url}
+          alt=""
+          aria-hidden
+          draggable={false}
+          style={{ ...boxStyle(logo.box), opacity: logo.opacity, zIndex: 2, pointerEvents: "none" }}
+        />
+      ) : null}
       {/* Cizgiler — metin ve gorsel bantlarini ayiran ince kurallar. */}
       {template.rules.map((rule, i) => (
         <span
@@ -323,6 +347,142 @@ function SlotImage({
           </button>
         </>
       ) : null}
+    </div>
+  );
+}
+
+type LogoCorner = "nw" | "ne" | "sw" | "se";
+
+/** Logo tutamaklari; en kucuk kenar sayfanin bu orani. */
+const MIN_LOGO_EDGE = 0.03;
+
+/**
+ * Suruklenebilir, kose karelerinden boyutlandirilabilir logo.
+ *
+ * Boyutlandirmada KARSI KOSE sabit ve oran korunuyor: logo hicbir kosulda
+ * ezilmiyor. Hareket sayfa olcusune gore oranla hesaplaniyor; onizleme
+ * kucuk, cikti 1240 px, ikisi ayni sayiyi paylasiyor.
+ */
+function LogoHandle({
+  logo,
+  pageRef,
+  onChange,
+}: {
+  logo: { url: string; box: Box; opacity: number };
+  pageRef: React.RefObject<HTMLDivElement | null>;
+  onChange: (box: Box) => void;
+}) {
+  const dragRef = useRef<{
+    mode: "move" | LogoCorner;
+    startX: number;
+    startY: number;
+    box: Box;
+  } | null>(null);
+
+  // Mod, basilan ogenin `data-logo-handle` degerinden okunuyor; govde "move".
+  const start = (event: React.PointerEvent<HTMLElement>) => {
+    const mode = (event.currentTarget.dataset.logoHandle ?? "move") as "move" | LogoCorner;
+    event.stopPropagation();
+    event.preventDefault();
+    dragRef.current = { mode, startX: event.clientX, startY: event.clientY, box: logo.box };
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Yakalama reddedilirse surukleme yine calisiyor.
+    }
+  };
+
+  const move = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    const page = pageRef.current;
+    if (!drag || !page) return;
+    const rect = page.getBoundingClientRect();
+    const dx = (event.clientX - drag.startX) / rect.width;
+    const dy = (event.clientY - drag.startY) / rect.height;
+    const { box } = drag;
+
+    if (drag.mode === "move") {
+      onChange({
+        ...box,
+        x: Math.max(-box.width / 2, Math.min(1 - box.width / 2, box.x + dx)),
+        y: Math.max(-box.height / 2, Math.min(1 - box.height / 2, box.y + dy)),
+      });
+      return;
+    }
+
+    // Oran piksel cinsinden korunmali: sayfa kare degil, 0-1 oranlari
+    // dogrudan carpilirsa logo yatay/dikey ezilirdi.
+    const east = drag.mode.endsWith("e");
+    const south = drag.mode.startsWith("s");
+    const widthPx = box.width * rect.width;
+    const heightPx = box.height * rect.height;
+    const grow = Math.max(
+      ((east ? dx : -dx) * rect.width) / widthPx,
+      ((south ? dy : -dy) * rect.height) / heightPx,
+    );
+    const minFactor = (MIN_LOGO_EDGE * rect.width) / Math.max(widthPx, heightPx);
+    const factor = Math.max(minFactor, 1 + grow);
+    const width = box.width * factor;
+    const height = box.height * factor;
+    onChange({
+      x: east ? box.x : box.x + box.width - width,
+      y: south ? box.y : box.y + box.height - height,
+      width,
+      height,
+    });
+  };
+
+  const end = () => {
+    dragRef.current = null;
+  };
+
+  const corners: { id: LogoCorner; style: CSSProperties; cursor: string }[] = [
+    { id: "nw", style: { left: 0, top: 0 }, cursor: "nwse-resize" },
+    { id: "ne", style: { left: "100%", top: 0 }, cursor: "nesw-resize" },
+    { id: "sw", style: { left: 0, top: "100%" }, cursor: "nesw-resize" },
+    { id: "se", style: { left: "100%", top: "100%" }, cursor: "nwse-resize" },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Logo: sürükleyerek taşıyın, köşelerden boyutlandırın"
+      style={{ ...boxStyle(logo.box), zIndex: 3 }}
+      className="cursor-move touch-none"
+      onPointerDown={start}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={logo.url}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="pointer-events-none h-full w-full"
+        style={{ opacity: logo.opacity, maxWidth: "none" }}
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 outline-1 outline-[#b08d4f] outline-dashed"
+      />
+      {corners.map((corner) => (
+        <span
+          key={corner.id}
+          data-logo-handle={corner.id}
+          onPointerDown={start}
+          onPointerMove={move}
+          onPointerUp={end}
+          onPointerCancel={end}
+          // Dokunma alani gorunen kareden buyuk: 10 px'lik kareyi telefonda
+          // parmakla tutturmak zor.
+          className="absolute flex size-7 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center"
+          style={{ ...corner.style, cursor: corner.cursor }}
+        >
+          <span className="pointer-events-none size-2.5 border border-[#b08d4f] bg-white" />
+        </span>
+      ))}
     </div>
   );
 }

@@ -44,3 +44,7 @@ build/
 *.onnx
 *.pth
 *.ckpt
+
+# ICC renk profilleri depoya konmaz: ECI lisansi dagitima izin vermiyor
+# (bkz. CLAUDE.md acik takip maddesi 1). Profil CMYK_ICC_PATH ile verilir.
+*.icc

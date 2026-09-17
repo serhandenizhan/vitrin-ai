@@ -42,9 +42,14 @@ export const dynamic = "force-dynamic";
  * yanlis renk verir ve bunu sessizce yapmak, ozelligi hic sunmamaktan kotudur.
  * Profil bulunamazsa istek acik bir mesajla reddediliyor.
  *
- * Uretimde depoya serbest lisansli bir profil (ornegin ECI'nin
- * ISOcoated_v2_eci.icc) konmali ya da matbaanin kendi profili verilmeli;
- * gelistirmede isletim sisteminin profili kullanilabiliyor.
+ * Kullanilan profil: ECI "PSO Coated v3" (FOGRA51, ISO 12647-2:2013; kuse
+ * kagida ofset). Kaynak: eci.org indirme sayfasi, `pso-coated_v3.zip`.
+ *
+ * PROFIL DEPOYA KONMAZ: profilin kendi lisans etiketi "kullanilabilir,
+ * gomulebilir, paylasilabilir" ama "ECI'nin yazili izni olmadan dagitilamaz"
+ * diyor ve depo herkese acik. Ciktiya gommek serbest; dosyanin kendisi depo
+ * disinda durur ve bu degiskenle verilir (`*.icc` .gitignore'da). Ayrinti:
+ * kok CLAUDE.md acik takip maddesi 1.
  */
 const ICC_PATH = process.env.CMYK_ICC_PATH;
 

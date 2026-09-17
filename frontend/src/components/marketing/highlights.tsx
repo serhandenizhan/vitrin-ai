@@ -44,11 +44,17 @@ export function Highlights() {
           </h2>
         </Reveal>
 
-        <ul className="mt-12 grid gap-x-10 gap-y-12 sm:mt-16 sm:grid-cols-2">
+        <ul className="mt-8 grid gap-x-10 gap-y-5 sm:mt-16 sm:grid-cols-2 sm:gap-y-12">
           {HIGHLIGHTS.map((item, index) => (
-            <Reveal as="li" key={item.baslik} delay={index * 90}>
+            <Reveal
+              as="li"
+              key={item.baslik}
+              delay={index * 90}
+              // Telefonda kutu degil ince cizgiyle ayrilmis kisa liste.
+              className="border-t border-white/12 pt-5 sm:border-0 sm:pt-0"
+            >
               <p className="display-feature text-balance">{item.baslik}</p>
-              <p className="lede on-dark-muted mt-3 text-pretty">
+              <p className="lede on-dark-muted mt-2 text-pretty sm:mt-3">
                 {item.aciklama}
               </p>
             </Reveal>

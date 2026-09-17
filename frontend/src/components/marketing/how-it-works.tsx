@@ -62,9 +62,15 @@ export function HowItWorks() {
           </h2>
         </Reveal>
 
-        <ol className="mt-12 grid gap-10 sm:mt-16 sm:grid-cols-3">
+        <ol className="mt-8 grid gap-6 sm:mt-16 sm:grid-cols-3 sm:gap-10">
           {STEPS.map((step, index) => (
-            <Reveal as="li" key={step.numara} delay={index * 90}>
+            <Reveal
+              as="li"
+              key={step.numara}
+              delay={index * 90}
+              // Telefonda altin cizgili zaman cizelgesi.
+              className="border-gold/60 border-l-2 pl-4 sm:border-0 sm:pl-0"
+            >
               <span className="text-gold block text-[0.8125rem] font-semibold tracking-[0.08em] tabular-nums">
                 {step.numara}
               </span>
@@ -78,7 +84,7 @@ export function HowItWorks() {
 
         {/* Cekim rehberi — ayri bir kart icinde, cunku bunlar adim degil oneri */}
         <Reveal delay={120}>
-          <div className="mt-16 rounded-2xl bg-white p-7 sm:mt-20 sm:p-10">
+          <div className="mt-10 rounded-2xl bg-white p-6 sm:mt-20 sm:p-10">
             <h3 className="display-feature text-balance">
               En iyi sonuç için üç öneri
             </h3>
@@ -87,7 +93,7 @@ export function HowItWorks() {
               dikkat ederseniz kenarlar çok daha temiz çıkar.
             </p>
 
-            <ul className="mt-8 grid gap-7 sm:grid-cols-3">
+            <ul className="mt-5 grid gap-4 sm:mt-8 sm:grid-cols-3 sm:gap-7">
               {TIPS.map((tip) => (
                 <li key={tip.baslik}>
                   <p className="text-[0.9375rem] font-semibold tracking-[-0.01em]">
