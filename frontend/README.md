@@ -835,9 +835,14 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   düğmesi önce onay penceresi açar: "Bu görsel baskıya önerilmiyor. Yine de onaylıyor
   musunuz?" — Vazgeç hiçbir şey indirmez, "Evet, indir" normal akışa devam eder. Kontrol
   arayüzde; `/api/cmyk` yalnızca çizilmiş sahneyi alır.
-- **Yerelde zeminler görünmüyorsa:** backend'in Redis'e ulaşabildiğini kontrol edin
-  (Faz 5 hız sınırlayıcısı). Redis yokken `GET /api/backgrounds` 500 verir ve vekil
-  `X-Backgrounds-Source: unavailable` ile boş liste döner.
+- **Yerelde zeminler görünmüyorsa:** artık ilk şüpheli Redis DEĞİL. PR #18'e kadar
+  Redis yokken `GET /api/backgrounds` 500 veriyor ve vekil
+  `X-Backgrounds-Source: unavailable` ile boş liste döndürüyordu; zemin listelemenin
+  hız sınırı artık fail-open olduğu için Redis kapalıyken de liste geliyor. Liste
+  hâlâ boşsa sırayla bakılacaklar: backend ayakta mı, `R2_*` ayarları dolu mu,
+  bucket'ın CORS kuralı bu origin'i içeriyor mu. Vekil sebebi hep
+  `X-Backgrounds-Source` başlığında söylüyor ve arayüz "yüklenemedi" mesajıyla
+  tekrar deneme sunuyor.
 
 ### Stüdyo adımları, biçim yönü, yansıma; katalog çıktısı (öne alınan iş, 17.09.2026)
 

@@ -17,9 +17,18 @@ YARIDA KALIRSA: aynı komut güvenle yeniden çalıştırılabilir. Bu garanti
 manifestten DEĞİL, zemin kimliğinin kaynak dosya adından TÜRETİLMESİNDEN
 geliyor (`background_id`, UUIDv5). Manifest ile veritabanı commit'i arasında
 süreç ölse bile yeniden çalıştırma aynı kimliği, aynı R2 anahtarını üretir:
-nesneler üzerine yazılır ve var olan satır tekrar eklenmez. Rastgele UUID ile
-bu pencerede kalan bir çökme, aynı görsel için İKİNCİ bir kayıt ve ikinci bir
-R2 nesne çifti üretiyordu (PR #18 incelemesi).
+içerik aynıysa yükleme HİÇ tekrarlanmaz, yalnızca manifest tamamlanır ve var
+olan satır tekrar eklenmez. Rastgele UUID ile bu pencerede kalan bir çökme,
+aynı görsel için İKİNCİ bir kayıt ve ikinci bir R2 nesne çifti üretiyordu
+(PR #18 incelemesi).
+
+AYNI ADI TAŞIYAN FARKLI GÖRSEL: yalnız dosya adı KALICI bir kimlik değildir —
+başka bir klasördeki aynı adlı farklı bir görsel aynı anahtarı üretir. Bu
+durumda betik DURUR (fail-closed) ve mevcut zeminin içeriğini sessizce
+değiştirmez; kategori/baskı uyarısı eski görsele ait kalacağı için sessiz
+üzerine yazma en kötü sonuçtu. Yeni bir parti yüklerken `--batch` ile kalıcı
+bir ad alanı verin; bilinçli değiştirme için `--allow-overwrite`
+(PR #18 ikinci inceleme turu).
 
 VERİTABANI YAPISI DEĞİŞMEZ: kategori ve baskı uyarısı tabloya değil,
 `frontend/src/lib/background-catalog.ts` dosyasına yazılır (Kaan'ın kararı).
@@ -29,6 +38,8 @@ Kullanım (backend klasöründen, gerçek `.env` ile):
   python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --dry-run
   # 2) Gerçek yükleme — `--yes` olmadan çalışmaz:
   python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --yes
+  # 2b) YENİ BİR PARTİ yüklerken kalıcı bir ad alanı verin (ad çakışmasını önler):
+  python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --batch 2026-10-sonbahar --yes
   # 3) Katalog:
   python scripts/upload_backgrounds.py --manifest manifest.json --catalog-out ../frontend/src/lib/background-catalog.ts
 

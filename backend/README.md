@@ -322,6 +322,8 @@ Zemin yönetim paneli Faz 6'da; ilk kütüphane (93 zemin) o panel olmadan
 ```bash
 python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --dry-run
 python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --yes
+# Yeni bir parti: kalıcı ad alanı verin (aynı dosya adının çakışmasını önler)
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --batch 2026-10-sonbahar --yes
 python scripts/upload_backgrounds.py --manifest manifest.json --catalog-out ../frontend/src/lib/background-catalog.ts
 ```
 
