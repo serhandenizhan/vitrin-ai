@@ -209,6 +209,7 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Stüdyo ve katalog düzenlemeleri (öne alınan iş, 17.09.2026, Kaan):** stüdyo **A4 ile açılır**, "Kare 2000×2000" kaldırıldı (beyaz zeminli Pazaryeri duruyor). Düzenleme **üç adım**: 1 Boyut ve zemin → 2 Ürün (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma) → 3 Bitir (logo, etiket, indirme, CMYK, WhatsApp). Zemin artık **esnetilmiyor**, biçimi ortadan kırparak kaplıyor (`coverCrop`); fotoğraf/desenli zeminler yalnızca biçimin yönüne (dikey/yatay; kare = yatay) uyuyorsa listelenir, **Sade her biçimde** (`fitsOrientation`; yön katalogda, yükleme betiği ölçülerden üretir). "Işık havuzu" kaldırıldı, yerine **yansıma** (ayrı Konva katmanında `destination-in` ile silikleşen ayna kopya). **Gölge güçlendirildi** (`SHADOW` 50/34/%55): eski değer Konva'da ölçüldü, açık zeminde ~27/255, koyu zeminde ~0 koyulaşma veriyordu — önbellek teşhisi ölçümle çürütüldü, sebep zayıf değerlerdi. Katalog PNG yerine **JPEG + baskıya uygun CMYK** ve **logo** (stüdyoyla aynı depolama; `lib/print-download.ts`, `lib/logo-image.ts` ortak). Sol panelden eski çalışma ana sayfa dışındaki sayfalarda açılmıyordu: bekleyen çalışma `sessionStorage`'a yazılıp ana sayfaya gidiliyor (sağlayıcı her sayfada yeniden kuruluyor, bellek yetmez).
 - **Aynı günün sonraki turları (17.09.2026, Kaan):** indirme sonrası soru (katalog boyutunda önce "şablona ekle" → `lib/catalog-handoff.ts` ile Katalog'da "Tam sayfa", sonra "ana menüye dön"); katalogda 6 şablon, sayfa rengi ve siyah/beyaz metin (`applyTemplateColors`); logo stüdyoda ve katalogda sürüklenip kare köşelerden boyutlandırılıyor (`LogoSettings.position`), renkleri çevrilebiliyor; stüdyoda **gölge kapalı başlıyor**. **Tuzak:** Konva önbelleği `shadowEnabled` değişince yenilenmiyor, gölge aç/kapa için `clearCache()`+`cache()` şart. **Tuzak:** `sessionStorage`'tan okurken silmek geliştirmede (StrictMode, efekt iki kez) veriyi kaybettiriyor — önce oku, teslim edince sil. Bülten `/bulten` (içerik `lib/bulletin.ts`); **altın kuru yok**: ücret/lisans/yazılı izin isteyen veri kaynağı eklenmez (TCMB ticari kullanımda yazılı izin istiyor). Telefonda liste düzenleri içeriğe göre farklı (`globals.css` `.mobile-rail` yalnızca görselli listelerde; diğerleri kısa liste, açılır başlık, sekme).
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
+- **README logosu öne alındı (Serhan, 17.09.2026):** Faz 6 kapanışı için planlanan iş, kullanıcı onayıyla şimdi yapıldı. `docs/brand/vitrin-ai-mark.svg` — kaynağı `frontend/src/components/brand-mark.tsx`, `currentColor` yerine sabit `#d1a25b` (`--color-gold`'un sRGB karşılığı) kullanıyor, dosyanın başında bu not var. Kök `README.md`'nin başına `<img src="docs/brand/vitrin-ai-mark.svg">` ile eklendi. **Tuzak:** bileşendeki altın rengi (`--color-gold`) değişirse SVG'deki sabit hex de elle güncellenmeli — `currentColor` bağlantısı statik dosyada koptu.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
 
 ## Arayüz tasarım dili (kilitli karar — Faz 2)
@@ -356,14 +357,3 @@ SPF/DKIM doğrulaması ve gönderen adresinin değiştirilmesi bekliyor.
    yüzden bu ikinci aşama de facto Faz 7'nin "launch öncesi son kapı"
    listesine düşüyor.
 
-### 6. README'de logo yok — Faz 6 kapanışında eklenmeli, sahibi: Kaan
-
-Kök `README.md` şu an logosuz (kullanıcı kararı, 16.09.2026: "şimdilik logosuz
-yap, bir sonraki faz biterken hatırlat"). Depoda ayrı bir logo dosyası yok;
-marka işareti `frontend/src/components/brand-mark.tsx` içinde inline SVG olarak
-duruyor ve `currentColor` ile geldiği için tek başına bir dosyaya çıkarıldığında
-rengi elle verilmeli.
-
-**Faz 6 biterken yapılacak:** işaret `docs/brand/` altına bir SVG olarak dışa
-aktarılır (kaynağı `brand-mark.tsx`, dosyanın başına bunun notu düşülür) ve
-README'nin başına konur. İkili dosya, kaynağı belirtilmeden commit edilmez.
