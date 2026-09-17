@@ -365,37 +365,66 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
 
-### 5. Supabase'in kendi (built-in) e-posta servisi production için yeterli değil — sahibi: Serhan
+### 5. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 
 Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
 e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"
-ekranı — bkz. `frontend/README.md` "Hesaplar"). Resend özel SMTP sandbox
-entegrasyonu 14.09.2026'da bağlandı ve doğrulandı. Üretim için kendi alan adının
-SPF/DKIM doğrulaması ve gönderen adresinin değiştirilmesi bekliyor.
+ekranı — bkz. `frontend/README.md` "Hesaplar").
+
+**Bu madde önceden "e-posta spam'e düşüyor" diyordu — YANLIŞTI, düzeltildi.**
+17.09.2026'da Kaan gerçek kullanımda hem kayıt hem "şifremi unuttum" denedi,
+ikisinde de hata aldı. Supabase Auth Logs'ta `/auth/v1/signup` ve
+`/auth/v1/recover` **500**, Resend Logs'ta karşılık gelen `/emails` isteği
+**403** olarak görüldü — e-posta spam'e düşmüyor, **hiç gönderilmiyor.**
+
+**Kök sebep (kaynağından doğrulandı):** gönderen adres hâlâ
+`onboarding@resend.dev` — Resend'in yalnızca **hesap sahibinin kendi
+e-postasına** teslimat yapan test alan adı. Başka her adrese (Kaan dahil,
+gerçek her müşteri dahil) gönderim Resend tarafında 403 ile reddediliyor;
+bu red Supabase'de 500'e dönüşüp arayüzde genel bir hataya düşüyor.
+("resend.dev is a test-only sender that can only deliver to the email
+address on your Resend account" —
+[VibeAnswers](https://vibeanswers.com/resend/403-testing-emails-error/);
+"you need to verify a domain... and change the from address" —
+[Resend API errors](https://resend.com/docs/api-reference/errors).)
+14.09.2026'daki "doğrulama" da bu yüzden yanıltıcıydı: test edilen adres
+(`serhandenizhan404+etiket@gmail.com`) hesap sahibinin **kendi** adresinin
+bir varyasyonuydu, yani sandbox kısıtına hiç çarpmamıştı.
+
+**Geçici çözüm (17.09.2026, Kaan'ın hesabı için uygulandı):** Supabase'in
+yönetici API'si (`PUT /auth/v1/admin/users/{id}`, `SUPABASE_SECRET_KEY` ile)
+parolayı e-postaya HİÇ dokunmadan doğrudan yazabiliyor. Kaan'a rastgele bir
+geçici parola bu yolla atandı ve güvenli bir kanaldan iletildi; Dashboard'daki
+"Reset password" düğmesi denenmedi çünkü o da aynı bozuk e-posta yoluna
+gidiyor — kalıcı çözüm değil, yalnızca tek seferlik kilit açma.
+
+**Domain almadan denenebilecek — henüz denenmedi:** Supabase'in kendi
+(built-in) e-posta servisi, custom SMTP hiç bağlanmasaydı da çalışırdı;
+resmi belgeye göre saatte 2 e-postayla sınırlı
+([Supabase Rate Limits](https://supabase.com/docs/guides/auth/rate-limits)).
+Bu sınırın dışında kime gönderebildiği resmi belgede açık değil — bazı
+ikincil kaynaklar yalnızca "yetkili takım adresleri"ne gittiğini söylüyor
+ama bu, Supabase'in kendi belgesinden DOĞRULANAMADI. Yani şu an bilinmeyen:
+Authentication → SMTP Settings'ten özel SMTP'yi kapatıp built-in'e dönmek,
+Kaan gibi harici bir adrese (saatte 2 taneyle sınırlı olsa da) gerçekten
+ulaşır mı ulaşmaz mı — denenip sonucu buraya not düşülmeli.
 
 **Çözüm iki aşamalı — sağlayıcı seçildi (Resend, 14.09.2026):**
 
-1. **Sandbox aşaması — ✅ tamamlandı ve doğrulandı (14.09.2026).** Resend
-   hesabı + API key ile Supabase'e özel SMTP bağlandı. Gerçek bir kayıt
-   denemesiyle uçtan uca test edildi: e-posta ulaştı, Resend Dashboard →
-   Logs'ta gönderim kaydı görüldü — SMTP entegrasyonunun kendisi çalışıyor.
-   (İlk denemede e-posta hiç gelmemişti; sebep SMTP değil, o adresle
-   `serhandenizhan404@gmail.com` zaten kayıtlı bir kullanıcı vardı —
-   Supabase var olan kullanıcı için numaralandırma korumasıyla sessizce
-   yeni e-posta göndermiyor. `+` etiketli farklı bir adresle tekrar
-   denenince e-posta ulaştı.)
-
-   **Bilinen sınırlama — son UX kontrolünde hatırlanmalı:** e-posta
-   **spam'e düşüyor**. Beklenen bir durum: `onboarding@resend.dev` Resend'in
-   paylaşılan/genel gönderen adresi, kendi alan adımızın SPF/DKIM kaydı
-   yok. Aşağıdaki 2. aşama (kendi alan adını doğrulama) bunu da düzeltmesi
-   beklenen bir yan etki — ayrı bir iş değil, aynı adımın parçası.
+1. **Sandbox bağlantısı kuruldu (14.09.2026) ama HESAP SAHİBİ DIŞINDA hiçbir
+   adrese teslimat yapmıyor (17.09.2026'da doğrulandı).** SMTP kimlik
+   doğrulamasının kendisi çalışıyor (bağlantı reddedilmiyor, 403 bir
+   yetkilendirme/alan adı sorunu) ama bu, "üretime hazır" anlamına gelmiyor —
+   tam tersine, gerçek kullanıcıların **hiçbiri** bugün e-posta alamıyor.
 2. **Tam üretim aşaması (henüz yapılamaz — sahibi: Serhan, dış girdiye
    bağlı):** proje bir alan adı alınca, o alan adı Resend'de doğrulanmalı
    (DNS'e SPF/DKIM kaydı) ve gönderen adresi kendi alan adına çevrilmeli.
-   Bu olmadan gerçek müşterilere e-posta gitmez (ve spam'e düşme sorunu da
-   sürer) — R2 CORS ve production domain maddesiyle (açık takip maddesi 2)
-   aynı dış girdiye bağlı, o
-   yüzden bu ikinci aşama de facto Faz 7'nin "launch öncesi son kapı"
-   listesine düşüyor.
+   **Bu, mutlaka Vitrin AI için yeni satın alınmış bir alan adı olmak
+   zorunda değil** — Resend alt alan adı (subdomain) doğrulamasını da kabul
+   ediyor; Serhan veya Kaan'ın DNS kaydı ekleyebildiği HERHANGİ bir mevcut
+   alan adı üzerinde bir alt alan adı (ör. `mail.mevcutalanadi.com`)
+   doğrulanıp gönderen adres oraya çevrilebilir. Bu olmadan gerçek
+   müşterilere e-posta gitmez — R2 CORS ve production domain maddesiyle
+   (açık takip maddesi 2) aynı dış girdiye bağlı, o yüzden bu ikinci aşama
+   de facto Faz 7'nin "launch öncesi son kapı" listesine düşüyor.
 
