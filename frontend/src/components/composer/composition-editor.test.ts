@@ -127,7 +127,9 @@ describe("CompositionEditor", () => {
     backgroundState = {
       backgrounds: initialBackgrounds,
       hasServerBackground: true,
+      isUnavailable: false,
       isLoading: false,
+      retry: () => {},
     };
     fakeStage = null;
     vi.stubGlobal(
@@ -178,6 +180,43 @@ describe("CompositionEditor", () => {
     expect(screen.getByTestId("stage-background").textContent).toBe(
       "r2-b|https://r2.example/b-refreshed",
     );
+  });
+
+  it("zemin kütüphanesi yüklenemediğinde bunu 'hazırlanıyor' diye göstermez", () => {
+    // Iki ayri sebep, iki ayri mesaj olmali: kutuphane 93 zeminle doluyken
+    // yasanan bir ariza (Redis/backend) eskiden "kutuphane hazirlaniyor"
+    // yaziyordu ve kullanici bunu bir ariza olarak hic anlamiyordu
+    // (PR #18 incelemesi).
+    const retry = vi.fn();
+    backgroundState = {
+      ...backgroundState,
+      backgrounds: [initialBackgrounds[0]],
+      hasServerBackground: false,
+      isUnavailable: true,
+      retry,
+    };
+
+    renderEditor();
+
+    expect(screen.getByText(/yüklenemedi/i)).toBeTruthy();
+    expect(screen.queryByText(/hazırlanıyor/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tekrar dene" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("kütüphane henüz hazır değilse eski bilgilendirmeyi korur", () => {
+    backgroundState = {
+      ...backgroundState,
+      backgrounds: [initialBackgrounds[0]],
+      hasServerBackground: false,
+      isUnavailable: false,
+    };
+
+    renderEditor();
+
+    expect(screen.getByText(/hazırlanıyor/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Tekrar dene" })).toBeNull();
   });
 
   describe("öne alınan özellikler (13.09.2026)", () => {

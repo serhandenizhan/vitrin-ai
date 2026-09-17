@@ -40,44 +40,27 @@ import {
   type Appearance,
   DEFAULT_APPEARANCE,
   DEFAULT_FORMAT_NAME,
-  formatOrientation,
   normalizeAngle,
   isDefaultAppearance,
   logicalSize,
   fitToStage,
   MARKETPLACE_BACKGROUND_ID,
 } from "@/lib/composition";
-import type { Background } from "@/lib/backgrounds";
-import {
-  BACKGROUND_CATEGORIES,
-  PRINT_WARNING_MESSAGE,
-  backgroundCategory,
-  fitsOrientation,
-  needsPrintWarning,
-  type BackgroundCategory,
-} from "@/lib/background-categories";
-import { invertLogo, prepareLogo } from "@/lib/logo-image";
+import { PRINT_WARNING_MESSAGE, needsPrintWarning } from "@/lib/background-categories";
 import { downloadCmyk } from "@/lib/print-download";
-import {
-  clearStoredLogo,
-  loadStoredLogo,
-  loadStoredLogoSettings,
-  storeLogo,
-  storeLogoSettings,
-} from "@/lib/logo-storage";
 import {
   CORNERS,
   DEFAULT_LABEL,
-  DEFAULT_LOGO,
   KARAT_OPTIONS,
   LOGO_OPACITY_RANGE,
   MAX_CODE_LENGTH,
   type Corner,
-  type LogoSettings,
   type ProductLabel,
   gramProblem,
-  logoFileProblem,
 } from "@/lib/overlays";
+import { useLogo } from "@/lib/use-logo";
+import { useStageSize } from "@/components/composer/use-stage-size";
+import { useBackgroundSelection } from "@/components/composer/use-background-selection";
 
 const EditorStage = dynamic(
   () => import("@/components/composer/editor-stage").then((m) => m.EditorStage),
@@ -112,13 +95,6 @@ export type CompositionEditorProps = {
 type AfterDownload = "catalog" | "home" | null;
 
 /**
- * Sahnenin ekrandaki ust siniri. 17.09.2026'da 560'tan buyutuldu (Kaan: daha
- * genis duzenleme alani); dikey bicimlerde tuval ayrica ekran yuksekligine
- * gore sinirlaniyor (kapsayicinin `maxWidth`i).
- */
-const MAX_DISPLAY_SIZE = 768;
-
-/**
  * Duzenleme uc adimda (Kaan, 17.09.2026: "cok daginik, asamalara bol").
  * Bicim ilk adimda: zemin listesi bicimin yonune gore suzuluyor, once bicim
  * secilmeli.
@@ -130,15 +106,6 @@ const EDITOR_STEPS = [
 ] as const;
 
 type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
-
-/**
- * Baslangic olcusu bilincli olarak KUCUK.
- *
- * Ust sinirdan baslamak, ilk olcum yapilana kadar gecen tek karede sahnenin
- * kapsayicisindan tasmasina yol aciyor. Kucukten baslayip buyumek, ters
- * yondeki tasmadan gorsel olarak daha az rahatsiz edici.
- */
-const INITIAL_DISPLAY_SIZE = 240;
 
 /** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
 const MIN_SCALE_RATIO = 0.25;
@@ -185,9 +152,8 @@ export function CompositionEditor({
   onReturnToStart,
   onSendToCatalog,
 }: CompositionEditorProps) {
-  const { backgrounds, hasServerBackground, isLoading } = useBackgrounds();
-  const [selectedBackgroundId, setSelectedBackgroundId] = useState<string | null>(null);
-  const [displaySize, setDisplaySize] = useState(INITIAL_DISPLAY_SIZE);
+  const { backgrounds, hasServerBackground, isUnavailable, isLoading, retry: retryBackgrounds } =
+    useBackgrounds();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
@@ -196,25 +162,22 @@ export function CompositionEditor({
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [afterDownload, setAfterDownload] = useState<AfterDownload>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  /**
-   * Kullanicinin elle actigi zemin kategorisi. `null`: secili zeminin
-   * kategorisi gosteriliyor — boylece "Pazaryeri" duz beyazi sectiginde sekme
-   * de kendiliginden "Sade"ye geciyor, secili zemin gorunmez bir sekmede kalmiyor.
-   */
-  const [activeCategory, setActiveCategory] = useState<BackgroundCategory | null>(null);
   /** Baskiya onerilmeyen zeminde CMYK indirmeden once acilan onay. */
   const [pendingPrintFormat, setPendingPrintFormat] = useState<"jpeg" | "tiff" | null>(null);
   const [transform, setTransform] = useState<Transform | null>(null);
   const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
   // Studyo yalnizca istemcide acildigi icin (kullanici etkilesimiyle) tembel
   // baslangic degeri localStorage'i guvenle okuyabiliyor; sunucu cizimi yok.
-  const [logoUrl, setLogoUrl] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : loadStoredLogo(),
-  );
-  const [logo, setLogo] = useState<LogoSettings>(() =>
-    typeof window === "undefined" ? DEFAULT_LOGO : loadStoredLogoSettings(),
-  );
-  const [logoMessage, setLogoMessage] = useState<string | null>(null);
+  // Logo akisi studyo ve katalogda AYNI (bkz. lib/use-logo.ts).
+  const {
+    logoUrl,
+    settings: logo,
+    message: logoMessage,
+    handleFile: handleLogoFile,
+    invert: invertCurrentLogo,
+    update: updateLogo,
+    remove: removeLogo,
+  } = useLogo();
   const [label, setLabel] = useState<ProductLabel>(DEFAULT_LABEL);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -257,37 +220,7 @@ export function CompositionEditor({
   const format = OUTPUT_FORMATS[formatName];
   const stageSize = useMemo(() => logicalSize(format), [format]);
 
-  // Sahne kare ve kapsayicisina sigmali. `ResizeObserver`, `window.resize`
-  // yerine kullaniliyor: kapsayici, pencere degismeden de (panel acilip
-  // kapandiginda) genislik degistiriyor.
-  //
-  // AMA ilk olcum observer'a BIRAKILMIYOR, `getBoundingClientRect()` ile elle
-  // yapiliyor. Sebep: `ResizeObserver` geri cagrilari, HTML spesifikasyonunda
-  // "update the rendering" adiminin parcasi olarak teslim ediliyor — kare
-  // uretmeyen bir baglamda (gizli sekme, gorunmez gomulu panel) HIC
-  // calismayabiliyorlar. Bu dogrulama sirasinda birebir gozlendi: 434 px
-  // genisliginde gercek bir ogeye takilan taze bir observer sifir olcum verdi.
-  // Ilk olcum tek basina dogru boyutu belirledigi icin, observer artik yalnizca
-  // SONRAKI degisiklikleri (panel acilip kapanmasi, pencere boyutu) izliyor.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    function applyWidth(width: number) {
-      if (width <= 0) return;
-      setDisplaySize(
-        Math.max(INITIAL_DISPLAY_SIZE, Math.min(width, MAX_DISPLAY_SIZE)),
-      );
-    }
-
-    applyWidth(container.getBoundingClientRect().width);
-
-    const observer = new ResizeObserver(([entry]) =>
-      applyWidth(entry.contentRect.width),
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+  const displaySize = useStageSize(containerRef);
 
   /**
    * Klavye kisayollari.
@@ -340,49 +273,16 @@ export function CompositionEditor({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [undo, pushHistory, stageSize]);
 
-  // Secili zemin id ile tutuluyor, nesneyle degil: liste yenilendiginde
-  // (imzali URL'ler tazelendiginde) nesne kimligi degisiyor ama id ayni
-  // kaliyor, dolayisiyla kullanicinin secimi yenilemeden SAG CIKIYOR.
-  // Nesneyi saklasaydik her yenilemede secim ilk zemine donerdi.
-  //
-  // Yalnizca bicimin yonune uyan zeminler (Kaan, 17.09.2026): dikey bir zemin
-  // kare bicime, yatay bir zemin hikayeye konunca buyuk kismi kirpiliyordu.
-  // "Sade" her bicimde (bkz. lib/background-categories.ts `fitsOrientation`).
-  // Bicim degisince secili zemin uymuyorsa ilk uyan zemine geciliyor.
-  const orientation = formatOrientation(format);
-  const fittingBackgrounds = useMemo(
-    () => backgrounds.filter((background) => fitsOrientation(background.id, orientation)),
-    [backgrounds, orientation],
-  );
-  const selectedBackground: Background =
-    fittingBackgrounds.find((background) => background.id === selectedBackgroundId) ??
-    fittingBackgrounds[0] ??
-    backgrounds[0];
-
-  /**
-   * Zeminler kategorilere ayriliyor (one alinan is, 17.09.2026): 90'dan fazla
-   * zemin tek izgarada karisiyordu. Bos kategori sekmesi gosterilmiyor;
-   * yalnizca bir kategori doluysa (ornegin sunucu zemini yokken) sekme hic yok.
-   */
-  const backgroundGroups = useMemo(
-    () =>
-      BACKGROUND_CATEGORIES.map((category) => ({
-        ...category,
-        items: fittingBackgrounds.filter(
-          (background) => backgroundCategory(background.id) === category.id,
-        ),
-      })).filter((group) => group.items.length > 0),
-    [fittingBackgrounds],
-  );
-  const shownGroup =
-    backgroundGroups.find(
-      (group) => group.id === (activeCategory ?? backgroundCategory(selectedBackground.id)),
-    ) ?? backgroundGroups[0];
-
-  const selectBackground = useCallback((id: string) => {
-    setSelectedBackgroundId(id);
-    setActiveCategory(null);
-  }, []);
+  // Zemin secimi, bicime gore filtreleme ve kategori sekmeleri tek yerde
+  // (bkz. use-background-selection.ts).
+  const {
+    selected: selectedBackground,
+    shownGroup,
+    groups: backgroundGroups,
+    fitting: fittingBackgrounds,
+    select: selectBackground,
+    showCategory,
+  } = useBackgroundSelection(backgrounds, format);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -427,10 +327,9 @@ export function CompositionEditor({
     // Pazaryeri "tek tikla": bicimle birlikte duz beyaz zemin seciliyor.
     // Kullanici sonra baska zemin secebilir; o zaman uyari gosteriliyor.
     if (name === "marketplace") {
-      setSelectedBackgroundId(MARKETPLACE_BACKGROUND_ID);
-      setActiveCategory(null);
+      selectBackground(MARKETPLACE_BACKGROUND_ID);
     }
-  }, []);
+  }, [selectBackground]);
 
   const setScaleRatio = useCallback(
     (ratio: number) => {
@@ -598,53 +497,6 @@ export function CompositionEditor({
     );
   }, [renderStage, fileName, format]);
 
-  const handleLogoFile = useCallback(async (file: File) => {
-    const problem = logoFileProblem(file);
-    if (problem) {
-      setLogoMessage(problem);
-      return;
-    }
-    try {
-      const dataUrl = await prepareLogo(file);
-      setLogoUrl(dataUrl);
-      setLogoMessage(
-        storeLogo(dataUrl, logo)
-          ? null
-          : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
-      );
-    } catch {
-      setLogoMessage("Logo okunamadı. Başka bir dosya deneyin.");
-    }
-  }, [logo]);
-
-  const removeLogo = useCallback(() => {
-    setLogoUrl(null);
-    setLogo(DEFAULT_LOGO);
-    clearStoredLogo();
-    setLogoMessage(null);
-  }, []);
-
-  /** Beyaz logo siyah, siyah logo beyaz olur; tekrar basmak geri alir. */
-  const invertCurrentLogo = useCallback(async () => {
-    if (!logoUrl) return;
-    try {
-      const inverted = await invertLogo(logoUrl);
-      setLogoUrl(inverted);
-      setLogoMessage(
-        storeLogo(inverted, logo) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
-      );
-    } catch {
-      setLogoMessage("Logonun renkleri çevrilemedi.");
-    }
-  }, [logoUrl, logo]);
-
-  const updateLogo = useCallback((patch: Partial<LogoSettings>) => {
-    setLogo((current) => {
-      const next = { ...current, ...patch };
-      storeLogoSettings(next);
-      return next;
-    });
-  }, []);
 
   /**
    * Baskiya uygun (CMYK) indirme.
@@ -860,7 +712,7 @@ export function CompositionEditor({
                     type="button"
                     role="tab"
                     aria-selected={isShown}
-                    onClick={() => setActiveCategory(group.id)}
+                    onClick={() => showCategory(group.id)}
                     className={
                       "press min-h-8 shrink-0 rounded-full px-3 text-[0.75rem] whitespace-nowrap transition-colors " +
                       (isShown
@@ -940,9 +792,26 @@ export function CompositionEditor({
             yokken "iste zeminleriniz" demek yanlis olurdu.
           */}
           {!isLoading && !hasServerBackground ? (
-            <p className="fine-print mt-3 opacity-60">
-              Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
-            </p>
+            isUnavailable ? (
+              // "Hazirlaniyor" ile "yuklenemedi" ayri sebepler: kutuphane
+              // doluyken ariza yasandiginda ilk mesaj kullaniciyi YANLIS
+              // bilgilendiriyordu (PR #18 incelemesi). Burada ayrica tekrar
+              // deneme secenegi var — tek alternatif sayfayi yenilemekti.
+              <p role="status" className="fine-print mt-3 text-amber-800">
+                Zemin kütüphanesi şu an yüklenemedi; şimdilik sade zeminler.{" "}
+                <button
+                  type="button"
+                  onClick={retryBackgrounds}
+                  className="press font-medium underline underline-offset-2"
+                >
+                  Tekrar dene
+                </button>
+              </p>
+            ) : (
+              <p className="fine-print mt-3 opacity-60">
+                Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
+              </p>
+            )
           ) : null}
 
           {formatName === "marketplace" &&

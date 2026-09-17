@@ -293,9 +293,16 @@ Zemin yönetim paneli Faz 6'da; ilk kütüphane (93 zemin) o panel olmadan
 - **Ne yapar:** her görseli yönetici yükleme ucuyla aynı `validate_upload`
   kontrollerinden geçirir, aynı çözünürlükte JPEG %92'ye çevirir (93 zemin 225 MB → 75 MB),
   ~480 px önizleme üretir, önce R2'ye (`backgrounds/<id>.jpg` ve
-  `backgrounds/thumbs/<id>.jpg`) sonra `backgrounds` tablosuna yazar. Satır yazılamazsa
-  yüklenen nesneleri geri siler. Manifestteki dosyayı tekrar yüklemez; yarıda kalırsa aynı
-  komut güvenle yeniden çalıştırılır.
+  `backgrounds/thumbs/<id>.jpg`) sonra `backgrounds` tablosuna yazar. Yükleme ya da satır
+  yazma yarıda kalırsa o ana kadar yüklenen nesneleri geri siler (önizleme yüklemesi
+  patladığında ana görselin yetim kalması PR #18 incelemesinde bulundu).
+  Manifestteki dosyayı tekrar yüklemez.
+- **Yeniden çalıştırma güvenliği manifestten DEĞİL, kimlikten gelir:** zemin kimliği
+  kaynak dosya adından türetiliyor (UUIDv5, `background_id_for`). Manifest ile DB
+  commit'i arasında süreç ölse bile yeniden çalıştırma aynı kimliği ve aynı R2
+  anahtarını üretir; nesneler üzerine yazılır, var olan satır tekrar eklenmez. Rastgele
+  UUID ile bu pencerede kalan bir çökme aynı görsel için ikinci bir kayıt ve ikinci bir
+  nesne çifti üretiyordu (`tests/test_upload_backgrounds_script.py`).
 - **Veritabanı yapısı değişmez:** kategori ve baskı uyarısı `--catalog-out` ile
   `frontend/src/lib/background-catalog.ts`'e yazılır.
 - **Güvenlik kilidi:** gerçek yükleme `--yes` olmadan çalışmaz; önce `--dry-run` hiçbir şey
@@ -347,7 +354,7 @@ sunucu/instance seçin.
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
 | `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
 | `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
-| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır |
+| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri fail-closed, zemin listeleme fail-open (bkz. `app/services/billing/limits.py`) |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |

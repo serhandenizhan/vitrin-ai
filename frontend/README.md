@@ -254,7 +254,18 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**270 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026). Faz 2-3 dosyaları:
+**280 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı).
+
+**Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
+renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
+artık `lib/use-logo.ts` kullanıyor (`useLogo` durum, `useLogoBox` kataloğun
+oransal kutusu). Stüdyodan ayrıca sahne ölçüsü
+(`components/composer/use-stage-size.ts`), zemin seçimi/kategori sekmeleri
+(`use-background-selection.ts`) ve görsel yükleme (`use-loaded-image.ts`) ayrı
+modüllere çıkarıldı — `composition-editor.tsx` 1667 → 1536,
+`catalog-editor.tsx` 1015 → 935 satır. JSX'e ve tasarım diline dokunulmadı.
+
+Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |

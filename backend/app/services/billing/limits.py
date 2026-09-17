@@ -1,10 +1,29 @@
-"""Checkout oluşturma ve herkese açık ödeme yüzeyleri için dağıtık hız sınırı."""
+"""Checkout oluşturma ve herkese açık ödeme yüzeyleri için dağıtık hız sınırı.
+
+FAIL-OPEN / FAIL-CLOSED AYRIMI (PR #18 incelemesi): Redis'e ulaşılamadığında
+sayaç sorulamıyor ve o anda iki kötü seçenek var — sınırı kaldırmak ya da uç
+noktayı kapatmak. Karar uç noktanın NE KORUDUĞUNA göre veriliyor:
+
+* `limit_checkout` / `limit_public` (para, sağlayıcı geri dönüşleri, webhook)
+  **fail-closed** kalır: buradaki sınırın sessizce kalkması, Redis arızasında
+  sınırsız checkout/webhook denemesi demek olurdu.
+* `limit_scoped` (yalnızca zemin listeleme) **fail-open**: burada korunan şey
+  yalnızca okuma trafiği, kaybedilen şey ise ürünün çekirdek özelliği. Aksi
+  hâlde Redis arızası 500'e, Next vekilinde "200 + boş liste"ye ve kullanıcının
+  gözünde 93 zeminlik kütüphanenin yok olmasına dönüşüyordu. Kök `CLAUDE.md`'nin
+  erişim kuralı 1 ile aynı mantık: listeleme bir kapı değil.
+"""
+
+import logging
 
 from fastapi import Depends, Request
+from redis.exceptions import RedisError
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.services.rate_limit import RequestRateLimiter
 from app.services.billing.errors import billing_error
+
+logger = logging.getLogger(__name__)
 
 checkout_limiter = RequestRateLimiter(10, 60, redis_url=settings.redis_url)
 public_limiter = RequestRateLimiter(600, 60, redis_url=settings.redis_url)
@@ -66,7 +85,15 @@ async def limit_scoped(request: Request, name: str, user_id=None):
     (doğrulanmamış bir başlıkla kova seçilemez).
     """
     scope = f"user:{user_id}" if user_id else f"ip:{client_ip(request)}"
-    retry = await public_limiter.retry_after(f"billing:{name}:{scope}")
+    try:
+        retry = await public_limiter.retry_after(f"billing:{name}:{scope}")
+    except RedisError:
+        # FAIL-OPEN, bilinçli — gerekçe modül docstring'inde. Sessiz değil:
+        # log'a yazılıyor ki "sınır neden uygulanmadı" sorusu cevaplanabilsin.
+        logger.warning(
+            "Hız sınırı sorulamadı (Redis), istek sınırsız geçiyor: %s/%s", name, scope
+        )
+        return
     if retry:
         raise billing_error(
             "rate_limited", "Çok fazla istek. Biraz bekleyin.", 429, retry

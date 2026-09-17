@@ -52,23 +52,9 @@ import {
   type TemplateName,
 } from "@/lib/catalog-templates";
 import { validateFile } from "@/lib/upload-constraints";
-import { invertLogo, prepareLogo } from "@/lib/logo-image";
 import { clearCatalogImport, peekCatalogImport } from "@/lib/catalog-handoff";
-import {
-  clearStoredLogo,
-  loadStoredLogo,
-  loadStoredLogoSettings,
-  storeLogo,
-  storeLogoSettings,
-} from "@/lib/logo-storage";
-import {
-  CORNERS,
-  DEFAULT_LOGO,
-  type LogoSettings,
-  logoBox,
-  logoFileProblem,
-  logoSettingsFromBox,
-} from "@/lib/overlays";
+import { CORNERS, logoSettingsFromBox } from "@/lib/overlays";
+import { useLogo, useLogoBox } from "@/lib/use-logo";
 import { downloadCmyk, type PrintFormat } from "@/lib/print-download";
 
 /**
@@ -147,84 +133,23 @@ export function CatalogEditor() {
   const [printMessage, setPrintMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Logo studyoyla AYNI yerde saklaniyor (lib/logo-storage.ts): studyoda
-  // yuklenen logo katalogda da hazir geliyor.
-  const [logoUrl, setLogoUrl] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : loadStoredLogo(),
-  );
-  const [logoSettings, setLogoSettings] = useState<LogoSettings>(() =>
-    typeof window === "undefined" ? DEFAULT_LOGO : loadStoredLogoSettings(),
-  );
-  const [logoSize, setLogoSize] = useState<{ url: string; width: number; height: number } | null>(null);
-  const [logoMessage, setLogoMessage] = useState<string | null>(null);
+  // yuklenen logo katalogda da hazir geliyor. Akisin kendisi de paylasiliyor
+  // (lib/use-logo.ts); burada kalan tek sey KATALOGA OZEL yerlesim hesabi.
+  const {
+    logoUrl,
+    settings: logoSettings,
+    message: logoMessage,
+    handleFile: handleLogoFile,
+    invert: invertCurrentLogo,
+    update: updateLogo,
+    remove: removeLogo,
+  } = useLogo();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Logonun dogal olculeri kutu hesabi icin gerekli; olcu, geldigi URL'le
-  // birlikte tutuluyor ki logo degisince eskisinin olcusu kullanilmasin.
-  useEffect(() => {
-    if (!logoUrl) return;
-    const image = new window.Image();
-    image.onload = () => setLogoSize({ url: logoUrl, width: image.width, height: image.height });
-    image.src = logoUrl;
-  }, [logoUrl]);
+  const logoPreview = useLogoBox(logoUrl, logoSettings, CATALOG_WIDTH, CATALOG_HEIGHT);
 
-  const logoPreview = useMemo(() => {
-    if (!logoUrl || logoSize?.url !== logoUrl) return null;
-    const box = logoBox(logoSize.width, logoSize.height, logoSettings, CATALOG_WIDTH, CATALOG_HEIGHT);
-    return {
-      url: logoUrl,
-      opacity: logoSettings.opacity,
-      box: {
-        x: box.x / CATALOG_WIDTH,
-        y: box.y / CATALOG_HEIGHT,
-        width: box.width / CATALOG_WIDTH,
-        height: box.height / CATALOG_HEIGHT,
-      },
-    };
-  }, [logoUrl, logoSize, logoSettings]);
-
-  const handleLogoFile = useCallback(
-    async (file: File) => {
-      const problem = logoFileProblem(file);
-      if (problem) {
-        setLogoMessage(problem);
-        return;
-      }
-      try {
-        const dataUrl = await prepareLogo(file);
-        setLogoUrl(dataUrl);
-        setLogoMessage(
-          storeLogo(dataUrl, logoSettings) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
-        );
-      } catch {
-        setLogoMessage("Logo okunamadı. Başka bir dosya deneyin.");
-      }
-    },
-    [logoSettings],
-  );
-
-  const updateLogo = useCallback((patch: Partial<LogoSettings>) => {
-    setLogoSettings((current) => {
-      const next = { ...current, ...patch };
-      storeLogoSettings(next);
-      return next;
-    });
-  }, []);
-
-  /** Beyaz logo siyah, siyah logo beyaz olur; tekrar basmak geri alir. */
-  const invertCurrentLogo = useCallback(async () => {
-    if (!logoUrl) return;
-    try {
-      const inverted = await invertLogo(logoUrl);
-      setLogoUrl(inverted);
-      setLogoMessage(
-        storeLogo(inverted, logoSettings) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
-      );
-    } catch {
-      setLogoMessage("Logonun renkleri çevrilemedi.");
-    }
-  }, [logoUrl, logoSettings]);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor.
   const objectUrlRef = useRef<string[]>([]);
@@ -828,12 +753,7 @@ export function CatalogEditor() {
                 variant="outline"
                 size="sm"
                 aria-label="Logoyu kaldır"
-                onClick={() => {
-                  setLogoUrl(null);
-                  setLogoSettings(DEFAULT_LOGO);
-                  clearStoredLogo();
-                  setLogoMessage(null);
-                }}
+                onClick={removeLogo}
                 className="press rounded-full bg-white"
               >
                 <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />

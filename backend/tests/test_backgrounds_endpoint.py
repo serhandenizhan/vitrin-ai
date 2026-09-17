@@ -2,18 +2,22 @@ import io
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 import pytest_asyncio
 from botocore.exceptions import ClientError
+from redis.exceptions import ConnectionError as RedisConnectionError
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select
 
 from app.api.routes.backgrounds import get_storage_service
+from app.core.auth import CurrentUser
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.main import app
 from app.models.background import Background
 from app.services import storage as storage_module
+from app.services.billing import limits
 
 
 def _jpeg_bytes() -> bytes:
@@ -306,3 +310,108 @@ async def test_list_backgrounds_expires_in_follows_settings(db_session, monkeypa
 
     assert response.status_code == 200
     assert response.json()[0]["expires_in"] == 120
+
+
+async def test_thumbnail_upload_failure_deletes_the_already_uploaded_original(
+    db_session, admin_headers
+):
+    # Kritik ayrım: yukarıdaki test HER yüklemeyi başarısız kılıyor, yani
+    # "ilk yükleme patladı" yolunu sınıyor. İKİNCİ yükleme (küçük önizleme)
+    # patladığında ise ana görsel R2'ye ÇOKTAN yazılmış olur ve DB satırı hiç
+    # yazılmadığı için anahtarını bilen hiçbir kayıt kalmaz — nesne erişilemez
+    # biçimde yer tutmaya devam eder (PR #18 incelemesinde bucket'ta gerçek bir
+    # örneği bulundu). Bu yüzden hata yolunda yüklenenler geri silinmeli.
+    storage_mock = AsyncMock()
+    storage_mock.upload.side_effect = [
+        None,
+        ClientError(
+            {"Error": {"Code": "InternalError", "Message": "boom"}}, "PutObject"
+        ),
+    ]
+    client = _client(db_session, storage_mock)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 502
+    uploaded_key = storage_mock.upload.call_args_list[0].args[0]
+    storage_mock.delete.assert_awaited_once_with(uploaded_key)
+
+    result = await db_session.execute(select(Background))
+    assert result.scalars().all() == []
+
+
+async def test_database_failure_deletes_both_uploaded_objects(db_session, admin_headers):
+    # Yüklemelerin ikisi de başarılı ama DB satırı yazılamıyorsa iki nesne de
+    # yetim kalır. R2'ye "önce yükle, sonra satır yaz" sırası yetim DB kaydını
+    # engelliyor; bu temizlik de ters yöndeki yetimi engelliyor.
+    storage_mock = AsyncMock()
+    # Gerçek session yerine tamamen sahte bir session veriliyor: `_client`'ın
+    # teardown'daki `commit()` çağrısı da bu sahteye gittiği için gerçek
+    # fixture'ın bağlantısı hiç bozulmuyor (aksi hâlde teardown başka bir
+    # event loop'ta patlıyor).
+    failing_session = MagicMock()
+    failing_session.add = MagicMock()
+    failing_session.commit = AsyncMock(side_effect=RuntimeError("db down"))
+    client = _client(failing_session, storage_mock, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 500
+    deleted = {call.args[0] for call in storage_mock.delete.await_args_list}
+    uploaded = {call.args[0] for call in storage_mock.upload.await_args_list}
+    assert deleted == uploaded
+
+    result = await db_session.execute(select(Background))
+    assert result.scalars().all() == []
+
+
+async def test_list_backgrounds_survives_a_redis_outage(db_session, monkeypatch):
+    # Hız sınırı Redis'te tutuluyor. Redis'e ulaşılamadığında sayaç
+    # sorulamıyor; eskiden bu hata yukarı sızıp 500 oluyordu ve Next vekili
+    # bütün 5xx'leri "200 + boş liste"ye çevirdiği için 93 zeminlik kütüphane
+    # kullanıcının gözünde YOK OLUYORDU. Sınırlayıcının altyapı arızası, ürünün
+    # çekirdek özelliğini kapatmak için bir sebep değil: kota kararları bile
+    # listeyi boşaltmıyor (kök CLAUDE.md, erişim kuralı 1).
+    active = Background(id=uuid.uuid4(), r2_key="backgrounds/aktif.jpg", is_active=True)
+    db_session.add(active)
+    await db_session.commit()
+
+    async def _redis_down(_key: str):
+        raise RedisConnectionError("Redis kapalı")
+
+    monkeypatch.setattr(limits.public_limiter, "retry_after", _redis_down)
+
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(return_value="https://r2.example/aktif")
+    client = _client(db_session, storage_mock)
+
+    response = client.get("/api/backgrounds")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [str(active.id)]
+
+
+async def test_checkout_rate_limit_stays_fail_closed_on_a_redis_outage():
+    # Karşı taraf bilinçli olarak AKSİ yönde: parayla ilgili yüzeyde sınırın
+    # sessizce kalkması, Redis arızasında sınırsız checkout denemesi demek
+    # olurdu. Bu yüzden `limit_checkout` fail-CLOSED kalıyor; ayrım
+    # `limits.py`'de yazılı ve bu test o ayrımın korunduğunu kanıtlıyor.
+    async def _redis_down(_key: str):
+        raise RedisConnectionError("Redis kapalı")
+
+    original = limits.checkout_limiter.retry_after
+    limits.checkout_limiter.retry_after = _redis_down
+    try:
+        user = CurrentUser(id=uuid.uuid4(), email="kuyumcu@example.com", session_id=None)
+        with pytest.raises(RedisConnectionError):
+            await limits.limit_checkout(user)
+    finally:
+        limits.checkout_limiter.retry_after = original

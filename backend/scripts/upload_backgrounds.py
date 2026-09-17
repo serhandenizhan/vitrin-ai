@@ -9,9 +9,17 @@ NE YAPAR (her görsel için, sırayla):
   2. Aynı çözünürlükte JPEG %92 olarak yeniden kaydeder ve tekrar doğrular.
   3. Küçük önizleme üretir (`backgrounds/thumbs/<id>.jpg`).
   4. Önce R2'ye yükler, ancak başarılıysa `backgrounds` tablosuna satır yazar
-     (yükleme ucuyla aynı sıra). Veritabanı yazılamazsa R2 nesneleri geri silinir.
-  5. Manifeste yazar. Manifestte olan dosya tekrar yüklenmez (yarıda kalırsa
-     aynı komut güvenle yeniden çalıştırılabilir).
+     (yükleme ucuyla aynı sıra). Yükleme ya da veritabanı yazma yarıda
+     kalırsa o ana kadar yüklenen R2 nesneleri geri silinir.
+  5. Manifeste yazar. Manifestte olan dosya tekrar yüklenmez.
+
+YARIDA KALIRSA: aynı komut güvenle yeniden çalıştırılabilir. Bu garanti
+manifestten DEĞİL, zemin kimliğinin kaynak dosya adından TÜRETİLMESİNDEN
+geliyor (`background_id`, UUIDv5). Manifest ile veritabanı commit'i arasında
+süreç ölse bile yeniden çalıştırma aynı kimliği, aynı R2 anahtarını üretir:
+nesneler üzerine yazılır ve var olan satır tekrar eklenmez. Rastgele UUID ile
+bu pencerede kalan bir çökme, aynı görsel için İKİNCİ bir kayıt ve ikinci bir
+R2 nesne çifti üretiyordu (PR #18 incelemesi).
 
 VERİTABANI YAPISI DEĞİŞMEZ: kategori ve baskı uyarısı tabloya değil,
 `frontend/src/lib/background-catalog.ts` dosyasına yazılır (Kaan'ın kararı).
@@ -63,6 +71,20 @@ CONTENT_TYPES = {
     ".webp": "image/webp",
 }
 CATEGORIES = ("sade", "doku", "dogal", "luks")
+
+# Zemin kimliği kaynak dosya adından TÜRETİLİYOR (UUIDv5): betik yeniden
+# çalıştırıldığında aynı dosya aynı kimliği ve aynı R2 anahtarını alır, yani
+# yükleme idempotent olur. Namespace sabiti bu betiğe özel ve DEĞİŞMEZ —
+# değişirse var olan kütüphanenin kimlikleri de değişir, kataloğu kırar.
+# (Kimlik hâlâ sunucuda üretiliyor; kullanıcı dosya adı R2 anahtarına hiç
+# girmiyor — path traversal koruması sürüyor, bkz. SECURITY.md böl. 4.)
+BACKGROUND_ID_NAMESPACE = uuid.UUID("6f5f3a1e-4d0b-5c7a-9e21-8a3b4c5d6e7f")
+
+
+def background_id_for(file_name: str) -> uuid.UUID:
+    return uuid.uuid5(BACKGROUND_ID_NAMESPACE, file_name)
+
+
 CATALOG_HEADER = """/**
  * BU DOSYA BETIKLE URETILIR, ELLE DUZENLEMEYIN.
  *
@@ -139,18 +161,32 @@ async def upload(source: Path, plan: dict[str, dict], manifest_path: Path, *, dr
             print(f"uygun: {name} | {path.stat().st_size / 1e6:.2f} MB -> {len(encoded) / 1e6:.2f} MB, önizleme {len(thumbnail) / 1e3:.0f} KB")
             continue
 
-        background_id = uuid.uuid4()
+        background_id = background_id_for(name)
         key = f"backgrounds/{background_id}.jpg"
-        await storage.upload(key, encoded, "image/jpeg")
-        await storage.upload(thumbnail_key(key), thumbnail, "image/jpeg")
+        # Kimlik deterministik olduğu için satır, manifest yazılmadan ölmüş bir
+        # önceki çalıştırmadan KALMIŞ olabilir. Bu YÜKLEMEDEN ÖNCE sorulmalı:
+        # aşağıdaki temizlik, var olan bir zeminin nesnelerini silip onu
+        # kırmasın (satır kalır, gösterdiği nesne gider).
+        async with sessions() as session:
+            row_existed = await session.get(Background, background_id) is not None
+
+        # Başarıyla yüklenen anahtarlar tek tek toplanıyor: İKİNCİ yükleme
+        # (küçük önizleme) patladığında ilki R2'de kalırdı ve DB satırı hiç
+        # yazılmadığı için ona bir daha kimse ulaşamazdı (yetim nesne).
+        uploaded: list[str] = []
         try:
-            async with sessions() as session:
-                session.add(Background(id=background_id, r2_key=key, tier="basic"))
-                await session.commit()
+            await storage.upload(key, encoded, "image/jpeg")
+            uploaded.append(key)
+            await storage.upload(thumbnail_key(key), thumbnail, "image/jpeg")
+            uploaded.append(thumbnail_key(key))
+            if not row_existed:
+                async with sessions() as session:
+                    session.add(Background(id=background_id, r2_key=key, tier="basic"))
+                    await session.commit()
         except Exception:
-            # Yetim nesne kalmasın: satır yazılamadıysa yüklenenler geri alınıyor.
-            await storage.delete(key)
-            await storage.delete(thumbnail_key(key))
+            if not row_existed:
+                for uploaded_key in uploaded:
+                    await storage.delete(uploaded_key)
             raise
 
         entry = plan[name]

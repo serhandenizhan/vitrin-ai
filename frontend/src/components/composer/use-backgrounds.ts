@@ -23,11 +23,20 @@ export type BackgroundState = {
   backgrounds: Background[];
   /** Sunucudan gercek zemin geldi mi — arayuzde bilgilendirme icin. */
   hasServerBackground: boolean;
+  /**
+   * Liste bos ve sebebi kutuphanenin hazir olmamasi DEGIL, ulasilamamak.
+   * "Hazirlaniyor" ile "yuklenemedi" ayri mesajlar gerektiriyor; ikincisinde
+   * tekrar deneme secenegi de sunuluyor (bkz. lib/backgrounds.ts).
+   */
+  isUnavailable: boolean;
   isLoading: boolean;
+  /** Kullanicinin "tekrar dene" diyebilmesi icin. */
+  retry: () => void;
 };
 
 export function useBackgrounds(): BackgroundState {
   const [serverBackgrounds, setServerBackgrounds] = useState<ServerBackground[]>([]);
+  const [isUnavailable, setIsUnavailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Zamanlayici id'si ref'te: her yenilemede yenisi kuruluyor, eskisi
@@ -37,9 +46,15 @@ export function useBackgrounds(): BackgroundState {
   const isMountedRef = useRef(true);
 
   const refresh = useCallback(async () => {
-    const fetched = await fetchBackgrounds();
+    const { backgrounds: fetched, unavailable } = await fetchBackgrounds();
     if (!isMountedRef.current) return;
-    setServerBackgrounds(fetched);
+    // Bos ve ulasilamaz bir yanit, ELDEKI listeyi silmiyor: gecici bir arizada
+    // kullanicinin altindan zeminleri cekmek, hem secili zemini kaybettirir
+    // hem de hicbir sey kazandirmaz.
+    setServerBackgrounds((current) =>
+      fetched.length > 0 || !unavailable ? fetched : current,
+    );
+    setIsUnavailable(unavailable);
     setIsLoading(false);
   }, []);
 
@@ -87,9 +102,16 @@ export function useBackgrounds(): BackgroundState {
     [serverBackgrounds],
   );
 
+  const retry = useCallback(() => {
+    setIsLoading(true);
+    void refresh();
+  }, [refresh]);
+
   return {
     backgrounds: backgrounds.length > 0 ? backgrounds : PLACEHOLDER_BACKGROUNDS,
     hasServerBackground: serverBackgrounds.length > 0,
+    isUnavailable: isUnavailable && serverBackgrounds.length === 0,
     isLoading,
+    retry,
   };
 }

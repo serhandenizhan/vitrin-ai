@@ -105,7 +105,7 @@ describe("fetchBackgrounds", () => {
         createResponse([{ id: "a", url: "https://x/a", expiresIn: 900 }]),
       );
 
-    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const { backgrounds } = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(backgrounds).toHaveLength(1);
     expect(backgrounds[0].id).toBe("a");
@@ -120,7 +120,7 @@ describe("fetchBackgrounds", () => {
       ]),
     );
 
-    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const { backgrounds } = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(backgrounds[0].thumbnailUrl).toBe("https://x/thumbs/a");
     expect(backgrounds[1]).not.toHaveProperty("thumbnailUrl");
@@ -133,27 +133,55 @@ describe("fetchBackgrounds", () => {
       .fn()
       .mockResolvedValue(createResponse([{ id: "a", url: "https://x/a" }]));
 
-    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const { backgrounds } = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(backgrounds[0].expiresInSeconds).toBeGreaterThan(0);
   });
 
-  it("ag hatasinda firlatmaz, bos liste doner", async () => {
+  it("ag hatasinda firlatmaz, bos liste doner ve ulasilamadi der", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("ag yok"));
 
     await expect(
       fetchBackgrounds(fetchMock as unknown as typeof fetch),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ backgrounds: [], unavailable: true });
   });
 
-  it("dizi disi govdede bos liste doner", async () => {
+  it("dizi disi govdede bos liste doner ve ulasilamadi der", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(createResponse({ error: "unexpected" }));
 
     await expect(
       fetchBackgrounds(fetchMock as unknown as typeof fetch),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ backgrounds: [], unavailable: true });
+  });
+
+  it("vekil 'unavailable' dediginde bunu ayirt eder", async () => {
+    // Vekil ariza durumunda 200 + bos liste donuyor; sebebi yalnizca bu
+    // baslikta soyluyor. Baslik okunmazsa 93 zeminlik kutuphane doluyken
+    // yasanan bir ariza "kutuphane hazirlaniyor" gibi gorunuyordu.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        headers: { "X-Backgrounds-Source": "unavailable" },
+      }),
+    );
+
+    await expect(
+      fetchBackgrounds(fetchMock as unknown as typeof fetch),
+    ).resolves.toEqual({ backgrounds: [], unavailable: true });
+  });
+
+  it("vekil gercek listeyi dondugunde ulasilamadi DEMEZ", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ id: "a", url: "https://x/a", expiresIn: 900 }]), {
+        headers: { "X-Backgrounds-Source": "backend" },
+      }),
+    );
+
+    const result = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+
+    expect(result.unavailable).toBe(false);
+    expect(result.backgrounds).toHaveLength(1);
   });
 
   it("bozuk kayitlari eler, saglamlari korur", async () => {
@@ -165,7 +193,7 @@ describe("fetchBackgrounds", () => {
       ]),
     );
 
-    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+    const { backgrounds } = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
 
     expect(backgrounds).toHaveLength(1);
     expect(backgrounds[0].id).toBe("good");

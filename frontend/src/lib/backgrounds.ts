@@ -137,25 +137,42 @@ type RawBackground = {
   expiresIn: number;
 };
 
+export type BackgroundFetchResult = {
+  backgrounds: ServerBackground[];
+  /**
+   * Liste BOS geldi ve sebebi "henuz zemin yok" DEGIL, ulasilamamak.
+   *
+   * Vekil bilincli olarak hic 5xx dondurmuyor (bkz. app/api/backgrounds/route.ts)
+   * ve arizada "200 + bos liste" veriyor. Bu tek basina iyi bir karar — editor
+   * tek bir yolu ele aliyor — ama ayirt edilmezse kutuphane 93 zeminle
+   * doluyken bile kullaniciya "zemin kutuphanesi haziralaniyor" yazan yanlis
+   * bir mesaj gosteriliyordu (PR #18 incelemesi). Vekil sebebi
+   * `X-Backgrounds-Source` basliginda soyluyor; burada okunuyor.
+   */
+  unavailable: boolean;
+};
+
 /**
  * Zeminleri vekilden ceker.
  *
- * Hicbir kosulda FIRLATMAZ. Vekil zaten backend'e ulasamadiginda bos liste
- * donuyor; burada ag hatasi/bozuk govde de ayni sekilde bos listeye dusuyor.
- * Cagiran taraf icin tek bir durum var: "gelen sunucu zemini sayisi".
+ * Hicbir kosulda FIRLATMAZ. Ag hatasi, bozuk govde ve vekilin "ulasilamadi"
+ * yaniti bos listeye dusuyor; ikincisi ayrica `unavailable` ile isaretleniyor.
  */
 export async function fetchBackgrounds(
   fetchFn: typeof fetch = fetch,
-): Promise<ServerBackground[]> {
+): Promise<BackgroundFetchResult> {
   try {
     const response = await fetchFn("/api/backgrounds", { cache: "no-store" });
-    if (!response.ok) return [];
+    if (!response.ok) return { backgrounds: [], unavailable: true };
+
+    const unavailable =
+      response.headers?.get("X-Backgrounds-Source") === "unavailable";
 
     const body: unknown = await response.json();
-    if (!Array.isArray(body)) return [];
+    if (!Array.isArray(body)) return { backgrounds: [], unavailable: true };
 
     const fetchedAt = Date.now();
-    return body
+    const backgrounds = body
       .filter(
         (record): record is RawBackground =>
           typeof record === "object" &&
@@ -175,8 +192,9 @@ export async function fetchBackgrounds(
             : 600,
         fetchedAt,
       }));
+    return { backgrounds, unavailable };
   } catch {
-    return [];
+    return { backgrounds: [], unavailable: true };
   }
 }
 

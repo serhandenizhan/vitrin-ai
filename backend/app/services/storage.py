@@ -1,9 +1,13 @@
+import logging
 from functools import lru_cache
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # Boş bırakılmış R2 ayarları boto3'ü hata vermeye ZORLAMAZ: `r2_account_id`
@@ -142,3 +146,20 @@ def get_storage_service() -> R2StorageService:
     # değiştiriyor. Tüm route'lar AYNI fonksiyonu kullanıyor ki tek bir
     # override hepsini kapsasın.
     return R2StorageService(bucket_name=settings.r2_bucket_name)
+
+
+async def delete_objects_quietly(storage: "R2StorageService", keys: list[str]) -> None:
+    """Verilen anahtarları siler; silme başarısız olursa HATA FIRLATMAZ.
+
+    İki yerde de aynı ihtiyaç var (proje silme, arka plan yüklemesinin hata
+    yolu) ve ikisinde de çağıran taraf ASIL sonucu zaten belirlemiş durumda:
+    silme hatasını yukarı taşımak, kullanıcıya gerçek sebebi gizleyen ikinci
+    bir hata üretirdi. Kalan nesne yetim (maliyet) ama erişilemez — anahtarını
+    bilen tek kayıt ya silinmiş ya hiç yazılmamış ve imzalı URL üretilemez.
+    Sessiz de değil: log'a yazılıyor.
+    """
+    for key in keys:
+        try:
+            await storage.delete(key)
+        except (BotoCoreError, ClientError, R2ConfigurationError):
+            logger.warning("R2 nesnesi silinemedi, yetim kaldı: %s", key)
