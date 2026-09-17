@@ -790,10 +790,21 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
   silinemezdi (testler bu hatayı yakaladı).
 - **Kullanıcı e-postaları Supabase'in yönetici API'sinden** okunuyor; `auth`
   şemasını doğrudan sorgulamama kararı (Faz 4) korundu.
-- **Açık madde:** GoTrue'nun `filter` (arama) parametresi canlı projeye karşı
-  doğrulanmadı — yerelde `SUPABASE_SECRET_KEY` yok. Dönen sayfa sunucuda bir
-  kez daha süzülüyor, yani sonuç eksik olabilir ama yanlış olamaz. Ders 19
-  gereği canlı doğrulama yapılıp not güncellenecek.
+- **Arama davranışı `supabase/auth` kaynağından doğrulandı (17.09.2026), iki
+  sürpriz çıktı.** Ders 19 "muhtemelen böyledir" demeyi yasakladığı için
+  varsayım yerine kaynak okundu:
+  1. GoTrue'nun `filter`'ı e-postada `ILIKE` değil **`LIKE`** kullanıyor, yani
+     büyük/küçük harfe duyarlı. E-postalar `strings.ToLower` ile saklandığı
+     için sorgu artık bizden küçük harfe çevrilerek gidiyor — yoksa "Musteri"
+     yazan yönetici hiçbir sonuç görmezdi.
+  2. `filter`'ın ad dalı `raw_user_meta_data->>'full_name'` alanına bakıyor;
+     bizim uygulamamız `first_name`/`last_name`/`business_name` yazıyor, yani
+     **ada göre arama fiilen yok**. Bilinçli karar: dönen sayfayı adlara göre
+     de süzmek EKLENMEDİ — aranan kişi başka sayfadaysa sessizce "sonuç yok"
+     derdi. Arama e-posta ve tam kullanıcı kimliğiyle sınırlı, arayüz etiketi
+     bunu söylemeli (Kaan).
+  Dönen sayfa yine de sunucuda süzülüyor: barındırılan `auth` sürümü daha eski
+  olup `filter`'ı yok sayarsa sonuç eksik olabilir ama yanlış olamaz.
 - Testler: 25 yeni backend testi (toplam 324). `0006 uygulanmış DB → 0007`
   yolu ayrıca doğrulandı; kredi iadesinin doğru kovaya gittiğini sınayan test
   eski (bozuk) davranışa karşı çalıştırılıp kırmızı yandığı görüldü.

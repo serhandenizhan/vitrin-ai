@@ -207,6 +207,38 @@ async def test_grant_columns_are_immutable_except_usage_and_revocation(
     await db_session.commit()
 
 
+async def test_an_admin_who_granted_credits_can_still_be_deleted(
+    db_session, create_user
+):
+    """`granted_by` FK'si `ON DELETE SET NULL`; değişmezlik kuralı buna izin
+    vermeliydi, vermeyince kredi vermiş bir yöneticinin hesabı HİÇ
+    silinemiyordu. Bu daha önce yalnızca test temizliğinde dolaylı olarak
+    görünüyordu — yani hata, testlerin BAKTIĞI yerin dışındaydı (ders 15)."""
+    admin_id = await create_user()
+    user_id = await create_user()
+    grant = await one(
+        db_session,
+        """INSERT INTO credit_grants(user_id,amount,reason,granted_by,idempotency_key)
+        VALUES(:uid,3,'jest',:actor,:key) RETURNING id""",
+        uid=user_id,
+        actor=admin_id,
+        key=str(uuid.uuid4()),
+    )
+    await db_session.commit()
+
+    await execute(db_session, "DELETE FROM auth.users WHERE id=:id", id=admin_id)
+    await db_session.commit()
+
+    # Kredi kaydı duruyor, yalnız kimlik koptu; kimin verdiği kalıcı olarak
+    # denetim günlüğünde (FK'siz `actor_id`) saklanıyor.
+    row = await one(
+        db_session,
+        "SELECT granted_by,amount,used FROM credit_grants WHERE id=:id",
+        id=grant["id"],
+    )
+    assert row["granted_by"] is None and row["amount"] == 3
+
+
 async def test_admin_audit_log_is_append_only(db_session, create_user):
     actor = await create_user()
     await execute(

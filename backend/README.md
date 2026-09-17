@@ -532,9 +532,22 @@ cevaplayamaz.
 uçlar `limit_admin` ile **fail-closed** (kredi verme ve hesap silme para/erişim
 yüzeyidir).
 
-**Açık madde — kullanıcı aramasının canlı doğrulaması.** `list_users`,
-GoTrue'nun `filter` parametresini gönderiyor ama bu parametre projeye karşı
-CANLI DENENMEDİ (yerelde `SUPABASE_SECRET_KEY` yok). Dönen sayfa bu yüzden
-sunucuda bir kez daha e-posta üzerinden süzülüyor: `filter` desteklenmiyorsa
-sonuç eksik olabilir, ama asla yanlış olmaz. Canlı doğrulama yapıldığında
-`app/services/supabase_admin.py`'deki not sonucuyla güncellenmeli.
+**Kullanıcı araması e-posta (ya da tam kullanıcı kimliği) aramasıdır.**
+Davranış `supabase/auth` kaynağından doğrulandı (17.09.2026,
+`internal/api/admin.go` → `internal/models/user.go` → `internal/api/mail.go`):
+
+- `filter` şu koşula çevriliyor:
+  `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
+  E-posta tarafı `ILIKE` **değil** `LIKE`, yani büyük/küçük harfe duyarlı.
+  GoTrue e-postaları `strings.ToLower` ile sakladığı için sorgu bizden küçük
+  harfe çevrilerek gidiyor — yoksa "Musteri" yazan yönetici hiçbir sonuç
+  görmezdi.
+- **`full_name` dalı bizde hiç çalışmaz:** uygulama profili `first_name` /
+  `last_name` / `business_name` anahtarlarıyla yazıyor
+  (`frontend/src/lib/profile.ts`); `full_name` diye bir alanımız yok. **Ada
+  göre arama desteklenmiyor** ve admin arayüzündeki alan etiketi bunu
+  söylemeli — "sayfada bulunanı da ara" gibi bir yama, aranan kişi başka
+  sayfadaysa sessizce "sonuç yok" derdi.
+- Barındırılan projenin `auth` sürümü bu kaynaktan eski olabileceği için dönen
+  sayfa sunucuda bir kez daha süzülüyor: sürüm `filter`'ı yok sayarsa sonuç
+  eksik olabilir ama asla yanlış olmaz. İki yön de test edilmiş durumda.

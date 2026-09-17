@@ -95,19 +95,32 @@ class SupabaseAdminService:
 
         `auth.users` DOĞRUDAN SORGULANMIYOR — gerekçe modül açıklamasında.
 
-        ARAMA HAKKINDA BİR UYARI: GoTrue'nun `filter` parametresi bu projeye
-        karşı CANLI DOĞRULANMADI (yerelde `SUPABASE_SECRET_KEY` yok). Bu yüzden
-        dönen sayfa burada bir kez daha e-posta üzerinden süzülüyor: `filter`
-        desteklenmiyorsa sonuç EKSİK olabilir ama asla YANLIŞ olmaz — arama
-        kutusuna yazılanla eşleşmeyen bir kullanıcı listeye giremez. Canlı
-        doğrulama yapıldığında bu yorum, sonucuyla birlikte güncellenmeli
-        (kök `CLAUDE.md` ders 19).
+        ARAMA — davranış `supabase/auth` kaynağından doğrulandı (17.09.2026,
+        `internal/api/admin.go` + `internal/models/user.go`). Üç somut sonuç ve
+        her birinin buradaki karşılığı:
+
+        1. `filter` şu koşula çevriliyor:
+           `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
+           E-posta tarafı `ILIKE` DEĞİL `LIKE`, yani **büyük/küçük harfe
+           duyarlı**. GoTrue e-postaları `strings.ToLower` ile saklıyor
+           (`internal/api/mail.go`, `validateEmail`), bu yüzden sorgu buradan
+           küçük harfe çevrilerek gönderiliyor — aksi hâlde "Musteri" yazan
+           yönetici hiçbir sonuç görmezdi.
+        2. `full_name` dalı BİZDE hiç çalışmıyor: uygulama profili
+           `first_name` / `last_name` / `business_name` anahtarlarıyla yazıyor
+           (`frontend/src/lib/profile.ts`), `full_name` diye bir alan yok.
+           Yani arama fiilen **e-posta (ya da tam kullanıcı kimliği)** aramasıdır
+           ve arayüzdeki etiket bunu söylemeli.
+        3. Barındırılan projenin `auth` sürümü bu kaynaktan eski olabilir. Bu
+           yüzden dönen sayfa burada bir kez daha süzülüyor: sürüm `filter`'ı
+           yok sayarsa sonuç EKSİK olabilir ama asla YANLIŞ olmaz — arama
+           kutusuna yazılanla eşleşmeyen bir kullanıcı listeye giremez.
         """
         self.ensure_configured()
         url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users"
         params: dict[str, str | int] = {"page": page, "per_page": per_page}
         if query:
-            params["filter"] = query
+            params["filter"] = query.strip().casefold()
         try:
             async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
                 response = await client.get(url, headers=self._headers(), params=params)
