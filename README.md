@@ -1,5 +1,3 @@
-<img src="docs/brand/vitrin-ai-mark.svg" alt="Vitrin AI" width="120" />
-
 # Vitrin AI
 
 **Kuyumcular için yapay zekâ destekli ürün görseli platformu.**

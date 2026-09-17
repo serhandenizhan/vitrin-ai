@@ -48,8 +48,3 @@ build/
 # ICC renk profilleri depoya konmaz: ECI lisansi dagitima izin vermiyor
 # (bkz. CLAUDE.md acik takip maddesi 1). Profil CMYK_ICC_PATH ile verilir.
 *.icc
-
-# superpowers skill'inin planlama/spec ciktilari — calisma sureci ara
-# dosyalari, kalici proje dokumantasyonu degil (bkz. CLAUDE.md, docs/superpowers
-# repodan cikarildi).
-docs/superpowers/
