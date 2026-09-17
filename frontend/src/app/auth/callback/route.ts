@@ -22,6 +22,7 @@ import {
   RECOVERY_COOKIE,
   RECOVERY_COOKIE_MAX_AGE,
 } from "@/lib/password-recovery";
+import { requestOrigin } from "@/lib/request-origin";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,7 +50,10 @@ const OTP_TYPES: EmailOtpType[] = [
 ];
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
+  // `nextUrl.origin` DEGIL: `next start -H 0.0.0.0` altinda 0.0.0.0'i
+  // gosteriyor ve dogrulama sonrasi kullanici acilmayan bir adrese gidiyordu.
+  const origin = requestOrigin(request);
   const next = safeRedirectPath(searchParams.get("next"));
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");

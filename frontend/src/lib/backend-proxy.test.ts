@@ -60,6 +60,26 @@ it("aynı origin'i geçirir, yabancı origin'i reddeder", () => {
   expect(foreignOrigin(foreign)?.status).toBe(403);
 });
 
+it("site ag adresinden (telefon) acildiginda kendi istegini reddetmiyor", () => {
+  // Next.js `request.url`i localhost'tan kurabiliyor; tarayici ise 192.168.x.x'e bagli.
+  const phone = new Request("http://localhost:3000/api/billing/checkout", {
+    method: "POST",
+    headers: { Origin: "http://192.168.1.181:3000", Host: "192.168.1.181:3000" },
+  });
+  const forged = new Request("http://localhost:3000/api/billing/checkout", {
+    method: "POST",
+    headers: { Origin: "https://kotu.test", Host: "192.168.1.181:3000" },
+  });
+  expect(foreignOrigin(phone)).toBeNull();
+  // `next start -H 0.0.0.0`: request.url 0.0.0.0, tarayici localhost'a bagli.
+  const bound = new Request("http://0.0.0.0:3000/api/account", {
+    method: "DELETE",
+    headers: { Origin: "http://localhost:3000", Host: "localhost:3000" },
+  });
+  expect(foreignOrigin(bound)).toBeNull();
+  expect(foreignOrigin(forged)?.status).toBe(403);
+});
+
 it("retry_safe bayrağını arayüze geçirir, uydurmaz", async () => {
   // İstemci idempotency anahtarını yalnız bu bayrakla yeniliyor; bayrağın
   // kaynağı backend olmalı, vekilin yorumu değil.
