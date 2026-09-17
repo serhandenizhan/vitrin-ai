@@ -845,6 +845,18 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     söylüyor. İkisi aynı işin iki aşaması, çelişki değil.
 - **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
 
+### Faza ait olmayan iş — stüdyo arayüzü yeniden düzenlendi (17.09.2026, Serhan)
+
+Bir fazın kapsamında değil; Serhan'ın açık isteğiyle yapıldı (kural 6 gereği
+önce söylendi). Stüdyonun sağındaki düz beyaz panel kaldırılıp yerine **koyu
+araç yüzeyi + sağda yüzen denetçi + altta camlı dock** kondu; bekleme ve
+inceleme ekranları da aynı yüzeye alındı. Tasarım dili iptal edilmedi, yanına
+"araç yüzeyi" diye ayrı bir madde eklendi (kök `CLAUDE.md`).
+
+Yeni: hazır görünüm ayarları (Doğal/Parlak/Sıcak/Net/Yumuşak). Kaydıraç elle
+oynatılınca ön ayar işareti kalkıyor. Ayrıntı ve tarayıcıda alınan ölçümler:
+`frontend/README.md` → "Stüdyo düzeni".
+
 ### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)

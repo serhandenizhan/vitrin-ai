@@ -252,6 +252,35 @@ Web arayüzü, kullanıcının referans olarak verdiği **apple.com/tr** ürün 
 
 **Yumuşak geçişler (13.09.2026, kullanıcı isteği: "tak diye açılıyor").** Bir ekran, pencere ya da katman belirirken `soft-enter` (hafif yükselip belirme) ya da `soft-fade` sınıfları kullanılıyor; tanımlar `globals.css`'in sonunda. Yalnızca giriş animasyonu, eğri sitenin geri kalanıyla aynı (`cubic-bezier(0.16, 1, 0.3, 1)`), "hareketi azalt" açıkken kapalı. Yeni bir koşullu ekran eklenirken aynı sınıflar kullanılmalı. **Doğrulama tuzağı:** gömülü tarayıcı paneli gizliyken kare üretilmediği için bu animasyonlar ilerlemez ve öğe görünmez kalır gibi ölçülür (ders 13); ölçmek için Web Animations API ile zaman ilerletilir.
 
+## Araç yüzeyi — koyu tema ve camlı katmanlar (17.09.2026, Serhan)
+
+Yukarıdaki tasarım dili **iptal edilmedi**; bu, onun yanında duran ayrı bir
+yüzey türü. Kural: **stüdyo ve ona giden çalışma ekranları koyu, site açık.**
+
+**Gerekçe:** stüdyo bir sayfa değil bir ARAÇ. Koyu zemin ürünün kendi rengini
+doğru gösteriyor (beyaz panelin yanındaki altın, ürünün üzerindeki altını
+yanıltıyordu) ve camlı yüzeyler tuvali tamamen örtmeden üzerinde durabiliyor.
+**Yeni renk uydurulmadı:** zemin `surface-black` (`#0c0b0a`), cam
+`surface-charcoal` %78 + `backdrop-filter`, metin `#f3f0eb` / `#a8a29a`, kenar
+`--color-hairline`, vurgu yine altın.
+
+**Kapsam:** stüdyo katmanı (`studio.tsx`), bekleme ekranı ve inceleme ekranı.
+Yükleme adımı açık kalıyor — orası hâlâ tanıtım sayfasının parçası, ve karar
+"çalışmanın ortasında beyazdan koyuya sıçrama olmasın" üzerineydi.
+
+**Düzen kuralı:** *dock = gözle seçilenler, denetçi = okunarak ayarlananlar.*
+Denetçi o adımın araçlarını listeler, dock seçili aracın paletini gösterir;
+dock yalnızca zemin göstermez. Ayrıntı ve ölçümler: `frontend/README.md` →
+"Stüdyo düzeni".
+
+**Üç şey tarayıcıda ÖLÇÜLEREK bulundu, tahminle değil:**
+1. `backdrop-filter`'ın kare maliyeti **yok** (16,67 ms / 16,66 ms).
+2. Açılışta seçili zemin altın halkayı taşıyor ama **kaydırma alanının
+   dışında** kalıyordu; artık görünür duruma kaydırılıyor.
+3. Telefonda yapışkan tuval iki kez bozuldu: kısa bir kapsayıcı içinde
+   yapışkanlık hiç çalışmıyor, ve yapışkan (konumlandırılmış) öğe statik
+   kardeşlerinin üzerine boyanıp denetçiyi örtüyor.
+
 ## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 
 Faz 2'de kullanıcı isteğiyle tarayıcıda (IndexedDB) tutulan geçmiş, Faz 4'te **sunucuya** taşındı: `frontend/src/lib/work-history.ts`'in yalnızca gövdesi değişti, fonksiyon adları aynı kaldı. Ürün kararları (Kaan, 12.09.2026): eski tarayıcı kayıtları hesaba **taşınmıyor** (eski IndexedDB deposu siliniyor), sunucuda yalnızca **sonuç** saklanıyor, **arka plan kaldırma giriş istiyor**. Ayrıntı: `ROADMAP.md` Faz 4, `frontend/README.md` → "Geçmiş sunucuda".

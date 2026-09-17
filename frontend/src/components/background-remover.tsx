@@ -304,6 +304,8 @@ export function BackgroundRemover() {
   );
 
   const showDropzone = status === "idle" || (status === "error" && !file);
+  /** Isleniyor ve sonuc: studyonun yuzeyiyle ayni koyu zemin. */
+  const isWorkingSurface = status === "processing" || status === "done";
   const showPreview = status === "ready" || (status === "error" && file !== null);
 
   return (
@@ -336,9 +338,21 @@ export function BackgroundRemover() {
         </Alert>
       ) : null}
 
-      {/* Arac, tanitim bolumlerinin arasinda beyaz bir kart olarak duruyor —
-          Apple'in acik zeminli bolumlerinde one cikan urun karti gibi. */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-9">
+      {/*
+        Arac, tanitim bolumlerinin arasinda bir kart olarak duruyor.
+
+        CALISMA DURUMLARINDA KOYU (17.09.2026, Serhan): isleniyor ve sonuc
+        ekranlari, ardindan acilan studyonun yuzeyiyle ayni renge geciyor;
+        boylece "beyazdan koyuya" sicramasi kullanicinin gozune calismanin
+        ORTASINDA denk gelmiyor. Yukleme adimi acik kaliyor — orasi hala
+        tanitim sayfasinin bir parcasi.
+      */}
+      <div
+        className={
+          "rounded-2xl p-5 shadow-sm transition-colors duration-500 sm:p-9 " +
+          (isWorkingSurface ? "surface-black" : "bg-white")
+        }
+      >
         {/* `soft-enter`: ekranlar (yukleme -> onizleme -> isleniyor -> sonuc)
             birden degil yumusakca beliriyor. Kosullu cizim her gecis icin
             ogeyi yeniden bagladigi icin animasyon her seferinde oynuyor. */}

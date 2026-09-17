@@ -85,6 +85,13 @@ export type EditorStageProps = {
   /** Logo sahnede surukleyip kose karelerinden boyutlandirilinca. */
   onLogoChange?: (patch: Pick<LogoSettings, "size" | "position">) => void;
   onTransformChange: (transform: Transform) => void;
+  /**
+   * Tuvalde bir surukleme/olcekleme BASLADI mi, BITTI mi.
+   *
+   * Alt dock tuvalin uzerinde duruyor; urune dokunuldugu anda silikleip geri
+   * cekilmesi icin bu haber gerekiyor (17.09.2026, Serhan'in karari).
+   */
+  onInteractionChange?: (isInteracting: boolean) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onCutoutSize: (size: { width: number; height: number }) => void;
   onStageReady: (stage: Konva.Stage | null) => void;
@@ -103,9 +110,18 @@ export function EditorStage({
   label,
   onLogoChange,
   onTransformChange,
+  onInteractionChange,
   onCutoutSize,
   onStageReady,
 }: EditorStageProps) {
+  const beginInteraction = useCallback(
+    () => onInteractionChange?.(true),
+    [onInteractionChange],
+  );
+  const endInteraction = useCallback(
+    () => onInteractionChange?.(false),
+    [onInteractionChange],
+  );
   const stageRef = useRef<Konva.Stage | null>(null);
   const cutoutRef = useRef<Konva.Image | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -458,10 +474,18 @@ export function EditorStage({
             }}
             onMouseDown={() => setIsSelected(true)}
             onTouchStart={() => setIsSelected(true)}
+            onDragStart={beginInteraction}
+            onTransformStart={beginInteraction}
             onDragMove={trackLiveTransform}
             onTransform={trackLiveTransform}
-            onDragEnd={reportTransform}
-            onTransformEnd={reportTransform}
+            onDragEnd={() => {
+              reportTransform();
+              endInteraction();
+            }}
+            onTransformEnd={() => {
+              reportTransform();
+              endInteraction();
+            }}
           />
         ) : null}
 
@@ -522,8 +546,16 @@ export function EditorStage({
             draggable={Boolean(onLogoChange)}
             onMouseDown={() => setSelection("logo")}
             onTouchStart={() => setSelection("logo")}
-            onDragEnd={reportLogo}
-            onTransformEnd={reportLogo}
+            onDragStart={beginInteraction}
+            onTransformStart={beginInteraction}
+            onDragEnd={() => {
+              reportLogo();
+              endInteraction();
+            }}
+            onTransformEnd={() => {
+              reportLogo();
+              endInteraction();
+            }}
           />
         ) : null}
         <Transformer
