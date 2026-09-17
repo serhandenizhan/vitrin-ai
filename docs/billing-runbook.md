@@ -168,6 +168,14 @@ Raporlama API izni merchant hesabında açık olmalıdır.
   nesneleri bakım turu siler; hesap silmede `results/<uid>/` öneki de gider.
   Hata yanıtındaki `retry_safe` bayrağı, kredinin hiç tüketilmediğini ya da
   iade edildiğini söyler; istemci yeni bir anahtara yalnızca bu bayrakla geçer.
+- **Admin'in verdiği bonus kredi dönem kotasını büyütmez** (Faz 6, migration
+  `0007`). Dönem snapshot'ı değişmez kalır; kredi `credit_grants` tablosunda
+  durur ve rezervasyon ona YALNIZCA dönem kotası tükendiğinde başvurur. Erişimi
+  kapalı (`suspended`/`expired`) bir aboneliği **açmaz** — kredi bir bakiye,
+  erişim kapısı değil. Başarısız iş kredisini `usage_reservations.grant_id`
+  üzerinden **alındığı** kovaya iade eder; bu yüzden bir kullanıcının dönem
+  sayacı ile bonus bakiyesi ayrı ayrı okunmalıdır
+  (`GET /api/subscriptions/me` → `period` ve `bonus_credits`).
 - İade sadece tam tutardır. Provider'a gönderildikten sonra ağ sonucu belirsizse
   `uncertain` olur; otomatik ikinci iade gönderilmez. Merchant Panel/destek
   kanıtıyla admin `POST /api/admin/billing/actions/{id}/resolve` çağırır:
@@ -195,7 +203,11 @@ Raporlama API izni merchant hesabında açık olmalıdır.
 ## Hesap silme ve veri saklama
 
 `DELETE /api/account` e-posta onayından sonra **202 pending** döner. Yeni iş/kota
-alımı durur. Worker tüm eski/yeni provider aboneliklerini iptal etmeden R2/Auth
+alımı durur. Faz 6'dan beri ikinci bir giriş noktası var —
+`DELETE /api/admin/users/{id}`, yöneticinin kullanıcının e-postasını yazarak
+onaylaması şartıyla **aynı** kuyruğa aynı işi koyar (`delete:<user_id>`), yani
+aşağıdaki bütün kurallar orada da aynen geçerlidir; tek fark denetim
+günlüğüne bir satır yazılmasıdır. Worker tüm eski/yeni provider aboneliklerini iptal etmeden R2/Auth
 silmez. Belirsiz initialization veya çözülmemiş iade talebi silmeyi bekletir.
 R2 öneki temizlendikten sonra Supabase Admin kullanıcısı silinir. Mali ve kabul
 kayıtlarının user_id alanı null olur, rastgele retention_subject korunur;

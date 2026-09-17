@@ -14,10 +14,9 @@ API'si kullanılıyor (gerekçe `app/services/supabase_admin.py` modül açıkla
 """
 
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.account import same_email
@@ -45,15 +44,26 @@ class CreditGrantRequest(StrictModel):
     amount: int = Field(gt=0, le=10000)
     reason: str = Field(min_length=3, max_length=500)
     idempotency_key: uuid.UUID
-    expires_at: datetime | None = None
+    # `AwareDatetime`: saat dilimi ZORUNLU. Sütun `timestamptz` olduğu için
+    # veritabanından her zaman saat dilimli dönüyor; saat dilimsiz bir girdi
+    # kabul edilseydi aynı anahtarla yapılan tekrar denemesinde karşılaştırma
+    # (naive == aware → her zaman False) sahte bir `idempotency_conflict`
+    # üretirdi. Zaten bir son kullanma anının saat dilimsizi de anlamsızdır.
+    expires_at: AwareDatetime | None = None
 
 
 class UserDeletionRequest(StrictModel):
     # Kullanıcının kendi silme akışındaki (`DELETE /api/account`) e-posta yazma
     # adımının aynısı: geri döndürülemez bir işlem, yanlış satıra tıklanarak
     # yapılamamalı.
+    #
+    # BİLİNÇLİ OLARAK `idempotency_key` YOK: silme işinin kimliği hesabın
+    # kendisinden türüyor (`delete:<user_id>`), yani istemciden gelen bir
+    # anahtarın hiçbir etkisi olmazdı. Etkisiz bir alan istemekten kötüsü,
+    # yöneticinin "yeni anahtar yeni deneme başlatır" sanmasıdır — oysa
+    # başarısız eylemi bakım turu zaten yeniden deniyor (ders 24'ün tersi
+    # yönü: anahtar İŞİ tanımlıyorsa, iş zaten tekse anahtar gereksizdir).
     email: str = Field(min_length=1, max_length=254)
-    idempotency_key: uuid.UUID
 
 
 def _supabase_unavailable(exc: Exception):
@@ -110,7 +120,9 @@ async def list_users(
     if not users:
         return {"users": [], "page": page, "per_page": per_page}
 
-    rows = await many(db, ENRICHMENT_SQL, ids=[str(user["id"]) for user in users])
+    rows = await many(
+        db, ENRICHMENT_SQL, ids=[str(user.get("id")) for user in users]
+    )
     billing = {str(row["user_id"]): dict(row) for row in rows}
     return {
         "users": [
@@ -243,12 +255,7 @@ async def delete_user(
     # hesap için ikinci bir silme isteği ikinci bir eylem açmaz.
     action = await enqueue(db, user_id, "delete_account", user_id, "delete:" + str(user_id))
     await admin_audit.record(
-        db,
-        admin.id,
-        "user_delete",
-        "user",
-        user_id,
-        {"idempotency_key": str(payload.idempotency_key)},
+        db, admin.id, "user_delete", "user", user_id, {"action_id": str(action["id"])}
     )
     await db.commit()
     return {"action_id": str(action["id"]), "status": action["status"]}
@@ -290,10 +297,15 @@ async def grant_credits(
         key=f"admin-credit:{payload.idempotency_key}",
         expires=payload.expires_at,
     )
-    # Aynı anahtarın BAŞKA bir kullanıcı ya da miktar için yeniden kullanılması
-    # sessizce "başarılı" sayılmaz: istemci hangi işi tekrarladığını sanıyorsa
-    # onun sonucunu almalı.
-    if grant["user_id"] != user_id or grant["amount"] != payload.amount:
+    # Aynı anahtarın BAŞKA bir iş için yeniden kullanılması sessizce "başarılı"
+    # sayılmaz: istemci hangi işi tekrarladığını sanıyorsa onun sonucunu almalı.
+    # `reason` karşılaştırmaya girmiyor (yalnız açıklama metni); kullanıcı,
+    # miktar ve son kullanma tarihi işin KENDİSİNİ tanımlıyor.
+    if (
+        grant["user_id"] != user_id
+        or grant["amount"] != payload.amount
+        or grant["expires_at"] != payload.expires_at
+    ):
         raise billing_error(
             "idempotency_conflict",
             "Bu anahtar farklı bir kredi işlemi için kullanılmış.",
@@ -343,6 +355,11 @@ async def revoke_credits(
 #: delikli bir seri grafikte "o gün veri yok" değil "o gün olmadı" gibi okunur.
 #: Tablo adları BURADA sabit; dışarıdan gelen tek değer `:days` ve o da bağlı
 #: parametre olarak geçiyor.
+#: `signups` bilinçli olarak `subscriptions` üzerinden sayılıyor: kayıt anında
+#: tetikleyici her kullanıcı için bir abonelik satırı açıyor ve bu, `auth`
+#: şemasını sorgulamadan yeni hesap sayısını verir. Sonuç: Supabase'de var olup
+#: bizde abonelik satırı OLMAYAN bir hesap (tetikleyici öncesinden kalma) bu
+#: seride görünmez.
 _SERIES = {
     "usage": "SELECT created_at FROM usage_events",
     "signups": "SELECT created_at FROM subscriptions",

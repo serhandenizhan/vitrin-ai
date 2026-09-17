@@ -198,6 +198,62 @@ async def test_reusing_a_key_for_a_different_job_is_rejected(client, people, tok
     assert response.json()["detail"]["code"] == "idempotency_conflict"
 
 
+async def test_a_dated_grant_stays_idempotent_across_a_database_round_trip(
+    client, people, tokens, db_session
+):
+    """Son kullanma tarihi karşılaştırmaya giriyor; veritabanı saat dilimli
+    döndürdüğü için saat dilimsiz bir girdi tekrar denemede SAHTE bir çakışma
+    üretirdi. Bu yüzden alan `AwareDatetime` ve tekrar gerçekten idempotent."""
+    admin_id, user_id = people
+    body = {
+        "amount": 3,
+        "reason": "kampanya",
+        "idempotency_key": str(uuid.uuid4()),
+        "expires_at": "2026-12-31T23:59:00+03:00",
+    }
+    first = await client.post(
+        f"/api/admin/users/{user_id}/credits", headers=tokens.headers(admin_id), json=body
+    )
+    second = await client.post(
+        f"/api/admin/users/{user_id}/credits", headers=tokens.headers(admin_id), json=body
+    )
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+    assert (
+        await one(db_session, "SELECT count(*)::int AS n FROM credit_grants")
+    )["n"] == 1
+
+    # Saat dilimsiz bir tarih hiç kabul edilmiyor — belirsiz bir son kullanma
+    # anını sessizce yorumlamak yerine istek reddediliyor.
+    naive = await client.post(
+        f"/api/admin/users/{user_id}/credits",
+        headers=tokens.headers(admin_id),
+        json={**body, "idempotency_key": str(uuid.uuid4()), "expires_at": "2026-12-31T23:59:00"},
+    )
+    assert naive.status_code == 422
+
+
+async def test_reusing_a_key_with_a_different_expiry_is_rejected(
+    client, people, tokens
+):
+    admin_id, user_id = people
+    key = str(uuid.uuid4())
+    base = {"amount": 3, "reason": "kampanya", "idempotency_key": key}
+    await client.post(
+        f"/api/admin/users/{user_id}/credits",
+        headers=tokens.headers(admin_id),
+        json={**base, "expires_at": "2026-12-31T23:59:00+03:00"},
+    )
+    response = await client.post(
+        f"/api/admin/users/{user_id}/credits",
+        headers=tokens.headers(admin_id),
+        json={**base, "expires_at": "2027-12-31T23:59:00+03:00"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "idempotency_conflict"
+
+
 async def test_granting_credits_writes_an_audit_row(client, people, tokens, db_session):
     admin_id, user_id = people
     await client.post(
@@ -246,7 +302,7 @@ async def test_admin_account_deletion_requires_the_users_own_email(
         "DELETE",
         f"/api/admin/users/{user_id}",
         headers=tokens.headers(admin_id),
-        json={"email": "yanlis@vitrin.example", "idempotency_key": str(uuid.uuid4())},
+        json={"email": "yanlis@vitrin.example"},
     )
     assert wrong.status_code == 400
     # Hiçbir şey kuyruğa girmemiş olmalı.
@@ -254,17 +310,26 @@ async def test_admin_account_deletion_requires_the_users_own_email(
 
 
 async def test_admin_account_deletion_queues_the_same_job_as_self_deletion(
-    admin_only, people, db_session
+    admin_only, client, people, tokens, db_session
 ):
-    _, user_id = people
-    body = {"email": "musteri@vitrin.example", "idempotency_key": str(uuid.uuid4())}
+    admin_id, user_id = people
+    body = {"email": "musteri@vitrin.example"}
     response = await admin_only("DELETE", f"/api/admin/users/{user_id}", 202, json=body)
 
     assert response.json()["status"] == "pending"
     action = await one(db_session, "SELECT * FROM provider_actions")
     assert action["kind"] == "delete_account" and action["user_id"] == user_id
-    # `admin_only` ucu iki kez çağırdı; anahtar hesabın kendisinden türediği
-    # için yalnız TEK eylem açılmış olmalı.
+
+    # İkinci BAŞARILI çağrı: silme işinin kimliği hesabın kendisinden türüyor,
+    # yani tekrar istemek ikinci bir eylem açmamalı. (`admin_only`'nin reddedilen
+    # çağrısı bunu kanıtlamaz — o istek zaten hiçbir şey yazmıyor.)
+    again = await client.request(
+        "DELETE",
+        f"/api/admin/users/{user_id}",
+        headers=tokens.headers(admin_id),
+        json=body,
+    )
+    assert again.status_code == 202 and again.json()["action_id"] == str(action["id"])
     assert (
         await one(db_session, "SELECT count(*)::int AS n FROM provider_actions")
     )["n"] == 1

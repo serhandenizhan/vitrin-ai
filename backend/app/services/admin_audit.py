@@ -37,7 +37,10 @@ async def record(
     subject_id: str,
     detail: dict | None = None,
 ) -> None:
-    assert action in ACTIONS, f"Bilinmeyen denetim eylemi: {action!r}"
+    # `assert` DEĞİL: Python `-O` ile çalıştırıldığında assert'ler tamamen
+    # kaldırılır ve bu kontrol üretimde sessizce yok olurdu.
+    if action not in ACTIONS:
+        raise ValueError(f"Bilinmeyen denetim eylemi: {action!r}")
     await execute(
         db,
         """INSERT INTO admin_audit_log(actor_id,action,subject_type,subject_id,detail)
