@@ -1,4 +1,4 @@
-<img src="docs/brand/vitrin-ai-mark.svg" alt="Vitrin AI" width="120" />
+<img src="docs/brand/vitrin-ai-logo-2.png" alt="Vitrin AI" width="180" />
 
 # Vitrin AI
 
