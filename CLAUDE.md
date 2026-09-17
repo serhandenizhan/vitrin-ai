@@ -230,8 +230,8 @@ Kapatılmamış, sahibi belli işler. Bir madde çözüldüğünde buradan **sil
 
 `/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
 koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
-yok**. Geliştirmede işletim sisteminin profili kullanılıyor; üretimde bu yol
-geçersiz olacağı için endpoint açık bir mesajla 503 döner.
+yok**. Değişken boşsa ya da dosya okunamıyorsa endpoint dönüşüme başlamadan
+açık bir mesajla 503 döner.
 
 Profilsiz bir çevrim matbaada yanlış renk verir; bunu sessizce yapmak özelliği
 hiç sunmamaktan kötüdür — bu yüzden varsayılan konmadı.
@@ -253,6 +253,12 @@ Bu yüzden: `*.icc` kök `.gitignore`'da, profil depo dışında durur ve
 bir yol okunamaz; o durumda profil özel bir depolamadan (ör. herkese açık olmayan
 R2 nesnesi) çalışma anında alınmalı — henüz yazılmadı, dağıtım hedefi belli
 olunca karar verilecek.
+
+**Ölçüm (17.09.2026):** çıktı gerçekten 4 kanallı CMYK, alfasız, içinde
+"PSO Coated v3" profili gömülü (TIFF ve JPEG). **Profil 2,2 MB** ve her dosyaya
+gömülüyor: küçük bir görsel bile ~2,2 MB iniyor. Beyaz 0/0/0/0 çıkıyor (saydamlık
+beyaza düzleşiyor). Renk doğruluğu yalnızca sayısal kontrol edildi; matbaa
+provası ya da Acrobat/Photoshop ön kontrolüyle henüz doğrulanmadı.
 
 ### 2. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
