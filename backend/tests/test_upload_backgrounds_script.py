@@ -37,6 +37,11 @@ class FakeStorage:
             raise RuntimeError("R2 patladı")
         self.objects[key] = content
 
+    async def download(self, key: str) -> bytes:
+        if key not in self.objects:
+            raise KeyError(key)   # gercek servis ClientError firlatiyor
+        return self.objects[key]
+
     async def delete(self, key: str) -> None:
         self.deleted.append(key)
         self.objects.pop(key, None)
@@ -173,3 +178,94 @@ async def test_cleanup_does_not_delete_objects_of_an_already_registered_backgrou
         await _run(source, plan, manifest)
 
     assert storage.deleted == []
+
+
+async def test_same_file_name_with_different_content_does_not_silently_overwrite(
+    db_session, tmp_path, source, plan, install_storage
+):
+    # Kimlik yalnız dosya ADINDAN türetildiği için, farklı bir klasörde aynı
+    # adı taşıyan BAŞKA bir görsel aynı UUID'yi ve aynı R2 anahtarını üretir.
+    # İkinci çalıştırma satırı var görür, yeni kayıt açmaz ama nesneleri
+    # ÜZERİNE YAZAR: veritabanındaki zeminin içeriği sessizce değişir —
+    # kategorisi ve baskı uyarısı eski görsele ait kalır. Rastgele UUID ile
+    # bu mümkün değildi; determinist kimliğin getirdiği yeni risk bu
+    # (PR #18 ikinci inceleme turu).
+    manifest = tmp_path / "manifest.json"
+    storage = install_storage(FakeStorage())
+    await _run(source, plan, manifest)
+
+    background_id = upload_backgrounds.background_id_for("zemin-bir.jpg")
+    key = f"backgrounds/{background_id}.jpg"
+    ilk_icerik = storage.objects[key]
+
+    # Aynı ada sahip BAŞKA bir görsel ve manifestsiz (yeni parti) çalıştırma.
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), color="crimson").save(buf, format="JPEG")
+    (source / "zemin-bir.jpg").write_bytes(buf.getvalue())
+    manifest.unlink()
+
+    with pytest.raises(SystemExit) as hata:
+        await _run(source, plan, manifest)
+
+    assert "farklı" in str(hata.value) or "--batch" in str(hata.value)
+    # En önemlisi: var olan zeminin içeriği DEĞİŞMEMİŞ olmalı.
+    assert storage.objects[key] == ilk_icerik
+    rows = (await db_session.execute(select(Background))).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_batch_namespace_makes_the_same_file_name_a_different_background():
+    # Aynı dosya adı, farklı parti -> farklı kimlik. Parti adı verilmediğinde
+    # kimlik eski (yalnız dosya adına dayanan) değeriyle BİRE BİR aynı kalmalı,
+    # yoksa ilk kütüphanenin kimlikleri değişir ve katalog kırılır.
+    adsiz = upload_backgrounds.background_id_for("zemin-bir.jpg")
+    assert adsiz == upload_backgrounds.background_id_for("zemin-bir.jpg", "")
+    sonbahar = upload_backgrounds.background_id_for("zemin-bir.jpg", "2026-10-sonbahar")
+    kis = upload_backgrounds.background_id_for("zemin-bir.jpg", "2026-12-kis")
+    assert len({adsiz, sonbahar, kis}) == 3
+    # Parti adı da determinist olmalı.
+    assert sonbahar == upload_backgrounds.background_id_for("zemin-bir.jpg", "2026-10-sonbahar")
+
+
+async def test_identical_content_is_not_uploaded_twice(
+    db_session, tmp_path, source, plan, install_storage
+):
+    # Yarıda kalmış çalıştırmanın sürdürülmesi: manifest yok ama DB satırı ve
+    # R2 nesnesi var, içerik AYNI. Bu durumda yükleme hiç tekrarlanmamalı,
+    # yalnızca manifest tamamlanmalı.
+    manifest = tmp_path / "manifest.json"
+    storage = install_storage(FakeStorage())
+    await _run(source, plan, manifest)
+    ilk_sayi = storage.upload_calls
+    manifest.unlink()
+
+    await _run(source, plan, manifest)
+
+    assert storage.upload_calls == ilk_sayi, "aynı içerik yeniden yüklenmemeli"
+    rows = (await db_session.execute(select(Background))).scalars().all()
+    assert len(rows) == 1
+    assert [e["file"] for e in json.loads(manifest.read_text())] == ["zemin-bir.jpg"]
+
+
+async def test_allow_overwrite_replaces_the_content_on_purpose(
+    db_session, tmp_path, source, plan, install_storage
+):
+    # Kasıtlı değiştirme: operatör --allow-overwrite verdiğinde betik durmuyor.
+    manifest = tmp_path / "manifest.json"
+    storage = install_storage(FakeStorage())
+    await _run(source, plan, manifest)
+    key = f"backgrounds/{upload_backgrounds.background_id_for('zemin-bir.jpg')}.jpg"
+    ilk = storage.objects[key]
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), color="crimson").save(buf, format="JPEG")
+    (source / "zemin-bir.jpg").write_bytes(buf.getvalue())
+    manifest.unlink()
+
+    await upload_backgrounds.upload(
+        source, plan, manifest, dry_run=False, allow_overwrite=True
+    )
+
+    assert storage.objects[key] != ilk
+    rows = (await db_session.execute(select(Background))).scalars().all()
+    assert len(rows) == 1, "kasıtlı değiştirmede de ikinci kayıt açılmamalı"

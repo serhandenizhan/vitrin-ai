@@ -158,8 +158,8 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 295 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 280 test
+cd backend && pytest             # 299 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 281 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

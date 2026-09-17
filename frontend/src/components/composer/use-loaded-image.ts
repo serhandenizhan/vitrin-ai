@@ -52,7 +52,16 @@ export function useLoadedImage(
 
     let cancelled = false;
     img.onload = () => {
-      if (!cancelled) setLoaded({ url, image: img });
+      if (cancelled) return;
+      setLoaded({ url, image: img });
+      // Hata isareti BASARIDA temizlenmeli. Aksi halde bir kez basarisiz olan
+      // url, sonradan yuklense bile asagidaki `failedUrl === url` kontrolune
+      // takilip SURESIZ reddedilirdi: gecici bir hatadan sonra o zemine geri
+      // donen kullanici, imzali URL yenilenene kadar zemini hic goremezdi
+      // (PR #18 ikinci inceleme turu). Isaret kosulsuz siliniyor: basari
+      // yalnizca O ANKI url icin gelebiliyor (`cancelled` eskisini susturuyor),
+      // dolayisiyla elde tutulacak bir "hala bozuk" bilgisi kalmiyor.
+      setFailedUrl(null);
     };
     img.onerror = () => {
       if (!cancelled) setFailedUrl(url);

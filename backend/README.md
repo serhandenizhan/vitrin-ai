@@ -300,9 +300,17 @@ Zemin yönetim paneli Faz 6'da; ilk kütüphane (93 zemin) o panel olmadan
 - **Yeniden çalıştırma güvenliği manifestten DEĞİL, kimlikten gelir:** zemin kimliği
   kaynak dosya adından türetiliyor (UUIDv5, `background_id_for`). Manifest ile DB
   commit'i arasında süreç ölse bile yeniden çalıştırma aynı kimliği ve aynı R2
-  anahtarını üretir; nesneler üzerine yazılır, var olan satır tekrar eklenmez. Rastgele
-  UUID ile bu pencerede kalan bir çökme aynı görsel için ikinci bir kayıt ve ikinci bir
-  nesne çifti üretiyordu (`tests/test_upload_backgrounds_script.py`).
+  anahtarını üretir; içerik aynıysa yükleme hiç tekrarlanmaz, var olan satır tekrar
+  eklenmez. Rastgele UUID ile bu pencerede kalan bir çökme aynı görsel için ikinci bir
+  kayıt ve ikinci bir nesne çifti üretiyordu (`tests/test_upload_backgrounds_script.py`).
+- **`--batch` ve içerik kontrolü — yalnız dosya adı KALICI bir kimlik değildir.**
+  Başka bir klasörde aynı adı taşıyan farklı bir görsel aynı kimliği üretir; kontrolsüz
+  bırakılsa ikinci çalıştırma var olan zeminin nesnesini sessizce ezer ve kategori/baskı
+  uyarısı eski görsele ait kalırdı (PR #18 ikinci inceleme turunda bulundu). İki katman:
+  (1) yeni parti yüklerken `--batch <kalıcı-parti-adı>` verilir, kimlik ondan da türer —
+  parti adı verilmediğinde kimlik ilk kütüphaneyle bire bir aynı kalır; (2) kimlik zaten
+  varsa R2'deki içerik karşılaştırılır, **farklıysa betik durur** (fail-closed) ve hangi
+  seçeneği kullanacağını söyler. Bilinçli değiştirme için `--allow-overwrite`.
 - **Veritabanı yapısı değişmez:** kategori ve baskı uyarısı `--catalog-out` ile
   `frontend/src/lib/background-catalog.ts`'e yazılır.
 - **Güvenlik kilidi:** gerçek yükleme `--yes` olmadan çalışmaz; önce `--dry-run` hiçbir şey

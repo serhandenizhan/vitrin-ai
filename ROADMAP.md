@@ -676,9 +676,9 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
     Lüks & koyu (14). Düşük çözünürlüklü 4 ChatGPT zemininde CMYK indirmeden önce
     onay penceresi.
   - **PR #18 inceleme düzeltmeleri (17.09.2026, Codex incelemesi + bağımsız doğrulama):**
-    - Backend testleri yerel Postgres + Redis ile çalıştırıldı: **295 test geçiyor**
+    - Backend testleri yerel Postgres + Redis ile çalıştırıldı: **299 test geçiyor**
       (yeni: önizleme yüklemesinin hata yolu, DB hatasında temizlik, Redis arızası,
-      toplu yükleme betiği). Frontend **280 test**, lint ve `next build` de geçti.
+      toplu yükleme betiği). Frontend **281 test**, lint ve `next build` de geçti.
     - Redis çökerse `GET /api/backgrounds`'ın 500 verip kütüphaneyi sessizce
       gradyanlara düşürmesi **kapatıldı**: zemin listelemenin hız sınırı artık
       fail-open (para/webhook yüzeyleri fail-closed kalıyor, `limits.py`). Ayrıca
@@ -723,6 +723,20 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
       (3) JavaScript'in `/i` bayrağı Türkçe **İ** (U+0130) ile `i`'yi
       eşleştirmiyor, "İndirme işlemi başarıyla tamamlandı" metni aranan
       yerde duruyor olmasına rağmen bulunamıyor.
+    - **İkinci inceleme turu (17.09.2026) — düzeltmelerin kendisi iki yeni
+      high üretmişti, ikisi de doğrulanıp kapatıldı:**
+      - `useLoadedImage` hata işaretini `onerror`'da koyuyor ama `onload`'da
+        silmiyordu: geçici bir hatadan sonra o zemine geri dönen kullanıcı,
+        imzalı URL yenilenene kadar zemini hiç göremiyordu. "Yanlış zemin"
+        hatasının yerine "hiç zemin yok" hatası geçmişti.
+      - Determinist kimlik yalnız dosya ADINA dayandığı için, başka bir
+        partide aynı adı taşıyan farklı bir görsel var olan zeminin nesnesini
+        sessizce ezebiliyordu (içerik 535 → 542 bayt değiştiği ölçüldü);
+        kategori ve baskı uyarısı eski görsele ait kalıyordu. Rastgele UUID
+        ile bu mümkün değildi, yani düzeltme yeni bir hata sınıfı açmıştı.
+        Çözüm: `--batch` kalıcı parti ad alanı + kimlik zaten varsa içerik
+        karşılaştırması (aynıysa yükleme tekrarlanmaz, farklıysa betik durur;
+        bilinçli değiştirme için `--allow-overwrite`).
     - **Açık bırakılan (bilinçli):** Türkçe iç anahtarlar
       (`sade`/`doku`/`dogal`/`luks`, bülten ve katalog sekme değerleri) —
       kod incelemesi bunları dil kuralı ihlali olarak raporladı, kullanıcı

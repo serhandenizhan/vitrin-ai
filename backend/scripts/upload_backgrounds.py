@@ -81,8 +81,19 @@ CATEGORIES = ("sade", "doku", "dogal", "luks")
 BACKGROUND_ID_NAMESPACE = uuid.UUID("6f5f3a1e-4d0b-5c7a-9e21-8a3b4c5d6e7f")
 
 
-def background_id_for(file_name: str) -> uuid.UUID:
-    return uuid.uuid5(BACKGROUND_ID_NAMESPACE, file_name)
+def background_id_for(file_name: str, batch: str = "") -> uuid.UUID:
+    """Dosya adından (ve varsa parti adından) determinist kimlik.
+
+    `batch` BOŞKEN kimlik yalnız dosya adına dayanır ve bu, ilk kütüphanenin
+    kimlikleriyle bire bir uyumlu kalır (yarıda kalmış bir çalıştırma güvenle
+    sürdürülebilsin diye bilinçli). Ama yalnız dosya adı KALICI bir kimlik
+    değildir: başka bir klasörde aynı adı taşıyan farklı bir görsel aynı
+    anahtarı üretir. Yeni bir parti yüklenirken `--batch` ile kalıcı bir ad
+    alanı verilir (ör. `--batch 2026-10-sonbahar`); böylece ad çakışması
+    farklı kimlik üretir. Ad alanı verilmese bile aşağıdaki içerik kontrolü
+    sessiz üzerine yazmayı engelliyor (PR #18 ikinci inceleme turu).
+    """
+    return uuid.uuid5(BACKGROUND_ID_NAMESPACE, f"{batch}/{file_name}" if batch else file_name)
 
 
 CATALOG_HEADER = """/**
@@ -128,6 +139,23 @@ def write_manifest(path: Path, manifest: list[dict]) -> None:
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _manifest_entry(
+    name: str, background_id: uuid.UUID, key: str, encoded: bytes, entry: dict
+) -> dict:
+    with Image.open(io.BytesIO(encoded)) as image:
+        width, height = image.size
+    return {
+        "file": name,
+        "id": str(background_id),
+        "r2_key": key,
+        "category": entry["category"],
+        "print_warning": bool(entry.get("print_warning")),
+        # Zemin yönü (dikey/yatay) frontend kataloğunda bundan türetiliyor.
+        "width": width,
+        "height": height,
+    }
+
+
 def prepare(path: Path) -> tuple[bytes, bytes]:
     content_type = CONTENT_TYPES.get(path.suffix.lower())
     if content_type is None:
@@ -139,7 +167,15 @@ def prepare(path: Path) -> tuple[bytes, bytes]:
     return encoded, make_thumbnail(encoded)
 
 
-async def upload(source: Path, plan: dict[str, dict], manifest_path: Path, *, dry_run: bool) -> None:
+async def upload(
+    source: Path,
+    plan: dict[str, dict],
+    manifest_path: Path,
+    *,
+    dry_run: bool,
+    batch: str = "",
+    allow_overwrite: bool = False,
+) -> None:
     manifest = load_manifest(manifest_path)
     done = {entry["file"] for entry in manifest}
     storage = R2StorageService(bucket_name=settings.r2_bucket_name)
@@ -161,7 +197,7 @@ async def upload(source: Path, plan: dict[str, dict], manifest_path: Path, *, dr
             print(f"uygun: {name} | {path.stat().st_size / 1e6:.2f} MB -> {len(encoded) / 1e6:.2f} MB, önizleme {len(thumbnail) / 1e3:.0f} KB")
             continue
 
-        background_id = background_id_for(name)
+        background_id = background_id_for(name, batch)
         key = f"backgrounds/{background_id}.jpg"
         # Kimlik deterministik olduğu için satır, manifest yazılmadan ölmüş bir
         # önceki çalıştırmadan KALMIŞ olabilir. Bu YÜKLEMEDEN ÖNCE sorulmalı:
@@ -169,6 +205,37 @@ async def upload(source: Path, plan: dict[str, dict], manifest_path: Path, *, dr
         # kırmasın (satır kalır, gösterdiği nesne gider).
         async with sessions() as session:
             row_existed = await session.get(Background, background_id) is not None
+
+        # KİMLİK ÇAKIŞMASI KONTROLÜ. Satır zaten varsa iki ayrı durum mümkün:
+        # (a) yarıda kalmış bir çalıştırmanın AYNI dosyası — sürdürülmeli;
+        # (b) başka bir partide aynı adı taşıyan FARKLI bir görsel — bu
+        #     durumda yükleme, veritabanındaki zeminin içeriğini sessizce
+        #     değiştirirdi (kategori ve baskı uyarısı eski görsele ait kalır).
+        # İkisini ayırt etmenin yolu R2'deki mevcut içeriğe bakmak. Aynıysa
+        # yükleme hiç tekrarlanmıyor; farklıysa betik DURUYOR (fail-closed).
+        if row_existed and not allow_overwrite:
+            try:
+                existing = await storage.download(key)
+            except Exception:
+                # Nesne yok (ör. önceki hata yolunda silinmiş): yükleme normal
+                # şekilde sürer, üzerine yazılacak bir içerik yok.
+                existing = None
+            if existing is not None and existing != encoded:
+                raise SystemExit(
+                    f"DURDURULDU: '{name}' için üretilen kimlik ({background_id}) "
+                    f"veritabanında zaten var ama R2'deki içerik FARKLI. Aynı adı "
+                    f"taşıyan başka bir görselin mevcut zemini sessizce ezmesini "
+                    f"engellemek için hiçbir şey yapılmadı.\n"
+                    f"  - Yeni bir parti yüklüyorsanız: --batch <kalıcı-parti-adı> verin.\n"
+                    f"  - Bu zemini bilerek değiştirmek istiyorsanız: --allow-overwrite verin."
+                )
+            if existing is not None:
+                # Bire bir aynı içerik: yükleme tekrarlanmıyor, yalnızca
+                # manifest tamamlanıyor (yarıda kalmış çalıştırmanın sürdürülmesi).
+                print(f"atlandı (R2'de aynı içerikle zaten var): {name}")
+                manifest.append(_manifest_entry(name, background_id, key, encoded, plan[name]))
+                write_manifest(manifest_path, manifest)
+                continue
 
         # Başarıyla yüklenen anahtarlar tek tek toplanıyor: İKİNCİ yükleme
         # (küçük önizleme) patladığında ilki R2'de kalırdı ve DB satırı hiç
@@ -189,21 +256,7 @@ async def upload(source: Path, plan: dict[str, dict], manifest_path: Path, *, dr
                     await storage.delete(uploaded_key)
             raise
 
-        entry = plan[name]
-        with Image.open(io.BytesIO(encoded)) as image:
-            width, height = image.size
-        manifest.append(
-            {
-                "file": name,
-                "id": str(background_id),
-                "r2_key": key,
-                "category": entry["category"],
-                "print_warning": bool(entry.get("print_warning")),
-                # Zemin yönü (dikey/yatay) frontend kataloğunda bundan türetiliyor.
-                "width": width,
-                "height": height,
-            }
-        )
+        manifest.append(_manifest_entry(name, background_id, key, encoded, plan[name]))
         write_manifest(manifest_path, manifest)
         print(f"yüklendi: {name} -> {background_id}")
 
@@ -253,6 +306,19 @@ def main() -> None:
     parser.add_argument("--catalog-out", type=Path)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--yes", action="store_true", help="Gerçek yükleme için zorunlu onay.")
+    parser.add_argument(
+        "--batch",
+        default="",
+        help="Kalıcı parti adı: kimlik bundan ve dosya adından türetilir. Yeni bir "
+        "parti yüklerken verin, aksi halde aynı adı taşıyan farklı bir görsel var "
+        "olan zeminle aynı kimliği üretir. İlk kütüphane parti adı OLMADAN yüklendi.",
+    )
+    parser.add_argument(
+        "--allow-overwrite",
+        action="store_true",
+        help="Var olan bir zeminin içeriğini bilerek değiştirmek için. Varsayılan "
+        "olarak içerik uyuşmazlığında betik durur.",
+    )
     args = parser.parse_args()
 
     if args.catalog_out:
@@ -266,7 +332,16 @@ def main() -> None:
     if not args.dry_run and not args.yes:
         parser.error("Gerçek yükleme için --yes verin; önce --dry-run ile kontrol edin.")
     plan = load_plan(args.source, args.plan)
-    asyncio.run(upload(args.source, plan, args.manifest, dry_run=args.dry_run))
+    asyncio.run(
+        upload(
+            args.source,
+            plan,
+            args.manifest,
+            dry_run=args.dry_run,
+            batch=args.batch,
+            allow_overwrite=args.allow_overwrite,
+        )
+    )
 
 
 if __name__ == "__main__":

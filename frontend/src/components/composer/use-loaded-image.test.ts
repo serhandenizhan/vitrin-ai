@@ -33,7 +33,10 @@ class FakeImage {
 }
 
 function instanceFor(url: string): FakeImage {
-  const found = FakeImage.instances.find((image) => image.src === url);
+  // SON olusan ornek aliniyor: ayni url'e geri donuldugunde hook yeni bir
+  // `Image` yaratiyor ve ilk (basarisiz) ornege bakmak yaniltici olur.
+  const matching = FakeImage.instances.filter((image) => image.src === url);
+  const found = matching[matching.length - 1];
   if (!found) throw new Error(`Bu url icin gorsel olusturulmadi: ${url}`);
   return found;
 }
@@ -87,6 +90,32 @@ describe("useLoadedImage", () => {
     // Kesim burada onemli: eski gorseli dondurmek, kullaniciya SECMEDIGI
     // zemini gostermek ve o zeminle dosya indirtmek demekti.
     expect(result.current).toBeNull();
+  });
+
+  it("bir kez basarisiz olan url SONRADAN yuklenirse yeniden gosterilir", () => {
+    // Gercek senaryo: A gecici bir hatayla (ag dalgalanmasi, imzali URL'in
+    // bir anlik reddi) yuklenemiyor, kullanici B'ye geciyor, sonra A'ya
+    // donuyor. A bu kez yukleniyor. Hata isareti temizlenmezse hook A'yi
+    // SURESIZ reddeder ve zemin, imzali URL yenilenene kadar olu kalir —
+    // cikti da gradyana duser. Yani "yanlis zemin" hatasinin yerine
+    // "hic zemin yok" hatasi gecer.
+    const { result, rerender } = renderHook(
+      ({ url }: { url: string }) => useLoadedImage(url, { keepPrevious: true }),
+      { initialProps: { url: "https://r2.example/a" } },
+    );
+
+    act(() => instanceFor("https://r2.example/a").onerror?.());
+    expect(result.current).toBeNull();
+
+    rerender({ url: "https://r2.example/b" });
+    act(() => instanceFor("https://r2.example/b").onload?.());
+    expect(result.current).toBe(instanceFor("https://r2.example/b"));
+
+    // A'ya donus: yeni bir yukleme baslar ve bu kez basarili olur.
+    rerender({ url: "https://r2.example/a" });
+    act(() => instanceFor("https://r2.example/a").onload?.());
+
+    expect(result.current).toBe(instanceFor("https://r2.example/a"));
   });
 
   it("basarisiz bir zeminden sonra yuklenebilen bir zemine gecilebilir", () => {
