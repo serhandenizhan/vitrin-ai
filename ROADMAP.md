@@ -812,6 +812,11 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
   yolu ayrıca doğrulandı; kredi iadesinin doğru kovaya gittiğini sınayan test
   eski (bozuk) davranışa karşı çalıştırılıp kırmızı yandığı görüldü.
 - Kaan: rol tabanlı `/admin` arayüzü, arka plan yükleme/yönetim paneli
+  - **Arama kutusunun etiketi "E-posta ile ara" olmalı, "kullanıcı ara"
+    değil.** Backend araması e-posta ve tam kullanıcı kimliğiyle sınırlı; ada
+    göre arama bilinçli olarak Faz 7'ye ertelendi (gerekçesi orada).
+    "Kullanıcı ara" yazıp ada göre çalışmaması, çalışmadığını söylemekten
+    kötüdür — sonuç boş liste olarak döner, hata mesajı olarak değil.
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -846,6 +851,26 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Admin panelinde ADA GÖRE arama — bilinçli olarak ertelendi (Serhan'ın
+  sorusu üzerine karar, 17.09.2026).** Faz 6'da arama e-posta ve tam kullanıcı
+  kimliğiyle sınırlı kaldı. Üç gerekçe:
+  1. **Ölçülen kullanıcı sayısı 2** (canlı projede, ikisi de ekip). Arama
+     kutusunun kendisi bile henüz bir sorunu çözmüyor; ada göre arama olmayan
+     bir sorunun çözümü olurdu.
+  2. **Her iki uygulama yolu da "sessizce eskiyen ikinci kopya" üretiyor.**
+     GoTrue'nun `filter`'ı yalnız `email` ve `raw_user_meta_data->>'full_name'`
+     alanlarına bakıyor; bizim profil anahtarlarımız `first_name` /
+     `last_name` / `business_name`. Çalışması için ya `user_metadata`'ya bir de
+     `full_name` yazılmalı (ad iki yerde durur, biri güncellenip diğeri
+     kalırsa arama sessizce yanlışlanır) ya da ad kendi veritabanımıza
+     kopyalanmalı (profil verisi iki sistemde, KVKK yüzeyi büyür, sayfalama
+     melezleşir). İki kullanıcı için bu takas kötü.
+  3. **Arayüz henüz yazılmadı.** Arama sözleşmesini kimse listeyi kullanmadan
+     tasarlamak tahmin olurdu.
+  **Geri dönüş koşulu:** gerçek müşteri sayısı listede gezmeyi zorlaştırdığında.
+  O noktada doğru soru "ada göre arama ekleyelim mi" değil, **"profil verisi
+  nerede yaşamalı"**dır (Supabase `user_metadata` mı, kendi veritabanımız mı);
+  cevap ikincisiyse ada göre arama ikinci bir kopya gerektirmeden zaten gelir.
 - **Launch öncesi son kapı, dış girdiye bağlı olduğu için buraya taşındı
   (kullanıcı kararı 14.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
