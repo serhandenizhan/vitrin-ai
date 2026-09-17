@@ -312,11 +312,13 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   **Ertelenmiş açık madde — sahibi: Kaan.** Profil yolu `CMYK_ICC_PATH` ile
   veriliyor ve varsayılanı yok. Profilsiz bir "CMYK" çevrimi matbaada yanlış
   renk verir, bunu sessizce yapmak özelliği hiç sunmamaktan kötüdür.
-  Geliştirmede işletim sisteminin profili kullanılıyor; **üretime çıkmadan
-  depoya serbest lisanslı bir profil konmalı** (örneğin ECI'nin
-  `ISOcoated_v2_eci.icc`) ya da matbaanın kendi profili alınmalı. Bu iş
-  mevcut fazdan çıkarıldı; Kaan'ın ayrı bir PR'ında, profil lisansı ve hedef
-  baskı koşulu doğrulanarak tamamlanacak.
+  **Güncelleme (16.09.2026):** profil seçildi, ECI **PSO Coated v3** (FOGRA51,
+  kuşe kâğıda ofset; ECI'nin güncel profili, `ISOcoated_v2` artık "eski
+  sürümler"de). Lisans doğrulandı: profil gömülebilir ve paylaşılabilir ama
+  ECI'nin yazılı izni olmadan **dağıtılamaz**; depo herkese açık olduğu için
+  **depoya konmadı** (`*.icc` `.gitignore`'da), depo dışında durup
+  `CMYK_ICC_PATH` ile veriliyor. Kalan: canlı sunucuya profilin konması
+  (Vercel'de yerel yol okunamaz — kök `CLAUDE.md` açık takip maddesi 1).
 
   **Kod standardı — Türkçe identifierlar İngilizceye taşındı (10.09.2026).**
   Kompozisyon editörü, katalog, zemin kaynağı ve stüdyo sözleşmesindeki
@@ -661,6 +663,42 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
   hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
   Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).
+- **Öne alınan iş — zemin kütüphanesi (Kaan'ın onayı, 17.09.2026).** Zemin
+  yükleme/yönetim paneli Faz 6'da (Kaan); ilk kütüphane panel olmadan yüklendi.
+  Faz dışı olduğu önceden söylendi ve onaylandı (kural 6).
+  - 93 zemin (bir kısmı Gemini/ChatGPT ile üretildi; görünür filigran yok) R2 +
+    `backgrounds` tablosuna, hepsi `basic`, `backend/scripts/upload_backgrounds.py`
+    ile. Aynı çözünürlükte JPEG %92 (225 MB → 75 MB) ve 480 px önizlemeler.
+  - **Veritabanı yapısı değişmedi** (Kaan'ın kararı). Kategori ve baskı uyarısı
+    `frontend/src/lib/background-catalog.ts`'te; Faz 6 paneli gelince tabloya
+    taşınması değerlendirilmeli.
+  - Stüdyoda 4 kategori sekmesi: Sade (41), Doku & desen (22), Doğal & çiçekli (16),
+    Lüks & koyu (14). Düşük çözünürlüklü 4 ChatGPT zemininde CMYK indirmeden önce
+    onay penceresi.
+  - Açık: backend testleri (önizleme yüklemesi, `thumbnail_url`) Postgres/Redis olmadan
+    çalıştırılamadı; yerelde Redis olmadığı için stüdyoda gerçek zeminlerle tarayıcı
+    doğrulaması yapılamadı. Redis çökerse `GET /api/backgrounds` 500 verip kütüphane
+    sessizce gradyanlara düşüyor — hız sınırlayıcıda yedek yol yok (Serhan'a iletilecek).
+    Yerelde Redis kuruldu (redis-windows 8.10.1, depo dışı), liste artık yerelde çalışıyor.
+- **Öne alınan iş — stüdyo ve katalog düzenlemeleri (Kaan'ın onayı, 17.09.2026).** Stüdyo
+  ve katalog Faz 3'te bitmişti; faz dışı olduğu önceden söylendi ve onaylandı.
+  - Stüdyo A4 ile açılıyor, "Kare 2000×2000" kaldırıldı; düzenleme üç adım (Boyut ve zemin →
+    Ürün → Bitir); daha geniş, ortalanmış ve ekran yüksekliğine sığan tuval.
+  - Zemin artık esnetilmiyor (ortadan kırparak kaplıyor). Fotoğraf/desenli zeminler biçimin
+    yönüne göre listeleniyor (32 dikey, 61 yatay); Sade her biçimde. Sonuç: dikey biçimlerde
+    "Lüks & koyu" yalnızca 2 zemin gösteriyor.
+  - "Işık havuzu" yerine yansıma; gölge ölçülerek güçlendirildi (eski gölge koyu zeminde
+    görünmüyordu).
+  - Katalog: PNG yerine JPEG ve baskıya uygun CMYK (TIFF/JPEG), logo ekleme.
+  - Hata düzeltmesi (Faz 4): sol panelden eski çalışma Paketler/Katalog sayfalarında açılmıyordu.
+  - Sonraki turlar: indirme sonrası soru (ana menü / kataloğa aktar), katalogda "Tam sayfa" dahil
+    6 şablon, sayfa ve metin rengi, sürükle/köşeden boyutlandır logo, logo renklerini çevirme;
+    stüdyoda gölge kapalı başlıyor. Logo ve favicon elmaslı işaretle yenilendi.
+- **Öne alınan iş — Bülten (Kaan'ın onayı, 17.09.2026).** Üst çubukta `/bulten`: görselli
+  paylaşımlar (güncelleme notu, duyuru, yakında) ve gözden kaçabilecek özellikler. İçerik kodda
+  (`frontend/src/lib/bulletin.ts`), veritabanına dokunmuyor. Altın kuru eklenip KALDIRILDI:
+  ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
+  Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
 ### Faz 6 — Admin paneli — ⏳ Planlanan
 

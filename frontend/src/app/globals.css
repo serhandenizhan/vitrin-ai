@@ -725,3 +725,73 @@ html.reduce-motion .soft-fade {
 .catalog-container {
   container-type: inline-size;
 }
+
+/*
+ * Katalog sayfasi onizlemesi yapiskan (17.09.2026). Telefonda ekran
+ * yuksekliginin ~%42'si, genis ekranda yuksekligin tamamina sigacak kadar.
+ */
+.catalog-sticky {
+  max-width: calc(42dvh * var(--catalog-ratio));
+}
+/* Tam genislik zemin: kaydirilan panel sayfanin yanlarindan gorunmesin. */
+.catalog-sticky-bar {
+  background-color: #f6f4f1;
+}
+@media (min-width: 64rem) {
+  .catalog-sticky {
+    max-width: min(32rem, calc((100dvh - 8rem) * var(--catalog-ratio)));
+  }
+  .catalog-sticky-bar {
+    background-color: transparent;
+  }
+}
+
+/*
+ * TELEFON DUZENI (Kaan, 17.09.2026: "kutular cok buyuk, cok asagi kaydirmak
+ * gerekiyor; telefona ozel olsun"). Apple'in telefon sayfalarindaki gibi:
+ * kart listeleri alt alta DEGIL, yana kaydirilan bir seritte; bir sonraki kart
+ * kenardan gorunuyor ki kaydirilabilecegi anlasilsin. 640 px ve ustunde hicbir
+ * etkisi yok, mevcut izgara aynen kaliyor.
+ *
+ * Katmansiz CSS bilincli: Tailwind'in `grid` yardimcisini (katmanli) ezmesi
+ * icin ozgulluk yerine katman sirasina guveniyor.
+ */
+@media (max-width: 639.98px) {
+  .mobile-rail {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1.25rem;
+    /* Serit ekran kenarina kadar uzaniyor; icerik yine 20 px iceride basliyor. */
+    margin-inline: -1.25rem;
+    padding-inline: 1.25rem;
+    padding-bottom: 0.25rem;
+    scrollbar-width: none;
+  }
+  .mobile-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .mobile-rail > * {
+    flex: 0 0 82%;
+    scroll-snap-align: start;
+    min-width: 0;
+  }
+  .mobile-rail-narrow > * {
+    flex-basis: 68%;
+  }
+  /* Seritteki kartlar yana kaydirilinca belirmeyi BEKLEMIYOR: dikey
+     kaydirmaya gore kurulu "reveal" gozlemcisi yatay kaydirmada gec ya da
+     hic tetiklenmeyebiliyor ve kart bos gorunuyordu. */
+  .mobile-rail > .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Bolum araliklari telefonda daha siki. */
+  .section-rhythm {
+    padding-top: 2.75rem;
+    padding-bottom: 2.75rem;
+  }
+}

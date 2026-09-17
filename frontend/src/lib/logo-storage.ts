@@ -43,7 +43,17 @@ export function loadStoredLogoSettings(): LogoSettings {
     ) {
       return DEFAULT_LOGO;
     }
-    return { corner: parsed.corner, size: parsed.size, opacity: parsed.opacity };
+    const position =
+      parsed.position &&
+      typeof parsed.position.x === "number" &&
+      typeof parsed.position.y === "number" &&
+      parsed.position.x >= 0 &&
+      parsed.position.x <= 1 &&
+      parsed.position.y >= 0 &&
+      parsed.position.y <= 1
+        ? { x: parsed.position.x, y: parsed.position.y }
+        : null;
+    return { corner: parsed.corner, size: parsed.size, opacity: parsed.opacity, position };
   } catch {
     return DEFAULT_LOGO;
   }

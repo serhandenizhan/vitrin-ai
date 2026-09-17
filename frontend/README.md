@@ -26,7 +26,7 @@ npm run dev
 | `USE_MOCK_BACKEND` | `true` | Demo modu — backend hiç çağrılmaz, sabit bir örnek kesim döner. Giriş yine gerekir. |
 | `NEXT_PUBLIC_SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | boş | Supabase publishable (anon) anahtarı; tarayıcıya gitmek için tasarlandı, veriyi RLS koruyor. Boşsa site açılır ama giriş yapılamaz. `service_role`/secret anahtar buraya asla yazılmaz. |
-| `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. |
+| `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. Kullanılan profil ECI **PSO Coated v3** (eci.org → `pso-coated_v3.zip` → `PSOcoated_v3.icc`). **Depoya konmaz:** lisansı gömmeye izin veriyor ama dağıtmaya izin vermiyor, depo herkese açık. Dosyayı depo dışına indirip yolunu buraya yazın (ayrıntı: kök `CLAUDE.md` açık takip maddesi 1). |
 
 > **`USE_MOCK_BACKEND` uyarısı:** bu değer `true` kaldığı sürece gerçek backend
 > ayakta olsa bile arayüz **hep aynı örnek görseli** gösterir. Önceki iterasyonda
@@ -254,7 +254,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**235 test** (Faz 5 uygulama incelemesindeki düzeltmeler, 15.09.2026). Faz 2-3 dosyaları:
+**270 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026). Faz 2-3 dosyaları:
 
 | dosya | kapsam |
 | --- | --- |
@@ -751,9 +751,9 @@ kez kuruluyor (görsel değiştiğinde), filtre parametreleri değiştiğinde Ko
 önbelleği kendisi yeniden işliyor — her kaydırac hareketinde `cache()` çağırmak
 büyük görsellerde gözle görülür takılma yaratırdı.
 
-**Gölge ve ışık havuzu** ölçüleri sahne koordinatında (1000 birim) veriliyor,
-sabit piksel değil: ürün büyüdükçe gölge de büyüyor. Işık havuzu ürünün değil
-**zeminin** üstünde — ürüne düşen bir vinyet onu soluklaştırırdı.
+**Gölge** ölçüleri sahne koordinatında (1000 birim) veriliyor, sabit piksel
+değil: ürün büyüdükçe gölge de büyüyor. (Faz 3'teki "ışık havuzu" 17.09.2026'da
+kaldırıldı, yerine yansıma geldi; aşağıdaki güncel bölüme bakın.)
 
 **Merkeze yakalama:** sürüklerken merkeze 12 birimden yakınsa değer tam merkeze
 çekiliyor. Fareyle tam ortayı tutturmak neredeyse imkânsız ve 1-2 piksellik kayma
@@ -806,6 +806,55 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   reddedebiliyor). `navigator.canShare({ files })` varsa (telefon) paylaşım menüsü
   görselin kendisiyle açılıyor; yoksa (masaüstü — WhatsApp Web'e bağlantıyla dosya
   eklenemiyor) görsel indiriliyor, WhatsApp Web açılıyor ve ne yapılacağı yazıyor.
+
+### Zemin kütüphanesi: kategoriler ve baskı uyarısı (öne alınan iş, 17.09.2026)
+
+- **Kategoriler:** stüdyodaki zemin seçici 4 sekmeye ayrıldı — Sade, Doku & desen,
+  Doğal & çiçekli, Lüks & koyu. Tanımlar `src/lib/background-categories.ts`. Boş
+  kategori sekmesi çizilmez; yalnızca bir kategori doluysa (ör. sunucu zemini yokken)
+  sekme hiç yoktur. Hazır gradyanlar ve katalogda olmayan her zemin "Sade" sayılır.
+- **Kategori nerede tutuluyor:** veritabanında DEĞİL. `src/lib/background-catalog.ts`
+  zemin kimliği → kategori / baskı uyarısı eşlemesi ve `backend/scripts/upload_backgrounds.py
+  --catalog-out` ile üretilir; elle düzenlenmez. Yeni zemin yüklenince betik yeniden
+  çalıştırılıp dosya commit edilir.
+- **Önizlemeler:** seçicideki yuvarlaklar tam boyutlu zemini değil ~480 px önizlemeyi
+  (`thumbnailUrl`) tembel yükler; önizleme yoksa tam boyutlu görsele düşer. Önizleme olmadan
+  bir sekme yüzlerce MB indiriyordu.
+- **Baskı uyarısı:** katalogda `printWarning` olan zemin seçiliyken CMYK (TIFF/JPEG)
+  düğmesi önce onay penceresi açar: "Bu görsel baskıya önerilmiyor. Yine de onaylıyor
+  musunuz?" — Vazgeç hiçbir şey indirmez, "Evet, indir" normal akışa devam eder. Kontrol
+  arayüzde; `/api/cmyk` yalnızca çizilmiş sahneyi alır.
+- **Yerelde zeminler görünmüyorsa:** backend'in Redis'e ulaşabildiğini kontrol edin
+  (Faz 5 hız sınırlayıcısı). Redis yokken `GET /api/backgrounds` 500 verir ve vekil
+  `X-Backgrounds-Source: unavailable` ile boş liste döner.
+
+### Stüdyo adımları, biçim yönü, yansıma; katalog çıktısı (öne alınan iş, 17.09.2026)
+
+- **Adımlar:** `composition-editor.tsx` paneli üç adıma bölündü — 1 Boyut ve zemin, 2 Ürün
+  (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma), 3 Bitir (logo, etiket, PNG/JPEG,
+  WhatsApp, CMYK). Biçim ilk adımda çünkü zemin listesini o belirliyor.
+- **Biçimler:** stüdyo A4 (`DEFAULT_FORMAT_NAME = "catalog"`) ile açılır; "Kare 2000×2000"
+  kaldırıldı, beyaz zeminli Pazaryeri (2000×2000) duruyor.
+- **Zemin esnetilmiyor:** `editor-stage.tsx` zemini `coverCrop` (lib/composition.ts) ile
+  ortadan kırparak kaplatıyor; önceden doğrudan sahne ölçüsüne zorlanıyor, hikâyede
+  "çekiştirilmiş" görünüyordu.
+- **Biçim yönüne göre zemin:** katalogdaki `orientation` (yükleme betiği ölçüden üretir) ile
+  dikey biçimlerde (A4, hikâye, Instagram dikey) dikey, gönderi ve pazaryerinde yatay zeminler
+  listelenir; **Sade her biçimde** (`fitsOrientation`). Biçim değişince uymayan seçili zemin
+  ilk uyan zemine geçer.
+- **Yansıma:** ayrı Konva katmanında aynalanmış kopya, `destination-in` gradyanıyla aşağı doğru
+  silikleşir (aynı katmanda ürünü de silerdi). Sürüklerken anlık takip eder; geri alma yığınına
+  yalnızca bırakınca yazılır.
+- **Gölge:** `SHADOW` sabiti (bulanıklık 50, kayma 34, opaklık %55). Eski değer Konva'da
+  ölçüldü ve koyu zeminde görünmüyordu; önbellek gölgeyi kesiyor sanılmıştı, ölçüm bunu
+  çürüttü. Önbelleğe yine de gölge payı veriliyor.
+- **Katalog:** PNG yerine JPEG indirme ve baskıya uygun CMYK (TIFF/JPEG); logo ekleme
+  (stüdyoyla aynı `lib/logo-storage.ts` deposu, önizlemede ve çıktıda aynı `logoBox`
+  geometrisi). CMYK akışı iki yerde ortak: `lib/print-download.ts`.
+- **Eski çalışmalar her sayfadan açılıyor:** ana sayfa dışında bir çalışmaya tıklanınca
+  çalışma `sessionStorage`'a yazılır ve ana sayfaya gidilir; araç abone olunca açar
+  (`workspace-provider.tsx`). Sağlayıcı her sayfada `SiteShell` ile yeniden kurulduğu için
+  bellekte tutmak yetmez.
 
 ## Ödemeler (Faz 5)
 

@@ -169,9 +169,15 @@ async def test_happy_path_uploads_and_creates_row(db_session, admin_headers):
     assert response.status_code == 201
     background_id = uuid.UUID(response.json()["id"])
 
-    storage_mock.upload.assert_called_once_with(
+    # Zeminin kendisi olduğu gibi, yanında küçük JPEG önizlemesi.
+    assert storage_mock.upload.call_count == 2
+    storage_mock.upload.assert_any_call(
         f"backgrounds/{background_id}.jpg", content, "image/jpeg"
     )
+    thumb_call = storage_mock.upload.call_args_list[1]
+    assert thumb_call.args[0] == f"backgrounds/thumbs/{background_id}.jpg"
+    assert thumb_call.args[2] == "image/jpeg"
+    assert Image.open(io.BytesIO(thumb_call.args[1])).format == "JPEG"
 
     result = await db_session.execute(
         select(Background).where(Background.id == background_id)
@@ -276,6 +282,8 @@ async def test_list_backgrounds_returns_only_active_with_presigned_urls(db_sessi
     assert len(body) == 1
     assert body[0]["id"] == str(active.id)
     assert body[0]["url"] == f"https://signed.example/{active.r2_key}"
+    # Önizleme adresi zeminin anahtarından türetiliyor; DB'de ayrı alan yok.
+    assert body[0]["thumbnail_url"] == "https://signed.example/backgrounds/thumbs/active.jpg"
     # İmzalı URL'ler süreli; istemcinin yenilemeyi ne zaman yapacağını
     # sunucudan öğrenmesi gerekiyor (bkz. ROADMAP.md Faz 3 uyarısı).
     assert body[0]["expires_in"] == settings.background_url_expiry_seconds

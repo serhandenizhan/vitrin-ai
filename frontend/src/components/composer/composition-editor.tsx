@@ -16,6 +16,10 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Contrast,
   Crosshair,
   Download,
   ImagePlus,
@@ -35,6 +39,8 @@ import {
   type Transform,
   type Appearance,
   DEFAULT_APPEARANCE,
+  DEFAULT_FORMAT_NAME,
+  formatOrientation,
   normalizeAngle,
   isDefaultAppearance,
   logicalSize,
@@ -42,6 +48,16 @@ import {
   MARKETPLACE_BACKGROUND_ID,
 } from "@/lib/composition";
 import type { Background } from "@/lib/backgrounds";
+import {
+  BACKGROUND_CATEGORIES,
+  PRINT_WARNING_MESSAGE,
+  backgroundCategory,
+  fitsOrientation,
+  needsPrintWarning,
+  type BackgroundCategory,
+} from "@/lib/background-categories";
+import { invertLogo, prepareLogo } from "@/lib/logo-image";
+import { downloadCmyk } from "@/lib/print-download";
 import {
   clearStoredLogo,
   loadStoredLogo,
@@ -55,8 +71,6 @@ import {
   DEFAULT_LOGO,
   KARAT_OPTIONS,
   LOGO_OPACITY_RANGE,
-  LOGO_SIZE_RANGE,
-  LOGO_STORAGE_MAX_EDGE,
   MAX_CODE_LENGTH,
   type Corner,
   type LogoSettings,
@@ -82,10 +96,40 @@ export type CompositionEditorProps = {
   cutoutUrl: string;
   /** Indirilen dosyanin adinda kullanilir. */
   fileName: string;
+  /** Indirme sonrasi "Ana menüye dön" (studyo saglar). */
+  onReturnToStart?: () => void;
+  /**
+   * Katalog boyutunda indirilen gorseli katalog sablonuna gonderir; `false`
+   * donerse gorsel tasinamadi (tarayici depolamasi kapali/dolu).
+   */
+  onSendToCatalog?: (jpegDataUrl: string) => boolean;
 };
 
-/** Sahnenin ekrandaki ust siniri — daha buyugu masaustunde sayfayi tasiyor. */
-const MAX_DISPLAY_SIZE = 560;
+/**
+ * Indirme bittikten sonra acilan soru (Kaan, 17.09.2026). Katalog boyutunda
+ * once "sablona ekle" soruluyor; "Hayır" denirse ana menu sorusu geliyor.
+ */
+type AfterDownload = "catalog" | "home" | null;
+
+/**
+ * Sahnenin ekrandaki ust siniri. 17.09.2026'da 560'tan buyutuldu (Kaan: daha
+ * genis duzenleme alani); dikey bicimlerde tuval ayrica ekran yuksekligine
+ * gore sinirlaniyor (kapsayicinin `maxWidth`i).
+ */
+const MAX_DISPLAY_SIZE = 768;
+
+/**
+ * Duzenleme uc adimda (Kaan, 17.09.2026: "cok daginik, asamalara bol").
+ * Bicim ilk adimda: zemin listesi bicimin yonune gore suzuluyor, once bicim
+ * secilmeli.
+ */
+const EDITOR_STEPS = [
+  { id: 1, label: "Boyut ve zemin" },
+  { id: 2, label: "Ürün" },
+  { id: 3, label: "Bitir" },
+] as const;
+
+type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
 
 /**
  * Baslangic olcusu bilincli olarak KUCUK.
@@ -109,27 +153,6 @@ const EXPORT_ERROR_MESSAGE =
   "Görsel dışa aktarılamadı. Sayfayı yenileyip tekrar deneyin.";
 
 type PrintStatus = "idle" | "preparing" | "done" | { error: string };
-
-/**
- * Yuklenen logoyu en fazla `LOGO_STORAGE_MAX_EDGE` px'e kucultup PNG veri
- * URL'ine cevirir: localStorage kotasi (~5 MB) birkac MB'lik bir logoyla
- * dolmasin, saydamlik da korunsun.
- */
-async function prepareLogo(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, LOGO_STORAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) {
-    bitmap.close();
-    throw new Error("Tuval kullanılamıyor.");
-  }
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return canvas.toDataURL("image/png");
-}
 
 /**
  * Veri URL'ini SENKRON olarak dosyaya cevirir.
@@ -156,15 +179,31 @@ function triggerDownload(href: string, name: string) {
   link.click();
 }
 
-export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProps) {
+export function CompositionEditor({
+  cutoutUrl,
+  fileName,
+  onReturnToStart,
+  onSendToCatalog,
+}: CompositionEditorProps) {
   const { backgrounds, hasServerBackground, isLoading } = useBackgrounds();
   const [selectedBackgroundId, setSelectedBackgroundId] = useState<string | null>(null);
   const [displaySize, setDisplaySize] = useState(INITIAL_DISPLAY_SIZE);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
-  const [formatName, setFormatName] = useState<OutputFormatName>("square");
+  const [formatName, setFormatName] = useState<OutputFormatName>(DEFAULT_FORMAT_NAME);
+  const [step, setStep] = useState<EditorStep>(1);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
+  const [afterDownload, setAfterDownload] = useState<AfterDownload>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  /**
+   * Kullanicinin elle actigi zemin kategorisi. `null`: secili zeminin
+   * kategorisi gosteriliyor — boylece "Pazaryeri" duz beyazi sectiginde sekme
+   * de kendiliginden "Sade"ye geciyor, secili zemin gorunmez bir sekmede kalmiyor.
+   */
+  const [activeCategory, setActiveCategory] = useState<BackgroundCategory | null>(null);
+  /** Baskiya onerilmeyen zeminde CMYK indirmeden once acilan onay. */
+  const [pendingPrintFormat, setPendingPrintFormat] = useState<"jpeg" | "tiff" | null>(null);
   const [transform, setTransform] = useState<Transform | null>(null);
   const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
   // Studyo yalnizca istemcide acildigi icin (kullanici etkilesimiyle) tembel
@@ -305,9 +344,45 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
   // (imzali URL'ler tazelendiginde) nesne kimligi degisiyor ama id ayni
   // kaliyor, dolayisiyla kullanicinin secimi yenilemeden SAG CIKIYOR.
   // Nesneyi saklasaydik her yenilemede secim ilk zemine donerdi.
+  //
+  // Yalnizca bicimin yonune uyan zeminler (Kaan, 17.09.2026): dikey bir zemin
+  // kare bicime, yatay bir zemin hikayeye konunca buyuk kismi kirpiliyordu.
+  // "Sade" her bicimde (bkz. lib/background-categories.ts `fitsOrientation`).
+  // Bicim degisince secili zemin uymuyorsa ilk uyan zemine geciliyor.
+  const orientation = formatOrientation(format);
+  const fittingBackgrounds = useMemo(
+    () => backgrounds.filter((background) => fitsOrientation(background.id, orientation)),
+    [backgrounds, orientation],
+  );
   const selectedBackground: Background =
-    backgrounds.find((background) => background.id === selectedBackgroundId) ??
+    fittingBackgrounds.find((background) => background.id === selectedBackgroundId) ??
+    fittingBackgrounds[0] ??
     backgrounds[0];
+
+  /**
+   * Zeminler kategorilere ayriliyor (one alinan is, 17.09.2026): 90'dan fazla
+   * zemin tek izgarada karisiyordu. Bos kategori sekmesi gosterilmiyor;
+   * yalnizca bir kategori doluysa (ornegin sunucu zemini yokken) sekme hic yok.
+   */
+  const backgroundGroups = useMemo(
+    () =>
+      BACKGROUND_CATEGORIES.map((category) => ({
+        ...category,
+        items: fittingBackgrounds.filter(
+          (background) => backgroundCategory(background.id) === category.id,
+        ),
+      })).filter((group) => group.items.length > 0),
+    [fittingBackgrounds],
+  );
+  const shownGroup =
+    backgroundGroups.find(
+      (group) => group.id === (activeCategory ?? backgroundCategory(selectedBackground.id)),
+    ) ?? backgroundGroups[0];
+
+  const selectBackground = useCallback((id: string) => {
+    setSelectedBackgroundId(id);
+    setActiveCategory(null);
+  }, []);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -351,7 +426,10 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
     setTransform(null);
     // Pazaryeri "tek tikla": bicimle birlikte duz beyaz zemin seciliyor.
     // Kullanici sonra baska zemin secebilir; o zaman uyari gosteriliyor.
-    if (name === "marketplace") setSelectedBackgroundId(MARKETPLACE_BACKGROUND_ID);
+    if (name === "marketplace") {
+      setSelectedBackgroundId(MARKETPLACE_BACKGROUND_ID);
+      setActiveCategory(null);
+    }
   }, []);
 
   const setScaleRatio = useCallback(
@@ -449,6 +527,11 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
     [stageSize, format],
   );
 
+  const openAfterDownload = useCallback(() => {
+    setCatalogError(null);
+    setAfterDownload(formatName === "catalog" && onSendToCatalog ? "catalog" : "home");
+  }, [formatName, onSendToCatalog]);
+
   /** Sahneyi indirilebilir bir dosyaya cevirir. */
   const download = useCallback(
     (type: "png" | "jpeg") => {
@@ -466,8 +549,9 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
         dataUrl,
         `${fileName.replace(/\.[^.]+$/, "")}-${format.fileSlug}.${type === "jpeg" ? "jpg" : "png"}`,
       );
+      openAfterDownload();
     },
-    [renderStage, fileName, format],
+    [renderStage, fileName, format, openAfterDownload],
   );
 
   /**
@@ -540,6 +624,20 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
     setLogoMessage(null);
   }, []);
 
+  /** Beyaz logo siyah, siyah logo beyaz olur; tekrar basmak geri alir. */
+  const invertCurrentLogo = useCallback(async () => {
+    if (!logoUrl) return;
+    try {
+      const inverted = await invertLogo(logoUrl);
+      setLogoUrl(inverted);
+      setLogoMessage(
+        storeLogo(inverted, logo) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
+      );
+    } catch {
+      setLogoMessage("Logonun renkleri çevrilemedi.");
+    }
+  }, [logoUrl, logo]);
+
   const updateLogo = useCallback((patch: Partial<LogoSettings>) => {
     setLogo((current) => {
       const next = { ...current, ...patch };
@@ -571,39 +669,70 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
       if (!dataUrl) return;
 
       setPrintStatus("preparing");
-      try {
-        const body = new FormData();
-        body.append("file", await (await fetch(dataUrl)).blob(), "sahne.png");
-        body.append("format", printFormat);
-
-        const response = await fetch("/api/cmyk", { method: "POST", body });
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => null);
-          setPrintStatus({ error: errorBody?.error ?? "Dönüşüm başarısız oldu." });
-          return;
-        }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${fileName.replace(/\.[^.]+$/, "")}-cmyk.${printFormat === "tiff" ? "tif" : "jpg"}`;
-        link.click();
-        // Iptal GECIKTIRILIYOR. `click()`'ten hemen sonra iptal etmek, tarayici
-        // blob'u okumaya baslamadan URL'i gecersiz kilabiliyor ve indirme
-        // sessizce basarisiz oluyor. Bir dakika, en yavas cihazda bile fazlasiyla
-        // yeterli; sonra bellek serbest kaliyor.
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        setPrintStatus("done");
-      } catch {
-        setPrintStatus({ error: "Sunucuya ulaşılamadı." });
-      }
+      // Istek ve indirme katalogla ortak (lib/print-download.ts).
+      const result = await downloadCmyk(dataUrl, printFormat, fileName.replace(/\.[^.]+$/, ""));
+      setPrintStatus(result.ok ? "done" : { error: result.error });
+      if (result.ok) openAfterDownload();
     },
-    [renderStage, fileName],
+    [renderStage, fileName, openAfterDownload],
   );
 
+  /** Katalog sorusuna "Evet": gorsel RGB JPEG olarak cizilip kataloga gidiyor. */
+  const sendToCatalog = useCallback(() => {
+    if (!onSendToCatalog) return;
+    let dataUrl: string | null;
+    try {
+      dataUrl = renderStage("jpeg");
+    } catch (error) {
+      console.error("[composer] katalog icin cizim basarisiz:", error);
+      setCatalogError(EXPORT_ERROR_MESSAGE);
+      return;
+    }
+    if (!dataUrl) return;
+    if (!onSendToCatalog(dataUrl)) {
+      setCatalogError("Görsel kataloğa taşınamadı. İndirdiğiniz dosyayı Katalog sayfasında ekleyebilirsiniz.");
+    }
+  }, [onSendToCatalog, renderStage]);
+
+  /**
+   * CMYK dugmelerinin girisi. Cozunurlugu baski icin dusuk zeminlerde
+   * (katalogda `printWarning`) once onay isteniyor — Kaan'in karari
+   * (17.09.2026): baski yasaklanmiyor, kullaniciya soruluyor.
+   *
+   * Sinir: kontrol arayuzde. `/api/cmyk` yalnizca cizilmis sahneyi aliyor,
+   * hangi zeminin kullanildigini bilmiyor.
+   */
+  const requestPrint = useCallback(
+    (printFormat: "jpeg" | "tiff") => {
+      if (needsPrintWarning(selectedBackground.id)) {
+        setPendingPrintFormat(printFormat);
+        return;
+      }
+      void downloadForPrint(printFormat);
+    },
+    [selectedBackground.id, downloadForPrint],
+  );
+
+  useEffect(() => {
+    if (!pendingPrintFormat) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setPendingPrintFormat(null);
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [pendingPrintFormat]);
+
+  useEffect(() => {
+    if (!afterDownload) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setAfterDownload(null);
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [afterDownload]);
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-8">
+    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-10">
       {/*
         `min-w-0` sart: grid ogelerinin varsayilan `min-width: auto` degeri,
         ogenin ICERIGINDEN daha dar olmasini engelliyor. Konva sahnesi kendine
@@ -621,7 +750,12 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
       */}
       <div
         ref={containerRef}
-        className="mx-auto w-full max-w-[22rem] min-w-0 sm:max-w-[26rem] lg:sticky lg:top-20 lg:max-w-[35rem]"
+        className="mx-auto w-full min-w-0 lg:sticky lg:top-20"
+        // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde yalnizca
+        // genislige gore buyutmek tuvali ekranin altina tasiyordu.
+        style={{
+          maxWidth: `min(48rem, calc((100dvh - 10rem) * ${format.outputWidth / format.outputHeight}))`,
+        }}
       >
         <div
           className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1"
@@ -638,6 +772,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
             logoUrl={logoUrl}
             logo={logo}
             label={label}
+            onLogoChange={updateLogo}
             onTransformChange={(next) => {
               pushHistory();
               setTransform(next);
@@ -653,16 +788,105 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
       </div>
 
       <div className="divide-black/8 rounded-2xl bg-[#f5f5f7] divide-y">
+        <div role="tablist" aria-label="Düzenleme adımları" className="grid grid-cols-3 gap-1.5 p-3">
+          {EDITOR_STEPS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={step === item.id}
+              onClick={() => setStep(item.id)}
+              className={
+                "press min-h-10 rounded-xl px-2 text-[0.8125rem] leading-tight transition-colors " +
+                (step === item.id
+                  ? "bg-black text-white"
+                  : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+              }
+            >
+              <span className="mr-1 tabular-nums opacity-60">{item.id}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {step === 1 ? (
+          <>
+        {/*
+          Cikti bicimleri. Mantiksal sahne olcusu her bicimde ciktinin YARISI
+          oldugu icin disa aktarma orani tam 2 kaliyor — kesirli bir oran
+          Konva'nin ic hesabinda bir piksel kaybina yol aciyor (2000 yerine
+          1999 px uretildigi birebir olculdu). Ilk adimda: zemin listesi
+          bicimin yonune gore suzuluyor.
+        */}
+        <SectionHeading>Çıktı boyutu</SectionHeading>
+        <div className="grid grid-cols-2 gap-2 px-5 pb-5">
+          {(
+            Object.entries(OUTPUT_FORMATS) as [
+              OutputFormatName,
+              (typeof OUTPUT_FORMATS)[OutputFormatName],
+            ][]
+          ).map(([name, option]) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => changeFormat(name)}
+              aria-pressed={formatName === name}
+              className={
+                "press rounded-xl px-3 py-2 text-left transition-shadow " +
+                (formatName === name
+                  ? "ring-gold bg-white ring-2"
+                  : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
+              }
+            >
+              <span className="block text-[0.8125rem] font-medium">{option.label}</span>
+              <span className="fine-print block opacity-55">{option.summary}</span>
+            </button>
+          ))}
+        </div>
+
         <SectionHeading>Zemin</SectionHeading>
         <div className="px-5 pb-5">
-          <div className="grid grid-cols-6 gap-2 lg:grid-cols-4">
-            {backgrounds.map((background) => {
+          {backgroundGroups.length > 1 ? (
+            <div
+              role="tablist"
+              aria-label="Zemin kategorileri"
+              className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1"
+            >
+              {backgroundGroups.map((group) => {
+                const isShown = group.id === shownGroup?.id;
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isShown}
+                    onClick={() => setActiveCategory(group.id)}
+                    className={
+                      "press min-h-8 shrink-0 rounded-full px-3 text-[0.75rem] whitespace-nowrap transition-colors " +
+                      (isShown
+                        ? "bg-black text-white"
+                        : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+                    }
+                  >
+                    {group.label}
+                    <span className="ml-1.5 tabular-nums opacity-55">{group.items.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Kaydirilabilir: bir kategoride 40'tan fazla zemin olabiliyor ve
+              panelin geri kalani (yerlesim, cikti) asagida kaybolmamali. `p-1`
+              secili halkanin (ring-offset) kirpilmamasi icin. */}
+          <div className="-m-1 grid max-h-[15.5rem] grid-cols-6 gap-2 overflow-y-auto p-1 lg:grid-cols-4">
+            {(shownGroup?.items ?? fittingBackgrounds).map((background) => {
               const isActive = background.id === selectedBackground.id;
               return (
                 <button
                   key={background.id}
                   type="button"
-                  onClick={() => setSelectedBackgroundId(background.id)}
+                  onClick={() => selectBackground(background.id)}
                   title={background.name}
                   aria-label={background.name}
                   aria-pressed={isActive}
@@ -673,7 +897,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
                   // olculerek yakalandi). `ring` bu isi tek bir ongorulebilir
                   // ozellikle yapiyor.
                   className={
-                    "aspect-square rounded-full ring-offset-[#f5f5f7] transition-transform duration-200 " +
+                    "aspect-square overflow-hidden rounded-full ring-offset-[#f5f5f7] transition-transform duration-200 " +
                     (isActive
                       ? "ring-gold scale-105 ring-2 ring-offset-2"
                       : "ring-1 ring-black/15 hover:scale-105")
@@ -681,13 +905,30 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
                   style={
                     background.type === "placeholder"
                       ? { background: gradientCss(background.gradient) }
-                      : {
-                          backgroundImage: `url(${background.url})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
+                      : undefined
                   }
-                />
+                >
+                  {background.type === "server" ? (
+                    // <img>, CSS arka plani degil: `loading="lazy"` yalnizca
+                    // gorunen simgeleri indiriyor ve onizleme yoksa tam boyutlu
+                    // gorsele dusmek icin `onError` gerekiyor.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={background.thumbnailUrl ?? background.url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      onError={(event) => {
+                        const image = event.currentTarget;
+                        if (image.dataset.fallback === "1") return;
+                        image.dataset.fallback = "1";
+                        image.src = background.url;
+                      }}
+                      className="size-full object-cover"
+                    />
+                  ) : null}
+                </button>
               );
             })}
           </div>
@@ -710,7 +951,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               Pazaryerleri genellikle düz beyaz zemin ister.{" "}
               <button
                 type="button"
-                onClick={() => setSelectedBackgroundId(MARKETPLACE_BACKGROUND_ID)}
+                onClick={() => selectBackground(MARKETPLACE_BACKGROUND_ID)}
                 className="font-medium underline underline-offset-2"
               >
                 Beyaza dön
@@ -719,6 +960,11 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           ) : null}
         </div>
 
+          </>
+        ) : null}
+
+        {step === 2 ? (
+          <>
         <SectionHeading>Yerleşim</SectionHeading>
         <div className="space-y-4 px-5 pb-5">
           <div>
@@ -816,13 +1062,17 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               onChange={(on) => setAppearance((a) => ({ ...a, shadow: on }))}
             />
             <Toggle
-              label="Işık havuzu"
-              isOn={appearance.spotlight}
-              onChange={(on) => setAppearance((a) => ({ ...a, spotlight: on }))}
+              label="Yansıma"
+              isOn={appearance.reflection}
+              onChange={(on) => setAppearance((a) => ({ ...a, reflection: on }))}
             />
           </div>
         </div>
+          </>
+        ) : null}
 
+        {step === 3 ? (
+          <>
         {/* Logo (one alinan is, 13.09.2026) */}
         <SectionHeading>Logo</SectionHeading>
         <div className="space-y-3 px-5 pb-5">
@@ -883,20 +1133,26 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
 
           {logoUrl ? (
             <>
+              {/* Kose secmek serbest konumu siliyor; boyut artik kaydiracla
+                  degil, sahnedeki kose karelerinden (Kaan, 17.09.2026). */}
               <CornerPicker
                 label="Logo konumu"
-                value={logo.corner}
-                onChange={(corner) => updateLogo({ corner })}
+                value={logo.position ? null : logo.corner}
+                onChange={(corner) => updateLogo({ corner, position: null })}
               />
-              <Slider
-                label="Logo boyutu"
-                value={logo.size}
-                min={LOGO_SIZE_RANGE.min}
-                max={LOGO_SIZE_RANGE.max}
-                step={0.01}
-                format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(size) => updateLogo({ size })}
-              />
+              <p className="fine-print opacity-55">
+                Logoya dokunun; sürükleyerek taşıyın, köşedeki karelerden boyutlandırın.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void invertCurrentLogo()}
+                className="press w-full rounded-full bg-white"
+              >
+                <Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />
+                Renkleri çevir
+              </Button>
               <Slider
                 label="Saydamlık"
                 value={logo.opacity}
@@ -1010,38 +1266,6 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
           )}
         </div>
 
-        {/*
-          Cikti bicimleri. Mantiksal sahne olcusu her bicimde ciktinin YARISI
-          oldugu icin disa aktarma orani tam 2 kaliyor — kesirli bir oran
-          Konva'nin ic hesabinda bir piksel kaybina yol aciyor (2000 yerine
-          1999 px uretildigi birebir olculdu).
-        */}
-        <SectionHeading>Çıktı boyutu</SectionHeading>
-        <div className="grid grid-cols-2 gap-2 px-5 pb-5">
-          {(
-            Object.entries(OUTPUT_FORMATS) as [
-              OutputFormatName,
-              (typeof OUTPUT_FORMATS)[OutputFormatName],
-            ][]
-          ).map(([name, option]) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => changeFormat(name)}
-              aria-pressed={formatName === name}
-              className={
-                "press rounded-xl px-3 py-2 text-left transition-shadow " +
-                (formatName === name
-                  ? "ring-gold bg-white ring-2"
-                  : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
-              }
-            >
-              <span className="block text-[0.8125rem] font-medium">{option.label}</span>
-              <span className="fine-print block opacity-55">{option.summary}</span>
-            </button>
-          ))}
-        </div>
-
         <SectionHeading>
           Dışa aktar
           <span className="ml-2 font-normal normal-case opacity-50">
@@ -1112,7 +1336,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => downloadForPrint("tiff")}
+              onClick={() => requestPrint("tiff")}
               disabled={printStatus === "preparing"}
               className="press min-h-10 flex-1 rounded-full bg-white"
             >
@@ -1127,7 +1351,7 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => downloadForPrint("jpeg")}
+              onClick={() => requestPrint("jpeg")}
               disabled={printStatus === "preparing"}
               className="press min-h-10 flex-1 rounded-full bg-white"
             >
@@ -1168,7 +1392,154 @@ export function CompositionEditor({ cutoutUrl, fileName }: CompositionEditorProp
             PNG çıktısı zaten kayıpsızdır; JPEG sıkıştırma uygular.
           </p>
         </div>
+          </>
+        ) : null}
+
+        <div className="flex gap-2 p-4">
+          {step > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep((current) => (current - 1) as EditorStep)}
+              className="press min-h-10 flex-1 rounded-full bg-white"
+            >
+              <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
+              Geri
+            </Button>
+          ) : null}
+          {step < 3 ? (
+            <Button
+              type="button"
+              onClick={() => setStep((current) => (current + 1) as EditorStep)}
+              className="press min-h-10 flex-1 rounded-full"
+            >
+              Devam
+              <ArrowRight className="size-4" strokeWidth={1.75} aria-hidden />
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {afterDownload ? (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-5">
+          <button
+            type="button"
+            aria-label="Kapat"
+            onClick={() => setAfterDownload(null)}
+            className="soft-fade fixed inset-0 bg-black/55 backdrop-blur-[2px]"
+          />
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="indirme-bitti-baslik"
+            className="soft-enter relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <span className="flex size-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+              <CheckCircle2 className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <p className="text-muted-foreground mt-4 text-[0.875rem]">
+              İndirme işlemi başarıyla tamamlandı.
+            </p>
+            <h2
+              id="indirme-bitti-baslik"
+              className="mt-1 text-[1.0625rem] font-semibold tracking-[-0.01em]"
+            >
+              {afterDownload === "catalog"
+                ? "Katalog görselinizi şablona eklemek ister misiniz?"
+                : "Ana menüye dönmek ister misiniz?"}
+            </h2>
+            {catalogError ? (
+              <p role="alert" className="fine-print mt-2 text-red-700">
+                {catalogError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() =>
+                  setAfterDownload(
+                    afterDownload === "catalog" && onReturnToStart ? "home" : null,
+                  )
+                }
+                className="min-h-11 flex-1 rounded-full text-[0.9375rem] ring-1 ring-black/15 transition-colors hover:bg-black/5"
+              >
+                Hayır
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (afterDownload === "catalog") {
+                    sendToCatalog();
+                    return;
+                  }
+                  setAfterDownload(null);
+                  onReturnToStart?.();
+                }}
+                className="press bg-foreground text-background min-h-11 flex-1 rounded-full text-[0.9375rem] font-medium"
+              >
+                Evet
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingPrintFormat ? (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-5">
+          <button
+            type="button"
+            aria-label="Vazgeç"
+            onClick={() => setPendingPrintFormat(null)}
+            className="soft-fade fixed inset-0 bg-black/55 backdrop-blur-[2px]"
+          />
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="baski-uyari-baslik"
+            aria-describedby="baski-uyari-aciklama"
+            className="soft-enter relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <span className="flex size-11 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+              <Printer className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <h2
+              id="baski-uyari-baslik"
+              className="mt-4 text-[1.0625rem] font-semibold tracking-[-0.01em]"
+            >
+              {PRINT_WARNING_MESSAGE}
+            </h2>
+            <p
+              id="baski-uyari-aciklama"
+              className="text-muted-foreground mt-2 text-[0.875rem] leading-relaxed"
+            >
+              Seçtiğiniz zeminin çözünürlüğü baskı için düşük; basılı çıktıda zemin
+              bulanık görünebilir. Ekranda ve sosyal medyada kullanım için sorun yok.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setPendingPrintFormat(null)}
+                className="min-h-11 flex-1 rounded-full text-[0.9375rem] ring-1 ring-black/15 transition-colors hover:bg-black/5"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const printFormat = pendingPrintFormat;
+                  setPendingPrintFormat(null);
+                  void downloadForPrint(printFormat);
+                }}
+                className="press bg-foreground text-background min-h-11 flex-1 rounded-full text-[0.9375rem] font-medium"
+              >
+                Evet, indir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1250,7 +1621,7 @@ function CornerPicker({
   onChange,
 }: {
   label: string;
-  value: Corner;
+  value: Corner | null;
   onChange: (corner: Corner) => void;
 }) {
   return (

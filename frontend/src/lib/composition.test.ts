@@ -119,7 +119,7 @@ describe("isDefaultAppearance", () => {
     expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, brightness: 0.1 })).toBe(false);
     expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, contrast: 5 })).toBe(false);
     expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, saturation: -0.2 })).toBe(false);
-    expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, shadow: false })).toBe(false);
-    expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, spotlight: true })).toBe(false);
+    expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, shadow: true })).toBe(false);
+    expect(isDefaultAppearance({ ...DEFAULT_APPEARANCE, reflection: true })).toBe(false);
   });
 });

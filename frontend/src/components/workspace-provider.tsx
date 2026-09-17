@@ -29,6 +29,8 @@ import {
   updateSettings as writeSettings,
   type Settings,
 } from "@/lib/settings-store";
+import { useRouter } from "next/navigation";
+
 import { displayName, readProfile, type Profile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseEnv } from "@/lib/supabase/env";
@@ -247,7 +249,45 @@ export function useWorkspace(): WorkspaceValue {
   return value;
 }
 
+/** Baska sayfadan acilan, ana sayfada acilmayi bekleyen calisma. */
+const PENDING_WORK_KEY = "vitrin-ai:open-work";
+
+function storePendingWork(work: WorkRecord): void {
+  try {
+    window.sessionStorage.setItem(PENDING_WORK_KEY, JSON.stringify(work));
+  } catch {
+    /* depolama kapali — ana sayfaya gidilir ama calisma acilmaz */
+  }
+}
+
+/**
+ * Bekleyen calismayi okur ama SILMEZ; silme calisma dinleyiciye teslim
+ * edilirken (`clearPendingWork`). Okurken silmek, gelistirmede iki kez
+ * calisan efektin ilk (iptal edilen) turunda calismayi kaybettiriyordu:
+ * baska sayfadan tiklanan calisma ana sayfada acilmiyordu (Kaan'in
+ * kaydi, 17.09.2026).
+ */
+function clearPendingWork(): void {
+  try {
+    window.sessionStorage.removeItem(PENDING_WORK_KEY);
+  } catch {
+    /* depolama kapali */
+  }
+}
+
+function peekPendingWork(): WorkRecord | null {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_WORK_KEY);
+    if (!raw) return null;
+    const work = JSON.parse(raw) as WorkRecord;
+    return typeof work?.id === "string" && typeof work?.resultUrl === "string" ? work : null;
+  } catch {
+    return null;
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSignInOpen, setSignInOpen] = useState(false);
   const [signInMode, setSignInMode] = useState<AuthMode>("signin");
@@ -424,14 +464,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const openWork = useCallback((work: WorkRecord) => {
-    for (const listener of openListenersRef.current) listener(work);
     setSidebarOpen(false);
+    // Calismayi acan arac yalnizca ANA SAYFADA. Paketler / Katalog gibi
+    // sayfalarda dinleyen yok ve tiklama hicbir sey yapmiyordu (Kaan'in
+    // bildirdigi hata, 17.09.2026). Saglayici her sayfada yeniden kuruldugu
+    // icin (SiteShell) bekleyen calisma bellekte degil oturum deposunda
+    // tutuluyor; ana sayfadaki arac abone olunca aciyor.
+    if (openListenersRef.current.size === 0) {
+      storePendingWork(work);
+      router.push("/");
+      return;
+    }
+    for (const listener of openListenersRef.current) listener(work);
     // Calisma aciliyordu ama kullanici sayfanin kaldigi yerde kaliyordu —
     // panelden bir ise tikladiginda ekranda hicbir sey degismiyor gibi
     // gorunuyordu. Kaydirma panel kapandiktan SONRA yapiliyor (bkz.
     // `aracaKaydir`, neden rAF degil setTimeout).
     aracaKaydir();
-  }, []);
+  }, [router]);
 
   // "Basa don" olayinin dinleyicileri.
   const resetListenersRef = useRef(new Set<() => void>());
@@ -457,6 +507,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (listener: (work: WorkRecord) => void) => {
       const listeners = openListenersRef.current;
       listeners.add(listener);
+      // Baska bir sayfadan gelinmisse bekleyen calisma simdi aciliyor.
+      // Zamanlayici: abonelik bir efektin icinde kuruluyor; dinleyici orada
+      // senkron cagrilsaydi efekt govdesinde setState olurdu.
+      const pending = peekPendingWork();
+      if (pending) {
+        setTimeout(() => {
+          if (!listeners.has(listener)) return;
+          clearPendingWork();
+          listener(pending);
+          aracaKaydir();
+        }, 0);
+      }
       return () => {
         listeners.delete(listener);
       };

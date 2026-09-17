@@ -45,6 +45,7 @@ const COLUMNS: {
       { label: "Katalog", href: "/katalog" },
       { label: "Paketler", href: "/paketler" },
       { label: "Çekim rehberi", href: "/cekim-rehberi" },
+      { label: "Bülten", href: "/bulten" },
     ],
   },
   {

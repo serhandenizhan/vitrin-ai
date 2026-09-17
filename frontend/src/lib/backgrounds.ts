@@ -42,6 +42,11 @@ export type ServerBackground = {
   id: string;
   name: string;
   url: string;
+  /**
+   * Secicideki kucuk yuvarlak icin ~480 px onizleme. Yoksa (eski backend,
+   * onizlemesi olmayan kayit) secici tam boyutlu `url`e duser.
+   */
+  thumbnailUrl?: string;
   /** Bu URL'in uretildigi andan itibaren gecerli kalacagi sure (saniye). */
   expiresInSeconds: number;
   /** URL'in alindigi an (ms, `Date.now()`). Yenileme hesabi buna dayaniyor. */
@@ -128,6 +133,7 @@ export function calculateRefreshDelay(
 type RawBackground = {
   id: string;
   url: string;
+  thumbnailUrl?: unknown;
   expiresIn: number;
 };
 
@@ -162,6 +168,7 @@ export async function fetchBackgrounds(
         id: record.id,
         name: `Zemin ${index + 1}`,
         url: record.url,
+        ...(typeof record.thumbnailUrl === "string" ? { thumbnailUrl: record.thumbnailUrl } : {}),
         expiresInSeconds:
           typeof record.expiresIn === "number" && record.expiresIn > 0
             ? record.expiresIn

@@ -112,6 +112,20 @@ describe("fetchBackgrounds", () => {
     expect(backgrounds[0].expiresInSeconds).toBe(900);
   });
 
+  it("onizleme adresini tasir, yoksa alani hic koymaz", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createResponse([
+        { id: "a", url: "https://x/a", thumbnailUrl: "https://x/thumbs/a", expiresIn: 900 },
+        { id: "b", url: "https://x/b", expiresIn: 900 },
+      ]),
+    );
+
+    const backgrounds = await fetchBackgrounds(fetchMock as unknown as typeof fetch);
+
+    expect(backgrounds[0].thumbnailUrl).toBe("https://x/thumbs/a");
+    expect(backgrounds[1]).not.toHaveProperty("thumbnailUrl");
+  });
+
   it("expires_in yoksa varsayilan sureye duser", async () => {
     // Backend'in `expires_in` alani PR #7 ile geldi; o alani dondurmeyen bir
     // backend surumune karsi da calismali.

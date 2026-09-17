@@ -44,6 +44,23 @@ describe("GET /api/backgrounds", () => {
     ]);
   });
 
+  it("onizleme adresini arayuze gecirir", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        backendResponse([
+          { id: "a", url: "https://signed/a", thumbnail_url: "https://signed/thumbs/a", expires_in: 3600 },
+        ]),
+      ),
+    );
+
+    const body = await (await GET()).json();
+
+    expect(body).toEqual([
+      { id: "a", url: "https://signed/a", thumbnailUrl: "https://signed/thumbs/a", expiresIn: 3600 },
+    ]);
+  });
+
   it("backend'e ulasilamadiginda 5xx DEGIL, bos liste doner", async () => {
     // Yol haritasi editorun bos listede yer tutuculara sessizce dusmesini
     // istiyor. Backend'in kapali olmasi, editor acisindan bos listeyle ayni

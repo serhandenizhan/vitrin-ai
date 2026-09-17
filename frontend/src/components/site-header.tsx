@@ -44,6 +44,7 @@ const LINKS = [
   { href: "/katalog", label: "Katalog" },
   { href: "/paketler", label: "Paketler" },
   { href: "/cekim-rehberi", label: "Rehber" },
+  { href: "/bulten", label: "Bülten" },
 ];
 
 /** Panel aciyor; sirasi menudeki gorunum sirasi. */

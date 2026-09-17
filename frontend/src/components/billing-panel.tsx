@@ -8,7 +8,7 @@ import { billingFetch, money, type Subscription, type BillingTransaction } from 
 export function BillingPanel() {
   const { user, isAuthLoaded, openSignIn } = useWorkspace();
   if (!isAuthLoaded) return null;
-  if (!user) return <button className="mt-6 underline" onClick={() => openSignIn()}>Kredileriniz ve ödemeleriniz için giriş yapın</button>;
+  if (!user) return <button className="mt-6 min-h-11 underline" onClick={() => openSignIn()}>Kredileriniz ve ödemeleriniz için giriş yapın</button>;
   return <SignedInBillingPanel key={user.id} />;
 }
 

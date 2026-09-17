@@ -45,6 +45,8 @@ const DEFAULT_EXPIRY_SECONDS = 600;
 export type BackgroundResponse = {
   id: string;
   url: string;
+  /** Secici icin kucuk onizleme; eski backend vermiyorsa alan hic yok. */
+  thumbnailUrl?: string;
   expiresIn: number;
 };
 
@@ -61,7 +63,12 @@ function parseRecord(raw: unknown): BackgroundResponse | null {
       ? record.expires_in
       : DEFAULT_EXPIRY_SECONDS;
 
-  return { id: record.id, url: record.url, expiresIn };
+  return {
+    id: record.id,
+    url: record.url,
+    ...(typeof record.thumbnail_url === "string" ? { thumbnailUrl: record.thumbnail_url } : {}),
+    expiresIn,
+  };
 }
 
 function createResponse(

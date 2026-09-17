@@ -17,6 +17,7 @@ from app.core.auth import require_admin
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.models.background import Background
+from app.services.background_images import make_thumbnail, thumbnail_key
 from app.services.storage import R2StorageService, get_storage_service
 from app.validation.upload import UploadValidationError, validate_upload
 
@@ -76,8 +77,12 @@ async def create_background(
 
     # Önce R2'ye yükle, DB satırı YALNIZCA yükleme başarılıysa yazılır — R2
     # başarısız olursa yetim bir DB kaydı oluşmasın diye sıra bilinçli.
+    # Stüdyodaki zemin seçici için küçük önizleme (bkz. services/background_images.py).
+    # Anahtar zeminin anahtarından türetiliyor; veritabanına yeni sütun yok.
+    thumbnail = await run_in_threadpool(make_thumbnail, content)
     try:
         await storage.upload(r2_key, content, file.content_type)
+        await storage.upload(thumbnail_key(r2_key), thumbnail, "image/jpeg")
     except (BotoCoreError, ClientError) as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -142,6 +147,10 @@ async def list_backgrounds(
         {
             "id": str(bg.id),
             "url": storage.generate_presigned_url(bg.r2_key),
+            # Önizleme anahtarı zeminin anahtarından türetiliyor. Önizlemesi
+            # olmayan eski bir kayıtta bu adres 404 verir; frontend o durumda
+            # tam boyutlu `url`e düşüyor.
+            "thumbnail_url": storage.generate_presigned_url(thumbnail_key(bg.r2_key)),
             "expires_in": settings.background_url_expiry_seconds,
         }
         for bg in backgrounds

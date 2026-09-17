@@ -285,6 +285,31 @@ verilmiyor; `*` ve yol içeren değerler uygulama başlarken reddediliyor
 sunucuya, CORS gerektirmez); bu katman tarayıcıdan doğrudan erişilen her durum
 için sınırı baştan çiziyor.
 
+## Zemin kütüphanesi toplu yükleme (17.09.2026)
+
+Zemin yönetim paneli Faz 6'da; ilk kütüphane (93 zemin) o panel olmadan
+`scripts/upload_backgrounds.py` ile yüklendi (Kaan'ın onayıyla öne alınan iş).
+
+- **Ne yapar:** her görseli yönetici yükleme ucuyla aynı `validate_upload`
+  kontrollerinden geçirir, aynı çözünürlükte JPEG %92'ye çevirir (93 zemin 225 MB → 75 MB),
+  ~480 px önizleme üretir, önce R2'ye (`backgrounds/<id>.jpg` ve
+  `backgrounds/thumbs/<id>.jpg`) sonra `backgrounds` tablosuna yazar. Satır yazılamazsa
+  yüklenen nesneleri geri siler. Manifestteki dosyayı tekrar yüklemez; yarıda kalırsa aynı
+  komut güvenle yeniden çalıştırılır.
+- **Veritabanı yapısı değişmez:** kategori ve baskı uyarısı `--catalog-out` ile
+  `frontend/src/lib/background-catalog.ts`'e yazılır.
+- **Güvenlik kilidi:** gerçek yükleme `--yes` olmadan çalışmaz; önce `--dry-run` hiçbir şey
+  yüklemeden bütün dosyaları kontrol eder. Betik gerçek `.env`'i (Supabase + R2) kullanır.
+- **Önizleme sözleşmesi:** `GET /api/backgrounds` her kayıt için `thumbnail_url` döner;
+  anahtar zeminin anahtarından türetilir (`app/services/background_images.py`), DB'de ayrı
+  alan yoktur. `POST /api/admin/backgrounds` da önizlemeyi aynı anahtara yükler.
+
+```bash
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --dry-run
+python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --manifest manifest.json --yes
+python scripts/upload_backgrounds.py --manifest manifest.json --catalog-out ../frontend/src/lib/background-catalog.ts
+```
+
 ## Docker
 
 ```bash

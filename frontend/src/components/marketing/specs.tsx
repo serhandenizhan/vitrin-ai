@@ -68,7 +68,7 @@ export function Specs() {
           </h2>
         </Reveal>
 
-        <dl className="mt-12 grid gap-x-10 gap-y-9 sm:mt-16 sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:mt-16 sm:gap-x-10 sm:gap-y-9 lg:grid-cols-3">
           {SPECS.map((spec, index) => (
             <Reveal key={spec.baslik} delay={(index % 3) * 80}>
               <dt className="border-t border-white/15 pt-4 text-[0.9375rem] font-semibold tracking-[-0.01em]">

@@ -15,15 +15,18 @@
  */
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Home } from "lucide-react";
 
 import { CompositionEditor } from "@/components/composer/composition-editor";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
+import { storeCatalogImport } from "@/lib/catalog-handoff";
 
 export function Studio() {
   const { studio, closeStudio, returnToStart } = useWorkspace();
+  const router = useRouter();
 
   // Escape ile cikis ve arkadaki sayfanin kaydirilmasinin durdurulmasi.
   // Katman acikken arka planin kaydirilabilmesi, kullaniciyi "hangi sayfadayim"
@@ -99,10 +102,17 @@ export function Studio() {
         </Button>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+      {/* Daha genis calisma alani (Kaan, 17.09.2026): tuval ve panel ortada. */}
+      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <CompositionEditor
           cutoutUrl={studio.cutoutUrl}
           fileName={studio.fileName}
+          onReturnToStart={returnToStart}
+          onSendToCatalog={(dataUrl) => {
+            if (!storeCatalogImport(dataUrl)) return false;
+            router.push("/katalog");
+            return true;
+          }}
         />
       </div>
     </div>

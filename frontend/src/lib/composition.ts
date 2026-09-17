@@ -77,16 +77,35 @@ export type Appearance = {
   saturation: number;
   /** Urunun altina dusen golge — kompozisyonu zemine "oturtuyor". */
   shadow: boolean;
-  /** Zemine dusen isik havuzu — urunu one cikaran yumusak vinyet. */
-  spotlight: boolean;
+  /**
+   * Urunun altinda, asagi dogru silikleserek kaybolan ayna yansimasi.
+   * 17.09.2026'da "isik havuzu"nun yerine geldi (Kaan: yansima istendi).
+   */
+  reflection: boolean;
 };
+
+/**
+ * Golge olculeri (sahne koordinatinda; urun olcegine bolunerek veriliyor).
+ *
+ * 17.09.2026'da GUCLENDIRILDI. Onceki deger (bulaniklik 38, kayma 26, opaklik
+ * %32) Konva'da olculdu: acik zeminde urunun altini yalnizca ~27/255
+ * koyulastiriyordu, koyu zeminde neredeyse sifir — kullanici "golge
+ * olmuyor" dedi. Bu deger acik zeminde ~80/255 ve koyu zeminde de
+ * seciliyor; daha genis/opak secenek gozle abartili durdu.
+ * Olcum ve karsilastirma: kok CLAUDE.md, zemin kutuphanesi notu.
+ */
+export const SHADOW = { blur: 50, offsetY: 34, opacity: 0.55 } as const;
+
+/** Yansimanin gorunur kalan boyu (urun yuksekliginin orani) ve opakligi. */
+export const REFLECTION = { fadeRatio: 0.6, opacity: 0.35 } as const;
 
 export const DEFAULT_APPEARANCE: Appearance = {
   brightness: 0,
   contrast: 0,
   saturation: 0,
-  shadow: true,
-  spotlight: false,
+  // Kapali basliyor (Kaan, 17.09.2026).
+  shadow: false,
+  reflection: false,
 };
 
 /** Kullanici hicbir ayara dokunmamis mi — "sifirla" dugmesini pasif tutmak icin. */
@@ -96,7 +115,7 @@ export function isDefaultAppearance(appearance: Appearance): boolean {
     appearance.contrast === DEFAULT_APPEARANCE.contrast &&
     appearance.saturation === DEFAULT_APPEARANCE.saturation &&
     appearance.shadow === DEFAULT_APPEARANCE.shadow &&
-    appearance.spotlight === DEFAULT_APPEARANCE.spotlight
+    appearance.reflection === DEFAULT_APPEARANCE.reflection
   );
 }
 
@@ -138,14 +157,12 @@ export type OutputFormat = {
   fileSlug: string;
 };
 
+/*
+ * "Kare 2000x2000" 17.09.2026'da KALDIRILDI (Kaan: gerek yok). Ayni olcu,
+ * beyaz zeminli "Pazaryeri" bicimi olarak duruyor. Liste sirasi arayuzdeki
+ * sira; ilk bicim (A4) studyonun acilis bicimi (`DEFAULT_FORMAT_NAME`).
+ */
 export const OUTPUT_FORMATS = {
-  square: {
-    label: "Kare",
-    summary: "2000×2000",
-    outputWidth: 2000,
-    outputHeight: 2000,
-    fileSlug: "kare",
-  },
   catalog: {
     label: "Katalog",
     summary: "A4 oranı",
@@ -192,6 +209,74 @@ export const OUTPUT_FORMATS = {
 export const MARKETPLACE_BACKGROUND_ID = "placeholder-white";
 
 export type OutputFormatName = keyof typeof OUTPUT_FORMATS;
+
+/** Studyo A4 ile aciliyor (Kaan, 17.09.2026). */
+export const DEFAULT_FORMAT_NAME: OutputFormatName = "catalog";
+
+export type Orientation = "portrait" | "landscape";
+
+/**
+ * Bicimin yonu. Kare bicimler (Instagram gonderi, pazaryeri) "landscape"
+ * sayiliyor: yatay bir zemin kareyi dikey bir zeminden cok daha az kirpiyor.
+ */
+export function formatOrientation(format: OutputFormat): Orientation {
+  return format.outputHeight > format.outputWidth ? "portrait" : "landscape";
+}
+
+/**
+ * Zemini sahneye ESNETMEDEN kaplatmak icin gorselden alinacak parca
+ * (gorsel pikseli). CSS `object-fit: cover` karsiligi: oran korunuyor,
+ * tasan kenarlar ortadan esit kirpiliyor.
+ *
+ * NEDEN: 17.09.2026'ya kadar zemin dogrudan sahne olcusune zorlaniyordu;
+ * yatay bir zemin hikaye biciminde dikey olarak uzatiliyor ve "cekistirilmis"
+ * gorunuyordu (Kaan'in bildirdigi hata).
+ */
+export function coverCrop(
+  imageWidth: number,
+  imageHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  const imageRatio = imageWidth / imageHeight;
+  const targetRatio = targetWidth / targetHeight;
+  if (imageRatio > targetRatio) {
+    const width = imageHeight * targetRatio;
+    return { x: (imageWidth - width) / 2, y: 0, width, height: imageHeight };
+  }
+  const height = imageWidth / targetRatio;
+  return { x: 0, y: (imageHeight - height) / 2, width: imageWidth, height };
+}
+
+/**
+ * Yansimanin yerlesimi: urunun ekrandaki ALT kenarindan yatay eksende
+ * aynalanmis kopya.
+ *
+ * Donduruler urunde eksen, donmus kutunun alt kenari. Yatay eksende
+ * aynalamak aciyi tersine ceviriyor (`-rotation`) ve dikey olcegi eksi
+ * yapiyor; merkez eksenin obur tarafina, ayni mesafeye geciyor.
+ */
+export function reflectionPlacement(
+  transform: Transform,
+  cutoutWidth: number,
+  cutoutHeight: number,
+): { x: number; y: number; scaleX: number; scaleY: number; rotation: number; axisY: number; fadeHeight: number } {
+  const radians = (transform.rotation * Math.PI) / 180;
+  const halfHeight =
+    ((Math.abs(cutoutWidth * Math.sin(radians)) + Math.abs(cutoutHeight * Math.cos(radians))) *
+      transform.scale) /
+    2;
+  const axisY = transform.y + halfHeight;
+  return {
+    x: transform.x,
+    y: axisY + halfHeight,
+    scaleX: transform.scale,
+    scaleY: -transform.scale,
+    rotation: -transform.rotation,
+    axisY,
+    fadeHeight: halfHeight * 2 * REFLECTION.fadeRatio,
+  };
+}
 
 /** Bir bicimin sahnedeki mantiksal olcusu — cikti olcusunun yarisi. */
 export function logicalSize(format: OutputFormat): {

@@ -17,11 +17,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Contrast,
   Download,
   ImagePlus,
   Loader2,
+  Printer,
   RotateCcw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -38,6 +41,9 @@ import {
 import {
   type CatalogTexts,
   DEFAULT_SLOT_TRANSFORM,
+  PAPER_COLORS,
+  type TextTone,
+  applyTemplateColors,
   MAX_SLOT_SCALE,
   MIN_SLOT_SCALE,
   type SlotTransform,
@@ -46,6 +52,24 @@ import {
   type TemplateName,
 } from "@/lib/catalog-templates";
 import { validateFile } from "@/lib/upload-constraints";
+import { invertLogo, prepareLogo } from "@/lib/logo-image";
+import { clearCatalogImport, peekCatalogImport } from "@/lib/catalog-handoff";
+import {
+  clearStoredLogo,
+  loadStoredLogo,
+  loadStoredLogoSettings,
+  storeLogo,
+  storeLogoSettings,
+} from "@/lib/logo-storage";
+import {
+  CORNERS,
+  DEFAULT_LOGO,
+  type LogoSettings,
+  logoBox,
+  logoFileProblem,
+  logoSettingsFromBox,
+} from "@/lib/overlays";
+import { downloadCmyk, type PrintFormat } from "@/lib/print-download";
 
 /**
  * "Ornek ile basla" icin hazir icerik.
@@ -95,6 +119,16 @@ function galleryPreviewSlots(template: Template): SlotContent[] {
   }));
 }
 
+type CatalogTab = "renkler" | "metinler" | "gorseller" | "logo" | "indir";
+
+const CATALOG_TABS: { id: CatalogTab; label: string }[] = [
+  { id: "gorseller", label: "Görseller" },
+  { id: "metinler", label: "Metinler" },
+  { id: "renkler", label: "Renkler" },
+  { id: "logo", label: "Logo" },
+  { id: "indir", label: "İndir" },
+];
+
 const DEFAULT_TEXTS: CatalogTexts = {
   eyebrow: "Sonbahar 2026",
   title: "Yeni Koleksiyon",
@@ -110,8 +144,87 @@ export function CatalogEditor() {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [printMessage, setPrintMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Logo studyoyla AYNI yerde saklaniyor (lib/logo-storage.ts): studyoda
+  // yuklenen logo katalogda da hazir geliyor.
+  const [logoUrl, setLogoUrl] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : loadStoredLogo(),
+  );
+  const [logoSettings, setLogoSettings] = useState<LogoSettings>(() =>
+    typeof window === "undefined" ? DEFAULT_LOGO : loadStoredLogoSettings(),
+  );
+  const [logoSize, setLogoSize] = useState<{ url: string; width: number; height: number } | null>(null);
+  const [logoMessage, setLogoMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Logonun dogal olculeri kutu hesabi icin gerekli; olcu, geldigi URL'le
+  // birlikte tutuluyor ki logo degisince eskisinin olcusu kullanilmasin.
+  useEffect(() => {
+    if (!logoUrl) return;
+    const image = new window.Image();
+    image.onload = () => setLogoSize({ url: logoUrl, width: image.width, height: image.height });
+    image.src = logoUrl;
+  }, [logoUrl]);
+
+  const logoPreview = useMemo(() => {
+    if (!logoUrl || logoSize?.url !== logoUrl) return null;
+    const box = logoBox(logoSize.width, logoSize.height, logoSettings, CATALOG_WIDTH, CATALOG_HEIGHT);
+    return {
+      url: logoUrl,
+      opacity: logoSettings.opacity,
+      box: {
+        x: box.x / CATALOG_WIDTH,
+        y: box.y / CATALOG_HEIGHT,
+        width: box.width / CATALOG_WIDTH,
+        height: box.height / CATALOG_HEIGHT,
+      },
+    };
+  }, [logoUrl, logoSize, logoSettings]);
+
+  const handleLogoFile = useCallback(
+    async (file: File) => {
+      const problem = logoFileProblem(file);
+      if (problem) {
+        setLogoMessage(problem);
+        return;
+      }
+      try {
+        const dataUrl = await prepareLogo(file);
+        setLogoUrl(dataUrl);
+        setLogoMessage(
+          storeLogo(dataUrl, logoSettings) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
+        );
+      } catch {
+        setLogoMessage("Logo okunamadı. Başka bir dosya deneyin.");
+      }
+    },
+    [logoSettings],
+  );
+
+  const updateLogo = useCallback((patch: Partial<LogoSettings>) => {
+    setLogoSettings((current) => {
+      const next = { ...current, ...patch };
+      storeLogoSettings(next);
+      return next;
+    });
+  }, []);
+
+  /** Beyaz logo siyah, siyah logo beyaz olur; tekrar basmak geri alir. */
+  const invertCurrentLogo = useCallback(async () => {
+    if (!logoUrl) return;
+    try {
+      const inverted = await invertLogo(logoUrl);
+      setLogoUrl(inverted);
+      setLogoMessage(
+        storeLogo(inverted, logoSettings) ? null : "Logo bu oturumda kullanılabilir ama tarayıcıda saklanamadı.",
+      );
+    } catch {
+      setLogoMessage("Logonun renkleri çevrilemedi.");
+    }
+  }, [logoUrl, logoSettings]);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor.
   const objectUrlRef = useRef<string[]>([]);
@@ -120,7 +233,16 @@ export function CatalogEditor() {
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  const template = templateName ? TEMPLATES[templateName] : null;
+  // Sayfa ve metin rengi (Kaan, 17.09.2026). `null`/"auto": sablonun kendi
+  // rengi ve ona gore siyah/beyaz metin. Sablon degisse de secim korunuyor.
+  const [paperColor, setPaperColor] = useState<string | null>(null);
+  const [textTone, setTextTone] = useState<TextTone>("auto");
+  const [mobileTab, setMobileTab] = useState<CatalogTab>("gorseller");
+  const template = useMemo(
+    () =>
+      templateName ? applyTemplateColors(TEMPLATES[templateName], paperColor, textTone) : null,
+    [templateName, paperColor, textTone],
+  );
 
   // Gorunen yuva listesi RENDER SIRASINDA turetiliyor. Boylece iki yuvali
   // sablondan tek yuvaliya gecip geri donuldugunde ikinci gorsel KAYBOLMUYOR.
@@ -181,6 +303,30 @@ export function CatalogEditor() {
     setSelectedSlot(null);
   }, [buildContent]);
 
+  // Studyodan "sablona ekle" ile gelindiyse gorsel Tam sayfa sablonunda
+  // sayfanin tamamina yerlesiyor (lib/catalog-handoff.ts). Metinler bos
+  // basliyor: gorselin ustune ornek baslik binmesin, kullanici isterse yazar.
+  useEffect(() => {
+    const imported = peekCatalogImport();
+    if (!imported) return;
+    let cancelled = false;
+    buildContent(imported, "stüdyo")
+      .then((content) => {
+        if (cancelled) return;
+        clearCatalogImport();
+        setTemplateName("full");
+        setTexts({ eyebrow: "", title: "", footer: "" });
+        setSlots([content]);
+        setSelectedSlot(0);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Stüdyodan gelen görsel açılamadı.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [buildContent]);
+
   const updateTransform = useCallback(
     (index: number, patch: Partial<SlotTransform>) => {
       setSlots((previous) => {
@@ -194,32 +340,51 @@ export function CatalogEditor() {
     [],
   );
 
-  const exportPage = useCallback(async () => {
-    if (!template) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await renderCatalog({
+  /**
+   * Katalog JPEG ya da baskiya uygun CMYK olarak iniyor (Kaan, 17.09.2026:
+   * "PNG degil, JPEG ve CMYK olsun, bastirilsin"). CMYK icin sayfa once
+   * kayipsiz PNG cizilip sunucuda donusturuluyor (lib/print-download.ts).
+   */
+  const exportPage = useCallback(
+    async (output: "jpeg" | PrintFormat) => {
+      if (!template) return;
+      setIsExporting(true);
+      setPrintMessage(null);
+      const content = {
         template,
         slots: visibleSlots,
         texts,
-      });
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `katalog-${template.fileSlug}.png`;
-      link.click();
-    } catch {
-      setError("Sayfa dışa aktarılamadı.");
-    } finally {
-      setIsExporting(false);
-    }
-  }, [template, visibleSlots, texts]);
+        logo: logoUrl ? { url: logoUrl, settings: logoSettings } : null,
+      };
+      try {
+        if (output === "jpeg") {
+          const link = document.createElement("a");
+          link.href = await renderCatalog(content, "jpeg");
+          link.download = `katalog-${template.fileSlug}.jpg`;
+          link.click();
+          return;
+        }
+        const result = await downloadCmyk(
+          await renderCatalog(content, "png"),
+          output,
+          `katalog-${template.fileSlug}`,
+        );
+        setPrintMessage(result.ok ? { ok: true, text: "İndirildi." } : { ok: false, text: result.error });
+      } catch {
+        setError("Sayfa dışa aktarılamadı.");
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [template, visibleSlots, texts, logoUrl, logoSettings],
+  );
 
   /* --- Galeri ----------------------------------------------------------- */
 
   if (!template) {
     return (
       <div className="soft-enter">
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-5 sm:gap-8 lg:grid-cols-3">
           {Object.values(TEMPLATES).map((option) => (
             <button
               key={option.name}
@@ -243,7 +408,9 @@ export function CatalogEditor() {
                   <CatalogPageView
                     template={option}
                     slots={galleryPreviewSlots(option)}
-                    texts={DEFAULT_TEXTS}
+                    // Tam sayfa onizlemesinde koyu ornek gorselin ustune koyu
+                    // baslik binip okunmuyordu; orada yalnizca gorsel.
+                    texts={option.name === "full" ? { eyebrow: "", title: "", footer: "" } : DEFAULT_TEXTS}
                   />
                 </div>
               </div>
@@ -275,10 +442,22 @@ export function CatalogEditor() {
   const selected = selectedSlot !== null ? visibleSlots[selectedSlot] : null;
 
   return (
-    <div className="soft-enter grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-      <div className="mx-auto w-full max-w-[32rem] min-w-0">
+    <div className="soft-enter flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      {/* Sayfa genis ekranda YAPISKAN: paneldeki alt ayarlar (logo, disa
+          aktarma) duzenlenirken sayfa gorunur kaliyor (Kaan, 17.09.2026).
+          Genislik ekran yuksekligine gore sinirli ki A4 ekrana sigsin. */}
+      <div
+        // Telefonda da YAPISKAN (Kaan, 17.09.2026): orada sayfa ekran
+        // yuksekliginin ~%42'siyle sinirli ki altindaki ayarlar da gorunsun.
+        className="catalog-sticky-bar sticky top-16 z-20 w-full min-w-0 py-2 lg:top-20 lg:py-0"
+        style={
+          {
+            "--catalog-ratio": CATALOG_WIDTH / CATALOG_HEIGHT,
+          } as React.CSSProperties
+        }
+      >
         <div
-          className="catalog-container overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
+          className="catalog-sticky catalog-container mx-auto overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_44px_-18px_rgba(0,0,0,0.28)] ring-1 ring-black/10"
           style={{ aspectRatio: `${CATALOG_WIDTH} / ${CATALOG_HEIGHT}` }}
         >
           <CatalogPageView
@@ -287,7 +466,10 @@ export function CatalogEditor() {
             texts={texts}
             editable
             selectedSlot={selectedSlot}
-            onSlotSelect={setSelectedSlot}
+            onSlotSelect={(slot) => {
+              setSelectedSlot(slot);
+              setMobileTab("gorseller");
+            }}
             onSlotMove={(index, x, y) =>
               updateTransform(index, {
                 // Sinir: gorsel tamamen kutunun disina surukleneemesin, aksi
@@ -310,9 +492,24 @@ export function CatalogEditor() {
               });
               setSelectedSlot(null);
             }}
+            logo={logoPreview}
+            onLogoChange={(box) =>
+              updateLogo(
+                logoSettingsFromBox(
+                  {
+                    x: box.x * CATALOG_WIDTH,
+                    y: box.y * CATALOG_HEIGHT,
+                    width: box.width * CATALOG_WIDTH,
+                    height: box.height * CATALOG_HEIGHT,
+                  },
+                  CATALOG_WIDTH,
+                  CATALOG_HEIGHT,
+                ),
+              )
+            }
           />
         </div>
-        <p className="fine-print mt-3 text-center opacity-55">
+        <p className="fine-print mt-3 hidden text-center opacity-55 lg:block">
           A4 oranında · {CATALOG_WIDTH}×{CATALOG_HEIGHT} piksel
         </p>
       </div>
@@ -335,6 +532,83 @@ export function CatalogEditor() {
           </Button>
         </div>
 
+        {/* Telefonda ayarlar SEKMELI (Kaan, 17.09.2026): hepsi alt alta
+            dizildiginde panel cok uzuyor, sayfa ustte sabit durdugu icin
+            asagi kaydirmak zorlasiyordu. Genis ekranda hepsi gorunur. */}
+        <div role="tablist" aria-label="Katalog ayarları" className="mobile-tabs flex gap-1 overflow-x-auto px-3 py-2 lg:hidden">
+          {CATALOG_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === tab.id}
+              onClick={() => setMobileTab(tab.id)}
+              className={
+                "press min-h-10 shrink-0 rounded-full px-3.5 text-[0.8125rem] transition-colors " +
+                (mobileTab === tab.id ? "bg-black text-white" : "text-black/70")
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className={mobileTab === "renkler" ? "" : "max-lg:hidden"}>
+        <SectionHeading>Renkler</SectionHeading>
+        <div className="space-y-3 px-5 pb-5">
+          <div role="group" aria-label="Sayfa rengi" className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={paperColor === null}
+              onClick={() => setPaperColor(null)}
+              className={
+                "press min-h-8 rounded-full px-3 text-[0.75rem] " +
+                (paperColor === null ? "ring-gold bg-white ring-2" : "bg-white/70 ring-1 ring-black/10")
+              }
+            >
+              Şablonun
+            </button>
+            {PAPER_COLORS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                title={option.label}
+                aria-label={option.label}
+                aria-pressed={paperColor === option.color}
+                onClick={() => setPaperColor(option.color)}
+                className={
+                  "press size-8 rounded-full ring-offset-2 ring-offset-[#efece6] " +
+                  (paperColor === option.color ? "ring-gold ring-2" : "ring-1 ring-black/15")
+                }
+                style={{ backgroundColor: option.color }}
+              />
+            ))}
+          </div>
+          <div role="group" aria-label="Metin rengi" className="flex gap-2">
+            {([
+              ["dark", "Siyah metin"],
+              ["light", "Beyaz metin"],
+            ] as const).map(([tone, label]) => (
+              <button
+                key={tone}
+                type="button"
+                aria-pressed={textTone === tone}
+                // Secili tona tekrar basmak otomatige donduruyor.
+                onClick={() => setTextTone((current) => (current === tone ? "auto" : tone))}
+                className={
+                  "press min-h-8 flex-1 rounded-full text-[0.8125rem] transition-colors " +
+                  (textTone === tone
+                    ? "bg-black text-white"
+                    : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        </div>
+        <div className={mobileTab === "metinler" ? "" : "max-lg:hidden"}>
         <SectionHeading>Metinler</SectionHeading>
         <div className="space-y-3 px-5 pb-5">
           <TextField
@@ -356,6 +630,8 @@ export function CatalogEditor() {
           ) : null}
         </div>
 
+        </div>
+        <div className={mobileTab === "gorseller" ? "" : "max-lg:hidden"}>
         <SectionHeading>
           Görseller
           <span className="ml-2 font-normal normal-case opacity-50">
@@ -377,7 +653,7 @@ export function CatalogEditor() {
                 className="press w-full justify-start rounded-full bg-white"
               >
                 <ImagePlus className="size-4" strokeWidth={1.75} aria-hidden />
-                {selected ? "Görseli değiştir" : "Bilgisayardan seçin"}
+                {selected ? "Görseli değiştir" : "Görsel seçin"}
               </Button>
 
               {/* Boyut ve konum — kullanicinin acikca istedigi kontrol.
@@ -519,11 +795,108 @@ export function CatalogEditor() {
           />
         </div>
 
+        </div>
+        <div className={mobileTab === "logo" ? "" : "max-lg:hidden"}>
+        <SectionHeading>Logo</SectionHeading>
+        <div className="space-y-3 px-5 pb-5">
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="sr-only"
+            aria-label="Katalog logosu seç"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void handleLogoFile(file);
+            }}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => logoInputRef.current?.click()}
+              className="press flex-1 rounded-full bg-white"
+            >
+              <ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />
+              {logoUrl ? "Logoyu değiştir" : "Logo ekle"}
+            </Button>
+            {logoUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label="Logoyu kaldır"
+                onClick={() => {
+                  setLogoUrl(null);
+                  setLogoSettings(DEFAULT_LOGO);
+                  clearStoredLogo();
+                  setLogoMessage(null);
+                }}
+                className="press rounded-full bg-white"
+              >
+                <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
+              </Button>
+            ) : null}
+          </div>
+          {logoUrl ? (
+            <>
+              <div role="group" aria-label="Logo konumu" className="grid grid-cols-2 gap-2">
+                {CORNERS.map((corner) => {
+                  const isActive = !logoSettings.position && logoSettings.corner === corner.id;
+                  return (
+                    <button
+                      key={corner.id}
+                      type="button"
+                      aria-pressed={isActive}
+                      // Kose secmek serbest konumu siliyor: logo o koseye yaslaniyor.
+                      onClick={() => updateLogo({ corner: corner.id, position: null })}
+                      className={
+                        "press min-h-8 rounded-lg text-[0.75rem] transition-shadow " +
+                        (isActive
+                          ? "ring-gold bg-white ring-2"
+                          : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
+                      }
+                    >
+                      {corner.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void invertCurrentLogo()}
+                className="press w-full rounded-full bg-white"
+              >
+                <Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />
+                Renkleri çevir
+              </Button>
+              <p className="fine-print opacity-55">
+                Logoyu sayfada sürükleyerek taşıyın, köşedeki karelerden boyutlandırın.
+              </p>
+            </>
+          ) : null}
+          {logoMessage ? (
+            <p role="alert" className="fine-print text-red-700">
+              {logoMessage}
+            </p>
+          ) : (
+            <p className="fine-print opacity-55">
+              Stüdyoda yüklediğiniz logo burada da hazır gelir.
+            </p>
+          )}
+        </div>
+
+        </div>
+        <div className={mobileTab === "indir" ? "" : "max-lg:hidden"}>
         <SectionHeading>Dışa aktar</SectionHeading>
         <div className="px-5 pb-5">
           <Button
             type="button"
-            onClick={exportPage}
+            onClick={() => void exportPage("jpeg")}
             disabled={isExporting || filledCount === 0}
             className="press min-h-10 w-full rounded-full"
           >
@@ -532,11 +905,42 @@ export function CatalogEditor() {
             ) : (
               <Download className="size-4" strokeWidth={1.75} aria-hidden />
             )}
-            PNG indir
+            JPEG indir
           </Button>
+
+          <p className="fine-print mt-4 mb-2 font-medium opacity-70">
+            Baskıya uygun <span className="font-normal opacity-70">CMYK</span>
+          </p>
+          <div className="flex gap-2">
+            {(["tiff", "jpeg"] as const).map((printFormat) => (
+              <Button
+                key={printFormat}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void exportPage(printFormat)}
+                disabled={isExporting || filledCount === 0}
+                aria-label={`Baskıya uygun ${printFormat === "tiff" ? "TIFF" : "JPEG"}`}
+                className="press min-h-10 flex-1 rounded-full bg-white"
+              >
+                <Printer className="size-3.5" strokeWidth={1.75} aria-hidden />
+                {printFormat === "tiff" ? "TIFF" : "JPEG"}
+              </Button>
+            ))}
+          </div>
+
+          {printMessage ? (
+            <p
+              role={printMessage.ok ? "status" : "alert"}
+              className={"fine-print mt-2 " + (printMessage.ok ? "opacity-60" : "text-red-700")}
+            >
+              {printMessage.text}
+            </p>
+          ) : null}
           {filledCount === 0 ? (
             <p className="fine-print mt-2 opacity-55">En az bir görsel ekleyin.</p>
           ) : null}
+        </div>
         </div>
       </div>
     </div>

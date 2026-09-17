@@ -28,8 +28,8 @@ fotoğraf yükle  →  arka plan kalksın  →  zemine yerleştir  →  satışa
 | | |
 | --- | --- |
 | **Arka plan kaldırma** | BiRefNet ile yüksek kenar hassasiyeti; ince zincir, tırnak montür ve küçük taşlar korunur |
-| **Kompozisyon stüdyosu** | Zemin seç, ürünü sürükle/ölçekle/döndür; parlaklık, kontrast, doygunluk; gölge ve ışık havuzu |
-| **Hazır ölçüler** | Kare 2000×2000, Instagram (kare, dikey, hikâye), pazaryeri beyaz zemin, A4 katalog sayfası |
+| **Kompozisyon stüdyosu** | Üç adım: boyut ve zemin, ürün (sürükle/ölçekle/döndür; parlaklık, kontrast, doygunluk; gölge, yansıma), bitir |
+| **Hazır ölçüler** | A4 katalog sayfası, Instagram (kare, dikey, hikâye), pazaryeri 2000×2000 beyaz zemin |
 | **Baskıya uygun çıktı** | ICC profili gömülü CMYK TIFF/JPEG |
 | **Marka öğeleri** | Logo yerleşimi, ürün etiketi (ayar, gram, ürün kodu) |
 | **Hesap ve geçmiş** | Supabase Auth ile giriş; çalışmalar sunucuda saklanır, cihazdan bağımsız |
@@ -73,7 +73,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **286** (pytest + gerçek PostgreSQL/Redis) · frontend **235** (Vitest) |
+| Testler | backend **286** (pytest + gerçek PostgreSQL/Redis) · frontend **270** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -159,7 +159,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 cd backend && pytest             # 286 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 235 test
+cd frontend && npm test          # 270 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

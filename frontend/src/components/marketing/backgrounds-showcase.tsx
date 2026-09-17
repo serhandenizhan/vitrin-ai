@@ -55,7 +55,7 @@ export function BackgroundsShowcase() {
           </div>
         </Reveal>
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-3 sm:gap-5">
+        <div className="mobile-rail mt-8 grid gap-4 sm:mt-12 sm:grid-cols-3 sm:gap-5">
           {ZEMINLER.map((zemin, sira) => (
             /* Kartlar sirayla beliriyor: hepsi ayni anda gelince goz nereye
                bakacagini bilemiyor, kisa bir kademe bakisi soldan saga

@@ -30,10 +30,17 @@ export type LogoSettings = {
   size: number;
   /** 0-1; filigran gibi hafif durabilsin. */
   opacity: number;
+  /**
+   * Logonun MERKEZI, sahne olcusune gore 0-1 orani. Kullanici logoyu
+   * surukleyip tutamaklarla boyutlandirinca (Kaan, 17.09.2026) doluyor; yoksa
+   * logo `corner`a yaslaniyor. Kose secmek bu degeri siliyor.
+   */
+  position?: { x: number; y: number } | null;
 };
 
 export const DEFAULT_LOGO: LogoSettings = { corner: "bottom-right", size: 0.18, opacity: 0.9 };
-export const LOGO_SIZE_RANGE = { min: 0.08, max: 0.35 } as const;
+/** Tutamakla boyutlandirma kaydiraçtan genis bir aralik istiyor. */
+export const LOGO_SIZE_RANGE = { min: 0.04, max: 0.9 } as const;
 export const LOGO_OPACITY_RANGE = { min: 0.2, max: 1 } as const;
 
 /** Kabul edilen logo turleri. SVG yok: dis kaynak cagirabilir, tuvali kirletebilir. */
@@ -152,6 +159,16 @@ export function logoBox(
 ): Box {
   const longEdge = Math.min(stageWidth, stageHeight) * settings.size;
   const scale = longEdge / Math.max(imageWidth, imageHeight);
+  if (settings.position) {
+    const width = imageWidth * scale;
+    const height = imageHeight * scale;
+    return {
+      x: settings.position.x * stageWidth - width / 2,
+      y: settings.position.y * stageHeight - height / 2,
+      width,
+      height,
+    };
+  }
   return placeInCorner(
     settings.corner,
     imageWidth * scale,
@@ -159,6 +176,27 @@ export function logoBox(
     stageWidth,
     stageHeight,
   );
+}
+
+/**
+ * Ekranda surukleyip boyutlandirilan logo kutusunu ayara ceviriyor: merkez
+ * sahneye gore oran, boyut uzun kenarin kisa kenara orani (aralikla sinirli).
+ * `logoBox`un tersi; ikisi birlikte ekran ve ciktinin ayni kalmasini sagliyor.
+ */
+export function logoSettingsFromBox(
+  box: Box,
+  stageWidth: number,
+  stageHeight: number,
+): Pick<LogoSettings, "size" | "position"> {
+  const size = Math.max(box.width, box.height) / Math.min(stageWidth, stageHeight);
+  const clamp = (value: number) => Math.max(0, Math.min(1, value));
+  return {
+    size: Math.max(LOGO_SIZE_RANGE.min, Math.min(LOGO_SIZE_RANGE.max, size)),
+    position: {
+      x: clamp((box.x + box.width / 2) / stageWidth),
+      y: clamp((box.y + box.height / 2) / stageHeight),
+    },
+  };
 }
 
 /**
