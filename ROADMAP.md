@@ -790,9 +790,12 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
   silinemezdi (testler bu hatayı yakaladı).
 - **Kullanıcı e-postaları Supabase'in yönetici API'sinden** okunuyor; `auth`
   şemasını doğrudan sorgulamama kararı (Faz 4) korundu.
-- **Arama davranışı `supabase/auth` kaynağından doğrulandı (17.09.2026), iki
-  sürpriz çıktı.** Ders 19 "muhtemelen böyledir" demeyi yasakladığı için
-  varsayım yerine kaynak okundu:
+- **Arama davranışı iki kez doğrulandı (17.09.2026): önce `supabase/auth`
+  kaynağından, sonra canlı projeye karşı.** Ders 19 "muhtemelen böyledir"
+  demeyi yasakladığı için varsayım yerine önce kaynak okundu, sonra Serhan
+  `SUPABASE_SECRET_KEY`'i verince yalnızca okuma yapan bir çağrıyla ölçüldü.
+  **Canlı ölçüm:** `filter='serhande'` 1 sonuç, `filter='SERHANDE'` 0 sonuç;
+  `full_name` taşıyan kullanıcı 0. İki sürpriz:
   1. GoTrue'nun `filter`'ı e-postada `ILIKE` değil **`LIKE`** kullanıyor, yani
      büyük/küçük harfe duyarlı. E-postalar `strings.ToLower` ile saklandığı
      için sorgu artık bizden küçük harfe çevrilerek gidiyor — yoksa "Musteri"

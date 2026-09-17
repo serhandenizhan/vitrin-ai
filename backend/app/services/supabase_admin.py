@@ -97,9 +97,15 @@ class SupabaseAdminService:
 
         `auth.users` DOĞRUDAN SORGULANMIYOR — gerekçe modül açıklamasında.
 
-        ARAMA — davranış `supabase/auth` kaynağından doğrulandı (17.09.2026,
-        `internal/api/admin.go` + `internal/models/user.go`). Üç somut sonuç ve
-        her birinin buradaki karşılığı:
+        ARAMA — davranış İKİ KEZ doğrulandı (17.09.2026): önce `supabase/auth`
+        kaynağından (`internal/api/admin.go` + `internal/models/user.go` +
+        `internal/api/mail.go`), sonra CANLI projeye karşı
+        (`ilfemklwjmlofeacbdsr`, yalnızca okuma). Canlı ölçüm: `filter`
+        destekleniyor (2 kullanıcıdan 1'ini döndürdü) ve e-posta eşleşmesi
+        gerçekten harfe duyarlı — `filter='serhande'` 1 sonuç verirken
+        `filter='SERHANDE'` **0 sonuç** verdi. Yani aşağıdaki küçük harfe
+        çevirme olmadan, büyük harf kullanan yönetici hiçbir sonuç görmezdi.
+        Üç somut sonuç ve her birinin buradaki karşılığı:
 
         1. `filter` şu koşula çevriliyor:
            `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
@@ -111,12 +117,16 @@ class SupabaseAdminService:
         2. `full_name` dalı BİZDE hiç çalışmıyor: uygulama profili
            `first_name` / `last_name` / `business_name` anahtarlarıyla yazıyor
            (`frontend/src/lib/profile.ts`), `full_name` diye bir alan yok.
-           Yani arama fiilen **e-posta (ya da tam kullanıcı kimliği)** aramasıdır
-           ve arayüzdeki etiket bunu söylemeli.
-        3. Barındırılan projenin `auth` sürümü bu kaynaktan eski olabilir. Bu
-           yüzden dönen sayfa burada bir kez daha süzülüyor: sürüm `filter`'ı
-           yok sayarsa sonuç EKSİK olabilir ama asla YANLIŞ olmaz — arama
-           kutusuna yazılanla eşleşmeyen bir kullanıcı listeye giremez.
+           Canlı projede de doğrulandı: `full_name` taşıyan kullanıcı sayısı 0,
+           `user_metadata` anahtarları `account_type`, `city`, `first_name`,
+           `last_name`, `phone`, `terms_*`. Yani arama fiilen **e-posta (ya da
+           tam kullanıcı kimliği)** aramasıdır ve arayüzdeki etiket bunu
+           söylemeli.
+        3. Barındırılan `auth` sürümü bugün `filter`'ı destekliyor, ama sürüm
+           bizim kontrolümüzde değil. Bu yüzden dönen sayfa burada bir kez daha
+           süzülüyor: ileride bir sürüm `filter`'ı yok sayarsa sonuç EKSİK
+           olabilir ama asla YANLIŞ olmaz — arama kutusuna yazılanla
+           eşleşmeyen bir kullanıcı listeye giremez.
         """
         self.ensure_configured()
         url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users"

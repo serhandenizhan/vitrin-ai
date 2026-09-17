@@ -533,8 +533,12 @@ uçlar `limit_admin` ile **fail-closed** (kredi verme ve hesap silme para/erişi
 yüzeyidir).
 
 **Kullanıcı araması e-posta (ya da tam kullanıcı kimliği) aramasıdır.**
-Davranış `supabase/auth` kaynağından doğrulandı (17.09.2026,
-`internal/api/admin.go` → `internal/models/user.go` → `internal/api/mail.go`):
+Davranış İKİ KEZ doğrulandı (17.09.2026): `supabase/auth` kaynağından
+(`internal/api/admin.go` → `internal/models/user.go` → `internal/api/mail.go`)
+ve canlı projeye karşı yalnızca okuma yapan bir çağrıyla. **Canlı ölçüm:**
+`filter='serhande'` 1 sonuç, `filter='SERHANDE'` **0 sonuç** — yani aşağıdaki
+küçük harfe çevirme olmasa büyük harf kullanan yönetici hiçbir şey bulamazdı.
+`full_name` taşıyan kullanıcı sayısı 0.
 
 - `filter` şu koşula çevriliyor:
   `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
