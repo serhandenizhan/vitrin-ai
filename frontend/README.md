@@ -452,9 +452,16 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
-**E-posta teslimi:** Resend SMTP sandbox bağlantısı doğrulandı (14.09.2026).
-Üretimde kendi alan adının SPF/DKIM ve gönderen adresi kurulumu bekliyor;
-bkz. kök `CLAUDE.md` açık takip maddesi 4.
+**E-posta teslimi — gerçek kullanıcılara HİÇ ulaşmıyor (17.09.2026'da
+doğrulandı).** Resend'in gönderen adresi hâlâ `onboarding@resend.dev`; bu
+alan adı yalnızca Resend hesap sahibinin kendi e-postasına teslimat yapıyor.
+Yerelde başka bir kullanıcıyla kayıt/parola sıfırlama denenirse Supabase
+Auth Logs'ta `/auth/v1/signup` veya `/auth/v1/recover` **500**, Resend
+Logs'ta karşılık gelen istek **403** görünür — 14.09.2026'daki "doğrulama"
+hesap sahibinin kendi adresiyle yapılmıştı, sandbox kısıtına hiç çarpmamıştı.
+Kök sebep, kaynaklar ve geçici kilit açma yolu (Supabase yönetici API'siyle
+parolayı e-postasız doğrudan ayarlamak) kök `CLAUDE.md` açık takip maddesi
+5'te.
 
 ### Geçmiş sunucuda
 
