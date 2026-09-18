@@ -7,6 +7,7 @@
  * giris penceresini acmasini saglayan `auth_required` koduna cevirmek. Bunlar
  * her route'ta ayri yazilsaydi biri mutlaka digerinden ayrisirdi.
  */
+import { requestOrigin } from "@/lib/request-origin";
 import { getAccessToken } from "@/lib/supabase/access-token";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -42,7 +43,11 @@ export function authRequired(): Response {
  */
 export function foreignOrigin(request: Request): Response | null {
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!origin) return null;
+  // Karsilastirma tarayicinin baglandigi adresle (bkz. lib/request-origin.ts);
+  // yalnizca `request.url`e bakmak `next start -H 0.0.0.0` altinda sitenin
+  // KENDI isteklerini reddediyordu.
+  if (origin !== requestOrigin(request) && origin !== new URL(request.url).origin) {
     return jsonError("Geçersiz istek kaynağı.", 403);
   }
   return null;
