@@ -28,8 +28,22 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { storeCatalogImport } from "@/lib/catalog-handoff";
 
 export function Studio() {
-  const { studio, closeStudio, returnToStart, updateWorkStatus } = useWorkspace();
+  const { studio, works, closeStudio, returnToStart, updateWorkStatus } = useWorkspace();
   const router = useRouter();
+  // Taslak kaydi calismanin DURUMUNU degistirmez, yalnizca editor ayarini
+  // yazar. Tamamlanmis bir calisma kaydedilince "draft" gondermek onu
+  // "Yarım kalan"a geri dusuruyor ve backend indirme zamanini siliyordu.
+  // Iki kaynak: listedeki kayit (onceden indirilmis) ve bu oturumdaki
+  // indirme (liste yuklu sayfada olmayabilir ya da henuz guncellenmemis olabilir).
+  const downloadedHereRef = useRef(false);
+  const saveStatus = (): "draft" | "completed" =>
+    downloadedHereRef.current || works.some((work) => work.id === studio?.workId && work.status === "completed")
+      ? "completed"
+      : "draft";
+  const workId = studio?.workId;
+  useEffect(() => {
+    downloadedHereRef.current = false;
+  }, [workId]);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const helpRef = useRef<HTMLDivElement | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -248,8 +262,15 @@ export function Studio() {
           initialDraft={studio.initialDraft}
           onReturnToStart={returnToStart}
           onStatusChange={updateEditorStatus}
-          onSave={studio.workId ? (draft) => updateWorkStatus(studio.workId!, "draft", draft) : undefined}
-          onDownloaded={studio.workId ? () => updateWorkStatus(studio.workId!, "completed") : undefined}
+          onSave={studio.workId ? (draft) => updateWorkStatus(studio.workId!, saveStatus(), draft) : undefined}
+          onDownloaded={
+            studio.workId
+              ? () => {
+                  downloadedHereRef.current = true;
+                  return updateWorkStatus(studio.workId!, "completed");
+                }
+              : undefined
+          }
           onSendToCatalog={(dataUrl) => {
             if (!storeCatalogImport(dataUrl)) return false;
             router.push("/katalog");

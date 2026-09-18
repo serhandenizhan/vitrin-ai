@@ -353,10 +353,16 @@ async def update_project_status(
         if not isinstance(parsed_state, dict):
             raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.")
     project = await _get_owned_project(db, project_id, user)
-    project.workflow_status = workflow_status
     if parsed_state is not None:
         project.editor_state = parsed_state
-    project.downloaded_at = datetime.now(timezone.utc) if workflow_status == "completed" else None
+    # Tamamlanmis calismanin taslak ayari kaydedilirken de "completed" gelir;
+    # indirme zamani o kayitla ezilmemeli, yalnizca ilk tamamlanmada yazilir.
+    if workflow_status == "completed":
+        if project.workflow_status != "completed" or project.downloaded_at is None:
+            project.downloaded_at = datetime.now(timezone.utc)
+    else:
+        project.downloaded_at = None
+    project.workflow_status = workflow_status
     await db.commit()
     await db.refresh(project)
     return _serialize(project, storage)

@@ -188,7 +188,7 @@ select id from auth.users where email = '<e-posta>';
 | `GET /api/projects?limit=50&cursor=...` | Tek sayfa, en yeni önce; `{items, next_cursor}` (sayfa başına en fazla 100) |
 | `POST /api/projects` | Multipart: `result` (PNG), `thumbnail` (PNG/JPEG/WebP, ≤512 KB), `file_name`, `is_mocked`, `duration_seconds` → `201` |
 | `GET /api/projects/{id}` | Tek proje |
-| `PATCH /api/projects/{id}` | Form: `workflow_status` (`draft`/`completed`), isteğe bağlı `editor_state` (JSON nesne, ≤20.000 karakter). `completed` `downloaded_at`'i doldurur, `draft` temizler; `editor_state` gönderilmezse eskisi korunur |
+| `PATCH /api/projects/{id}` | Form: `workflow_status` (`draft`/`completed`), isteğe bağlı `editor_state` (JSON nesne, ≤20.000 karakter). `completed` `downloaded_at`'i yalnız İLK tamamlanmada doldurur (tamamlanmış çalışmanın taslak kaydı indirme zamanını ezmez), `draft` temizler; `editor_state` gönderilmezse eskisi korunur |
 | `DELETE /api/projects/{id}` | `204` |
 | `DELETE /api/projects` | Kullanıcının tüm projeleri, `204` |
 

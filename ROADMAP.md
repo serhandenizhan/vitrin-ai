@@ -867,6 +867,19 @@ Yeni: hazır görünüm ayarları (Doğal/Parlak/Sıcak/Net/Yumuşak). Kaydıra�
 oynatılınca ön ayar işareti kalkıyor. Ayrıntı ve tarayıcıda alınan ölçümler:
 `frontend/README.md` → "Stüdyo düzeni".
 
+**Kaan'ın incelemesi (18.09.2026, PR #22):** stüdyo tasarımı Kaan'ın 17.09
+kararını (üç adım) değiştirdiği için onay tarayıcıda bakıldıktan sonra
+verilecek (ders 20) — henüz onaylanmadı. İnceleme bir hata buldu ve
+düzeltildi: stüdyonun taslak kaydı her zaman `draft` gönderdiği için
+**tamamlanmış (indirilmiş) bir çalışma** yeniden açılıp kaydedildiğinde ya da
+aynı oturumda indirildikten sonra kaydedildiğinde "Yarım kalan"a düşüyor ve
+indirme zamanı siliniyordu. Artık kayıt çalışmanın durumunu koruyor; backend
+de `downloaded_at`'i yalnız ilk tamamlanmada yazıyor. Frontend ve backend
+testleri eski koda karşı kırmızı yandı (ders 15). Aynı turda backend paketi
+yerel Postgres ile çalıştırıldı: 350 geçti; kalan 2 kırmızı
+(`test_billing.py` mutabakat testleri) `main`'de de aynı şekilde kırmızı,
+yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan).
+
 ### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)

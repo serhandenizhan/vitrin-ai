@@ -531,6 +531,27 @@ async def test_patch_back_to_draft_clears_download_time_and_keeps_editor_state(
     assert stored.editor_state == {"a": 1}
 
 
+async def test_saving_editor_state_of_completed_project_keeps_download_time(
+    db_session, tokens, create_user
+):
+    # Tamamlanmış çalışmanın stüdyo ayarı kaydedilirken istemci "completed"
+    # gönderir; bu kayıt indirme zamanını "şimdi"ye çekmemeli (PR #22 incelemesi).
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+    url, headers = f"/api/projects/{project.id}", tokens.headers(owner)
+    first = client.patch(url, data={"workflow_status": "completed"}, headers=headers).json()
+
+    response = client.patch(
+        url, data={"workflow_status": "completed", "editor_state": '{"b": 2}'}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["downloaded_at"] == first["downloaded_at"]
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "completed" and stored.editor_state == {"b": 2}
+
+
 async def test_patch_other_users_project_returns_404_and_changes_nothing(
     db_session, tokens, create_user
 ):

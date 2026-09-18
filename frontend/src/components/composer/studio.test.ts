@@ -5,15 +5,29 @@ import { createElement, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  studio: { cutoutUrl: "blob:cutout", fileName: "urun.png" },
+  studio: { cutoutUrl: "blob:cutout", fileName: "urun.png" } as {
+    cutoutUrl: string;
+    fileName: string;
+    workId?: string;
+  },
+  works: [] as { id: string; status: "draft" | "completed" }[],
   closeStudio: vi.fn(),
   returnToStart: vi.fn(),
+  updateWorkStatus: vi.fn(async () => true),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/workspace-provider", () => ({ useWorkspace: () => state }));
 vi.mock("@/components/composer/composition-editor", () => ({
-  CompositionEditor: ({ onStatusChange }: { onStatusChange?: (status: unknown) => void }) => {
+  CompositionEditor: ({
+    onStatusChange,
+    onSave,
+    onDownloaded,
+  }: {
+    onStatusChange?: (status: unknown) => void;
+    onSave?: (draft: unknown) => Promise<boolean>;
+    onDownloaded?: () => void;
+  }) => {
     useEffect(() => {
       onStatusChange?.({
         step: 2,
@@ -22,7 +36,13 @@ vi.mock("@/components/composer/composition-editor", () => ({
         toolLabel: "Görünüm",
       });
     }, [onStatusChange]);
-    return createElement("button", { type: "button" }, "Son denetim");
+    return createElement(
+      "div",
+      null,
+      createElement("button", { type: "button", onClick: () => void onSave?.({ step: 2 }) }, "Taslağı kaydet"),
+      createElement("button", { type: "button", onClick: () => onDownloaded?.() }, "İndir"),
+      createElement("button", { type: "button" }, "Son denetim"),
+    );
   },
 }));
 
@@ -77,5 +97,42 @@ describe("Studio modal odağı", () => {
     fireEvent.keyDown(shortcuts, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Klavye kısayolları" })).toBeNull();
     expect(state.closeStudio).not.toHaveBeenCalled();
+  });
+});
+
+// Tamamlanmis (indirilmis) bir calisma stüdyoda yeniden acilip kaydedildiginde
+// "Yarım kalan" sekmesine geri dusuyordu: kaydetme her zaman "draft"
+// gonderiyor, backend de "draft"ta indirme zamanini siliyordu (PR #22 incelemesi).
+describe("Studio taslak kaydı çalışmanın durumunu korur", () => {
+  beforeEach(() => {
+    state.studio = { cutoutUrl: "blob:cutout", fileName: "urun.png", workId: "w1" };
+    state.works = [];
+    state.updateWorkStatus.mockClear();
+  });
+
+  afterEach(() => cleanup());
+
+  it("yarım kalan çalışmayı taslak olarak kaydeder", () => {
+    state.works = [{ id: "w1", status: "draft" }];
+    render(createElement(Studio));
+    fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
+    expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "draft", { step: 2 });
+  });
+
+  it("tamamlanmış çalışmayı kaydetmek onu yarım kalana düşürmez", () => {
+    state.works = [{ id: "w1", status: "completed" }];
+    render(createElement(Studio));
+    fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
+    expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "completed", { step: 2 });
+  });
+
+  it("aynı oturumda indirildikten sonra yapılan kayıt da tamamlanmış kalır", () => {
+    // Liste henuz guncellenmemis olsa (ya da calisma yuklu sayfada olmasa)
+    // bile indirme bu oturumda gerceklesti.
+    state.works = [];
+    render(createElement(Studio));
+    fireEvent.click(screen.getByRole("button", { name: "İndir" }));
+    fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
+    expect(state.updateWorkStatus).toHaveBeenLastCalledWith("w1", "completed", { step: 2 });
   });
 });
