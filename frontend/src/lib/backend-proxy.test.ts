@@ -80,6 +80,22 @@ it("site ag adresinden (telefon) acildiginda kendi istegini reddetmiyor", () => 
   expect(foreignOrigin(forged)?.status).toBe(403);
 });
 
+it("sahte X-Forwarded-Host, sahte Origin'i mesru gostermeye YETMEZ (guvenlik incelemesi, 18.09.2026)", () => {
+  // `X-Forwarded-Host`, `Host`'un aksine JS'ten `fetch()` ile yazilabiliyor.
+  // requestOrigin() bunu onceliklendirseydi bu istek "kendi istegimiz"
+  // sanilip 403 ALMAZDI — CSRF korumasi fiilen devre disi kalirdi.
+  const spoofed = new Request("http://localhost:3000/api/billing/checkout", {
+    method: "POST",
+    headers: {
+      Origin: "https://evil.com",
+      Host: "localhost:3000",
+      "X-Forwarded-Host": "evil.com",
+      "X-Forwarded-Proto": "https",
+    },
+  });
+  expect(foreignOrigin(spoofed)?.status).toBe(403);
+});
+
 it("retry_safe bayrağını arayüze geçirir, uydurmaz", async () => {
   // İstemci idempotency anahtarını yalnız bu bayrakla yeniliyor; bayrağın
   // kaynağı backend olmalı, vekilin yorumu değil.
