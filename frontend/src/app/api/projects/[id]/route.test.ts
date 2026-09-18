@@ -62,3 +62,55 @@ describe("DELETE /api/projects/[id]", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("PATCH /api/projects/[id] — yeniden adlandırma (18.09.2026)", () => {
+  function patch(fields: Record<string, string>): Request {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, value);
+    return new Request("http://localhost", {
+      method: "PATCH",
+      body: form,
+      headers: { "X-Expected-User-Id": USER_ID },
+    });
+  }
+
+  const backendProject = {
+    id: ID,
+    file_name: "Altın yüzük",
+    created_at: "2026-09-18T10:00:00Z",
+    is_mocked: false,
+    duration_seconds: null,
+    workflow_status: "completed",
+    downloaded_at: "2026-09-18T10:05:00Z",
+    editor_state: null,
+    result_url: "https://signed.example/r",
+    thumbnail_url: "https://signed.example/t",
+    expires_in: 3600,
+  };
+
+  it("yalnız adı iletiyor; durumu göndermiyor", async () => {
+    let sent: FormData | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      sent = init?.body as FormData;
+      return Response.json(backendProject);
+    });
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(patch({ fileName: "Altın yüzük" }), context(ID));
+
+    expect(response.status).toBe(200);
+    expect(sent!.get("file_name")).toBe("Altın yüzük");
+    // Ad degistirmek calismayi "Yarım kalan"a dusurmemeli.
+    expect(sent!.has("workflow_status")).toBe(false);
+  });
+
+  it("değiştirilecek alan yoksa backend'e gitmiyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { PATCH } = await import("./route");
+
+    const response = await PATCH(patch({}), context(ID));
+
+    expect(response.status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

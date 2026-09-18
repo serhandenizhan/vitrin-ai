@@ -16,12 +16,18 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   const expectedUserId = request.headers.get("X-Expected-User-Id");
   if (!expectedUserId) return jsonError("Oturum kimliği eksik.", 409);
   const incoming = await request.formData();
-  const status = incoming.get("status");
-  if (status !== "draft" && status !== "completed") return jsonError("Geçersiz çalışma durumu.", 400);
   const form = new FormData();
-  form.append("workflow_status", status);
+  // Durum istege bagli: yeniden adlandirma durumu degistirmez (18.09.2026).
+  const status = incoming.get("status");
+  if (status !== null) {
+    if (status !== "draft" && status !== "completed") return jsonError("Geçersiz çalışma durumu.", 400);
+    form.append("workflow_status", status);
+  }
   const editorState = incoming.get("editorState");
   if (typeof editorState === "string" && editorState.length <= 20_000) form.append("editor_state", editorState);
+  const fileName = incoming.get("fileName");
+  if (typeof fileName === "string") form.append("file_name", fileName);
+  if ([...form.keys()].length === 0) return jsonError("Değiştirilecek bir alan yok.", 400);
   const call = await callBackend(`/api/projects/${id}`, {
     method: "PATCH",
     body: form,

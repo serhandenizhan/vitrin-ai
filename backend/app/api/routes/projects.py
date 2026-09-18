@@ -332,16 +332,31 @@ async def get_project(
 @router.patch("/api/projects/{project_id}")
 async def update_project_status(
     project_id: uuid.UUID,
-    workflow_status: str = Form(...),
+    # Iki alan da istege bagli: gonderilmeyen alan DEGISMEZ. Yeniden
+    # adlandirma (18.09.2026, Kaan) durumu ellememeli — ad degistirmek
+    # tamamlanmis bir calismayi "Yarım kalan"a dusurmemeli.
+    workflow_status: str | None = Form(None),
     editor_state: str | None = Form(None, max_length=20_000),
+    file_name: str | None = Form(None),
     expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict:
     _verify_expected_user(expected_user_id, user)
-    if workflow_status not in {"draft", "completed"}:
+    if workflow_status is not None and workflow_status not in {"draft", "completed"}:
         raise HTTPException(status_code=400, detail="Geçersiz çalışma durumu.")
+    display_name = None
+    if file_name is not None:
+        # Kayittaki kuralin aynisi (create_project): bas/son bosluk atilir, 1-255.
+        display_name = file_name.strip()
+        if not display_name or len(display_name) > MAX_FILE_NAME_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dosya adı 1-{MAX_FILE_NAME_LENGTH} karakter olmalı.",
+            )
+    if workflow_status is None and editor_state is None and file_name is None:
+        raise HTTPException(status_code=400, detail="Değiştirilecek bir alan yok.")
     # Bütün girdi, satıra dokunmadan ÖNCE doğrulanır: yarıda kalan bir
     # doğrulama, oturumda yarım değiştirilmiş bir nesne bırakmamalı.
     parsed_state = None
@@ -355,14 +370,17 @@ async def update_project_status(
     project = await _get_owned_project(db, project_id, user)
     if parsed_state is not None:
         project.editor_state = parsed_state
+    if display_name is not None:
+        project.file_name = display_name
     # Tamamlanmis calismanin taslak ayari kaydedilirken de "completed" gelir;
     # indirme zamani o kayitla ezilmemeli, yalnizca ilk tamamlanmada yazilir.
     if workflow_status == "completed":
         if project.workflow_status != "completed" or project.downloaded_at is None:
             project.downloaded_at = datetime.now(timezone.utc)
-    else:
+    elif workflow_status == "draft":
         project.downloaded_at = None
-    project.workflow_status = workflow_status
+    if workflow_status is not None:
+        project.workflow_status = workflow_status
     await db.commit()
     await db.refresh(project)
     return _serialize(project, storage)

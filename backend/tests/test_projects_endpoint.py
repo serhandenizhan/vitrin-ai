@@ -613,3 +613,71 @@ async def test_patch_rejects_invalid_input_and_changes_nothing(
     assert response.status_code == expected
     stored = await _reload(db_session, project.id)
     assert stored.workflow_status == "draft" and stored.editor_state is None
+
+
+async def test_patch_renames_own_project_without_touching_status(
+    db_session, tokens, create_user
+):
+    # Yeniden adlandirma (18.09.2026): yalniz ad degisir; tamamlanmis calisma
+    # tamamlanmis kalir, indirme zamani ve taslak korunur.
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+    url, headers = f"/api/projects/{project.id}", tokens.headers(owner)
+    first = client.patch(
+        url, data={"workflow_status": "completed", "editor_state": '{"a": 1}'}, headers=headers
+    ).json()
+
+    response = client.patch(url, data={"file_name": "  Altın yüzük  "}, headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["file_name"] == "Altın yüzük"
+    assert body["workflow_status"] == "completed"
+    assert body["downloaded_at"] == first["downloaded_at"]
+    stored = await _reload(db_session, project.id)
+    assert stored.file_name == "Altın yüzük" and stored.editor_state == {"a": 1}
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 256])
+async def test_patch_rejects_invalid_name_and_changes_nothing(
+    db_session, tokens, create_user, name
+):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    before = project.file_name
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}", data={"file_name": name}, headers=tokens.headers(owner)
+    )
+
+    assert response.status_code == 400
+    assert (await _reload(db_session, project.id)).file_name == before
+
+
+async def test_patch_cannot_rename_other_users_project(db_session, tokens, create_user):
+    owner = await create_user()
+    intruder = await create_user()
+    project = await _insert_project(db_session, owner)
+    before = project.file_name
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"file_name": "ele geçirildi"},
+        headers=tokens.headers(intruder),
+    )
+
+    assert response.status_code == 404
+    assert (await _reload(db_session, project.id)).file_name == before
+
+
+async def test_patch_with_no_fields_is_rejected(db_session, tokens, create_user):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(f"/api/projects/{project.id}", data={}, headers=tokens.headers(owner))
+
+    assert response.status_code == 400

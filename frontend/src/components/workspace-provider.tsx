@@ -41,6 +41,7 @@ import {
   listWorks,
   saveWork,
   updateWorkStatus as writeWorkStatus,
+  renameWork as writeWorkName,
   type NewWork,
   type WorkRecord,
 } from "@/lib/work-history";
@@ -60,6 +61,8 @@ type WorkspaceValue = {
   loadMoreWorks: () => void;
   recordWork: (work: NewWork) => Promise<WorkRecord | null>;
   updateWorkStatus: (id: string, status: "draft" | "completed", editorState?: EditorDraft) => Promise<boolean>;
+  /** Calismanin adini degistirir (Çalışmalarım sayfasi); basarisizsa `false`. */
+  renameWork: (id: string, fileName: string) => Promise<boolean>;
   removeWork: (id: string) => Promise<void>;
   removeAllWorks: () => Promise<void>;
   /**
@@ -468,6 +471,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return true;
   }, [userId]);
 
+  const renameWork = useCallback<WorkspaceValue["renameWork"]>(async (id, fileName) => {
+    if (!userId) return false;
+    const updated = await writeWorkName(id, fileName, userId);
+    if (!updated) return false;
+    setHistory((current) => ({
+      ...current,
+      works: current.works.map((work) => (work.id === id ? updated : work)),
+    }));
+    return true;
+  }, [userId]);
+
   const removeWork = useCallback(async (id: string) => {
     if (!userId) return;
     // Sunucuda silinemediyse listede kalsin; "silindi" gorunup yeniden
@@ -560,6 +574,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       loadMoreWorks,
       recordWork,
       updateWorkStatus,
+      renameWork,
       removeWork,
       removeAllWorks,
       refreshWorks,
@@ -612,6 +627,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       loadMoreWorks,
       recordWork,
       updateWorkStatus,
+      renameWork,
       removeWork,
       removeAllWorks,
       refreshWorks,

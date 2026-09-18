@@ -82,6 +82,27 @@ export async function saveWork(
   }
 }
 
+/** Calismanin adini degistirir; durum ve taslak degismez. */
+export async function renameWork(
+  id: string,
+  fileName: string,
+  expectedUserId: string,
+): Promise<WorkRecord | null> {
+  try {
+    const form = new FormData();
+    form.append("fileName", fileName);
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: form,
+      headers: { "X-Expected-User-Id": expectedUserId },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as WorkRecord;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateWorkStatus(
   id: string,
   status: "draft" | "completed",
