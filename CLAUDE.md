@@ -101,7 +101,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
   sonuç artık saklanmıyor) anahtar korunur.
 - **Admin paneli (Faz 6):** backend uçları `backend/app/api/routes/admin.py`,
-  şema migration `0007`. **Üç kural:** (1) *admin'in verdiği kredi dönem
+  şema migration `0007`. **Beş kural:** (1) *admin'in verdiği kredi dönem
   kotasını BÜYÜTMEZ* — `quota_snapshot` değişmez bir kanıt kaydıdır; bonus
   krediler `credit_grants` tablosunda durur, yalnız dönem kotası tükendiğinde
   harcanır ve erişimi kapalı bir aboneliği **diriltmez**.
@@ -112,7 +112,11 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   FK'si bilinçli olarak yoktur ki admin hesabı silinse de iz kalsın.
   (3) *admin uçlarında hız sınırı yönü uca göre seçilir*: okuma fail-open,
   yazma (kredi, silme, rol) fail-closed. Kullanıcı e-postaları `auth.users`'tan
-  değil Supabase'in yönetici API'sinden okunur.
+  değil Supabase'in yönetici API'sinden okunur. (4) *yönetici hesabı panelden
+  silinmez, son yönetici kendini silemez* — panel sahipsiz kalırsa yetkiyi geri
+  vermenin tek yolu veritabanına elle girmektir. (5) *denetim satırı yalnız
+  durumu gerçekten değiştiren istekte yazılır* — idempotent bir tekrar, günlükte
+  olmamış ikinci bir eylem göstermemeli.
 - **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
   revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
   değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema
@@ -134,7 +138,9 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   değil (erişim kuralı 1) ve sınırlayıcının altyapı arızası, Next vekilinin
   bütün 5xx'leri "200 + boş liste"ye çevirmesi yüzünden kullanıcının gözünde
   93 zeminlik kütüphaneyi yok ediyordu. Her iki yön de test edilmiş durumda;
-  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir.
+  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. Destek formu
+  (`POST /api/support-requests`, saatte 5/kullanıcı) da fail-open: Redis'in
+  düştüğü an kullanıcının sorun bildirmek isteyeceği andır.
 - **Hız sınırı kovası ters proxy arkasında doğru seçilmeli:** `request.client.host`
   doğrudan okunursa tüm trafik proxy'nin tek kovasını paylaşır, `X-Forwarded-For`'a
   körlemesine güvenmek ise sınırı tamamen kaldırır. Başlık yalnız bağlantı

@@ -328,3 +328,36 @@ async def test_user_search_never_returns_a_row_the_query_does_not_match(monkeypa
     found = await SupabaseAdminService().list_users(1, 25, "musteri")
 
     assert [u["email"] for u in found] == ["musteri@vitrin.example"]
+
+
+async def test_last_admin_cannot_delete_own_account(db_session, create_user, grant_admin):
+    from fastapi import HTTPException
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    from app.services.billing.db import one
+    uid = await create_user()
+    await grant_admin(uid)
+    with pytest.raises(HTTPException) as exc:
+        await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+            CurrentUser(id=uid, email="test@test.example", session_id=None),
+            FakeStorage(), FakeAdmin(), db_session)
+    assert exc.value.status_code == 409
+    await db_session.rollback()
+    # Hiçbir şey kuyruğa girmemiş ve hesap silme işaretlenmemiş olmalı.
+    assert await one(db_session, "SELECT id FROM provider_actions") is None
+    assert (await one(db_session, "SELECT deletion_requested_at FROM subscriptions WHERE user_id=:uid",
+        uid=uid))["deletion_requested_at"] is None
+
+
+async def test_admin_can_delete_own_account_when_another_admin_remains(
+    db_session, create_user, grant_admin
+):
+    # Ders 15: yalnız RED yolunu sınamak, korumanın her yöneticiyi kilitleyen
+    # bozuk bir hâlini de yeşil geçirirdi.
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    uid, other = await create_user(), await create_user()
+    await grant_admin(uid)
+    await grant_admin(other)
+    response = await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+        CurrentUser(id=uid, email="test@test.example", session_id=None),
+        FakeStorage(), FakeAdmin(), db_session)
+    assert response.status_code == 202

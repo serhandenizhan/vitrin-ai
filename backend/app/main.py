@@ -22,7 +22,12 @@ from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
 from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
-from app.services.billing.limits import admin_limiter, checkout_limiter, public_limiter
+from app.services.billing.limits import (
+    admin_limiter,
+    checkout_limiter,
+    public_limiter,
+    support_limiter,
+)
 
 
 @asynccontextmanager
@@ -36,6 +41,7 @@ async def lifespan(app: FastAPI):
     await checkout_limiter.aclose()
     await public_limiter.aclose()
     await admin_limiter.aclose()
+    await support_limiter.aclose()
 
 
 app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)

@@ -792,6 +792,12 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
   `credit_grants.granted_by` ise `ON DELETE SET NULL` olduğu için değişmezlik
   kuralından NULL yönüne muaf — yasaklansaydı o yöneticinin hesabı hiç
   silinemezdi (testler bu hatayı yakaladı).
+- **PR #22 incelemesi (18.09.2026) düzeltmeleri:** yönetici hesapları
+  panelden silinemiyor (`409 admin_target`), son yönetici kendi hesabını
+  silemiyor; denetim satırı yalnız durumu değiştiren istekte yazılıyor
+  (idempotent tekrar ikinci satır üretmiyor); `POST /api/support-requests`
+  kullanıcı başına saatte 5 istekle sınırlandı (fail-open) ve
+  `PATCH /api/projects/{id}` ile destek ucu testlendi.
 - **Kullanıcı e-postaları Supabase'in yönetici API'sinden** okunuyor; `auth`
   şemasını doğrudan sorgulamama kararı (Faz 4) korundu.
 - **Arama davranışı iki kez doğrulandı (17.09.2026): önce `supabase/auth`

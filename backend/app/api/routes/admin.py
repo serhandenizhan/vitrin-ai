@@ -226,7 +226,18 @@ async def delete_user(
     Ayrı bir silme yolu yazmak, `billing_delete_guard` ve uzak abonelik iptali
     gibi Faz 5 korumalarını ikinci kez (ve er ya da geç farklı) uygulamak
     demekti. Buradaki tek fark onayın kimden geldiği ve denetim satırı.
+
+    Hedef bir YÖNETİCİYSE (çağıranın kendisi dahil) reddedilir: bir yönetici
+    başka bir yöneticinin hesabını, ya da son yönetici kendisini bu uçtan
+    silerek paneli sahipsiz bırakamamalı. Yöneticinin kendi hesabını silmesi
+    `DELETE /api/account` üzerinden, son yönetici korumasıyla yapılır.
     """
+    if await one(db, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=user_id):
+        raise billing_error(
+            "admin_target",
+            "Yönetici hesapları panelden silinemez; önce yönetici yetkisi kaldırılmalı.",
+            409,
+        )
     try:
         account = await supabase.get_user(user_id)
     except (SupabaseAdminConfigurationError, SupabaseAdminError) as exc:
@@ -241,7 +252,9 @@ async def delete_user(
         )
 
     subscription = await one(
-        db, "SELECT id FROM subscriptions WHERE user_id=:uid FOR UPDATE", uid=user_id
+        db,
+        "SELECT id,deletion_requested_at FROM subscriptions WHERE user_id=:uid FOR UPDATE",
+        uid=user_id,
     )
     if not subscription:
         raise billing_error("not_found", "Hesap bulunamadı.", 404)
@@ -254,9 +267,13 @@ async def delete_user(
     # Anahtar İŞİ tanımlıyor (kullanıcının kendi akışıyla aynı desen): aynı
     # hesap için ikinci bir silme isteği ikinci bir eylem açmaz.
     action = await enqueue(db, user_id, "delete_account", user_id, "delete:" + str(user_id))
-    await admin_audit.record(
-        db, admin.id, "user_delete", "user", user_id, {"action_id": str(action["id"])}
-    )
+    # Denetim satırı yalnız silmeyi BU istek başlattıysa yazılır: tekrar gönderilen
+    # istek ya da kullanıcının zaten kendisinin istediği silme, olmamış bir admin
+    # eylemini günlüğe ikinci kez düşürürdü.
+    if subscription["deletion_requested_at"] is None:
+        await admin_audit.record(
+            db, admin.id, "user_delete", "user", user_id, {"action_id": str(action["id"])}
+        )
     await db.commit()
     return {"action_id": str(action["id"]), "status": action["status"]}
 
@@ -289,7 +306,8 @@ async def grant_credits(
         """INSERT INTO credit_grants(user_id,amount,reason,granted_by,idempotency_key,expires_at)
         VALUES(:uid,:amount,:reason,:actor,:key,:expires)
         ON CONFLICT(idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key
-        RETURNING id,user_id,amount,used,reason,expires_at,revoked_at,created_at""",
+        RETURNING id,user_id,amount,used,reason,expires_at,revoked_at,created_at,
+        (xmax = 0) AS inserted""",
         uid=user_id,
         amount=payload.amount,
         reason=payload.reason,
@@ -310,16 +328,21 @@ async def grant_credits(
             "idempotency_conflict",
             "Bu anahtar farklı bir kredi işlemi için kullanılmış.",
         )
-    await admin_audit.record(
-        db,
-        admin.id,
-        "credit_grant",
-        "credit_grant",
-        grant["id"],
-        {"user_id": str(user_id), "amount": payload.amount, "reason": payload.reason},
-    )
+    grant = dict(grant)
+    # `xmax = 0` yalnız satırı BU ifade eklediyse doğru; `ON CONFLICT DO UPDATE`
+    # var olan satırı döndürdüğünde xmax dolu. Tekrar denemesi ikinci krediyi
+    # açmadığı gibi ikinci bir denetim satırı da yazmamalı.
+    if grant.pop("inserted"):
+        await admin_audit.record(
+            db,
+            admin.id,
+            "credit_grant",
+            "credit_grant",
+            grant["id"],
+            {"user_id": str(user_id), "amount": payload.amount, "reason": payload.reason},
+        )
     await db.commit()
-    return dict(grant)
+    return grant
 
 
 @router.post("/api/admin/credits/{grant_id}/revoke", dependencies=[Depends(limit_admin)])

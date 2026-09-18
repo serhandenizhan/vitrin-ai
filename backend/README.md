@@ -188,8 +188,14 @@ select id from auth.users where email = '<e-posta>';
 | `GET /api/projects?limit=50&cursor=...` | Tek sayfa, en yeni önce; `{items, next_cursor}` (sayfa başına en fazla 100) |
 | `POST /api/projects` | Multipart: `result` (PNG), `thumbnail` (PNG/JPEG/WebP, ≤512 KB), `file_name`, `is_mocked`, `duration_seconds` → `201` |
 | `GET /api/projects/{id}` | Tek proje |
+| `PATCH /api/projects/{id}` | Form: `workflow_status` (`draft`/`completed`), isteğe bağlı `editor_state` (JSON nesne, ≤20.000 karakter). `completed` `downloaded_at`'i doldurur, `draft` temizler; `editor_state` gönderilmezse eskisi korunur |
 | `DELETE /api/projects/{id}` | `204` |
 | `DELETE /api/projects` | Kullanıcının tüm projeleri, `204` |
+
+`POST /api/support-requests` (oturum zorunlu; `kind` `issue`/`suggestion`,
+`message` 10–4000 karakter, isteğe bağlı `email`) satırı token'daki kullanıcıya
+yazar ve kullanıcı başına **saatte 5** istekle sınırlıdır (`support_limiter`,
+fail-open — Redis'in düştüğü an kullanıcının sorun bildirmek isteyeceği andır).
 
 Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 `expires_in` = `PROJECT_URL_EXPIRY_SECONDS`).
@@ -364,7 +370,7 @@ sunucu/instance seçin.
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
 | `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
 | `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
-| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri fail-closed, zemin listeleme fail-open (bkz. `app/services/billing/limits.py`) |
+| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri ve admin yazma uçları fail-closed; zemin listeleme, admin okuma uçları ve destek formu fail-open (bkz. `app/services/billing/limits.py`) |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
@@ -501,7 +507,7 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 |---|---|
 | `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
 | `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
-| `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır |
+| `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |
 | `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
 | `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
 | `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
@@ -525,7 +531,14 @@ hesabı hiç silinemezdi). Kimin verdiği bilgisi kalıcı olarak
 **`admin_audit_log` yalnızca eklemeye açıktır** (`admin_audit_append_only`
 trigger'ı her `UPDATE`/`DELETE`'i reddeder). Yöneticinin sonradan
 düzenleyebildiği bir kayıt, "bu krediyi kim, ne zaman, neden verdi" sorusunu
-cevaplayamaz.
+cevaplayamaz. Satır yalnız durumu GERÇEKTEN değiştiren istekte yazılır: aynı
+idempotency anahtarıyla tekrar gelen kredi isteği ve silmesi zaten istenmiş bir
+hesap için admin silmesi ikinci bir satır üretmez.
+
+**Yönetici hesapları panelden silinmez** (`409 admin_target`, çağıranın kendisi
+dahil); yönetici kendi hesabını `DELETE /api/account` ile siler ve **son
+yönetici** orada `409` alır (`admin_users` satırları kilitlenerek sayılır, iki
+yönetici aynı anda kendini silerken ikisi de "başka biri var" görmez).
 
 **Hız sınırı yönü uca göre seçilir:** okuma uçları `limit_scoped` ile
 **fail-open** (Redis arızası panelin bütün sayfalarını karartmasın), yazan

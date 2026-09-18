@@ -3,13 +3,14 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.db import get_db_session
+from app.services.billing.limits import limit_scoped, support_limiter
 
 router = APIRouter()
 
@@ -33,10 +34,12 @@ class SupportRequestBody(BaseModel):
 
 @router.post("/api/support-requests", status_code=status.HTTP_201_CREATED)
 async def create_support_request(
+    request: Request,
     body: SupportRequestBody,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, UUID]:
+    await limit_scoped(request, "support", user.id, limiter=support_limiter)
     request_id = await db.scalar(
         text("""
             insert into support_requests (user_id, kind, email, message)

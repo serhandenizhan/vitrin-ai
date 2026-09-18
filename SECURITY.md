@@ -279,7 +279,10 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   denetim günlüğü (`admin_audit_log`, DB trigger'ı `UPDATE`/`DELETE`'i
   reddeder); admin uçlarında hız sınırının yönü uca göre seçilir (okuma
   fail-open, kredi/silme/rol fail-closed); geri döndürülemez admin silme
-  işleminde kullanıcının e-postasının yazılarak doğrulanması
+  işleminde kullanıcının e-postasının yazılarak doğrulanması; yönetici
+  hesaplarının panelden silinememesi ve son yöneticinin kendi hesabını
+  silememesi (panel sahipsiz kalmasın); destek formunda kullanıcı başına hız
+  sınırı
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
   son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
 

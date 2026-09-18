@@ -342,8 +342,9 @@ async def update_project_status(
     _verify_expected_user(expected_user_id, user)
     if workflow_status not in {"draft", "completed"}:
         raise HTTPException(status_code=400, detail="Geçersiz çalışma durumu.")
-    project = await _get_owned_project(db, project_id, user)
-    project.workflow_status = workflow_status
+    # Bütün girdi, satıra dokunmadan ÖNCE doğrulanır: yarıda kalan bir
+    # doğrulama, oturumda yarım değiştirilmiş bir nesne bırakmamalı.
+    parsed_state = None
     if editor_state is not None:
         try:
             parsed_state = json.loads(editor_state)
@@ -351,6 +352,9 @@ async def update_project_status(
             raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.") from exc
         if not isinstance(parsed_state, dict):
             raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.")
+    project = await _get_owned_project(db, project_id, user)
+    project.workflow_status = workflow_status
+    if parsed_state is not None:
         project.editor_state = parsed_state
     project.downloaded_at = datetime.now(timezone.utc) if workflow_status == "completed" else None
     await db.commit()

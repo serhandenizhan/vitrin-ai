@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.db import get_db_session
 from app.main import app
-from app.services.billing.db import one
+from app.services.billing.db import execute, many, one
 from app.services.billing.provider import Iyzico, get_provider
 from app.services.supabase_admin import (
     SupabaseAdminError,
@@ -178,6 +178,12 @@ async def test_granting_credits_is_idempotent_per_key(admin_only, people, db_ses
         await one(db_session, "SELECT count(*)::int AS n FROM credit_grants")
     )["n"] == 1
     assert (await one(db_session, "SELECT amount,used FROM credit_grants"))["amount"] == 5
+    # Tekrar denemesi ikinci krediyi açmadığı gibi ikinci bir denetim satırı da
+    # yazmamalı: günlük, tek bir krediyi iki kez verilmiş gibi göstermemeli.
+    assert (
+        await one(db_session, "SELECT count(*)::int AS n FROM admin_audit_log")
+    )["n"] == 1
+    assert "inserted" not in second.json()
 
 
 async def test_reusing_a_key_for_a_different_job_is_rejected(client, people, tokens):
@@ -336,9 +342,56 @@ async def test_admin_account_deletion_queues_the_same_job_as_self_deletion(
     assert (
         await one(db_session, "SELECT deletion_requested_at FROM subscriptions WHERE user_id=:uid", uid=user_id)
     )["deletion_requested_at"] is not None
+    audit = await many(db_session, "SELECT action FROM admin_audit_log")
+    assert [row["action"] for row in audit] == ["user_delete"]
+
+
+async def test_admin_deletion_of_an_already_requested_account_writes_no_audit_row(
+    client, people, tokens, db_session
+):
+    """Kullanıcı silmeyi zaten kendisi istediyse admin'in isteği bir şey başlatmadı."""
+    admin_id, user_id = people
+    await execute(
+        db_session,
+        "UPDATE subscriptions SET deletion_requested_at=now() WHERE user_id=:uid",
+        uid=user_id,
+    )
+    await db_session.commit()
+    response = await client.request(
+        "DELETE",
+        f"/api/admin/users/{user_id}",
+        headers=tokens.headers(admin_id),
+        json={"email": "musteri@vitrin.example"},
+    )
+    assert response.status_code == 202
+    assert await one(db_session, "SELECT id FROM admin_audit_log") is None
+
+
+@pytest.mark.parametrize("target", ["self", "other_admin"])
+async def test_admin_accounts_cannot_be_deleted_from_the_panel(
+    client, people, tokens, db_session, create_user, grant_admin, supabase, target
+):
+    admin_id, _ = people
+    if target == "self":
+        target_id, email = admin_id, "admin@vitrin.example"
+    else:
+        email = "ikinci-admin@vitrin.example"
+        target_id = await create_user(email)
+        await grant_admin(target_id)
+        supabase.accounts[str(target_id)] = {"id": str(target_id), "email": email}
+    response = await client.request(
+        "DELETE",
+        f"/api/admin/users/{target_id}",
+        headers=tokens.headers(admin_id),
+        json={"email": email},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "admin_target"
+    assert await one(db_session, "SELECT id FROM provider_actions") is None
+    assert await one(db_session, "SELECT id FROM admin_audit_log") is None
     assert (
-        await one(db_session, "SELECT action FROM admin_audit_log")
-    )["action"] == "user_delete"
+        await one(db_session, "SELECT deletion_requested_at FROM subscriptions WHERE user_id=:uid", uid=target_id)
+    )["deletion_requested_at"] is None
 
 
 async def test_stats_fills_every_day_of_the_window(admin_only):

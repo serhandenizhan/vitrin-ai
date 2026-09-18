@@ -23,6 +23,7 @@ export function SupportCenter() {
     const response = await fetch("/api/support-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: kind === "Sorun bildirimi" ? "issue" : "suggestion", message, email: String(data.get("email") ?? "") || null }) });
     setSending(false);
     if (response.status === 401) { setSent("Mesaj göndermek için önce giriş yapın."); return; }
+    if (response.status === 429) { setSent("Kısa sürede çok fazla mesaj gönderdiniz. Lütfen bir süre sonra tekrar deneyin."); return; }
     if (!response.ok) { setSent("Mesaj gönderilemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin."); return; }
     event.currentTarget.reset();
     setSent("Mesajınız alındı. İnceleyip hesabınızdaki e-posta üzerinden dönüş yapacağız.");
