@@ -378,7 +378,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**312 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
+**336 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -1003,6 +1003,37 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   çalışma `sessionStorage`'a yazılır ve ana sayfaya gidilir; araç abone olunca açar
   (`workspace-provider.tsx`). Sağlayıcı her sayfada `SiteShell` ile yeniden kurulduğu için
   bellekte tutmak yetmez.
+
+## Yönetim paneli (`/admin`, Faz 6)
+
+Kaan, 18.09.2026. Backend: Serhan'ın admin API'si (`backend/README.md` →
+admin uçları). **Yetki backend'de** (`require_admin`); arayüzdeki her ekran
+seçimi yalnızca gösterim — sayfa elle açılsa da veri gelmez.
+
+- **Yöneticilik bilgisi:** `components/admin/use-admin-status.ts` →
+  `GET /api/admin/me`. Kullanıcı değişince yeniden sorulur; cevap gelene kadar
+  "kontrol ediliyor" (bağlantı bir an görünüp kaybolmasın). Hesap menüsünde
+  yalnız yöneticiye "Yönetim paneli" bağlantısı.
+- **Vekiller** (`app/api/admin/**`, ortak tip ve sınırlar `lib/admin-api.ts`):
+  kimlik UUID mi, sayılar backend sınırlarında mı; gövde bilinen alanlarla
+  yeniden kuruluyor (istemcinin fazladan alanı backend'e gitmiyor); kredi,
+  geri alma ve silmede Origin kontrolü.
+- **Genel bakış:** sayaçlar, günlük kesim ve kayıt grafikleri
+  (`daily-bars.tsx` — tek seri, altın, 2px aralıklı ince barlar, üzerine
+  gelince ipucu, ekran okuyucu tablosu; altının koyu yüzeydeki kontrastı
+  betikle ölçüldü), abonelik durumları, bonus kredi bakiyesi, gelir
+  hareketleri, bekleyen operasyon. Başarısız iş ORANI gösterilmiyor (payda
+  sıfırken yanıltıcı olur), iki sayı ayrı.
+- **Kullanıcılar:** "E-posta ile ara" (ad araması Faz 7'ye ertelendi),
+  sayfalama (toplam sayı yok; sonraki sayfa, satır sayısı sayfa boyuna
+  eşitse var sayılır).
+- **Kullanıcı ayrıntısı:** özet, dönemler, ödemeler, onaylar, bekleyen
+  sağlayıcı işleri; **bonus kredi** (dönem kotasını büyütmez) — form
+  idempotency anahtarını hata sonrası KORUR, başarıdan sonra YENİLER;
+  **geri alma** (onaylı); **hesap silme** — e-posta birebir yazılmadan düğme
+  kapalı, yönetici hesabında hiç sunulmuyor (backend de `409 admin_target`).
+- **Etiketler kaynağından:** abonelik durumları ve tahsilat türleri
+  migration CHECK kısıtlarından birebir (ders 19).
 
 ## Ödemeler (Faz 5)
 

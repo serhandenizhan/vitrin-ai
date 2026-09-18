@@ -505,6 +505,7 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 
 | Uç | Ne yapar |
 |---|---|
+| `GET /api/admin/me` | Oturumdaki kullanıcı yönetici mi: `{is_admin: bool}` (Faz 6, Kaan — `/admin` arayüzü için). **`require_admin`'e bağlı DEĞİL ve 403 dönmez**: sıradan kullanıcı da hata değil `false` alır, arayüz "Yönetim paneli" bağlantısını buna göre gösterir. Yetkilendirme sayılmaz — diğer her uç kendi kontrolünü yapar. Rol her istekte veritabanından okunur (yetki geri alınınca aynı token'la bir sonraki istek `false`) |
 | `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
 | `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
 | `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |

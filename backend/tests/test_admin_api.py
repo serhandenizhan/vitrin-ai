@@ -104,6 +104,32 @@ def admin_only(client, people, tokens):
     return _check
 
 
+async def test_admin_me_answers_both_roles_without_an_error(client, people, tokens):
+    # Iki yol da ayri ayri (ders 15): yonetici "evet", siradan kullanici HATA
+    # degil "hayir" alir — arayuz menudeki baglantiyi buna gore gosteriyor.
+    admin_id, user_id = people
+    admin = await client.get("/api/admin/me", headers=tokens.headers(admin_id))
+    assert admin.status_code == 200 and admin.json() == {"is_admin": True}
+    regular = await client.get("/api/admin/me", headers=tokens.headers(user_id))
+    assert regular.status_code == 200 and regular.json() == {"is_admin": False}
+
+
+async def test_admin_me_requires_a_session(client):
+    assert (await client.get("/api/admin/me")).status_code == 401
+
+
+async def test_admin_me_reflects_a_revoked_role_immediately(
+    client, people, tokens, db_session
+):
+    # Rol token'da degil veritabaninda: yetki geri alininca ayni token'la
+    # yapilan bir sonraki istek "hayir" almali.
+    admin_id, _ = people
+    await execute(db_session, "DELETE FROM admin_users WHERE user_id=:uid", uid=admin_id)
+    await db_session.commit()
+    response = await client.get("/api/admin/me", headers=tokens.headers(admin_id))
+    assert response.json() == {"is_admin": False}
+
+
 async def test_user_list_joins_supabase_accounts_with_our_billing_rows(
     admin_only, people, db_session
 ):

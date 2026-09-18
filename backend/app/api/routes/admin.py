@@ -20,7 +20,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.account import same_email
-from app.core.auth import CurrentUser, require_admin
+from app.core.auth import CurrentUser, get_current_user, require_admin
 from app.core.db import get_db_session
 from app.services import admin_audit
 from app.services.billing.db import enqueue, execute, many, one
@@ -74,6 +74,26 @@ def _supabase_unavailable(exc: Exception):
         else str(exc),
         503,
     )
+
+
+@router.get("/api/admin/me")
+async def admin_me(
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, bool]:
+    """Oturumdaki kullanıcı yönetici mi (Faz 6, Kaan — `/admin` arayüzü için).
+
+    BİLİNÇLİ OLARAK 403 DÖNMÜYOR: arayüz bu cevapla menüde "Yönetim"
+    bağlantısını gösterip göstermeyeceğine karar veriyor; sıradan kullanıcı da
+    "hayır" cevabını almalı, hata değil. Bu bir YETKİLENDİRME değil — her admin
+    ucu `require_admin` ile kendi kontrolünü ayrıca yapıyor (`SECURITY.md` 3.2).
+    Rol, `require_admin` gibi her istekte veritabanından okunuyor (token'da
+    tutulsaydı yetki geri alındığında token yenilenene kadar bayat kalırdı).
+    """
+    await limit_scoped(request, "admin", user.id)
+    row = await one(db, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=user.id)
+    return {"is_admin": row is not None}
 
 
 #: Kullanıcı listesinin abonelik/kota/kullanım tarafı. Supabase'den gelen sayfa

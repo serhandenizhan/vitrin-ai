@@ -827,6 +827,28 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     göre arama bilinçli olarak Faz 7'ye ertelendi (gerekçesi orada).
     "Kullanıcı ara" yazıp ada göre çalışmaması, çalışmadığını söylemekten
     kötüdür — sonuç boş liste olarak döner, hata mesajı olarak değil.
+  - **`/admin` arayüzü — yapıldı (18.09.2026, Kaan).** Dal
+    `feature/faz6-kaan-admin-arayuz` (PR #22'nin üstüne); Kaan'ın kararıyla
+    main'e ara PR açılmıyor, **faz sonunda tek PR** (PR #22 main'e girdikten
+    sonra dal main'e taşınarak — stacked PR yok, ders 17).
+    - Backend: `GET /api/admin/me` (`{is_admin}`; 403 dönmez, yetkilendirme
+      değil). Serhan'ın alanı — PR'da ayrıca belirtilecek. 3 test (iki rol,
+      oturumsuz 401, geri alınan yetki anında `false`).
+    - Vekiller (`app/api/admin/**`): kimlik UUID kontrolü, gövdeyi bilinen
+      alanlarla yeniden kurma, geri dönüşü olmayan işlemlerde (kredi, geri
+      alma, silme) Origin kontrolü — red ve kabul yolu ayrı test edildi,
+      Origin kontrolü kaldırılınca testin kırmızı yandığı görüldü (ders 15).
+    - Sayfa `/admin` (arama motorlarına kapalı), hesap menüsünde yalnız
+      yöneticiye görünen "Yönetim paneli". Genel bakış (sayaçlar, günlük
+      kesim/kayıt grafikleri, abonelikler, bonus krediler, gelir,
+      operasyon), Kullanıcılar ("E-posta ile ara", sayfalama), kullanıcı
+      ayrıntısı (bonus kredi ver/geri al, hesap silme — e-posta birebir
+      yazılmadan düğme kapalı, yönetici hesabında hiç sunulmuyor).
+    - Kredi formu idempotency anahtarı İŞİ tanımlar: hata sonrası tekrar
+      denemede aynı anahtar, başarıdan sonra yeni anahtar (testli).
+    - Arayüzdeki durum/tür etiketleri migration'daki CHECK kısıtlarından
+      birebir alındı (ders 19); ilk taslakta tahminle yazılan `payment`
+      gerçekte `charge`, `canceling` eksikti — ikisi de düzeltildi.
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
