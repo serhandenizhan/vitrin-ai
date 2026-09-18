@@ -45,3 +45,46 @@ export function LegalSection({
     </section>
   );
 }
+
+export function LegalNotice({ children }: { children: ReactNode }) {
+  return (
+    <aside className="glass-panel-light rounded-2xl border-l-4 border-l-[#d6a756] p-5 text-[0.875rem] leading-relaxed text-[#4d4942]">
+      {children}
+    </aside>
+  );
+}
+
+export function LegalTable({
+  headers,
+  rows,
+}: {
+  headers: string[];
+  rows: ReactNode[][];
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white/45 shadow-sm">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-[0.8125rem] leading-relaxed">
+        <thead className="bg-[#171614] text-[#f3f0eb]">
+          <tr>
+            {headers.map((header) => (
+              <th key={header} scope="col" className="px-4 py-3 font-semibold">
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/8">
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className="align-top transition-colors hover:bg-white/55">
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} className="px-4 py-3.5">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

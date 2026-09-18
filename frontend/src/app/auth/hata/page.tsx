@@ -23,7 +23,7 @@ export default function AuthErrorPage() {
   return (
     <SiteShell>
       <section className="surface-mist section-rhythm page-top">
-        <div className="mx-auto w-full max-w-xl px-5 text-center">
+        <div className="glass-panel-light mx-auto w-[calc(100%-2.5rem)] max-w-xl rounded-3xl p-8 text-center sm:p-10">
           <h1 className="display-section text-balance">Bağlantı geçersiz</h1>
           <p className="lede on-light-muted mx-auto mt-4 text-pretty">
             Bu bağlantının süresi dolmuş ya da daha önce kullanılmış. Giriş

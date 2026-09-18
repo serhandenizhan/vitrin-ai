@@ -28,11 +28,20 @@ export type Settings = {
   historyEnabled: boolean;
   /** Kaydirma animasyonlarini kapat. */
   reduceMotion: boolean;
+  /** Sol paneldeki çalışma satırlarını daha sıkı göster. */
+  compactSidebar: boolean;
+  /** Soluk metin ve cam kenarlarının kontrastını artır. */
+  highContrast: boolean;
+  /** Çalışma ve geçmiş temizleme işlemlerinden önce onay iste. */
+  confirmDeletes: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
   historyEnabled: true,
   reduceMotion: false,
+  compactSidebar: false,
+  highContrast: false,
+  confirmDeletes: true,
 };
 
 const listeners = new Set<() => void>();
@@ -53,6 +62,18 @@ function read(): Settings {
         typeof parsed.reduceMotion === "boolean"
           ? parsed.reduceMotion
           : DEFAULT_SETTINGS.reduceMotion,
+      compactSidebar:
+        typeof parsed.compactSidebar === "boolean"
+          ? parsed.compactSidebar
+          : DEFAULT_SETTINGS.compactSidebar,
+      highContrast:
+        typeof parsed.highContrast === "boolean"
+          ? parsed.highContrast
+          : DEFAULT_SETTINGS.highContrast,
+      confirmDeletes:
+        typeof parsed.confirmDeletes === "boolean"
+          ? parsed.confirmDeletes
+          : DEFAULT_SETTINGS.confirmDeletes,
     };
   } catch {
     // Bozuk ya da erisilemeyen depolama varsayilana duser; ayarlar kritik

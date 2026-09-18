@@ -74,7 +74,7 @@ export default function BulletinPage() {
           <div className="mobile-rail mt-6 grid gap-6 sm:mt-10 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((post, index) => (
               <Reveal key={post.id} delay={Math.min(index, 5) * 60}>
-                <article className="flex h-full flex-col overflow-hidden rounded-[1.5rem] bg-white ring-1 ring-black/5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_18px_40px_-24px_rgba(0,0,0,0.25)]">
+                <article className="glass-panel-light flex h-full flex-col overflow-hidden rounded-[1.5rem] transition-transform duration-300 hover:-translate-y-1">
                   <header className="flex items-center gap-3 px-5 pt-4 pb-3">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1a1917]">
                       <BrandMark className="text-gold h-3.5 w-auto" />
@@ -143,7 +143,7 @@ export default function BulletinPage() {
             </p>
           </Reveal>
           {/* Telefonda acilir basliklar: sekiz kart yerine kisa bir liste. */}
-          <div className="mt-6 divide-y divide-black/8 overflow-hidden rounded-2xl bg-[#f6f4f1] sm:hidden">
+          <div className="glass-panel-light mt-6 divide-y divide-black/8 overflow-hidden rounded-2xl sm:hidden">
             {HIDDEN_FEATURES.map((feature) => (
               <details key={feature.title} className="group">
                 <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 [&::-webkit-details-marker]:hidden">
@@ -163,7 +163,7 @@ export default function BulletinPage() {
           <div className="mt-10 hidden gap-4 sm:grid sm:grid-cols-2">
             {HIDDEN_FEATURES.map((feature, index) => (
               <Reveal key={feature.title} delay={Math.min(index, 5) * 50}>
-                <div className="h-full rounded-2xl bg-[#f6f4f1] p-6">
+                <div className="glass-panel-light h-full rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
                   <h3 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">{feature.title}</h3>
                   <p className="mt-2 text-[0.9375rem] leading-relaxed">{feature.what}</p>
                   <p className="on-light-muted mt-2 text-[0.875rem] leading-relaxed">

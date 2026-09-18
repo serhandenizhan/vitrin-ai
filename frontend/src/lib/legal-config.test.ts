@@ -9,6 +9,9 @@ it("production yayinini eksik yasal kimlikle durdurur", async () => {
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("NEXT_PUBLIC_DATA_CONTROLLER_NAME", "");
   vi.stubEnv("NEXT_PUBLIC_LEGAL_CONTACT_EMAIL", "");
+  vi.stubEnv("NEXT_PUBLIC_LEGAL_ADDRESS", "");
+  vi.stubEnv("NEXT_PUBLIC_LEGAL_PHONE", "");
+  vi.stubEnv("NEXT_PUBLIC_LEGAL_REGISTRY_NUMBER", "");
 
   await expect(import("@/lib/legal-config")).rejects.toThrow(
     "NEXT_PUBLIC_DATA_CONTROLLER_NAME",

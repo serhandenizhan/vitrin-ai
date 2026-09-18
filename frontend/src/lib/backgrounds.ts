@@ -1,3 +1,5 @@
+import { BACKGROUND_NAMES } from "@/lib/background-names";
+
 /**
  * Zemin (arka plan) kaynagi: yer tutucular, sunucudan gelenler ve imzali
  * URL'lerin yenilenmesi.
@@ -183,7 +185,7 @@ export async function fetchBackgrounds(
       .map((record, index) => ({
         type: "server" as const,
         id: record.id,
-        name: `Zemin ${index + 1}`,
+        name: BACKGROUND_NAMES[record.id] ?? `Zemin ${index + 1}`,
         url: record.url,
         ...(typeof record.thumbnailUrl === "string" ? { thumbnailUrl: record.thumbnailUrl } : {}),
         expiresInSeconds:

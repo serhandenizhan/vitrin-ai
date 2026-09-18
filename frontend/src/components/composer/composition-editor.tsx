@@ -69,6 +69,7 @@ import {
 import { useLogo } from "@/lib/use-logo";
 import { useStageSize } from "@/components/composer/use-stage-size";
 import { useBackgroundSelection } from "@/components/composer/use-background-selection";
+import type { EditorDraft } from "@/lib/project-record";
 
 const EditorStage = dynamic(
   () => import("@/components/composer/editor-stage").then((m) => m.EditorStage),
@@ -94,6 +95,18 @@ export type CompositionEditorProps = {
    * donerse gorsel tasinamadi (tarayici depolamasi kapali/dolu).
    */
   onSendToCatalog?: (jpegDataUrl: string) => boolean;
+  /** Navbar'daki kısa çalışma özetini aktif adım ve araçla günceller. */
+  onStatusChange?: (status: EditorStatus) => void;
+  initialDraft?: EditorDraft | null;
+  onSave?: (draft: EditorDraft) => Promise<boolean>;
+  onDownloaded?: () => Promise<boolean>;
+};
+
+export type EditorStatus = {
+  step: number;
+  totalSteps: number;
+  stepLabel: string;
+  toolLabel: string;
 };
 
 /**
@@ -108,9 +121,9 @@ type AfterDownload = "catalog" | "home" | null;
  * secilmeli.
  */
 const EDITOR_STEPS = [
-  { id: 1, label: "Boyut" },
-  { id: 2, label: "Ürün" },
-  { id: 3, label: "Bitir" },
+  { id: 1, label: "Sahne" },
+  { id: 2, label: "Düzenle" },
+  { id: 3, label: "Tamamla" },
 ] as const;
 
 /**
@@ -128,8 +141,7 @@ const STEP_TOOLS = {
     { id: "gorunum", label: "Görünüm" },
   ],
   3: [
-    { id: "logo", label: "Logo" },
-    { id: "etiket", label: "Etiket" },
+    { id: "marka", label: "Marka" },
     { id: "indir", label: "İndir" },
   ],
 } as const;
@@ -140,7 +152,7 @@ const STEP_TOOLS = {
  * 1. adimda bilincli olarak ILK arac degil "Zemin": bicim zaten makul bir
  * varsayilanla (A4) aciliyor, kullanicinin ilk gercek karari zemin.
  */
-const DEFAULT_TOOL: Record<EditorStep, string> = { 1: "zemin", 2: "yerlesim", 3: "logo" };
+const DEFAULT_TOOL: Record<EditorStep, string> = { 1: "zemin", 2: "yerlesim", 3: "marka" };
 
 type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
 
@@ -188,21 +200,26 @@ export function CompositionEditor({
   fileName,
   onReturnToStart,
   onSendToCatalog,
+  onStatusChange,
+  initialDraft,
+  onSave,
+  onDownloaded,
 }: CompositionEditorProps) {
   const { backgrounds, hasServerBackground, isUnavailable, isLoading, retry: retryBackgrounds } =
     useBackgrounds();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
-  const [formatName, setFormatName] = useState<OutputFormatName>(DEFAULT_FORMAT_NAME);
-  const [step, setStep] = useState<EditorStep>(1);
+  const [formatName, setFormatName] = useState<OutputFormatName>(initialDraft?.formatName ?? DEFAULT_FORMAT_NAME);
+  const [step, setStep] = useState<EditorStep>(initialDraft?.step ?? 1);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [afterDownload, setAfterDownload] = useState<AfterDownload>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   /** Baskiya onerilmeyen zeminde CMYK indirmeden once acilan onay. */
   const [pendingPrintFormat, setPendingPrintFormat] = useState<"jpeg" | "tiff" | null>(null);
-  const [transform, setTransform] = useState<Transform | null>(null);
-  const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
+  const [transform, setTransform] = useState<Transform | null>(initialDraft?.transform ?? null);
+  const [appearance, setAppearance] = useState<Appearance>(initialDraft?.appearance ?? DEFAULT_APPEARANCE);
   // Studyo yalnizca istemcide acildigi icin (kullanici etkilesimiyle) tembel
   // baslangic degeri localStorage'i guvenle okuyabiliyor; sunucu cizimi yok.
   // Logo akisi studyo ve katalogda AYNI (bkz. lib/use-logo.ts).
@@ -215,16 +232,11 @@ export function CompositionEditor({
     update: updateLogo,
     remove: removeLogo,
   } = useLogo();
-  const [label, setLabel] = useState<ProductLabel>(DEFAULT_LABEL);
+  const [label, setLabel] = useState<ProductLabel>(initialDraft?.label ?? DEFAULT_LABEL);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   /** Denetcide secili arac; dock bunun paletini gosteriyor. */
-  const [activeTool, setActiveTool] = useState<string>(DEFAULT_TOOL[1]);
-  /**
-   * Tuvalde surukleme/olcekleme suruyor mu. Dock tuvalin UZERINDE durdugu icin
-   * o sirada silikleip geri cekiliyor (Serhan'in karari).
-   */
-  const [isInteracting, setIsInteracting] = useState(false);
+  const [activeTool, setActiveTool] = useState<string>(initialDraft?.activeTool ?? DEFAULT_TOOL[initialDraft?.step ?? 1]);
   /** Telefonda denetci cekmecesi; masaustunde her zaman acik. */
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
@@ -333,7 +345,7 @@ export function CompositionEditor({
     fitting: fittingBackgrounds,
     select: selectBackground,
     showCategory,
-  } = useBackgroundSelection(backgrounds, format);
+  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -499,10 +511,17 @@ export function CompositionEditor({
         dataUrl,
         `${fileName.replace(/\.[^.]+$/, "")}-${format.fileSlug}.${type === "jpeg" ? "jpg" : "png"}`,
       );
+      void onDownloaded?.();
       openAfterDownload();
     },
-    [renderStage, fileName, format, openAfterDownload],
+    [renderStage, fileName, format, openAfterDownload, onDownloaded],
   );
+
+  const saveDraft = useCallback(async () => {
+    if (!onSave) return;
+    setSaveStatus("saving");
+    setSaveStatus((await onSave({ formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool })) ? "saved" : "error");
+  }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
 
   /**
    * WhatsApp'ta paylas (one alinan is, 13.09.2026).
@@ -575,9 +594,12 @@ export function CompositionEditor({
       // Istek ve indirme katalogla ortak (lib/print-download.ts).
       const result = await downloadCmyk(dataUrl, printFormat, fileName.replace(/\.[^.]+$/, ""));
       setPrintStatus(result.ok ? "done" : { error: result.error });
-      if (result.ok) openAfterDownload();
+      if (result.ok) {
+        void onDownloaded?.();
+        openAfterDownload();
+      }
     },
-    [renderStage, fileName, openAfterDownload],
+    [renderStage, fileName, openAfterDownload, onDownloaded],
   );
 
   /** Katalog sorusuna "Evet": gorsel RGB JPEG olarak cizilip kataloga gidiyor. */
@@ -635,6 +657,17 @@ export function CompositionEditor({
   }, [afterDownload]);
 
   const tools = STEP_TOOLS[step];
+
+  useEffect(() => {
+    const stepLabel = EDITOR_STEPS.find((item) => item.id === step)?.label ?? "";
+    const toolLabel = tools.find((item) => item.id === activeTool)?.label ?? stepLabel;
+    onStatusChange?.({
+      step,
+      totalSteps: EDITOR_STEPS.length,
+      stepLabel,
+      toolLabel,
+    });
+  }, [activeTool, onStatusChange, step, tools]);
 
   /**
    * Dock'un basligi, sag ustteki baglam denetimi ve paleti.
@@ -751,7 +784,7 @@ export function CompositionEditor({
       return {
         title: "Yerleşim",
         body: (
-          <DockStrip label="Yerleşim eylemleri">
+          <DockStrip label="Yerleşim eylemleri" centered>
             <DockAction onClick={centerAndFit} disabled={!cutoutSize} icon={<Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />}>
               Ortala ve sığdır
             </DockAction>
@@ -780,7 +813,7 @@ export function CompositionEditor({
         ) : undefined,
         body: (
           <>
-            <DockStrip label="Hazır görünüm ayarları">
+            <DockStrip label="Hazır görünüm ayarları" centered>
               {APPEARANCE_PRESETS.map((item) => (
                 <button
                   key={item.id}
@@ -818,9 +851,14 @@ export function CompositionEditor({
       };
     }
 
-    if (activeTool === "logo") {
+    if (activeTool === "marka") {
       return {
-        title: "Logo",
+        title: "Marka",
+        action: (
+          <span className="on-dark-muted fine-print">
+            Logo ve ürün bilgisi
+          </span>
+        ),
         body: (
           <>
             <input
@@ -835,79 +873,71 @@ export function CompositionEditor({
                 if (file) void handleLogoFile(file);
               }}
             />
-            {logoUrl ? (
-              <>
-                <DockStrip label="Logo eylemleri">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+            <DockStrip label="Marka öğeleri" centered>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={logoUrl}
                     alt="Yüklenen logo"
                     className="checkerboard size-9 shrink-0 self-center rounded-lg object-contain ring-1 ring-white/15"
                   />
-                  <DockAction onClick={() => logoInputRef.current?.click()}>Değiştir</DockAction>
+              ) : null}
+              <DockAction
+                onClick={() => logoInputRef.current?.click()}
+                icon={<ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}
+              >
+                {logoUrl ? "Logoyu değiştir" : "Logo yükle"}
+              </DockAction>
+              {logoUrl ? (
+                <>
                   <DockAction onClick={() => void invertCurrentLogo()} icon={<Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />}>
                     Renkleri çevir
                   </DockAction>
                   <DockAction onClick={removeLogo} icon={<Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
                     Kaldır
                   </DockAction>
-                </DockStrip>
-                {/* Kose secmek serbest konumu siliyor; boyut sahnedeki kose
-                    karelerinden (Kaan, 17.09.2026). */}
-                <div className="mt-2">
+                </>
+              ) : null}
+              <Toggle
+                label="Ürün etiketi"
+                isOn={label.enabled}
+                onChange={(enabled) => setLabel((current) => ({ ...current, enabled }))}
+              />
+            </DockStrip>
+
+            {(logoUrl || label.enabled) ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {logoUrl ? (
                   <CornerRow
                     label="Logo konumu"
                     value={logo.position ? null : logo.corner}
                     onChange={(corner) => updateLogo({ corner, position: null })}
                   />
-                </div>
-              </>
-            ) : (
-              <DockStrip label="Logo eylemleri">
-                <DockAction onClick={() => logoInputRef.current?.click()} icon={<ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}>
-                  Logo yükle
-                </DockAction>
-              </DockStrip>
-            )}
+                ) : <span />}
+                {label.enabled ? (
+                  <CornerRow
+                    label="Etiket konumu"
+                    value={label.corner}
+                    onChange={(corner) => setLabel((current) => ({ ...current, corner }))}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            {label.enabled ? (
+              <div className="mt-2 flex gap-2 sm:ml-auto sm:w-1/2 sm:pl-1">
+                <Toggle
+                  label="Koyu etiket"
+                  isOn={label.theme === "dark"}
+                  onChange={() => setLabel((current) => ({ ...current, theme: "dark" }))}
+                />
+                <Toggle
+                  label="Açık etiket"
+                  isOn={label.theme === "light"}
+                  onChange={() => setLabel((current) => ({ ...current, theme: "light" }))}
+                />
+              </div>
+            ) : null}
           </>
-        ),
-      };
-    }
-
-    if (activeTool === "etiket") {
-      return {
-        title: "Ürün etiketi",
-        action: (
-          <Toggle
-            label={label.enabled ? "Açık" : "Kapalı"}
-            isOn={label.enabled}
-            onChange={(enabled) => setLabel((current) => ({ ...current, enabled }))}
-          />
-        ),
-        body: label.enabled ? (
-          <>
-            <CornerRow
-              label="Etiket konumu"
-              value={label.corner}
-              onChange={(corner) => setLabel((current) => ({ ...current, corner }))}
-            />
-            <div className="mt-2 flex gap-2">
-              <Toggle
-                label="Koyu"
-                isOn={label.theme === "dark"}
-                onChange={() => setLabel((current) => ({ ...current, theme: "dark" }))}
-              />
-              <Toggle
-                label="Açık"
-                isOn={label.theme === "light"}
-                onChange={() => setLabel((current) => ({ ...current, theme: "light" }))}
-              />
-            </div>
-          </>
-        ) : (
-          <p className="fine-print on-dark-muted px-1 pb-1">
-            Ayar, gram ve ürün kodunu görselin köşesine ekler.
-          </p>
         ),
       };
     }
@@ -920,6 +950,7 @@ export function CompositionEditor({
         </span>
       ),
       body: (
+        <>
         <DockStrip label="Çıktı türleri">
           <DockAction onClick={() => download("png")} disabled={isExporting} icon={<Download className="size-3.5" strokeWidth={1.75} aria-hidden />}>
             PNG
@@ -944,7 +975,14 @@ export function CompositionEditor({
           <DockAction onClick={shareToWhatsApp} disabled={isExporting} icon={<MessageCircle className="size-3.5" strokeWidth={1.75} aria-hidden />}>
             WhatsApp
           </DockAction>
+          {onSave ? (
+            <DockAction onClick={() => void saveDraft()} disabled={saveStatus === "saving"} icon={<CheckCircle2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              {saveStatus === "saving" ? "Kaydediliyor" : saveStatus === "saved" ? "Kaydedildi" : "Kaydet"}
+            </DockAction>
+          ) : null}
         </DockStrip>
+        {saveStatus === "error" ? <p className="fine-print mt-2 text-red-300">Çalışma kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.</p> : null}
+        </>
       ),
     };
   })();
@@ -1014,9 +1052,10 @@ export function CompositionEditor({
       );
     }
 
-    if (activeTool === "logo") {
+    if (activeTool === "marka") {
       return (
         <>
+          <p className="text-[0.75rem] font-medium text-[#f3f0eb]">Logo</p>
           {logoUrl ? (
             <Slider
               label="Saydamlık"
@@ -1037,14 +1076,11 @@ export function CompositionEditor({
               Saydam PNG en iyi sonucu verir. Logo yalnızca bu tarayıcıda hatırlanır.
             </p>
           )}
-        </>
-      );
-    }
-
-    if (activeTool === "etiket" && label.enabled) {
-      return (
-        <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="border-t border-white/10 pt-3">
+            <p className="mb-2 text-[0.75rem] font-medium text-[#f3f0eb]">Ürün etiketi</p>
+            {label.enabled ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="fine-print on-dark-muted block">Ayar</span>
               <select
@@ -1076,25 +1112,32 @@ export function CompositionEditor({
                 className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12 aria-invalid:ring-red-400"
               />
             </label>
+                </div>
+                <label className="mt-3 block">
+                  <span className="fine-print on-dark-muted block">Ürün kodu</span>
+                  <input
+                    type="text"
+                    placeholder="A-102"
+                    maxLength={MAX_CODE_LENGTH}
+                    value={label.code}
+                    onChange={(event) =>
+                      setLabel((current) => ({ ...current, code: event.target.value }))
+                    }
+                    className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
+                  />
+                </label>
+                {gramProblem(label.gram) ? (
+                  <p role="alert" className="fine-print mt-2 text-red-300">
+                    {gramProblem(label.gram)}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="fine-print on-dark-muted">
+                Ayar, gram ve ürün kodunu görselin köşesine eklemek için dock’tan etkinleştirin.
+              </p>
+            )}
           </div>
-          <label className="block">
-            <span className="fine-print on-dark-muted block">Ürün kodu</span>
-            <input
-              type="text"
-              placeholder="A-102"
-              maxLength={MAX_CODE_LENGTH}
-              value={label.code}
-              onChange={(event) =>
-                setLabel((current) => ({ ...current, code: event.target.value }))
-              }
-              className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
-            />
-          </label>
-          {gramProblem(label.gram) ? (
-            <p role="alert" className="fine-print text-red-300">
-              {gramProblem(label.gram)}
-            </p>
-          ) : null}
         </>
       );
     }
@@ -1196,30 +1239,15 @@ export function CompositionEditor({
   );
 
   return (
-    <div className="relative flex w-full flex-col lg:block">
-      {/*
-        TUVAL ALANI. `min-w-0` sart: flex ogelerinin varsayilan
-        `min-width: auto` degeri, ogenin ICERIGINDEN dar olmasini engelliyor.
-        Konva sahnesi kendine acik bir piksel genisligi verdigi icin bu bir geri
-        besleme dongusu yaratiyordu (sahne 560 -> kapsayici 560 -> olcum 560).
-        Sagdaki 19rem'lik pay, yuzen denetcinin tuvali ortmemesi icin.
-      */}
-      {/*
-        TELEFONDA YAPISKAN (Serhan'in karari: "tuval ustte sabit kalir,
-        kullanici ayar yaparken sonucu gorur"). Yapiskanlik BU seviyede olmali:
-        oge, uzun olan kok kapsayicinin dogrudan cocugu — bir alt seviyede
-        denendiginde kapsayicinin yuksekligi tuval kadar oldugu icin
-        kayacak yer kalmiyor ve tuval ekranin disina cikiyordu (olculdu:
-        cerceve ust kenari -101 px).
-      */}
-      <div className="order-1 sticky top-14 z-0 flex min-w-0 items-center justify-center px-3 py-3 lg:static lg:min-h-[calc(100dvh-3.5rem)] lg:px-6 lg:py-6 lg:pr-[19rem]">
+    <div className="relative flex w-full flex-col lg:min-h-[calc(100dvh-4.25rem)]">
+      {/* Tuval ve dock ayrı satırlarda; sağ panel için iki yanda eşit pay. */}
+      <div className="order-1 relative z-0 flex min-w-0 items-center justify-center bg-white px-3 py-5 lg:static lg:flex-1 lg:px-[19rem]">
         <div
           ref={containerRef}
           className="stage-fit w-full min-w-0"
           // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde
           // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
-          // Dock tuvalin uzerinde duruyor ve urune dokununca cekiliyor
-          // (Serhan'in karari), bu yuzden dock icin ayrica yer AYRILMIYOR.
+          // Dock ayrı satırda; dikey pay fotoğrafın tamamını görünür tutar.
           style={{
             maxWidth: `min(46rem, calc((100dvh - var(--studio-reserved)) * ${format.outputWidth / format.outputHeight}))`,
           }}
@@ -1240,7 +1268,6 @@ export function CompositionEditor({
               logo={logo}
               label={label}
               onLogoChange={updateLogo}
-              onInteractionChange={setIsInteracting}
               onTransformChange={(next) => {
                 pushHistory();
                 setTransform(next);
@@ -1249,36 +1276,21 @@ export function CompositionEditor({
               onStageReady={handleStageReady}
             />
           </div>
-          {/*
-            YALNIZCA TELEFONDA. Masaustunde dock tuvalin uzerinde duruyor ve bu
-            yazi tamamen onun arkasinda kaliyordu (tarayicida olculdu: yazinin
-            ust kenari dock'un ust kenarinin altinda). Hic gorunmeyen bir metni
-            orada birakmak, yerini bosa harcamak olurdu; ayni ipucu masaustunde
-            "Yerleşim" aracinin denetcisinde duruyor.
-          */}
-          <p className="fine-print on-dark-muted mt-2 text-center lg:hidden">
+          <p className="fine-print text-muted-foreground mt-2 text-center lg:hidden">
             Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
             döndürün
           </p>
         </div>
       </div>
 
-      {/*
-        DENETCI: telefonda dock'un ustunde, masaustunde sagda yuzen.
-
-        `relative z-10` ZORUNLU: telefonda tuval alani `sticky` (yani
-        KONUMLANDIRILMIS) ve konumlandirilmis oge, statik kardeslerinin
-        UZERINE boyaniyor — tuval denetciyi ve dock'u ortuyordu (tarayicida
-        gorundu). Kok CLAUDE.md ders 13'un ayni sinifi: kazanani boyama
-        sirasi belirliyor.
-      */}
+      {/* Denetçi mobilde akışta, masaüstünde sağda. */}
       <div className="relative z-10 order-2 px-3 lg:absolute lg:top-6 lg:right-6 lg:px-0">
         {inspector}
       </div>
 
-      {/* DOCK: telefonda en altta akista, masaustunde tuvalin uzerinde. */}
-      <div className="relative z-10 order-3 mt-2 flex justify-center px-3 pb-3 lg:absolute lg:inset-x-0 lg:bottom-4 lg:mt-0 lg:px-6 lg:pb-0 lg:pr-[19rem]">
-        <Dock title={dock.title} action={dock.action} isQuiet={isInteracting}>
+      {/* Dock tüm ekranlarda tuvalin altında, ekran merkezinde. */}
+      <div className="relative z-10 order-3 mt-2 flex shrink-0 justify-center px-3 pb-4 lg:px-6">
+        <Dock title={dock.title} action={dock.action}>
           {dock.body}
         </Dock>
       </div>

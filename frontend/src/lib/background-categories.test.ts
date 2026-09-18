@@ -40,9 +40,9 @@ describe("zemin kategorileri", () => {
   it("dort kategori, Sade ilk sirada", () => {
     expect(BACKGROUND_CATEGORIES.map((category) => category.label)).toEqual([
       "Sade",
-      "Doku & desen",
-      "Doğal & çiçekli",
-      "Lüks & koyu",
+      "Desen",
+      "Doğal",
+      "Lüks",
     ]);
   });
 

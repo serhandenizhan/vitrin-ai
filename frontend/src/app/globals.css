@@ -345,6 +345,18 @@
   transition-duration: 0.001ms !important;
 }
 
+/* Ayarlar > Yüksek kontrast. Tasarım paletini değiştirmeden ikincil metin ve
+   cam kenarlarını daha belirgin yapar. */
+.high-contrast .on-light-muted {
+  color: #45413b;
+}
+.high-contrast .on-dark-muted {
+  color: #d3cec6;
+}
+.high-contrast .glass-panel {
+  border-color: rgb(255 255 255 / 0.42);
+}
+
 /*
  * Sol cekmecenin konumu ve hareketi.
  *
@@ -811,9 +823,11 @@ html.reduce-motion .soft-fade {
 
 /* Sagda yuzen denetci ve altta yuzen dock'un ortak zemini. */
 @utility glass-panel {
-  background-color: color-mix(in srgb, #1a1917 78%, transparent);
+  background:
+    radial-gradient(120% 180% at 8% -70%, rgb(255 255 255 / 0.3), transparent 46%),
+    linear-gradient(135deg, rgb(42 41 38 / 0.76), rgb(20 19 18 / 0.68));
   color: #f3f0eb;
-  border: 1px solid var(--color-hairline);
+  border: 1px solid rgb(255 255 255 / 0.24);
   /* `backdrop-filter` tuvalin uzerinde teorik olarak pahali: bulanik alan,
      Konva her kareyi yeniden cizerken de yeniden hesaplaniyor. TAHMIN
      EDILMEDI, OLCULDU (17.09.2026, 1440x900, iki camli yuzey, tuvalin altindaki
@@ -822,67 +836,37 @@ html.reduce-motion .soft-fade {
      dusmuyor. Olcum dikey senkrona takili oldugu icin 16.7 ms'nin ALTINDAKI
      bir maliyeti ayirt edemez; soyledigi sey "bu kurulumda kare kaybi yok".
      Yaricap buyutulurse olcum tekrarlanmali. */
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 0.06) inset,
-    0 24px 48px -24px rgb(0 0 0 / 0.65);
+    0 1px 0 0 rgb(255 255 255 / 0.28) inset,
+    0 -1px 0 0 rgb(255 255 255 / 0.08) inset,
+    0 24px 56px -28px rgb(0 0 0 / 0.72);
 }
 
-/* Dock, tuvalin UZERINDE duruyor (Serhan'in karari). Urune dokunuldugu anda
-   geri cekiliyor ki kompozisyonun alti gorunsun.
-
-   BILESIK SECICI zorunlu (ders 13): `.glass-dock` ve `.dock-quiet` ikisi de
-   `@utility` olsaydi ayni ozgullukte olur ve kazanani uretilen dosyadaki SIRA
-   belirlerdi — sol cekmecede bu hata birebir yasandi. */
-@utility glass-dock {
-  transition:
-    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+/* Açık sayfalardaki kart ve ayar yüzeyleri. Beyazın altındaki sayfa tonu
+   görünür kalır; üst kenardaki parlama koyu stüdyo camıyla aynı dili kurar. */
+@utility glass-panel-light {
+  background:
+    radial-gradient(120% 160% at 8% -60%, rgb(255 255 255 / 0.98), transparent 52%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.58));
+  border: 1px solid rgb(255 255 255 / 0.82);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.92) inset,
+    0 22px 48px -30px rgb(42 36 28 / 0.35),
+    0 0 0 1px rgb(26 25 23 / 0.05);
 }
 
-/* YALNIZCA MASAUSTUNDE (lg ve ustu). Telefonda dock tuvalin uzerinde degil,
-   akista ve tuvalin ALTINDA duruyor; orada silikleşmesinin bir karsiligi yok,
-   tersine kullanici ayar yaparken dock'un kaybolmasi kafa karistirirdi. */
-@media (min-width: 64rem) {
-  .glass-dock.dock-quiet {
-    opacity: 0.18;
-    transform: translateY(0.75rem);
-    /* Silikken tiklamayi yutmamali: altindaki tuval calisiyor olabilir. */
-    pointer-events: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .glass-dock {
-    transition: none;
-  }
-}
-
-html.reduce-motion .glass-dock {
-  transition: none;
-}
-
-/* Tuvalin ekrana sigmasi icin ayrilan dikey pay.
-   TELEFONDA denetci ve dock tuvalin ALTINDA akista duruyor, masaustunde ise
-   uzerinde yuzuyor — yani ayrilmasi gereken yer iki durumda cok farkli.
-   Tek bir satir ici `style` bunu yapamadigi icin deger bir degiskene alindi.
-
-   TARAYICIDA OLCULDU: telefonda pay ayrilmadan tuval 496 px cikiyor, denetci
-   ve dock ile birlikte gorus alanini asiyor ve tuval yukari kayip EKRANIN
-   DISINDA kaliyordu (cerceve ust kenari -101 px). "Ayar yaparken sonucu gor"
-   karari boylece hic islemiyordu. */
+/* Tuval, navbar ve alt kontrollerle birlikte görünür alana sığar. */
 @utility stage-fit {
-  /* TELEFON: tuval, denetci ve dock'un TAMAMINI ayni anda gostermeye
-     calismak yanlis yol — 375x667'de olculdu, tuval 155 px'e dusuyor ve yine
-     sigmiyordu. Karar (Serhan): tuval YAPISKAN, sayfa kaysin. Buradaki pay
-     yalnizca baslik + tuvalin kendi payi. */
-  --studio-reserved: 15rem;
+  --studio-reserved: max(15rem, 48dvh);
 }
 
 @media (min-width: 64rem) {
   .stage-fit {
-    --studio-reserved: 12rem;
+    --studio-reserved: 21rem;
   }
 }
 
@@ -893,3 +877,8 @@ html.reduce-motion .glass-dock {
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
 }
+
+/* Scrollbar labels ile çakışmasın; kendi satırında yer kaplasın. */
+.dock-strip { scrollbar-width: thin; scrollbar-color: #77736c transparent; }
+.dock-strip::-webkit-scrollbar { height: 6px; }
+.dock-strip::-webkit-scrollbar-thumb { background: #77736c; border-radius: 999px; }

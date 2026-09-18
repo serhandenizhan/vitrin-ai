@@ -40,9 +40,11 @@ import {
   discardLegacyBrowserHistory,
   listWorks,
   saveWork,
+  updateWorkStatus as writeWorkStatus,
   type NewWork,
   type WorkRecord,
 } from "@/lib/work-history";
+import type { EditorDraft } from "@/lib/project-record";
 
 type WorkspaceValue = {
   isSidebarOpen: boolean;
@@ -56,7 +58,8 @@ type WorkspaceValue = {
   hasMoreWorks: boolean;
   isLoadingMoreWorks: boolean;
   loadMoreWorks: () => void;
-  recordWork: (work: NewWork) => Promise<void>;
+  recordWork: (work: NewWork) => Promise<WorkRecord | null>;
+  updateWorkStatus: (id: string, status: "draft" | "completed", editorState?: EditorDraft) => Promise<boolean>;
   removeWork: (id: string) => Promise<void>;
   removeAllWorks: () => Promise<void>;
   /**
@@ -237,6 +240,8 @@ const EMPTY_WORKS: WorkRecord[] = [];
 export type StudioData = {
   cutoutUrl: string;
   fileName: string;
+  workId?: string;
+  initialDraft?: EditorDraft | null;
 };
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -426,7 +431,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       "reduce-motion",
       settings.reduceMotion,
     );
-  }, [settings.reduceMotion]);
+    document.documentElement.classList.toggle(
+      "high-contrast",
+      settings.highContrast,
+    );
+  }, [settings.highContrast, settings.reduceMotion]);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     writeSettings(patch);
@@ -434,18 +443,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const recordWork = useCallback<WorkspaceValue["recordWork"]>(
     async (work) => {
-      if (!settings.historyEnabled || !userId) return;
+      if (!settings.historyEnabled || !userId) return null;
       const kayit = await saveWork(work, userId);
-      if (!kayit) return;
+      if (!kayit) return null;
       // Kayit sirasinda kullanici degistiyse (cikis) listeye eklenmiyor.
       setHistory((current) =>
         current.userId === userId
           ? { ...current, works: [kayit, ...current.works] }
           : current,
       );
+      return kayit;
     },
     [settings.historyEnabled, userId],
   );
+
+  const updateWorkStatus = useCallback<WorkspaceValue["updateWorkStatus"]>(async (id, status, editorState) => {
+    if (!userId) return false;
+    const updated = await writeWorkStatus(id, status, userId, editorState);
+    if (!updated) return false;
+    setHistory((current) => ({
+      ...current,
+      works: current.works.map((work) => (work.id === id ? updated : work)),
+    }));
+    return true;
+  }, [userId]);
 
   const removeWork = useCallback(async (id: string) => {
     if (!userId) return;
@@ -538,6 +559,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isLoadingMoreWorks,
       loadMoreWorks,
       recordWork,
+      updateWorkStatus,
       removeWork,
       removeAllWorks,
       refreshWorks,
@@ -589,6 +611,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isLoadingMoreWorks,
       loadMoreWorks,
       recordWork,
+      updateWorkStatus,
       removeWork,
       removeAllWorks,
       refreshWorks,

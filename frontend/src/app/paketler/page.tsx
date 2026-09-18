@@ -28,7 +28,11 @@
 import type { Metadata } from "next";
 import { Check, Minus } from "lucide-react";
 
-import { BillingPlans, type PlanPresentation } from "@/components/billing-plans";
+import {
+  BillingPlans,
+  TrialQuotaAnswer,
+  type PlanPresentation,
+} from "@/components/billing-plans";
 import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
@@ -158,8 +162,7 @@ const KARSILASTIRMA: { ozellik: string; degerler: (boolean | string)[] }[] =
 const SORULAR = [
   {
     soru: "Bugün ne kadar kullanabilirim?",
-    cevap:
-      "Bir sınır koymadık. Ücretsiz bir hesap açmanız yeterli, ücret yok; istediğiniz kadar fotoğraf işleyebilirsiniz. Aynı anda tek fotoğraf işlendiği için yoğun anlarda kısa bir süre beklemeniz gerekebilir.",
+    cevap: <TrialQuotaAnswer />,
   },
   {
     soru: "Ücretli plana geçince bugünkü çalışmalarım ne olacak?",

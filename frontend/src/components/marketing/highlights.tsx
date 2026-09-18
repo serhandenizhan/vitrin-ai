@@ -36,8 +36,9 @@ const HIGHLIGHTS = [
 
 export function Highlights() {
   return (
-    <section id="ozellikler" className="surface-charcoal section-rhythm">
-      <div className="mx-auto w-full max-w-5xl px-5">
+    <section id="ozellikler" className="surface-mist section-rhythm relative overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(45%_80%_at_50%_0%,rgba(214,167,86,0.11),transparent_75%)]" />
+      <div className="relative mx-auto w-full max-w-5xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
             Farkı ayrıntılarda görürsünüz
@@ -51,10 +52,10 @@ export function Highlights() {
               key={item.baslik}
               delay={index * 90}
               // Telefonda kutu degil ince cizgiyle ayrilmis kisa liste.
-              className="border-t border-white/12 pt-5 sm:border-0 sm:pt-0"
+              className="border-t border-black/10 pt-5 sm:border-0 sm:pt-0"
             >
               <p className="display-feature text-balance">{item.baslik}</p>
-              <p className="lede on-dark-muted mt-2 text-pretty sm:mt-3">
+              <p className="lede on-light-muted mt-2 text-pretty sm:mt-3">
                 {item.aciklama}
               </p>
             </Reveal>

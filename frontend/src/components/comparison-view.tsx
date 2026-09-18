@@ -28,6 +28,7 @@ type ComparisonViewProps = {
   fileName: string;
   isMocked: boolean;
   elapsedSeconds: number | null;
+  workId: string | null;
   onReset: () => void;
 };
 
@@ -43,6 +44,7 @@ export function ComparisonView({
   fileName,
   isMocked,
   elapsedSeconds,
+  workId,
   onReset,
 }: ComparisonViewProps) {
   const { openStudio } = useWorkspace();
@@ -114,7 +116,7 @@ export function ComparisonView({
           <Button
             size="lg"
             className="press min-h-11 rounded-full"
-            onClick={() => openStudio({ cutoutUrl: resultUrl, fileName })}
+            onClick={() => openStudio({ cutoutUrl: resultUrl, fileName, workId: workId ?? undefined })}
           >
             <ImagePlus className="size-4" strokeWidth={1.75} aria-hidden />
             Arka plan ekle

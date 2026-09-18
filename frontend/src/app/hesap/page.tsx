@@ -23,10 +23,24 @@ export const metadata: Metadata = {
 export default function AccountPage() {
   return (
     <SiteShell>
-      <section className="surface-mist section-rhythm page-top">
-        <div className="mx-auto w-full max-w-xl px-5">
-          <h1 className="display-section text-balance">Hesabım</h1>
-          <div className="mt-8">
+      <section className="surface-black section-rhythm page-top relative overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[30rem]"
+          style={{ background: "radial-gradient(50% 65% at 50% 0%, rgba(212,175,110,0.2), transparent 72%)" }}
+        />
+        <div className="relative mx-auto w-full max-w-6xl px-5">
+          <p className="text-gold text-[0.75rem] font-semibold tracking-[0.12em] uppercase">Hesap merkezi</p>
+          <h1 className="display-section mt-3 max-w-3xl text-balance">Hesabınız, güvenliğiniz ve ödemeleriniz</h1>
+          <p className="lede on-dark-muted mt-5 max-w-2xl text-pretty">
+            Profil bilgilerinizi güncelleyin, oturum güvenliğinizi yönetin ve kredi durumunuzu tek yerde takip edin.
+          </p>
+        </div>
+      </section>
+      <section className="surface-mist section-rhythm relative overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[32rem] bg-[radial-gradient(48%_75%_at_50%_0%,rgba(214,167,86,0.13),transparent_76%)]" />
+        <div className="relative mx-auto w-full max-w-6xl px-5">
+          <div>
             <AccountPanel />
             <BillingPanel />
           </div>

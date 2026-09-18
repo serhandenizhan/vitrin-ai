@@ -318,9 +318,9 @@ export function CatalogEditor() {
                 setTemplateName(option.name);
                 setSelectedSlot(null);
               }}
-              className="press group text-left"
+              className="press group rounded-[1.5rem] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#b8893f] focus-visible:ring-offset-4"
             >
-              <div className="overflow-hidden rounded-[1.5rem] shadow-[0_1px_2px_rgba(0,0,0,0.06),0_24px_50px_-22px_rgba(0,0,0,0.35)] ring-1 ring-black/10 transition-shadow group-hover:ring-black/25">
+              <div className="relative overflow-hidden rounded-[1.5rem] shadow-[0_1px_2px_rgba(0,0,0,0.06),0_24px_50px_-22px_rgba(0,0,0,0.35)] ring-1 ring-black/10 transition-[transform,box-shadow] duration-300 group-hover:-translate-y-2 group-hover:shadow-[0_30px_65px_-24px_rgba(0,0,0,0.48)] group-hover:ring-[#b8893f]/60 group-focus-visible:-translate-y-2">
                 <div
                   className="catalog-container"
                   style={{ aspectRatio: `${CATALOG_WIDTH} / ${CATALOG_HEIGHT}` }}
@@ -338,8 +338,11 @@ export function CatalogEditor() {
                     texts={option.name === "full" ? { eyebrow: "", title: "", footer: "" } : DEFAULT_TEXTS}
                   />
                 </div>
+                <span className="absolute top-3 right-3 translate-y-1 rounded-full bg-black/70 px-3 py-1.5 text-[0.6875rem] font-medium text-white opacity-0 shadow-lg backdrop-blur-md transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+                  Şablonu seç
+                </span>
               </div>
-              <h3 className="mt-4 text-[1.0625rem] font-semibold tracking-[-0.01em]">
+              <h3 className="mt-4 text-[1.0625rem] font-semibold tracking-[-0.01em] transition-colors group-hover:text-[#9a6b24]">
                 {option.title}
               </h3>
               <p className="on-light-muted fine-print mt-0.5">{option.summary}</p>
@@ -439,7 +442,7 @@ export function CatalogEditor() {
         </p>
       </div>
 
-      <div className="divide-black/8 divide-y rounded-2xl bg-[#efece6]">
+      <div className="glass-panel-light divide-black/8 divide-y rounded-2xl">
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <span className="text-[0.9375rem] font-medium">{template.title}</span>
           <Button
@@ -501,7 +504,7 @@ export function CatalogEditor() {
                 aria-pressed={paperColor === option.color}
                 onClick={() => setPaperColor(option.color)}
                 className={
-                  "press size-8 rounded-full ring-offset-2 ring-offset-[#efece6] " +
+                  "press size-8 rounded-full ring-offset-2 ring-offset-transparent " +
                   (paperColor === option.color ? "ring-gold ring-2" : "ring-1 ring-black/15")
                 }
                 style={{ backgroundColor: option.color }}

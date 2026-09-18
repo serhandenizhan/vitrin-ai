@@ -42,7 +42,7 @@ export default function ShootingGuidePage() {
           {/* Genis ekranda kartlar. */}
           <div className="hidden gap-4 sm:grid sm:grid-cols-2">
           {STEPS.map(([title, text], index) => (
-            <Reveal key={title} delay={index * 60} className="rounded-2xl bg-white p-6 ring-1 ring-black/5">
+            <Reveal key={title} delay={index * 60} className="glass-panel-light rounded-2xl p-6 transition-transform duration-300 hover:-translate-y-1">
               <span className="text-gold text-[0.75rem] font-semibold tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
@@ -53,7 +53,7 @@ export default function ShootingGuidePage() {
           </div>
           {/* Telefonda acilir basliklar (Kaan, 17.09.2026): alti kart alt alta
               cok uzuyordu, yana kaydirma da yoruyordu. Ilki acik geliyor. */}
-          <div className="divide-y divide-black/8 overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 sm:hidden">
+          <div className="glass-panel-light divide-y divide-black/8 overflow-hidden rounded-2xl sm:hidden">
           {STEPS.map(([title, text], index) => (
             <details key={title} open={index === 0} className="group">
               <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 [&::-webkit-details-marker]:hidden">

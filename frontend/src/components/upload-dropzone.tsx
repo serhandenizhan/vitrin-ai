@@ -61,19 +61,20 @@ export function UploadDropzone({
         if (!disabled) handleFiles(event.dataTransfer.files);
       }}
       className={cn(
-        "flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-6 py-16 text-center transition-colors",
+        "group relative flex cursor-pointer flex-col items-center justify-center gap-4 overflow-hidden rounded-[1.5rem] border border-dashed px-6 py-16 text-center transition-[transform,border-color,background-color,box-shadow] duration-300",
+        "before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_10%,rgba(214,167,86,0.12),transparent_48%)] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
         "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
         isDraggingOver
-          ? "border-primary bg-accent"
-          : "border-border hover:border-primary/50 hover:bg-accent/50",
+          ? "border-[#d6a756] bg-[#d6a756]/8 shadow-[0_18px_44px_-26px_rgba(214,167,86,0.75)]"
+          : "border-black/12 bg-white/45 hover:-translate-y-0.5 hover:border-[#d6a756]/65 hover:bg-white/72 hover:shadow-[0_20px_46px_-30px_rgba(82,61,29,0.5)]",
         disabled && "pointer-events-none opacity-60",
       )}
     >
-      <span className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
+      <span className="relative flex size-14 items-center justify-center rounded-full bg-[linear-gradient(145deg,#f6ddb0,#d6a756)] text-[#342719] shadow-[0_12px_26px_-12px_rgba(214,167,86,0.9),inset_0_1px_0_rgba(255,255,255,0.7)] transition-transform duration-300 group-hover:scale-105">
         <ImagePlus className="size-5" strokeWidth={1.5} aria-hidden />
       </span>
 
-      <span className="flex flex-col gap-1">
+      <span className="relative flex flex-col gap-1">
         <span className="text-base font-medium">
           Ürün fotoğrafını buraya bırakın
         </span>
@@ -82,7 +83,7 @@ export function UploadDropzone({
         </span>
       </span>
 
-      <span className="text-muted-foreground text-xs">
+      <span className="text-muted-foreground relative rounded-full bg-black/[0.035] px-3 py-1.5 text-xs ring-1 ring-black/5">
         JPEG, PNG, WebP veya HEIC, en fazla {MAX_FILE_SIZE_MB} MB
       </span>
 

@@ -126,15 +126,15 @@ const initialBackgrounds = [
   },
 ];
 
-/** Logo, etiket ve indirme dugmeleri ucuncu adimda. */
+/** Marka ve indirme araçları üçüncü adımda. */
 function goToFinish() {
-  fireEvent.click(screen.getByRole("tab", { name: /Bitir/ }));
+  fireEvent.click(screen.getByRole("tab", { name: /Tamamla/ }));
 }
 
 /**
  * Denetcideki ARAC sekmesine gecer; dock o aracin paletini gosterir
  * (17.09.2026 duzen degisikligi). Adim haplari da `role="tab"` ama adlari
- * numarali ("3 Bitir"), arac adlari numarasiz — TAM ad verilerek ayrisiyorlar.
+ * numaralı ("3 Tamamla"), araç adları numarasız — tam adla ayrışıyorlar.
  */
 function openTool(name: string) {
   fireEvent.click(screen.getByRole("tab", { name }));
@@ -333,8 +333,7 @@ describe("CompositionEditor", () => {
       renderEditor();
 
       goToFinish();
-      openTool("Etiket");
-      fireEvent.click(screen.getByRole("switch", { name: "Kapalı" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Ürün etiketi" }));
       fireEvent.change(screen.getByPlaceholderText("3,45"), { target: { value: "üç" } });
 
       expect(screen.getByRole("alert").textContent).toMatch(/Gramı sayı olarak/);
@@ -383,7 +382,7 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("button", { name: "R2 A" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "R2 Lüks" })).toBeNull();
 
-      chooseCategory(/Lüks & koyu/);
+      chooseCategory(/Lüks/);
 
       expect(screen.queryByRole("button", { name: "R2 A" })).toBeNull();
       const swatch = screen.getByRole("button", { name: "R2 Lüks" });
@@ -442,14 +441,14 @@ describe("CompositionEditor", () => {
       renderEditor();
 
       // A4 (dikey): dikey zemin var, yatay yok; katalogda olmayan R2 A (Sade) var.
-      chooseCategory(/Lüks & koyu/);
+      chooseCategory(/Lüks/);
       expect(screen.getByRole("button", { name: "R2 Dikey" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "R2 Yatay" })).toBeNull();
 
       openTool("Boyut");
       fireEvent.click(screen.getByRole("button", { name: /Instagram gönderi/ }));
       openTool("Zemin");
-      chooseCategory(/Lüks & koyu/);
+      chooseCategory(/Lüks/);
       expect(screen.getByRole("button", { name: "R2 Yatay" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "R2 Dikey" })).toBeNull();
       chooseCategory(/Sade/);
@@ -533,9 +532,8 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("group", { name: "Görünüm" })).toBeTruthy();
 
       fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
-      expect(screen.getByRole("group", { name: "Logo" })).toBeTruthy();
-      openTool("Etiket");
-      expect(screen.getByRole("group", { name: "Ürün etiketi" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Marka" })).toBeTruthy();
+      expect(screen.getByRole("switch", { name: "Ürün etiketi" })).toBeTruthy();
       openTool("İndir");
       expect(screen.getByRole("group", { name: "İndir" })).toBeTruthy();
     });
@@ -576,10 +574,38 @@ describe("CompositionEditor", () => {
       // Sade: iki zemin (r2-a, r2-b). Luks: bir zemin.
       expect(screen.getByRole("button", { name: "Sade · 2" })).toBeTruthy();
 
-      chooseCategory(/Lüks & koyu/);
+      chooseCategory(/Lüks/);
 
-      expect(screen.getByRole("button", { name: "Lüks & koyu · 1" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Lüks · 1" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "R2 Lüks" })).toBeTruthy();
+    });
+
+    it("Escape açık kategori menüsünü kapatır ve olayı üst katmana taşımaz", () => {
+      const luxury = {
+        type: "server" as const,
+        id: "r2-lux",
+        name: "R2 Lüks",
+        url: "https://r2.example/lux",
+        expiresInSeconds: 3600,
+        fetchedAt: 1,
+      };
+      backgroundState = {
+        ...backgroundState,
+        backgrounds: [...initialBackgrounds, luxury],
+      };
+      const documentEscape = vi.fn();
+      document.addEventListener("keydown", documentEscape);
+      renderEditor();
+
+      const trigger = screen.getByRole("button", { name: "Sade · 2" });
+      fireEvent.click(trigger);
+      expect(screen.getByRole("menu", { name: "Zemin kategorileri" })).toBeTruthy();
+
+      fireEvent.keyDown(trigger, { key: "Escape" });
+
+      expect(screen.queryByRole("menu", { name: "Zemin kategorileri" })).toBeNull();
+      expect(documentEscape).not.toHaveBeenCalled();
+      document.removeEventListener("keydown", documentEscape);
     });
 
     it("hazır görünüm ayarı uygulanıyor; kaydıraç elle oynatılınca işaret kalkıyor", () => {
@@ -601,13 +627,13 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("button", { name: "Parlak" }).getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("ürün sürüklenirken dock geri çekiliyor, bırakılınca geri geliyor", () => {
+    it("ürün sürüklenirken ayrı satırdaki dock görünür kalıyor", () => {
       renderEditor();
       const dock = screen.getByRole("group", { name: "Zemin" });
       expect(dock.className).not.toContain("dock-quiet");
 
       fireEvent.click(screen.getByTestId("stage-drag-start"));
-      expect(screen.getByRole("group", { name: "Zemin" }).className).toContain("dock-quiet");
+      expect(screen.getByRole("group", { name: "Zemin" }).className).not.toContain("dock-quiet");
 
       fireEvent.click(screen.getByTestId("stage-drag-end"));
       expect(screen.getByRole("group", { name: "Zemin" }).className).not.toContain("dock-quiet");

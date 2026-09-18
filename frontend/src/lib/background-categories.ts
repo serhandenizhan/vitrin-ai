@@ -14,9 +14,9 @@ import type { Orientation } from "@/lib/composition";
 
 export const BACKGROUND_CATEGORIES = [
   { id: "sade", label: "Sade" },
-  { id: "doku", label: "Doku & desen" },
-  { id: "dogal", label: "Doğal & çiçekli" },
-  { id: "luks", label: "Lüks & koyu" },
+  { id: "doku", label: "Desen" },
+  { id: "dogal", label: "Doğal" },
+  { id: "luks", label: "Lüks" },
 ] as const;
 
 export type BackgroundCategory = (typeof BACKGROUND_CATEGORIES)[number]["id"];

@@ -154,7 +154,7 @@ export function NewPasswordForm({ cameFromResetLink }: { cameFromResetLink: bool
   }
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-[0_24px_50px_-22px_rgba(0,0,0,0.25)] ring-1 ring-black/5">
+    <div className="glass-panel-light rounded-2xl p-6">
       <span className="bg-gold/15 text-gold flex size-11 items-center justify-center rounded-full">
         <KeyRound className="size-5" strokeWidth={1.75} aria-hidden />
       </span>

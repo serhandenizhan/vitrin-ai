@@ -19,7 +19,7 @@ import base64
 import hmac
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import (
@@ -146,6 +146,9 @@ def _serialize(project: Project, storage: R2StorageService) -> dict:
         "created_at": project.created_at.isoformat(),
         "is_mocked": project.is_mocked,
         "duration_seconds": project.duration_seconds,
+        "workflow_status": project.workflow_status,
+        "downloaded_at": project.downloaded_at.isoformat() if project.downloaded_at else None,
+        "editor_state": project.editor_state,
         "result_url": storage.generate_presigned_url(
             project.result_r2_key, expires_in=expires_in
         ),
@@ -323,6 +326,35 @@ async def get_project(
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict:
     project = await _get_owned_project(db, project_id, user)
+    return _serialize(project, storage)
+
+
+@router.patch("/api/projects/{project_id}")
+async def update_project_status(
+    project_id: uuid.UUID,
+    workflow_status: str = Form(...),
+    editor_state: str | None = Form(None, max_length=20_000),
+    expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    storage: R2StorageService = Depends(get_storage_service),
+) -> dict:
+    _verify_expected_user(expected_user_id, user)
+    if workflow_status not in {"draft", "completed"}:
+        raise HTTPException(status_code=400, detail="Geçersiz çalışma durumu.")
+    project = await _get_owned_project(db, project_id, user)
+    project.workflow_status = workflow_status
+    if editor_state is not None:
+        try:
+            parsed_state = json.loads(editor_state)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.") from exc
+        if not isinstance(parsed_state, dict):
+            raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.")
+        project.editor_state = parsed_state
+    project.downloaded_at = datetime.now(timezone.utc) if workflow_status == "completed" else None
+    await db.commit()
+    await db.refresh(project)
     return _serialize(project, storage)
 
 

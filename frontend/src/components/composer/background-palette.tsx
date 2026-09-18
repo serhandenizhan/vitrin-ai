@@ -34,21 +34,16 @@ export function CategoryMenuButton({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Disari tiklayinca ve Escape ile kapaniyor. Menu dock'un icinde kucuk bir
-  // katman; acik kalirsa paletin ustunu ortuyor.
+  // Disari tiklayinca kapaniyor. Escape, asagidaki kapsayici olayinda
+  // ele aliniyor: boylece olay belgeye ulasip studyoyu da kapatmiyor.
   useEffect(() => {
     if (!isOpen) return;
     function handlePointerDown(event: MouseEvent | TouchEvent) {
       if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false);
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
-    }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen]);
 
@@ -56,7 +51,16 @@ export function CategoryMenuButton({
   if (groups.length < 2) return null;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className="relative"
+      onKeyDown={(event) => {
+        if (!isOpen || event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        setIsOpen(false);
+      }}
+    >
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -123,22 +127,15 @@ export function BackgroundPalette({
 }) {
   const selectedRef = useRef<HTMLButtonElement | null>(null);
 
-  /**
-   * Secili zemini serit icinde gorunur kiliyor.
-   *
-   * TARAYICIDA OLCULDU: studyo acildiginda secili zemin ("Zemin 1") altin
-   * halkayi tasiyordu ama serit onu KAYDIRMA ALANININ DISINDA birakiyordu —
-   * yani "secili olani halka ve adiyla belirt" karari pratikte hicbir sey
-   * gostermiyordu. Kategori degistiginde de ayni sey oluyor.
-   *
-   * `block: "nearest"`: yalnizca YATAY serit kaydirilsin; "center" dikeyde de
-   * kaydirip sayfayi oynatiyordu.
-   */
+  // Yalnızca yatay şeridi kaydır: scrollIntoView mobilde tüm stüdyoyu
+  // aşağı kaydırıp tuvalin üstünü navbarın arkasına götürüyordu.
   useEffect(() => {
-    // `?.` iki kez: jsdom `scrollIntoView`'i HIC tanimlamiyor ve cagri
-    // TypeError ile patliyordu (testlerde goruldu). Kaydirma bir suslemedir,
-    // yoklugu editoru kirmamali.
-    selectedRef.current?.scrollIntoView?.({ block: "nearest", inline: "center" });
+    const selected = selectedRef.current;
+    const strip = selected?.parentElement;
+    if (!selected || !strip) return;
+    const item = selected.getBoundingClientRect();
+    const viewport = strip.getBoundingClientRect();
+    strip.scrollTo?.({ left: strip.scrollLeft + item.left - viewport.left - (viewport.width - item.width) / 2 });
   }, [selectedId, items]);
 
   return (
@@ -152,7 +149,7 @@ export function BackgroundPalette({
             type="button"
             onClick={() => onSelect(background.id)}
             aria-pressed={isActive}
-            className="press w-16 shrink-0 snap-start text-center"
+            className="press w-20 shrink-0 snap-start text-center"
           >
             <span
               // Halka `ring` yardimcilariyla veriliyor, keyfi `shadow-[...]`
@@ -161,7 +158,7 @@ export function BackgroundPalette({
               className={
                 "block aspect-square w-full overflow-hidden rounded-xl transition-transform duration-200 " +
                 (isActive
-                  ? "ring-gold scale-105 ring-2 ring-offset-2 ring-offset-[#1a1917]"
+                  ? "ring-gold scale-105 ring-2 ring-offset-2 ring-offset-transparent"
                   : "ring-1 ring-white/15 hover:scale-105")
               }
               style={
@@ -195,7 +192,7 @@ export function BackgroundPalette({
                 Yalnizca renge guvenilmiyor (erisilebilirlik). */}
             <span
               className={
-                "mt-1.5 block truncate text-[0.6875rem] leading-tight " +
+                "mt-2 block min-h-8 text-[0.6875rem] leading-4 " +
                 (isActive ? "text-gold font-medium" : "on-dark-muted")
               }
             >

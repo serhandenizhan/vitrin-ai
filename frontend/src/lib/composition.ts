@@ -260,21 +260,25 @@ export function reflectionPlacement(
   transform: Transform,
   cutoutWidth: number,
   cutoutHeight: number,
+  visibleBounds?: { x: number; y: number; width: number; height: number },
 ): { x: number; y: number; scaleX: number; scaleY: number; rotation: number; axisY: number; fadeHeight: number } {
   const radians = (transform.rotation * Math.PI) / 180;
-  const halfHeight =
-    ((Math.abs(cutoutWidth * Math.sin(radians)) + Math.abs(cutoutHeight * Math.cos(radians))) *
-      transform.scale) /
-    2;
-  const axisY = transform.y + halfHeight;
+  const bounds = visibleBounds ?? { x: 0, y: 0, width: cutoutWidth, height: cutoutHeight };
+  const ys = [bounds.x, bounds.x + bounds.width].flatMap((x) =>
+    [bounds.y, bounds.y + bounds.height].map((y) =>
+      transform.y + ((x - cutoutWidth / 2) * Math.sin(radians) +
+        (y - cutoutHeight / 2) * Math.cos(radians)) * transform.scale,
+    ),
+  );
+  const axisY = Math.max(...ys);
   return {
     x: transform.x,
-    y: axisY + halfHeight,
+    y: 2 * axisY - transform.y,
     scaleX: transform.scale,
     scaleY: -transform.scale,
     rotation: -transform.rotation,
     axisY,
-    fadeHeight: halfHeight * 2 * REFLECTION.fadeRatio,
+    fadeHeight: (axisY - Math.min(...ys)) * REFLECTION.fadeRatio,
   };
 }
 

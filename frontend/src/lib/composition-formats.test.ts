@@ -68,3 +68,13 @@ describe("reflectionPlacement — yansıma ürünün alt kenarından aynalanıyo
     expect(placement.rotation).toBe(-90);
   });
 });
+
+it("saydam boşluklu kesimde yansıma görünür ürünün altına bitişir", () => {
+  const result = reflectionPlacement(
+    { x: 300, y: 400, scale: 0.5, rotation: 0 }, 1200, 1600,
+    { x: 300, y: 650, width: 600, height: 450 },
+  );
+  expect(result.axisY).toBe(550);
+  expect(result.y - (1100 - 800) * 0.5).toBe(550);
+  expect(result.fadeHeight).toBe(135);
+});

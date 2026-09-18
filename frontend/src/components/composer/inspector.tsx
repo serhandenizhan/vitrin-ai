@@ -8,8 +8,7 @@
  * kullanici nereye basacagini aramasin.
  *
  * TELEFONDA (lg alti) sagda yer yok: denetci dock'un ustunden acilan kisa bir
- * cekmeceye donuyor. Tuval ustte yapiskan kaliyor, yani ayar yaparken sonuc
- * gorunuyor — bugunku davranisin aynisi.
+ * cekmeceye donuyor. Tuval ve dock ayrı bloklarda; kaydırırken birbirlerini örtmez.
  */
 
 import type { ReactNode } from "react";

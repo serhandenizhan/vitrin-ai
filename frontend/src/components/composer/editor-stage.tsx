@@ -312,11 +312,32 @@ export function EditorStage({
     node.getLayer()?.batchDraw();
   }, [cutout, cacheScale, shadowOn]);
 
+  // Segmentasyon kaynak boyutunu korur; saydam kenarlar yansıma ekseni değildir.
+  const visibleBounds = useMemo(() => {
+    if (!cutout) return undefined;
+    const canvas = document.createElement("canvas");
+    canvas.width = cutout.width;
+    canvas.height = cutout.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return undefined;
+    context.drawImage(cutout, 0, 0);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let left = canvas.width, top = canvas.height, right = -1, bottom = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        if (data[(y * canvas.width + x) * 4 + 3] < 16) continue;
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
+      }
+    }
+    return right < left ? undefined : { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+  }, [cutout]);
+
   const reflection = useMemo(() => {
     const source = liveTransform ?? placement;
     if (!appearance.reflection || !cutout || !source) return null;
-    return reflectionPlacement(source, cutout.width, cutout.height);
-  }, [appearance.reflection, cutout, liveTransform, placement]);
+    return reflectionPlacement(source, cutout.width, cutout.height, visibleBounds);
+  }, [appearance.reflection, cutout, liveTransform, placement, visibleBounds]);
 
   const backgroundCrop = useMemo(
     () =>

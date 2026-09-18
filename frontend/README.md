@@ -26,6 +26,11 @@ npm run dev
 | `USE_MOCK_BACKEND` | `true` | Demo modu — backend hiç çağrılmaz, sabit bir örnek kesim döner. Giriş yine gerekir. |
 | `NEXT_PUBLIC_SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | boş | Supabase publishable (anon) anahtarı; tarayıcıya gitmek için tasarlandı, veriyi RLS koruyor. Boşsa site açılır ama giriş yapılamaz. `service_role`/secret anahtar buraya asla yazılmaz. |
+| `NEXT_PUBLIC_DATA_CONTROLLER_NAME` | boş | KVKK veri sorumlusu ve hizmet sağlayıcının gerçek kişi/tüzel kişi unvanı. |
+| `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` | boş | KVKK başvurusu, destek ve sözleşme iletişim e-postası. |
+| `NEXT_PUBLIC_LEGAL_ADDRESS` / `NEXT_PUBLIC_LEGAL_PHONE` | boş | Yasal metinlerde yayımlanan merkez adresi ve telefon. |
+| `NEXT_PUBLIC_LEGAL_KEP` | boş | Varsa KEP adresi. |
+| `NEXT_PUBLIC_LEGAL_REGISTRY_NUMBER` | boş | Şirket için MERSİS; gerçek kişi işletmesi için ilgili sicil/vergi bilgisi. |
 | `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. Kullanılan profil ECI **PSO Coated v3** (eci.org → `pso-coated_v3.zip` → `PSOcoated_v3.icc`). **Depoya konmaz:** lisansı gömmeye izin veriyor ama dağıtmaya izin vermiyor, depo herkese açık. Dosyayı depo dışına indirip yolunu buraya yazın (ayrıntı: kök `CLAUDE.md` açık takip maddesi 1). |
 
 > **`USE_MOCK_BACKEND` uyarısı:** bu değer `true` kaldığı sürece gerçek backend
@@ -200,9 +205,10 @@ bileşeni, yani istemciye hiç inmiyor.
 
 ## Stüdyo düzeni: yüzen denetçi + alt dock (17.09.2026)
 
-Stüdyo artık beyaz bir ekranda sağda düz bir panel değil: **koyu bir araç
-yüzeyi**, sağda **yüzen bir denetçi** ve altta **camlı bir dock**. Serhan'ın
-kararı; gerekçe ve palet kök `CLAUDE.md` → "Araç yüzeyi".
+Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar, sağda **yüzen
+denetçi** ve fotoğrafın altında **camlı dock** kullanır. 17.09.2026 tarihli
+son düzenleme, aynı günün önceki koyu çalışma alanı ve üst üste binen dock
+kararının yerini alır.
 
 **İş bölümü tek bir kurala dayanıyor:** *dock = gözle seçilenler, denetçi =
 okunarak ayarlananlar.* Denetçi o adımın araçlarını listeler, dock seçili
@@ -221,12 +227,12 @@ makul bir varsayılanla (A4) açılıyor, kullanıcının ilk gerçek kararı ze
 
 - Seçili zemin **altın ince halka VE adıyla** belli oluyor; yalnızca renge
   güvenilmiyor.
-- Seçili zemin şeritte **görünür duruma kaydırılıyor**. Bu bir süsleme değil:
-  tarayıcıda ölçüldüğünde açılışta seçili zemin altın halkayı taşıyordu ama
-  kaydırma alanının dışında kalıyordu, yani karar pratikte hiçbir şey
-  göstermiyordu. (`scrollIntoView` jsdom'da yok, çağrı `?.` ile korunuyor.)
+- Seçili zemin yalnızca yatay şeritte `scrollTo` ile ortalanır; sayfanın dikey
+  konumu değişmez. Adlar iki satıra yayılabilir, scrollbar için ayrı alt boşluk vardır.
+- 93 katalog zemininin renk/desen adı `src/lib/background-names.ts` içinde
+  kimliğe bağlıdır; sunucu sırası değişse de isim değişmez.
 - Kategoriler sürekli bir chip satırı kaplamıyor; başlıktaki
-  `Doku & desen · 17` düğmesi bir menü açıyor.
+  `Desen · 17` düğmesi bir menü açıyor.
 - Son kart yarım görünüyor (`palette-fade`): devamı olduğu belli olsun.
 
 ### Hazır görünüm ayarları
@@ -237,37 +243,19 @@ işareti **kalkıyor** — arayüzün "Parlak" derken değerlerin başka bir şe
 ekranın söylediğiyle dosyanın içindekinin ayrışması demekti. Gölge ve yansımaya
 ön ayar dokunmuyor: ikisi de kullanıcının kendi açtığı/kapattığı şeyler.
 
-### Örtme ve başarım
+### Tuval, dock ve telefon düzeni (17.09.2026 güncellemesi)
 
-Dock tuvalin **üzerinde** duruyor ve ürüne dokunulunca silikleşip geri
-çekiliyor (`dock-quiet`, yalnızca masaüstünde — telefonda dock zaten tuvalin
-altında). Bunun bilinen bedeli: ürün sürüklenmezken kompozisyonun alt şeridi
-camın arkasında kalıyor.
+Stüdyo çalışma alanı ve kesim sonuç kartı beyazdır. Navbar koyu, bulanık camlı,
+kenarlardan boşluklu bir kapsüldür. Başlık, yan düğmelerin genişliğinden bağımsız ortalanır.
+Masaüstünde denetçi sağda yüzer; tuvalin iki yanında eşit alan ayrılır, böylece
+fotoğraf ekranın ortasında kalır. Dock ayrı satırda ve ekran merkezindedir;
+fotoğrafın hiçbir bölümünü örtmez ve sürükleme sırasında kaybolmaz.
+Yerleşim ve görünüm paletinin düğmeleri kendi satırlarında ortalanır.
 
-**`backdrop-filter` maliyeti ölçüldü, tahmin edilmedi** (1440×900, iki camlı
-yüzey, tuvalin altındaki bölge her karede kirletilerek): ortalama kare süresi
-camla **16,67 ms**, camsız **16,66 ms**. Fark yok, kare düşmüyor. Ölçüm dikey
-senkrona takılı olduğu için 16,7 ms'nin altındaki bir maliyeti ayırt edemez;
-bulanıklık yarıçapı büyütülürse ölçüm tekrarlanmalı.
-
-### Telefon
-
-Denetçi dock'un **üstünde** ve kısa bir çekmece olarak açılıyor; tuval yukarıda
-**yapışkan** kalıyor, yani ayar yapılırken sonuç görünüyor.
-
-**İki tuzak tarayıcıda ölçülerek bulundu:**
-
-1. Yapışkanlık, tuvali saran kısa bir kapsayıcıda **hiç çalışmıyor** — kayacak
-   yer kalmıyor ve tuval ekranın dışına çıkıyordu (çerçeve üst kenarı −101 px).
-   Yapışkan olan öğe, uzun olan kök kapsayıcının doğrudan çocuğu olmalı.
-2. Yapışkan öğe **konumlandırılmış** olduğu için statik kardeşlerinin üzerine
-   boyanıyor ve tuval denetçiyi örtüyordu; denetçi ve dock `relative z-10`
-   taşıyor (kök `CLAUDE.md` ders 13'ün aynı sınıfı: kazananı boyama sırası
-   belirliyor).
-
-Tuvalin ekrana sığması için ayrılan dikey pay `--studio-reserved` ile veriliyor
-(telefon 15rem, masaüstü 12rem); tek bir satır içi `style` iki düzeni birden
-karşılayamıyor.
+Telefonda tuval, açılabilir denetçi ve dock normal akışta yer alır. Tuval yapışkan
+değildir; uzun araçlar sayfa kaydırılarak kullanılır. `--studio-reserved` telefonlarda
+`max(15rem, 48dvh)`, masaüstünde `21rem` olarak fotoğrafa ayrılan yüksekliği sınırlar.
+Ölçüm hook'u dar kapsayıcılarda 240 px altına da inebilir; sahne kapsayıcıdan taşmaz.
 
 ## Üst çubuk
 
@@ -325,7 +313,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**281 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı).
+**293 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -891,8 +879,8 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
 
 ### Zemin kütüphanesi: kategoriler ve baskı uyarısı (öne alınan iş, 17.09.2026)
 
-- **Kategoriler:** stüdyodaki zemin seçici 4 sekmeye ayrıldı — Sade, Doku & desen,
-  Doğal & çiçekli, Lüks & koyu. Tanımlar `src/lib/background-categories.ts`. Boş
+- **Kategoriler:** stüdyodaki zemin seçici 4 sekmeye ayrıldı — Sade, Desen,
+  Doğal, Lüks. Tanımlar `src/lib/background-categories.ts`. Boş
   kategori sekmesi çizilmez; yalnızca bir kategori doluysa (ör. sunucu zemini yokken)
   sekme hiç yoktur. Hazır gradyanlar ve katalogda olmayan her zemin "Sade" sayılır.
 - **Kategori nerede tutuluyor:** veritabanında DEĞİL. `src/lib/background-catalog.ts`
@@ -931,7 +919,8 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   ilk uyan zemine geçer.
 - **Yansıma:** ayrı Konva katmanında aynalanmış kopya, `destination-in` gradyanıyla aşağı doğru
   silikleşir (aynı katmanda ürünü de silerdi). Sürüklerken anlık takip eder; geri alma yığınına
-  yalnızca bırakınca yazılır.
+  yalnızca bırakınca yazılır. Eksen, kesimin saydam kenarları hariç görünür ürün
+  sınırlarından hesaplanır; boşluklu PNG dosyalarında yansıma ürünün altına bitişir.
 - **Gölge:** `SHADOW` sabiti (bulanıklık 50, kayma 34, opaklık %55). Eski değer Konva'da
   ölçüldü ve koyu zeminde görünmüyordu; önbellek gölgeyi kesiyor sanılmıştı, ölçüm bunu
   çürüttü. Önbelleğe yine de gölge payı veriliyor.

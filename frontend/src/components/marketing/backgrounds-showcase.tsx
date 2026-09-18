@@ -38,8 +38,9 @@ const ZEMINLER = [
 
 export function BackgroundsShowcase() {
   return (
-    <section id="zeminler" className="surface-black section-rhythm">
-      <div className="mx-auto w-full max-w-6xl px-5">
+    <section id="zeminler" className="surface-black section-rhythm relative overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(45%_80%_at_50%_0%,rgba(214,167,86,0.14),transparent_74%)]" />
+      <div className="relative mx-auto w-full max-w-6xl px-5">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
             <p className="fine-print on-dark-muted tracking-[0.08em] uppercase">

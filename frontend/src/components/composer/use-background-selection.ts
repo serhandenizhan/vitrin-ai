@@ -49,8 +49,9 @@ export type BackgroundSelection = {
 export function useBackgroundSelection(
   backgrounds: Background[],
   format: OutputFormat,
+  initialSelectedId: string | null = null,
 ): BackgroundSelection {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   /**
    * Kullanicinin elle actigi zemin kategorisi. `null`: secili zeminin
    * kategorisi gosteriliyor — boylece "Pazaryeri" duz beyazi sectiginde sekme
