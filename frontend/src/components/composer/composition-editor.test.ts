@@ -41,7 +41,10 @@ function createFakeStage(toDataURL: () => string) {
     scale: (next: { x: number; y: number }) => {
       scale = next;
     },
-    find: () => [transformer],
+    // Gercek Konva gibi secicuye gore: yalniz "Transformer" tutamak dondurur.
+    // Onceden her seciciye tutamak donuyordu; zemin gecisini bitiren
+    // `finishBackgroundFade` (".background-...") tutamagi zemin sanip patladi.
+    find: (selector: string) => (selector === "Transformer" ? [transformer] : []),
     draw: () => {},
     toDataURL: vi.fn(toDataURL),
   };
@@ -126,24 +129,24 @@ const initialBackgrounds = [
   },
 ];
 
-/** Marka ve indirme araçları üçüncü adımda. */
+/** Marka araci; "Tamamla" grubunun ilk araci. */
 function goToFinish() {
-  fireEvent.click(screen.getByRole("tab", { name: /Tamamla/ }));
+  openTool("Marka");
 }
 
 /**
- * Denetcideki ARAC sekmesine gecer; dock o aracin paletini gosterir
- * (17.09.2026 duzen degisikligi). Adim haplari da `role="tab"` ama adlari
- * numaralı ("3 Tamamla"), araç adları numarasız — tam adla ayrışıyorlar.
+ * Alttaki arac cubugundan bir araca gecer; panel o aracin paletini gosterir
+ * (18.09.2026, iPhone Fotograflar duzeni — sagdaki denetci kalkti).
  */
 function openTool(name: string) {
+  // Ince bar hep gorunur; arac tek dokunusla acilir.
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
 /** Zemin kategorisi artik sekme degil, baslikta acilan bir menu. */
 function chooseCategory(pattern: RegExp) {
-  fireEvent.click(screen.getByRole("button", { name: /·\s*\d+$/ }));
-  fireEvent.click(screen.getByRole("menuitemradio", { name: pattern }));
+  // Kategoriler sekme (18.09.2026); adlari "Sade · 2" gibi sayili.
+  fireEvent.click(screen.getByRole("tab", { name: pattern }));
 }
 
 function renderEditor() {
@@ -378,7 +381,7 @@ describe("CompositionEditor", () => {
       // Kategori artik surekli bir chip satiri degil, dock basligindan acilan
       // bir menu (17.09.2026): chip satiri dock yuksekliginin ucte birini
       // yiyordu.
-      expect(screen.getByRole("button", { name: /^Sade\s*·\s*\d+$/ })).toBeTruthy();
+      expect(screen.getByRole("tab", { name: /^Sade\s*·\s*\d+$/ })).toBeTruthy();
       expect(screen.getByRole("button", { name: "R2 A" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "R2 Lüks" })).toBeNull();
 
@@ -394,7 +397,7 @@ describe("CompositionEditor", () => {
 
       // Menu bir secim sunmuyorsa dugmesi de yok — bos bir menu acmak
       // kullaniciya yapacak bir sey vermiyordu.
-      expect(screen.queryByRole("button", { name: /·\s*\d+$/ })).toBeNull();
+      expect(screen.queryByRole("tab", { name: /·\s*\d+$/ })).toBeNull();
     });
 
     it("stüdyo A4 ile açılıyor ve Kare 2000×2000 biçimi yok", () => {
@@ -405,30 +408,32 @@ describe("CompositionEditor", () => {
       expect(screen.queryByRole("button", { name: /^Kare/ })).toBeNull();
     });
 
-    it("düzenleme üç adımda: zemin, ürün ayarları, bitir", () => {
+    it("bütün araçlar tek çubukta, adım sırasıyla; her biri tek dokunuşla açılıyor", () => {
       renderEditor();
 
       // Dock'un basligi `role="group"` ve erisilebilir adi; "o an hangi
       // paletin acik oldugu" DOM'dan okunabilen tek iz (Konva tuvaline
       // cizilenler okunamiyor, bkz. kok CLAUDE.md ders 26).
+      // Acilista Zemin menusu acik; bar ayni anda gorunur.
       expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
       expect(screen.queryByRole("switch", { name: "Yansıma" })).toBeNull();
+      // Arac cubugu adim sirasini koruyor: Sahne · Düzenle · Tamamla.
+      const tabs = within(screen.getByRole("tablist", { name: "Araçlar" })).getAllByRole("tab");
+      expect(tabs.map((tab) => tab.textContent)).toEqual([
+        "Boyut", "Zemin", "Yerleşim", "Görünüm", "Marka", "İndir",
+      ]);
+      // Sagdaki denetci ve "Devam" dugmesi yok (18.09.2026).
+      expect(screen.queryByRole("tablist", { name: "Düzenleme adımları" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Devam/ })).toBeNull();
 
-      fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
+      // Adim atlamadan dogrudan son araca, sonra geri.
+      openTool("İndir");
+      expect(screen.getByRole("button", { name: "PNG" })).toBeTruthy();
       openTool("Görünüm");
       expect(screen.getByRole("switch", { name: "Gölge" })).toBeTruthy();
       expect(screen.getByRole("switch", { name: "Yansıma" })).toBeTruthy();
       expect(screen.queryByRole("switch", { name: /Işık havuzu/ })).toBeNull();
       expect(screen.queryByRole("group", { name: "Zemin" })).toBeNull();
-
-      fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
-      openTool("İndir");
-      expect(screen.getByRole("button", { name: "PNG" })).toBeTruthy();
-      expect(screen.queryByRole("button", { name: /Devam/ })).toBeNull();
-
-      fireEvent.click(screen.getByRole("button", { name: /Geri/ }));
-      openTool("Görünüm");
-      expect(screen.getByRole("switch", { name: "Yansıma" })).toBeTruthy();
     });
 
     it("zeminler biçimin yönüne göre süzülüyor; Sade her biçimde", () => {
@@ -526,12 +531,12 @@ describe("CompositionEditor", () => {
     it("dock sadece zemin göstermiyor: her adımın kendi paleti var", () => {
       renderEditor();
 
-      fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
+      openTool("Yerleşim");
       expect(screen.getByRole("group", { name: "Yerleşim" })).toBeTruthy();
       openTool("Görünüm");
       expect(screen.getByRole("group", { name: "Görünüm" })).toBeTruthy();
 
-      fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
+      openTool("Marka");
       expect(screen.getByRole("group", { name: "Marka" })).toBeTruthy();
       expect(screen.getByRole("switch", { name: "Ürün etiketi" })).toBeTruthy();
       openTool("İndir");
@@ -572,45 +577,16 @@ describe("CompositionEditor", () => {
       renderEditor();
 
       // Sade: iki zemin (r2-a, r2-b). Luks: bir zemin.
-      expect(screen.getByRole("button", { name: "Sade · 2" })).toBeTruthy();
+      expect(screen.getByRole("tab", { name: "Sade · 2" })).toBeTruthy();
 
       chooseCategory(/Lüks/);
 
-      expect(screen.getByRole("button", { name: "Lüks · 1" })).toBeTruthy();
+      expect(screen.getByRole("tab", { name: "Lüks · 1" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "R2 Lüks" })).toBeTruthy();
-    });
-
-    it("Escape açık kategori menüsünü kapatır ve olayı üst katmana taşımaz", () => {
-      const luxury = {
-        type: "server" as const,
-        id: "r2-lux",
-        name: "R2 Lüks",
-        url: "https://r2.example/lux",
-        expiresInSeconds: 3600,
-        fetchedAt: 1,
-      };
-      backgroundState = {
-        ...backgroundState,
-        backgrounds: [...initialBackgrounds, luxury],
-      };
-      const documentEscape = vi.fn();
-      document.addEventListener("keydown", documentEscape);
-      renderEditor();
-
-      const trigger = screen.getByRole("button", { name: "Sade · 2" });
-      fireEvent.click(trigger);
-      expect(screen.getByRole("menu", { name: "Zemin kategorileri" })).toBeTruthy();
-
-      fireEvent.keyDown(trigger, { key: "Escape" });
-
-      expect(screen.queryByRole("menu", { name: "Zemin kategorileri" })).toBeNull();
-      expect(documentEscape).not.toHaveBeenCalled();
-      document.removeEventListener("keydown", documentEscape);
     });
 
     it("hazır görünüm ayarı uygulanıyor; kaydıraç elle oynatılınca işaret kalkıyor", () => {
       renderEditor();
-      fireEvent.click(screen.getByRole("button", { name: /Devam/ }));
       openTool("Görünüm");
 
       const parlak = screen.getByRole("button", { name: "Parlak" });
@@ -622,7 +598,11 @@ describe("CompositionEditor", () => {
       // Elle degistirince on ayar ISARETI kalkmali: arayuz "Parlak" derken
       // degerlerin baska bir sey olmasi, ekranin soyledigi ile dosyanin
       // icindekinin ayrismasi demekti.
+      // Tek kaydirac: once ayar secilir (iPhone Fotograflar gibi), geri
+      // tusu gorunum menusune doner.
+      fireEvent.click(screen.getByRole("button", { name: "Kontrast" }));
       fireEvent.change(screen.getByLabelText("Kontrast"), { target: { value: "30" } });
+      fireEvent.click(screen.getByRole("button", { name: "Görünüm menüsüne dön" }));
 
       expect(screen.getByRole("button", { name: "Parlak" }).getAttribute("aria-pressed")).toBe("false");
     });
@@ -639,14 +619,61 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("group", { name: "Zemin" }).className).not.toContain("dock-quiet");
     });
 
-    it("telefonda denetçi çekmecesi açılıp kapanıyor", () => {
+    it("geri tuşu önce menü içindeki katmana, sonra bir önceki araca döner", () => {
       renderEditor();
+      // Acilista Zemin; sirada onceki arac Boyut.
+      fireEvent.click(screen.getByRole("button", { name: "Önceki araç: Boyut" }));
+      expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
+      // Boyut'tan geri: gecmiste Zemin var — Boyut <-> Zemin arasinda gidip gelinir.
+      openTool("Zemin");
+      fireEvent.click(screen.getByRole("button", { name: "Önceki araç: Boyut" }));
+      expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
 
-      const drawer = screen.getByRole("button", { name: "Ayarlar" });
-      expect(drawer.getAttribute("aria-expanded")).toBe("false");
+      openTool("Görünüm");
+      fireEvent.click(screen.getByRole("button", { name: "Doygunluk" }));
+      expect(screen.getByLabelText("Doygunluk")).toBeTruthy();
 
-      fireEvent.click(drawer);
-      expect(screen.getByRole("button", { name: "Ayarlar" }).getAttribute("aria-expanded")).toBe("true");
+      // Kaydiraçtan geri: once Gorunum menusu, sonra onceki arac (Boyut).
+      fireEvent.click(screen.getByRole("button", { name: "Görünüm menüsüne dön" }));
+      expect(screen.getByRole("switch", { name: "Gölge" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Önceki araç: Boyut" }));
+      expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
+      // Geri tusu karti KAPATMIYOR (Kaan: "geri tuşu barı kapatıyor").
+      expect(screen.getByRole("tablist", { name: "Araçlar" })).toBeTruthy();
+    });
+
+    it("tek satırlık menülerde (Zemin, Boyut) kart incelir ve tuval büyür", () => {
+      const { container } = renderEditor();
+      const stage = container.querySelector(".stage-fit")!;
+      // Acilista Zemin: ince kart, buyuk tuval.
+      expect(stage.classList.contains("stage-fit-compact")).toBe(true);
+
+      openTool("Görünüm");
+      expect(stage.classList.contains("stage-fit-compact")).toBe(false);
+
+      openTool("Boyut");
+      expect(stage.classList.contains("stage-fit-compact")).toBe(true);
+
+      // Kucultulmus hal ince karttan once gelir.
+      fireEvent.click(screen.getByRole("button", { name: "Barı küçült" }));
+      expect(stage.classList.contains("stage-fit-compact")).toBe(false);
+      expect(stage.classList.contains("stage-fit-collapsed")).toBe(true);
+    });
+
+    it("küçült düğmesi kartı ve barı küçültür, tuvale büyüme sınıfını verir", () => {
+      const { container } = renderEditor();
+      const stage = container.querySelector(".stage-fit")!;
+      expect(stage.classList.contains("stage-fit-collapsed")).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Barı küçült" }));
+      expect(screen.queryByRole("group", { name: "Zemin" })).toBeNull();
+      expect(screen.queryByRole("tablist", { name: "Araçlar" })).toBeNull();
+      expect(stage.classList.contains("stage-fit-collapsed")).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: "Barı büyüt" }));
+      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
+      expect(screen.getByRole("tablist", { name: "Araçlar" })).toBeTruthy();
+      expect(stage.classList.contains("stage-fit-collapsed")).toBe(false);
     });
   });
 

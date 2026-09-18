@@ -20,21 +20,27 @@ import {
   Contrast,
   Crosshair,
   Download,
+  Image as ImageIcon,
   ImagePlus,
   Loader2,
   MessageCircle,
+  Move,
   Printer,
+  Ratio,
   RotateCw,
+  SlidersHorizontal,
+  Stamp,
   Trash2,
 } from "lucide-react";
 import type Konva from "konva";
 
 import { useBackgrounds } from "@/components/composer/use-backgrounds";
 import { Dock, DockStrip } from "@/components/composer/dock";
-import { Inspector } from "@/components/composer/inspector";
+import { ToolBar } from "@/components/composer/tool-bar";
+import { finishBackgroundFade } from "@/components/composer/background-fade";
 import {
   BackgroundPalette,
-  CategoryMenuButton,
+  CategoryTabs,
 } from "@/components/composer/background-palette";
 import {
   APPEARANCE_PRESETS,
@@ -127,34 +133,63 @@ const EDITOR_STEPS = [
 ] as const;
 
 /**
- * Her adimin ARACLARI. Denetci araci secer, dock o aracin paletini gosterir
- * (17.09.2026, Serhan). Kural: dock = gozle secilenler, denetci = okunarak
- * ayarlananlar.
+ * Her adimin ARACLARI; alttaki arac cubugunda adim sirasiyla gruplanmis
+ * duruyor (18.09.2026, Kaan: iPhone Fotograflar duzeni). Adim artik ayri bir
+ * durum degil, secili aractan turetiliyor.
  */
 const STEP_TOOLS = {
   1: [
-    { id: "boyut", label: "Boyut" },
-    { id: "zemin", label: "Zemin" },
+    { id: "boyut", label: "Boyut", icon: Ratio },
+    { id: "zemin", label: "Zemin", icon: ImageIcon },
   ],
   2: [
-    { id: "yerlesim", label: "Yerleşim" },
-    { id: "gorunum", label: "Görünüm" },
+    { id: "yerlesim", label: "Yerleşim", icon: Move },
+    { id: "gorunum", label: "Görünüm", icon: SlidersHorizontal },
   ],
   3: [
-    { id: "marka", label: "Marka" },
-    { id: "indir", label: "İndir" },
+    { id: "marka", label: "Marka", icon: Stamp },
+    { id: "indir", label: "İndir", icon: Download },
   ],
 } as const;
 
+const TOOL_GROUPS = EDITOR_STEPS.map((item) => ({
+  step: item.id,
+  label: item.label,
+  tools: STEP_TOOLS[item.id],
+}));
+
+/** Butun araclar bar sirasiyla — geri tusunun "siradaki onceki arac"i icin. */
+const ALL_TOOLS: readonly { id: string; label: string }[] = EDITOR_STEPS.flatMap(
+  (item) => [...STEP_TOOLS[item.id]],
+);
+
+function toolLabel(id: string | null): string {
+  return ALL_TOOLS.find((tool) => tool.id === id)?.label ?? "";
+}
+
 /**
- * Adim acilinca secili gelen arac.
- *
- * 1. adimda bilincli olarak ILK arac degil "Zemin": bicim zaten makul bir
- * varsayilanla (A4) aciliyor, kullanicinin ilk gercek karari zemin.
+ * Acilista secili gelen arac: bilincli olarak ILK arac degil "Zemin" — bicim
+ * zaten makul bir varsayilanla (A4) aciliyor, kullanicinin ilk gercek karari zemin.
  */
-const DEFAULT_TOOL: Record<EditorStep, string> = { 1: "zemin", 2: "yerlesim", 3: "marka" };
+const DEFAULT_TOOL = "zemin";
 
 type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
+
+function stepOfTool(tool: string): EditorStep {
+  for (const item of EDITOR_STEPS) {
+    if (STEP_TOOLS[item.id].some((candidate) => candidate.id === tool)) return item.id;
+  }
+  return 1;
+}
+
+/** Gorunum aracinda tek kaydirac: once ayar secilir, sonra kaydirilir (iPhone gibi). */
+const ADJUSTMENTS = [
+  { id: "brightness", label: "Parlaklık" },
+  { id: "contrast", label: "Kontrast" },
+  { id: "saturation", label: "Doygunluk" },
+] as const;
+
+type AdjustmentId = (typeof ADJUSTMENTS)[number]["id"];
 
 /** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
 const MIN_SCALE_RATIO = 0.25;
@@ -211,7 +246,6 @@ export function CompositionEditor({
   const [exportError, setExportError] = useState<string | null>(null);
   const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
   const [formatName, setFormatName] = useState<OutputFormatName>(initialDraft?.formatName ?? DEFAULT_FORMAT_NAME);
-  const [step, setStep] = useState<EditorStep>(initialDraft?.step ?? 1);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [afterDownload, setAfterDownload] = useState<AfterDownload>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -235,15 +269,52 @@ export function CompositionEditor({
   const [label, setLabel] = useState<ProductLabel>(initialDraft?.label ?? DEFAULT_LABEL);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
-  /** Denetcide secili arac; dock bunun paletini gosteriyor. */
-  const [activeTool, setActiveTool] = useState<string>(initialDraft?.activeTool ?? DEFAULT_TOOL[initialDraft?.step ?? 1]);
-  /** Telefonda denetci cekmecesi; masaustunde her zaman acik. */
-  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  /** Arac cubugunda secili arac; panel bunun paletini gosteriyor. */
+  const [activeTool, setActiveTool] = useState<string>(initialDraft?.activeTool ?? DEFAULT_TOOL);
+  const step = stepOfTool(activeTool);
+  /**
+   * Bar kucultulmus mu (Kaan, 18.09.2026). Kucultulunce menu karti kalkar,
+   * bar tek bir kucuk hapa iner ve tuval o yeri alarak BUYUR — ikisi ayni
+   * egriyle birlikte hareket eder (bkz. `.stage-fit-collapsed`).
+   */
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  /** Gorunum menusunde acik kaydirac; `null` = gorunum menusunun kendisi. */
+  const [adjustment, setAdjustment] = useState<AdjustmentId | null>(null);
+  /**
+   * Gezinme gecmisi: geri tusu bir onceki ARACA doner (Boyut -> Zemin ->
+   * Boyut...). Kartı kapatmak geri tusunun isi DEGIL — o "küçült" dugmesinde
+   * (Kaan: "geri tuşu barı kapatıyor").
+   */
+  const [toolHistory, setToolHistory] = useState<string[]>([]);
 
-  const changeStep = useCallback((next: number) => {
-    setStep(next as EditorStep);
-    setActiveTool(DEFAULT_TOOL[next as EditorStep]);
-  }, []);
+  const openTool = useCallback(
+    (id: string) => {
+      if (id !== activeTool) setToolHistory((history) => [...history, activeTool].slice(-20));
+      setActiveTool(id);
+      setAdjustment(null);
+      setIsCollapsed(false);
+    },
+    [activeTool],
+  );
+
+  /**
+   * Geri: once menunun icindeki alt katman (kaydirac -> Gorunum), sonra bir
+   * onceki arac. Gecmis bossa sirada bir onceki arac (Zemin -> Boyut).
+   */
+  /** Tek satirlik menuler ince kartla acilir, tuval o kadar buyur. */
+  const isCompactMenu = activeTool === "zemin" || activeTool === "boyut";
+  const toolIndex = ALL_TOOLS.findIndex((tool) => tool.id === activeTool);
+  const previousTool =
+    toolHistory.at(-1) ?? (toolIndex > 0 ? ALL_TOOLS[toolIndex - 1].id : null);
+  const goBack = useCallback(() => {
+    if (adjustment) {
+      setAdjustment(null);
+      return;
+    }
+    if (!previousTool) return;
+    setToolHistory((history) => history.slice(0, -1));
+    setActiveTool(previousTool);
+  }, [adjustment, previousTool]);
 
   /**
    * Geri alma yigini.
@@ -445,6 +516,8 @@ export function CompositionEditor({
 
       try {
         transformers.forEach((node) => node.hide());
+        // Suren bir zemin gecisi dosyaya iki zeminin karisimini sokmasin.
+        finishBackgroundFade(stage);
         stage.draw();
 
         // Sahne, disa aktarma suresince EKRAN olcusunden MANTIKSAL olcusune
@@ -720,8 +793,10 @@ export function CompositionEditor({
     if (activeTool === "zemin") {
       return {
         title: "Zemin",
+        // Kategori sekmeleri kartin BASLIK satirinda: ayri bir satir kart
+        // yuksekligini buyutuyor, tuvali kucultuyordu (18.09.2026).
         action: (
-          <CategoryMenuButton
+          <CategoryTabs
             groups={backgroundGroups}
             shownGroup={shownGroup}
             onSelect={showCategory}
@@ -729,14 +804,13 @@ export function CompositionEditor({
         ),
         body: (
           <>
-            <DockStrip label="Zeminler">
-              <BackgroundPalette
-                items={shownGroup?.items ?? fittingBackgrounds}
-                selectedId={selectedBackground.id}
-                onSelect={selectBackground}
-                gradientCss={gradientCss}
-              />
-            </DockStrip>
+            <BackgroundPalette
+              key={shownGroup?.id ?? "all"}
+              items={shownGroup?.items ?? fittingBackgrounds}
+              selectedId={selectedBackground.id}
+              onSelect={selectBackground}
+              gradientCss={gradientCss}
+            />
 
             {/*
               Yer tutucu zeminler kullaniciya ACIKCA soyleniyor: gercek zemin
@@ -800,6 +874,34 @@ export function CompositionEditor({
 
     if (activeTool === "gorunum") {
       const preset = matchingPreset(appearance);
+      // Ikinci katman: secilen ayarin TEK kaydiraci (iPhone gibi). Geri tusu
+      // gorunum menusune doner.
+      if (adjustment) {
+        const range = {
+          brightness: { min: -0.3, max: 0.3, step: 0.01, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+          contrast: { min: -40, max: 40, step: 1, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}` },
+          saturation: { min: -1, max: 1, step: 0.02, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+        }[adjustment];
+        const adjustmentLabel = ADJUSTMENTS.find((item) => item.id === adjustment)!.label;
+        return {
+          title: "Görünüm",
+          action: <span className="on-dark-muted fine-print">{adjustmentLabel}</span>,
+          body: (
+            <div className="px-3 pt-4">
+              <Slider
+                label={adjustmentLabel}
+                value={appearance[adjustment]}
+                min={range.min}
+                max={range.max}
+                step={range.step}
+                format={range.format}
+                onStart={pushHistory}
+                onChange={(v) => setAppearance((a) => ({ ...a, [adjustment]: v }))}
+              />
+            </div>
+          ),
+        };
+      }
       return {
         title: "Görünüm",
         action: !isDefaultAppearance(appearance) ? (
@@ -834,7 +936,17 @@ export function CompositionEditor({
                 </button>
               ))}
             </DockStrip>
-            <div className="mt-2 flex gap-2">
+            <div className="flex flex-wrap justify-center gap-2 px-1">
+              {ADJUSTMENTS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setAdjustment(item.id)}
+                  className="press liquid-glass-pill min-h-9 rounded-full px-3.5 text-[0.8125rem]"
+                >
+                  {item.label}
+                </button>
+              ))}
               <Toggle
                 label="Gölge"
                 isOn={appearance.shadow}
@@ -1015,43 +1127,6 @@ export function CompositionEditor({
       );
     }
 
-    if (activeTool === "gorunum") {
-      return (
-        <>
-          <Slider
-            label="Parlaklık"
-            value={appearance.brightness}
-            min={-0.3}
-            max={0.3}
-            step={0.01}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, brightness: v }))}
-          />
-          <Slider
-            label="Kontrast"
-            value={appearance.contrast}
-            min={-40}
-            max={40}
-            step={1}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, contrast: v }))}
-          />
-          <Slider
-            label="Doygunluk"
-            value={appearance.saturation}
-            min={-1}
-            max={1}
-            step={0.02}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, saturation: v }))}
-          />
-        </>
-      );
-    }
-
     if (activeTool === "marka") {
       return (
         <>
@@ -1191,60 +1266,16 @@ export function CompositionEditor({
     return null;
   })();
 
-  /** Adim gezinme — her adimda AYNI yerde (denetcinin en alti). */
-  const stepFooter = (
-    <div className="flex gap-2">
-      {step > 1 ? (
-        <button
-          type="button"
-          onClick={() => changeStep(step - 1)}
-          className="press on-dark-muted min-h-10 flex-1 rounded-xl text-[0.8125rem] ring-1 ring-white/15 hover:text-[#f3f0eb]"
-        >
-          Geri
-        </button>
-      ) : null}
-      {step < 3 ? (
-        <button
-          type="button"
-          onClick={() => changeStep(step + 1)}
-          className="press bg-gold min-h-10 flex-1 rounded-xl text-[0.8125rem] font-medium text-[#1a1917]"
-        >
-          Devam →
-        </button>
-      ) : null}
-    </div>
-  );
-
-  /*
-    DENETCI VE DOCK BIRER KEZ ciziliyor, iki kez DEGIL.
-    Once her ikisi de "mobil surum + masaustu surum" olarak iki kez yazilmisti;
-    ikisi de DOM'da kaldigi icin ayni rol ve ada sahip iki tablist olusuyor,
-    `getByRole` iki sonuc buluyordu. Konum farki yalnizca SINIFLARLA veriliyor:
-    telefonda akista (denetci dock'un ustunde), masaustunde yuzen.
-  */
-  const inspector = (
-    <Inspector
-      steps={EDITOR_STEPS}
-      step={step}
-      onStepChange={changeStep}
-      tools={[...tools]}
-      activeTool={activeTool}
-      onToolChange={setActiveTool}
-      footer={stepFooter}
-      isOpen={isInspectorOpen}
-      onOpenChange={setIsInspectorOpen}
-    >
-      {inspectorBody}
-    </Inspector>
-  );
-
   return (
     <div className="relative flex w-full flex-col lg:min-h-[calc(100dvh-4.25rem)]">
-      {/* Tuval ve dock ayrı satırlarda; sağ panel için iki yanda eşit pay. */}
-      <div className="order-1 relative z-0 flex min-w-0 items-center justify-center bg-white px-3 py-5 lg:static lg:flex-1 lg:px-[19rem]">
+      {/* Tuval üstte, bütün kontroller altında tek panelde (iPhone Fotoğraflar düzeni, 18.09.2026). */}
+      <div className="order-1 relative z-0 flex min-w-0 items-center justify-center bg-white px-3 py-5 lg:static lg:flex-1 lg:px-6">
         <div
           ref={containerRef}
-          className="stage-fit w-full min-w-0"
+          className={
+            "stage-fit w-full min-w-0" +
+            (isCollapsed ? " stage-fit-collapsed" : isCompactMenu ? " stage-fit-compact" : "")
+          }
           // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde
           // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
           // Dock ayrı satırda; dikey pay fotoğrafın tamamını görünür tutar.
@@ -1283,14 +1314,33 @@ export function CompositionEditor({
         </div>
       </div>
 
-      {/* Denetçi mobilde akışta, masaüstünde sağda. */}
-      <div className="relative z-10 order-2 px-3 lg:absolute lg:top-6 lg:right-6 lg:px-0">
-        {inspector}
-      </div>
-
-      {/* Dock tüm ekranlarda tuvalin altında, ekran merkezinde. */}
-      <div className="relative z-10 order-3 mt-2 flex shrink-0 justify-center px-3 pb-4 lg:px-6">
-        <Dock title={dock.title} action={dock.action}>
+      <div className="relative z-10 order-2 mt-2 flex shrink-0 justify-center px-3 pb-4 lg:px-6">
+        <Dock
+          title={dock.title}
+          action={dock.action}
+          settings={inspectorBody}
+          tools={
+            <ToolBar
+              groups={TOOL_GROUPS}
+              activeTool={activeTool}
+              onToolChange={openTool}
+            />
+          }
+          activeToolLabel={toolLabel(activeTool)}
+          isCollapsed={isCollapsed}
+          onCollapsedChange={setIsCollapsed}
+          compact={isCompactMenu}
+          layerKey={`${activeTool}:${adjustment ?? ""}`}
+          onBack={goBack}
+          canGoBack={Boolean(adjustment || previousTool)}
+          backLabel={
+            adjustment
+              ? "Görünüm menüsüne dön"
+              : previousTool
+                ? `Önceki araç: ${toolLabel(previousTool)}`
+                : "Önceki araç"
+          }
+        >
           {dock.body}
         </Dock>
       </div>

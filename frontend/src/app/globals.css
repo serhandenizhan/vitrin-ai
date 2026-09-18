@@ -844,6 +844,189 @@ html.reduce-motion .soft-fade {
     0 24px 56px -28px rgb(0 0 0 / 0.72);
 }
 
+/* --------------------------------------------------------------------------
+   Liquid Glass (Kaan, 18.09.2026): stüdyonun alt barı ve menü kartı.
+
+   Apple'ın Liquid Glass'ı AÇIK bir malzeme: beyaz zeminin üzerinde koyu bir
+   kutu değil, arkasındakini büyüten, doyuran ve kenarında ışığı kıran berrak
+   bir cam. İlk sürüm koyu tonluydu; kullanıcı "Apple'dakine benzemiyor" dedi.
+   Stüdyonun çalışma alanı beyaz olduğu için cam da açık.
+   Katmanlar:
+   1. gövde: çok hafif beyaz tül + güçlü bulanıklık ve doygunluk;
+   2. specular: üstte parlak iç çizgi, altta hafif ışık dönüşü, köşede leke;
+   3. `::before` ile kalınlık: sol üst ve sağ alt köşede parlayan gradyan kenar;
+   4. `::after` ile çok ince koyu dış hat — beyaz üstünde beyaz cam kaybolmasın.
+   Gerçek kırılma (refraction) tarayıcıda yok; his bu katmanlarla veriliyor.
+   Bulanıklık `glass-panel`'deki ölçülen değeri (30px, kare maliyeti yok) aşmıyor.
+   -------------------------------------------------------------------------- */
+.liquid-glass {
+  position: relative;
+  isolation: isolate;
+  /* TON: üstteki navbar'ın camıyla (`glass-panel`) aynı kömür grisi (Kaan,
+     18.09.2026: "üstteki bara yakın bir gri"). Açık ve açık-gri denemeler
+     beyaz çalışma alanında ya kayboldu ya navbar'la iki ayrı malzeme gibi
+     durdu; iki cam artık aynı aileden.
+
+     PREMIUM TUR (Kaan, 18.09.2026): his tondan değil KATMANLARDAN geliyor —
+     1. gövde: üstte ince bir ışık bandı + alttan sıcak bir iç parıltı ile
+        derinlik; daha yüksek doygunluk arkadaki rengi "camın içinde" gösteriyor;
+     2. specular: keskin üst çizgi + çok ince iç kontur (camın kalınlığı);
+     3. `::before` kenar: sol üstte beyaz, sağ altta markanın ALTININA dönen
+        gradyan — kuyumcu ürününe yakışan, ölçülü bir ışık kırılması;
+     4. iki katmanlı, yumuşak ve derin gölge (yüzeyden yükselmiş cam).
+     Bulanıklık yarıçapı ölçülen sınırı (30px, kare maliyeti yok) aşmıyor. */
+  color: #f3f0eb;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 38%),
+    radial-gradient(120% 90% at 50% 120%, rgb(214 167 86 / 0.1), transparent 60%),
+    radial-gradient(90% 140% at 12% -30%, rgb(255 255 255 / 0.16), transparent 50%),
+    linear-gradient(135deg, rgb(44 42 39 / 0.8), rgb(18 17 16 / 0.74));
+  backdrop-filter: blur(28px) saturate(210%) contrast(1.04);
+  -webkit-backdrop-filter: blur(28px) saturate(210%) contrast(1.04);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.1),
+    inset 0 -1px 1px rgb(255 255 255 / 0.06),
+    inset 0 -18px 30px -24px rgb(214 167 86 / 0.18),
+    0 32px 64px -30px rgb(0 0 0 / 0.62),
+    0 12px 24px -14px rgb(0 0 0 / 0.32);
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    140deg,
+    rgb(255 255 255 / 0.62),
+    rgb(255 255 255 / 0.12) 28%,
+    rgb(255 255 255 / 0.03) 58%,
+    rgb(232 196 136 / 0.45)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.liquid-glass::after {
+  content: "";
+  position: absolute;
+  inset: -0.5px;
+  z-index: -2;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0.5px rgb(30 26 20 / 0.14);
+  pointer-events: none;
+}
+/* Kayan cam mercek, geri/küçült tuşları: parlak üst yarım küre + ince
+   kontur — küçük, kalın bir cam damlası. */
+.liquid-glass-pill {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.05) 55%, rgb(255 255 255 / 0.09)),
+    rgb(255 255 255 / 0.05);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.16),
+    inset 0 -1px 1px rgb(0 0 0 / 0.18),
+    0 8px 18px -10px rgb(0 0 0 / 0.6);
+}
+
+/* Menüler arası geçiş — "camdan büyüyen" giriş. Kart alttan (barın
+   üzerinden) hafif ölçekle, bulanıktan netleşerek çıkıyor; içerik değişince
+   yalnızca içerik bulanıktan netleşiyor. Eğri iOS'un yay hissine yakın. */
+@keyframes glass-morph-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes glass-content-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+.glass-morph-in {
+  transform-origin: 50% 100%;
+  animation: glass-morph-in 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.glass-content-in {
+  animation: glass-content-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.glass-lens {
+  transition:
+    transform 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 560ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* Bar küçülünce tuval BÜYÜR — bar ve tuval aynı eğriyle birlikte hareket
+   eder (Kaan, 18.09.2026). Tuvalin genişliği `--studio-reserved`'den
+   türüyor; değişken değişince hesaplanan `max-width` geçişle kayıyor. Sahne
+   ölçüsü ResizeObserver ile takip edildiği için Konva her karede yeniden
+   boyutlanıyor. */
+.stage-fit {
+  transition: max-width 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.stage-fit.stage-fit-collapsed {
+  --studio-reserved: max(9rem, 22dvh);
+}
+/* İnce menü kartı (Zemin, Boyut): kart 1,5rem kısalıyor, tuval aynı miktarda büyüyor. */
+.stage-fit.stage-fit-compact {
+  --studio-reserved: calc(max(15rem, 48dvh) - 1.5rem);
+}
+@media (min-width: 64rem) {
+  .stage-fit.stage-fit-collapsed {
+    --studio-reserved: 11.5rem;
+  }
+  .stage-fit.stage-fit-compact {
+    --studio-reserved: 23.5rem;
+  }
+}
+.dock-card-area {
+  transition:
+    height 520ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 280ms ease-out,
+    padding 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-fit,
+  .dock-card-area {
+    transition: none;
+  }
+  .glass-morph-in,
+  .glass-content-in {
+    animation: none;
+  }
+  .glass-lens {
+    transition: none;
+  }
+}
+html.reduce-motion .glass-morph-in,
+html.reduce-motion .glass-content-in {
+  animation: none;
+}
+html.reduce-motion .stage-fit,
+html.reduce-motion .dock-card-area {
+  transition: none;
+}
+
+.high-contrast .liquid-glass::after { box-shadow: 0 0 0 1px rgb(30 26 20 / 0.45); }
+
 /* Açık sayfalardaki kart ve ayar yüzeyleri. Beyazın altındaki sayfa tonu
    görünür kalır; üst kenardaki parlama koyu stüdyo camıyla aynı dili kurar. */
 @utility glass-panel-light {
@@ -866,7 +1049,7 @@ html.reduce-motion .soft-fade {
 
 @media (min-width: 64rem) {
   .stage-fit {
-    --studio-reserved: 21rem;
+    --studio-reserved: 25rem;
   }
 }
 
@@ -879,6 +1062,11 @@ html.reduce-motion .soft-fade {
 }
 
 /* Scrollbar labels ile çakışmasın; kendi satırında yer kaplasın. */
-.dock-strip { scrollbar-width: thin; scrollbar-color: #77736c transparent; }
-.dock-strip::-webkit-scrollbar { height: 6px; }
-.dock-strip::-webkit-scrollbar-thumb { background: #77736c; border-radius: 999px; }
+/* Paneldeki şeritlerde ve menü kartında kaydırma ÇUBUĞU gösterilmiyor
+   (Kaan, 18.09.2026: "sağdaki beyazlı olanı kaldır"). Kaydırma yine çalışıyor:
+   tekerlek yatay kaydırır (`use-horizontal-wheel.ts`), dokunmatikte parmakla,
+   devamın olduğunu da sağ kenardaki solma (`palette-fade`) söylüyor. */
+.dock-strip,
+.dock-scroll { scrollbar-width: none; }
+.dock-strip::-webkit-scrollbar,
+.dock-scroll::-webkit-scrollbar { display: none; }

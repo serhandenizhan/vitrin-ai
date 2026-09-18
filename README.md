@@ -63,9 +63,9 @@ proxy ayarları tamamlanmalı. Ayrıntı:
 [ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
 
 Stüdyo arayüzü 17.09.2026'da yeniden düzenlendi (faza ait olmayan iş): sağdaki
-beyaz panel yerine **koyu araç yüzeyi, sağda yüzen bir denetçi ve altta camlı
-bir dock** var. Denetçi o adımın araçlarını listeliyor, dock seçili aracın
-paletini gösteriyor. Ayrıntı: [frontend README](frontend/README.md) →
+beyaz panel yerine **koyu araç yüzeyi** ve tuvalin hemen altında **iPhone
+Fotoğraflar'daki gibi** ince bir Liquid Glass araç barı ve onun üstünde açılan
+menü kartı var (18.09.2026'da sağdaki denetçi kaldırıldı). Ayrıntı: [frontend README](frontend/README.md) →
 "Stüdyo düzeni".
 
 Faz 6'da admin API'sinin ilk bölümü (kullanıcılar, bonus krediler, kullanım
@@ -172,8 +172,8 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 352 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 297 test
+cd backend && pytest             # 358 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 312 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

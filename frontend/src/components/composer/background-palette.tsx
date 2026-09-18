@@ -1,28 +1,43 @@
 "use client";
 
 /**
- * Dock'taki zemin paleti (17.09.2026, Serhan).
+ * Menü kartındaki zemin seçici (Kaan, 18.09.2026): kategori sekmeleri +
+ * ADLARIYLA yatay şerit.
  *
- * Dort urun karari burada:
+ * Kısa geçmiş: önce yatay şeritti (tekerlek yatay kaydırmıyordu, uzun uzun
+ * sağa gitmek gerekiyordu), sonra dikey ızgara oldu (kart büyüdü, adlar
+ * kayboldu, sağda ikinci bir kaydırma çubuğu çıktı). Kaan'ın kararı: hareket
+ * SAĞA/SOLA olsun, adlar görünsün. Asıl kusur tekerlekti; artık tekerlek şeridi
+ * yatay kaydırıyor (`use-horizontal-wheel.ts`) ve kaydırma çubuğu gizli.
  *
- * 1. SECILI ZEMIN yalnizca renkle degil, altin ince bir halka VE ADIYLA
- *    belirtiliyor. Yalnizca renge guvenmek, birbirine yakin iki zemin arasinda
- *    (ve renk korlugunde) secimin hangisi oldugunu okunamaz kiliyordu.
- * 2. KATEGORI CHIP'LERI surekli bir satir kaplamiyor; baslikta duran
- *    "Doku & desen · 17" dugmesi bir menu aciyor. Chip satiri dock'un
- *    yuksekliginin ucte birini yiyordu.
- * 3. Son kart YARIM gorunuyor (`palette-fade`): devaminin oldugu belli olsun.
- * 4. "Devam" burada degil, denetcide sabit kaliyor.
+ * İnce kart turu (18.09.2026): kategori sekmeleri kartın BAŞLIK satırına
+ * çıktı (bir satır kazanıldı, tuval o kadar büyüdü); adlar TEK satır —
+ * iki satırlık ad kartın alt kenarında kesiliyor ve gizli kaydırma çubuğu
+ * yüzünden hiç görünmüyordu ("zemin isimleri yazsın").
+ *
+ * Yumuşaklık: seçim halkası, büyüme ve ad rengi aynı uzun eğriyle geçiyor;
+ * seçilen zemin şeridin ortasına YUMUŞAK kayıyor; kategori değişince seçim
+ * camı (`GlassLens`) sekmeler arasında süzülüyor ve şerit bulanıktan netleşiyor.
+ *
+ * Korunan ürün kararları (17.09.2026, Serhan):
+ * 1. SEÇİLİ ZEMİN yalnızca renkle değil — altın halka VE adıyla belirtiliyor.
+ * 2. Her kategori sekmesinde kaç zemin olduğu yazar.
+ * 3. Son kart yarım görünüyor (`palette-fade`): devamı olduğu belli olsun.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useEffect, useRef } from "react";
 
+import { GlassLens } from "@/components/composer/glass-lens";
+import { ScrollArrows } from "@/components/composer/scroll-arrows";
+import { useHorizontalWheel } from "@/components/composer/use-horizontal-wheel";
 import type { BackgroundGroup } from "@/components/composer/use-background-selection";
 import type { BackgroundCategory } from "@/lib/background-categories";
 import type { Background } from "@/lib/backgrounds";
 
-export function CategoryMenuButton({
+/** Seçim geçişlerinin ortak eğrisi — iOS'un yay hissine yakın, uzun kuyruklu. */
+const SOFT = "duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
+
+export function CategoryTabs({
   groups,
   shownGroup,
   onSelect,
@@ -31,85 +46,46 @@ export function CategoryMenuButton({
   shownGroup: BackgroundGroup | undefined;
   onSelect: (category: BackgroundCategory | null) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // Disari tiklayinca kapaniyor. Escape, asagidaki kapsayici olayinda
-  // ele aliniyor: boylece olay belgeye ulasip studyoyu da kapatmiyor.
-  useEffect(() => {
-    if (!isOpen) return;
-    function handlePointerDown(event: MouseEvent | TouchEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false);
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-    };
-  }, [isOpen]);
-
-  // Tek kategori varsa menu bir secim sunmuyor; dugme de gosterilmiyor.
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  useHorizontalWheel(stripRef);
+  // Tek kategori varsa seçim sunulmuyor.
   if (groups.length < 2) return null;
 
   return (
     <div
-      ref={containerRef}
-      className="relative"
-      onKeyDown={(event) => {
-        if (!isOpen || event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        setIsOpen(false);
-      }}
+      ref={stripRef}
+      role="tablist"
+      aria-label="Zemin kategorileri"
+      className="dock-strip relative flex min-w-0 gap-0.5 overflow-x-auto"
     >
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-        // ACIK `aria-label`: erisilebilir ad metin dugumlerinden hesaplanirken
-        // her ogenin katkisi ayri ayri kirpiliyor ve ad "Sade· 2" gibi bitisik
-        // cikiyordu (testte olculdu). Gorsel bicimlendirme bozulmadan okunur
-        // bir ad vermenin tek yolu bu.
-        aria-label={`${shownGroup?.label ?? ""} · ${shownGroup?.items.length ?? 0}`}
-        className="press on-dark-muted flex min-h-8 items-center gap-1 rounded-full px-2 text-[0.75rem] whitespace-nowrap hover:text-[#f3f0eb]"
-      >
-        {shownGroup?.label}
-        <span className="tabular-nums opacity-70" aria-hidden>
-          · {shownGroup?.items.length}
-        </span>
-        <ChevronDown className="size-3.5" strokeWidth={1.75} aria-hidden />
-      </button>
-
-      {isOpen ? (
-        <div
-          role="menu"
-          aria-label="Zemin kategorileri"
-          className="glass-panel soft-enter absolute right-0 bottom-full z-10 mb-2 min-w-44 rounded-xl p-1"
-        >
-          {groups.map((group) => {
-            const isShown = group.id === shownGroup?.id;
-            return (
-              <button
-                key={group.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={isShown}
-                onClick={() => {
-                  onSelect(group.id);
-                  setIsOpen(false);
-                }}
-                className={
-                  "press flex min-h-9 w-full items-center justify-between gap-4 rounded-lg px-3 text-[0.8125rem] " +
-                  (isShown ? "text-gold bg-white/8" : "hover:bg-white/8")
-                }
-              >
-                {group.label}
-                <span className="tabular-nums opacity-55">{group.items.length}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      <GlassLens containerRef={stripRef} activeKey={shownGroup?.id} />
+      {groups.map((group) => {
+        const isShown = group.id === shownGroup?.id;
+        return (
+          <button
+            key={group.id}
+            type="button"
+            role="tab"
+            data-lens-key={group.id}
+            aria-selected={isShown}
+            // ACIK ad: metin parcalari ayri ogelerde oldugu icin hesaplanan ad
+            // "Sade· 2" gibi bitisik cikiyordu (17.09'da testte olculdu).
+            aria-label={`${group.label} · ${group.items.length}`}
+            onClick={() => onSelect(group.id)}
+            className={
+              "press relative z-10 flex min-h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[0.75rem] whitespace-nowrap transition-colors " +
+              SOFT +
+              " " +
+              (isShown ? "font-semibold text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
+            }
+          >
+            {group.label}
+            <span className="tabular-nums opacity-55" aria-hidden>
+              {group.items.length}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -125,82 +101,102 @@ export function BackgroundPalette({
   onSelect: (id: string) => void;
   gradientCss: (stops: (number | string)[]) => string;
 }) {
+  // Kategori degisince bilesen UST bilesende `key` ile yeniden kuruluyor
+  // (composition-editor.tsx): serit `glass-content-in` ile bulaniktan
+  // netlesiyor ve tekerlek/ok dinleyicileri YENI seride baglaniyor. Anahtar
+  // seridin kendisine verilseydi dinleyiciler eski ogede kalirdi.
+  const stripRef = useRef<HTMLDivElement | null>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
+  const hasCenteredRef = useRef(false);
+  useHorizontalWheel(stripRef);
 
-  // Yalnızca yatay şeridi kaydır: scrollIntoView mobilde tüm stüdyoyu
-  // aşağı kaydırıp tuvalin üstünü navbarın arkasına götürüyordu.
+  // Seçili zemin şeridin ortasına getiriliyor — yalnızca şeridin KENDİ
+  // kaydırması; `scrollIntoView` mobilde bütün stüdyoyu kaydırıyordu. İlk
+  // açılışta anında (kart açılırken kayan şerit rahatsız ediyor), sonra
+  // YUMUŞAK kayarak.
   useEffect(() => {
+    const strip = stripRef.current;
     const selected = selectedRef.current;
-    const strip = selected?.parentElement;
-    if (!selected || !strip) return;
-    const item = selected.getBoundingClientRect();
-    const viewport = strip.getBoundingClientRect();
-    strip.scrollTo?.({ left: strip.scrollLeft + item.left - viewport.left - (viewport.width - item.width) / 2 });
+    if (!strip || !selected) return;
+    strip.scrollTo?.({
+      left: selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2,
+      behavior: hasCenteredRef.current ? "smooth" : "auto",
+    });
+    hasCenteredRef.current = true;
   }, [selectedId, items]);
 
   return (
-    <>
-      {items.map((background) => {
-        const isActive = background.id === selectedId;
-        return (
-          <button
-            key={background.id}
-            ref={isActive ? selectedRef : undefined}
-            type="button"
-            onClick={() => onSelect(background.id)}
-            aria-pressed={isActive}
-            className="press w-20 shrink-0 snap-start text-center"
-          >
-            <span
-              // Halka `ring` yardimcilariyla veriliyor, keyfi `shadow-[...]`
-              // ile degil: keyfi coklu golge denendiginde Tailwind iki katman
-              // uretti ama ikisi de SEFFAF kaldi (tarayicida olculdu).
-              className={
-                "block aspect-square w-full overflow-hidden rounded-xl transition-transform duration-200 " +
-                (isActive
-                  ? "ring-gold scale-105 ring-2 ring-offset-2 ring-offset-transparent"
-                  : "ring-1 ring-white/15 hover:scale-105")
-              }
-              style={
-                background.type === "placeholder"
-                  ? { background: gradientCss(background.gradient) }
-                  : undefined
-              }
+    <ScrollArrows targetRef={stripRef} label="zeminler">
+      <div
+        ref={stripRef}
+        aria-label="Zeminler"
+        className="dock-strip palette-fade glass-content-in relative flex snap-x gap-2 overflow-x-auto px-2 pt-1.5 pb-1"
+      >
+        {items.map((background) => {
+          const isActive = background.id === selectedId;
+          return (
+            <button
+              key={background.id}
+              ref={isActive ? selectedRef : undefined}
+              type="button"
+              onClick={() => onSelect(background.id)}
+              aria-pressed={isActive}
+              className="press w-[3.75rem] shrink-0 snap-start text-center"
             >
-              {background.type === "server" ? (
-                // <img>, CSS arka plani degil: `loading="lazy"` yalnizca
-                // gorunen simgeleri indiriyor ve onizleme yoksa tam boyutlu
-                // gorsele dusmek icin `onError` gerekiyor.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={background.thumbnailUrl ?? background.url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  draggable={false}
-                  onError={(event) => {
-                    const image = event.currentTarget;
-                    if (image.dataset.fallback === "1") return;
-                    image.dataset.fallback = "1";
-                    image.src = background.url;
-                  }}
-                  className="size-full object-cover"
-                />
-              ) : null}
-            </span>
-            {/* Ad, SECILI olanda altin ve tam okunur; digerlerinde soluk.
-                Yalnizca renge guvenilmiyor (erisilebilirlik). */}
-            <span
-              className={
-                "mt-2 block min-h-8 text-[0.6875rem] leading-4 " +
-                (isActive ? "text-gold font-medium" : "on-dark-muted")
-              }
-            >
-              {background.name}
-            </span>
-          </button>
-        );
-      })}
-    </>
+              <span
+                className={
+                  "block aspect-square w-full overflow-hidden rounded-[0.8rem] transition-[transform,box-shadow] " +
+                  SOFT +
+                  " " +
+                  (isActive
+                    ? "ring-gold scale-[1.06] ring-2 shadow-[0_6px_16px_-8px_rgb(0_0_0/0.6)]"
+                    : "ring-1 ring-white/15 hover:scale-[1.04]")
+                }
+                style={
+                  background.type === "placeholder"
+                    ? { background: gradientCss(background.gradient) }
+                    : undefined
+                }
+              >
+                {background.type === "server" ? (
+                  // <img>, CSS arka plani degil: `loading="lazy"` yalnizca
+                  // gorunen ornekleri indiriyor ve onizleme yoksa tam boyutlu
+                  // gorsele dusmek icin `onError` gerekiyor.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={background.thumbnailUrl ?? background.url}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                    onError={(event) => {
+                      const image = event.currentTarget;
+                      if (image.dataset.fallback === "1") return;
+                      image.dataset.fallback = "1";
+                      image.src = background.url;
+                    }}
+                    className="size-full object-cover"
+                  />
+                ) : null}
+              </span>
+              {/* Ad her zeminin altinda, TEK satir; secili olan altin ve kalin.
+                  Yalnizca renge guvenilmiyor (erisilebilirlik). Uzun ad
+                  `title` ile tamamen okunur. */}
+              <span
+                title={background.name}
+                className={
+                  "mt-1.5 block truncate text-[0.625rem] leading-3 transition-colors " +
+                  SOFT +
+                  " " +
+                  (isActive ? "text-gold font-semibold" : "on-dark-muted")
+                }
+              >
+                {background.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </ScrollArrows>
   );
 }

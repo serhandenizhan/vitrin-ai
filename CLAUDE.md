@@ -223,7 +223,7 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
 - **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). **Faz 5'ten beri R2 zorunlu:** arka plan kaldırma başarılı sonucu idempotency için geçici bir R2 nesnesi olarak saklamadan krediyi tüketmiyor; R2 yapılandırılmamışsa kesim hiç başlamaz ve `503 result_storage_unavailable` döner (eskiden bu cümle "kesim ve indirme akışı etkilenmez" diyordu). Yalnız arayüzü denemek için `USE_MOCK_BACKEND=true`.
 - **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 297 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 312 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Zemin kütüphanesi (öne alınan iş, 17.09.2026):** 93 zemin `backend/scripts/upload_backgrounds.py` ile R2 + `backgrounds` tablosuna "basic" olarak yüklendi; betik yükleme ucuyla aynı kontrolleri yapıp zemini aynı çözünürlükte JPEG %92'ye çevirir ve 480 px önizleme (`backgrounds/thumbs/<id>.jpg`) üretir. **Veritabanı yapısı bilinçli olarak değişmedi** (Kaan: "karışıklık olur"): kategori ve baskı uyarısı `frontend/src/lib/background-catalog.ts`'te (betikle üretilir, elle düzenlenmez), zemin kimliğine göre; katalogda olmayan zemin "Sade" sayılır. 4 kategori (`lib/background-categories.ts`): Sade, Doku & desen, Doğal & çiçekli, Lüks & koyu. Düşük çözünürlüklü 4 ChatGPT zemininde CMYK düğmesi önce "Bu görsel baskıya önerilmiyor. Yine de onaylıyor musunuz?" diye sorar — kontrol yalnız arayüzde, `/api/cmyk` hangi zeminin kullanıldığını bilmez. **Tuzak (PR #18'de KAPATILDI):** Faz 5'in hız sınırlayıcısı Redis ister ve Redis yoksa `GET /api/backgrounds` 500 veriyordu; vekil bütün 5xx'leri "200 + boş liste"ye çevirdiği için stüdyo sessizce gradyan yer tutuculara düşüyordu. Artık zemin listelemenin hız sınırı **fail-open** (para/webhook yüzeyleri fail-closed kaldı, bkz. yukarıdaki hız sınırı maddesi): Redis kapalıyken de 93 zemin dönüyor, yalnızca bir uyarı log'lanıyor. Arayüz de "kütüphane hazırlanıyor" ile "yüklenemedi"yi ayırıyor ve tekrar deneme sunuyor. Zeminler yine görünmüyorsa sıradaki şüpheli Redis değil, **R2 ayarları ya da CORS kuralı**. Yerelde Redis: `Yeni klasör\araclar\redis\` (redis-windows 8.10.1, kurulumsuz), `.claude/launch.json`'daki `redis` kaydı; backend'den önce başlatılır.
 - **Stüdyo ve katalog düzenlemeleri (öne alınan iş, 17.09.2026, Kaan):** stüdyo **A4 ile açılır**, "Kare 2000×2000" kaldırıldı (beyaz zeminli Pazaryeri duruyor). Düzenleme **üç adım**: 1 Boyut ve zemin → 2 Ürün (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma) → 3 Bitir (logo, etiket, indirme, CMYK, WhatsApp). Zemin artık **esnetilmiyor**, biçimi ortadan kırparak kaplıyor (`coverCrop`); fotoğraf/desenli zeminler yalnızca biçimin yönüne (dikey/yatay; kare = yatay) uyuyorsa listelenir, **Sade her biçimde** (`fitsOrientation`; yön katalogda, yükleme betiği ölçülerden üretir). "Işık havuzu" kaldırıldı, yerine **yansıma** (ayrı Konva katmanında `destination-in` ile silikleşen ayna kopya). **Gölge güçlendirildi** (`SHADOW` 50/34/%55): eski değer Konva'da ölçüldü, açık zeminde ~27/255, koyu zeminde ~0 koyulaşma veriyordu — önbellek teşhisi ölçümle çürütüldü, sebep zayıf değerlerdi. Katalog PNG yerine **JPEG + baskıya uygun CMYK** ve **logo** (stüdyoyla aynı depolama; `lib/print-download.ts`, `lib/logo-image.ts` ortak). Sol panelden eski çalışma ana sayfa dışındaki sayfalarda açılmıyordu: bekleyen çalışma `sessionStorage`'a yazılıp ana sayfaya gidiliyor (sağlayıcı her sayfada yeniden kuruluyor, bellek yetmez).
 - **Aynı günün sonraki turları (17.09.2026, Kaan):** indirme sonrası soru (katalog boyutunda önce "şablona ekle" → `lib/catalog-handoff.ts` ile Katalog'da "Tam sayfa", sonra "ana menüye dön"); katalogda 6 şablon, sayfa rengi ve siyah/beyaz metin (`applyTemplateColors`); logo stüdyoda ve katalogda sürüklenip kare köşelerden boyutlandırılıyor (`LogoSettings.position`), renkleri çevrilebiliyor; stüdyoda **gölge kapalı başlıyor**. **Tuzak:** Konva önbelleği `shadowEnabled` değişince yenilenmiyor, gölge aç/kapa için `clearCache()`+`cache()` şart. **Tuzak:** `sessionStorage`'tan okurken silmek geliştirmede (StrictMode, efekt iki kez) veriyi kaybettiriyor — önce oku, teslim edince sil. Bülten `/bulten` (içerik `lib/bulletin.ts`); **altın kuru yok**: ücret/lisans/yazılı izin isteyen veri kaynağı eklenmez (TCMB ticari kullanımda yazılı izin istiyor). Telefonda liste düzenleri içeriğe göre farklı (`globals.css` `.mobile-rail` yalnızca görselli listelerde; diğerleri kısa liste, açılır başlık, sekme).
@@ -274,10 +274,41 @@ yanıltıyordu) ve camlı yüzeyler tuvali tamamen örtmeden üzerinde durabiliy
 Yükleme adımı açık kalıyor — orası hâlâ tanıtım sayfasının parçası, ve karar
 "çalışmanın ortasında beyazdan koyuya sıçrama olmasın" üzerineydi.
 
-**Düzen kuralı:** *dock = gözle seçilenler, denetçi = okunarak ayarlananlar.*
-Denetçi o adımın araçlarını listeler, dock seçili aracın paletini gösterir;
-dock yalnızca zemin göstermez. Ayrıntı ve ölçümler: `frontend/README.md` →
-"Stüdyo düzeni".
+**Düzen kuralı (18.09.2026, Kaan — iPhone Fotoğraflar düzeni):** stüdyonun
+bütün kontrolleri tuvalin altında: **ince bir bar** (solda ‹ geri, sonra
+Boyut · Zemin | Yerleşim · Görünüm | Marka · İndir — adımlar ince ayraçla
+gruplu, "Devam" yok) ve barın ÜSTÜNDE açılan **menü kartı**. Bar HİÇ
+KIPIRDAMAZ: kart, sabit yükseklikli bir alanın altına hizalı açılır. **Geri
+tuşu (solda) ARAÇLAR ARASINDA gezer** — bir önceki araca (Boyut ↔ Zemin),
+Görünüm'de açık kaydıraçtan önce Görünüm menüsüne; kartı KAPATMAZ. **Küçült
+tuşu (sağda)** kartı ve barı tek bir küçük hapa indirir ve **tuval o yeri
+alarak büyür** — ikisi aynı eğriyle birlikte hareket eder
+(`.stage-fit-collapsed`, `.dock-card-area`). Dört kez yinelendi, sebepleri
+kalıcı ders: sağda ayrı kart → göz iki yere gidiyordu; içerik boyunda panel →
+bar her araçta kayıyordu; sabit kalın panel → görsel bütünlük bozuldu; geri
+tuşu kartı kapatıyordu → "geri" gezinmedir, kapatmak ayrı bir düğmedir. **Sağa yeni bir kart açılmaz, bar
+kalınlaştırılmaz;** yeni araç `STEP_TOOLS`'a eklenir. Zemin seçimi kategori
+sekmeleri + ADLARIYLA YATAY şerit; paneldeki bütün şeritlerde fare tekerleği
+SAĞA/SOLA kaydırır (`use-horizontal-wheel.ts`) ve kaydırma çubuğu gizli.
+Dikey ızgara denendi ve bırakıldı: kart büyüdü, adlar kayboldu, ikinci bir
+kaydırma çubuğu çıktı. Yatay şeridin asıl kusuru tekerlekti, şerit değil.
+Şeritlerin iki yanında cam oklar (`scroll-arrows.tsx`; yalnızca o yönde yer
+varsa görünür). **Zeminler arası çapraz geçiş** (`editor-stage.tsx`, 0,42 sn):
+eski zemin geçici bir Konva düğümü olarak altta kalır. **Kural:** tuvale
+eklenen her animasyon dışa aktarmadan ÖNCE bitirilmeli — `renderStage`
+`finishBackgroundFade`'i çağırıyor, yoksa dosyaya iki zeminin karışımı girer
+(ders 23'ün "yanlış çıktı" sınıfı). **Tek satırlık menüler (Zemin, Boyut)
+ince kartla açılır** ve tuval aynı miktarda büyür (`.stage-fit-compact`);
+kategori sekmeleri kartın başlık satırında. Seçim geçişleri tek bir uzun eğriyle
+(`cubic-bezier(0.32, 0.72, 0, 1)`, 500–560 ms); seçili sekme/araç altında
+cam mercek süzülür (`glass-lens.tsx`, ortak).
+Yüzey **Liquid Glass, üstteki navbar'ın camıyla aynı kömür grisi**
+(`.liquid-glass`, `globals.css`) — açık ve açık-gri denemeler beyaz çalışma
+alanında ya kayboldu ya navbar'la iki ayrı malzeme gibi durdu. Liquid Glass
+hissi tondan değil katmanlardan: parlak iç çizgi, ışık lekesi, köşede parlayan
+kenar, kayan cam mercek ve "camdan büyüyen" geçişler. Yeni bir araç
+eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
+ölçümler: `frontend/README.md` → "Stüdyo düzeni".
 
 **Üç şey tarayıcıda ÖLÇÜLEREK bulundu, tahminle değil:**
 1. `backdrop-filter`'ın kare maliyeti **yok** (16,67 ms / 16,66 ms).
@@ -285,7 +316,7 @@ dock yalnızca zemin göstermez. Ayrıntı ve ölçümler: `frontend/README.md` 
    dışında** kalıyordu; artık görünür duruma kaydırılıyor.
 3. Telefonda yapışkan tuval iki kez bozuldu: kısa bir kapsayıcı içinde
    yapışkanlık hiç çalışmıyor, ve yapışkan (konumlandırılmış) öğe statik
-   kardeşlerinin üzerine boyanıp denetçiyi örtüyor.
+   kardeşlerinin üzerine boyanıp alttaki paneli örtüyor.
 
 ## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 

@@ -867,9 +867,44 @@ Yeni: hazır görünüm ayarları (Doğal/Parlak/Sıcak/Net/Yumuşak). Kaydıra�
 oynatılınca ön ayar işareti kalkıyor. Ayrıntı ve tarayıcıda alınan ölçümler:
 `frontend/README.md` → "Stüdyo düzeni".
 
-**Kaan'ın incelemesi (18.09.2026, PR #22):** stüdyo tasarımı Kaan'ın 17.09
-kararını (üç adım) değiştirdiği için onay tarayıcıda bakıldıktan sonra
-verilecek (ders 20) — henüz onaylanmadı. İnceleme bir hata buldu ve
+**Kaan'ın incelemesi (18.09.2026, PR #22):** tarayıcıda bakıldı; genel
+tasarım kabul edildi, üç değişiklikle (faz dışı iş olduğu söylendi, Kaan bu
+PR'da yapılmasını onayladı — kural 6):
+1. **Sağdaki denetçi kaldırıldı, iPhone Fotoğraflar düzeni:** bütün kontroller
+   tuvalin altında tek panelde; altta araç çubuğu (adımlar ayraçla gruplu,
+   "Devam" yok), üstünde seçili aracın ayarları; görünümde tek kaydıraç.
+   Gerekçe: her değişiklik için sağa, sonra aşağıya gitmek gerekiyordu.
+   İkinci tur: panel yüksekliği her araçta değiştiği için geri dönmek
+   zorlaşıyordu → sabit yükseklik ve kenarda ‹ geri tuşu. Üçüncü tur: panel
+   kalınlaştı, cam Apple'a benzemedi, zemin şeridi sağa kaydırma istiyordu →
+   **ince bar (hiç kıpırdamaz) + üstünde açılan menü kartı**, açık (Apple
+   tonunda) Liquid Glass ve "camdan büyüyen" geçişler, zemin için kategori
+   sekmeleri + dikey ızgara. Dördüncü tur: geri tuşu kartı kapatıyordu →
+   geri artık araçlar arasında gezer (Boyut ↔ Zemin); ayrı bir **küçült**
+   düğmesi barı küçültür ve tuval o yeri alarak animasyonla büyür; cam
+   temaya uygun gri tonda.
+   Beşinci tur: cam hâlâ beyaz okunuyordu → ton, üstteki navbar'ın camıyla
+   aynı kömür grisine çekildi (iki cam aynı malzeme ailesinden). Altıncı
+   tur: dikey zemin ızgarası kartı büyütüp adları gizliyor ve ikinci bir
+   kaydırma çubuğu çıkarıyordu → adlarıyla yatay şerit, fare tekerleği
+   bütün şeritlerde sağa/sola kaydırır, kaydırma çubukları gizli. Yedinci
+   tur: şeritlere sağ/sol cam oklar; zeminler arası çapraz geçiş (indirme
+   geçişin ortasına denk gelirse geçiş önce bitiriliyor — dosyaya iki zeminin
+   karışımı girmesin). Sekizinci tur: zemin adları kartta kesiliyordu → tek
+   satır; Zemin/Boyut kartı inceldi ve tuval aynı oranda büyüdü; zemin ve
+   kategori seçimleri tek uzun eğriyle, sekmeler arasında kayan cam mercek;
+   Liquid Glass daha premium (ışık bandı, altın iç parıltı ve kenar).
+2. **Çalışmalarım'da ürün adını değiştirme** (faz dışı — Faz 4 özelliği;
+   önceden söylendi, Kaan bu PR'da yapılmasını onayladı): kartın başlığındaki
+   kalemle yerinde düzenleme (Enter kaydeder, Escape vazgeçer).
+   `PATCH /api/projects/{id}`'ye isteğe bağlı `file_name` eklendi; ad
+   değiştirmek durumu ve indirme zamanını ellemez. Sahiplik, geçersiz ad ve
+   başkasının çalışması için backend testleri; vekil ve arayüz testleri.
+3. **Yeni sayfalara giriş animasyonu:** `/calismalar`, `/destek`, `/hesap` ve
+   yasal sayfalar "tak diye" açılıyordu; diğer sayfalardaki `Reveal` deseni
+   eklendi (çalışma sekmeleri ve stüdyo araç değişimi `soft-fade`).
+
+İnceleme ayrıca bir hata buldu ve
 düzeltildi: stüdyonun taslak kaydı her zaman `draft` gönderdiği için
 **tamamlanmış (indirilmiş) bir çalışma** yeniden açılıp kaydedildiğinde ya da
 aynı oturumda indirildikten sonra kaydedildiğinde "Yarım kalan"a düşüyor ve

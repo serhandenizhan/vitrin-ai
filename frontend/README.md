@@ -203,37 +203,103 @@ Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
-## Stüdyo düzeni: yüzen denetçi + alt dock (17.09.2026)
+## Stüdyo düzeni: ince bar + menü kartı (18.09.2026)
 
-Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar, sağda **yüzen
-denetçi** ve fotoğrafın altında **camlı dock** kullanır. 17.09.2026 tarihli
-son düzenleme, aynı günün önceki koyu çalışma alanı ve üst üste binen dock
-kararının yerini alır.
+Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar ve fotoğrafın
+altında **ince bir Liquid Glass bar** ile onun üstünde açılan **menü kartı**
+kullanır. Örnek iPhone Fotoğraflar'ın düzenleme ekranı (Kaan, 18.09.2026).
+Aynı gün dört kez yinelendi; her turun sebebi bir sonrakinin kuralı oldu:
 
-**İş bölümü tek bir kurala dayanıyor:** *dock = gözle seçilenler, denetçi =
-okunarak ayarlananlar.* Denetçi o adımın araçlarını listeler, dock seçili
-aracın paletini gösterir.
+1. Sağda yüzen denetçi + altta dock → her değişiklikte göz ve fare iki yere gidiyordu.
+2. Tuvalin altında tek panel, içerik boyunda → bar her araçta birkaç piksel kayıyor,
+   geri dönmek için düğme her seferinde yeniden aranıyordu.
+3. Aynı panel sabit 12,5rem → bar kalınlaştı, görsel bütünlük bozuldu.
+4. Geri tuşu kartı kapatıyordu → "geri" araçlar arasında gezinmek içindir;
+   kartı kapatmak ayrı bir "küçült" düğmesinin işi.
 
-| Adım | Denetçideki araçlar | Dock paleti | Denetçide kalan |
-| --- | --- | --- | --- |
-| 1 | Boyut · **Zemin** | biçim kartları / zemin galerisi | — |
-| 2 | Yerleşim · Görünüm | hızlı eylemler / hazır ayarlar + gölge, yansıma | boyut, parlaklık, kontrast, doygunluk |
-| 3 | Logo · Etiket · İndir | logo eylemleri + köşe / etiket köşe-tema / çıktı türleri | saydamlık, ayar, gram, ürün kodu |
+**Şimdiki yapı** (`dock.tsx`, `tool-bar.tsx`):
 
-1. adımda varsayılan araç bilinçli olarak ilk araç değil **Zemin**: biçim zaten
-makul bir varsayılanla (A4) açılıyor, kullanıcının ilk gerçek kararı zemin.
+- **Bar (3,25rem) HİÇ KIPIRDAMAZ.** Solda ‹ geri, ince ayraç, altı araç, sağda ⌄ küçült; araçlar
+  simge + küçük adla; adımlar (Sahne · Düzenle · Tamamla — Kaan, 17.09) ince
+  ayraçlarla gruplu, "Devam" yok. Seçili aracın altında bir cam **mercek
+  kayarak** yer değiştirir.
+- **Menü kartı** barın üstündeki SABİT yükseklikli (10,5rem) alanın altına
+  hizalı açılır: kart büyüse de küçülse de bar yerinde kalır. Uzun içerik
+  kartın içinde kayar. Açılışta Zemin menüsü açık.
+- **Geri tuşu araçlar arasında gezer:** bir önceki araca döner (gezinme
+  geçmişi; geçmiş boşsa sırada bir önceki araç — Zemin → Boyut). Görünüm'de
+  kaydıraç açıksa önce Görünüm menüsüne. Kartı kapatmaz; gidilecek yer yoksa pasif.
+- **Küçült tuşu** kartı ve barı tek bir küçük hapa ("⌃ Zemin") indirir; tuval
+  o yeri alarak BÜYÜR. Bar ile tuval aynı eğriyle (520 ms) birlikte hareket
+  eder: kart alanı yüksekliği sıfıra iner (`.dock-card-area`), tuvalin
+  `--studio-reserved` payı küçülür (`.stage-fit-collapsed`; masaüstünde
+  25rem → 11,5rem; ince kartta 23,5rem) ve hesaplanan `max-width` geçişle kayar. Hapa ya da bir
+  araca basınca geri açılır.
+- **Geçişler:** kart açılırken barın üzerinden "camdan büyür" (ölçek + bulanıktan
+  netleşme, `glass-morph-in`); menü içinde katman değişince yalnızca içerik
+  bulanıktan netleşir (`glass-content-in`). Eğri iOS'un yay hissine yakın
+  (`cubic-bezier(0.32, 0.72, 0, 1)`), "hareketi azalt"ta kapalı.
 
-### Zemin paleti
+**Liquid Glass tonlaması** (`.liquid-glass`, `.liquid-glass-pill`): ton,
+üstteki navbar'ın camıyla (`glass-panel`) **aynı kömür grisi** (Kaan, 18.09.2026).
+Sırasıyla denenip bırakılanlar: koyu ilk sürüm ("Apple'dakine benzemiyor"),
+açık beyaz (beyaz çalışma alanında kayboldu), açık gri ("sadece gri değil" —
+hâlâ beyaz okundu). Liquid Glass hissi tondan değil katmanlardan geliyor:
+bulanıklık + doygunluk, üstte parlak iç çizgi ve ışık lekesi, `::before` ile
+köşelerde parlayan gradyan kenar, seçili aracın altında kayan cam mercek.
+**Premium tur:** üstte ince ışık bandı, alttan sıcak altın bir iç parıltı,
+keskin üst specular + çok ince iç kontur, sol üstte beyazdan sağ altta markanın
+altınına dönen kenar, iki katmanlı derin gölge; cam damlaları (mercek, geri/
+küçült) parlak üst yarım küreli.
 
-- Seçili zemin **altın ince halka VE adıyla** belli oluyor; yalnızca renge
-  güvenilmiyor.
-- Seçili zemin yalnızca yatay şeritte `scrollTo` ile ortalanır; sayfanın dikey
-  konumu değişmez. Adlar iki satıra yayılabilir, scrollbar için ayrı alt boşluk vardır.
+| Grup | Araç | Menü kartındaki içerik |
+| --- | --- | --- |
+| Sahne | Boyut · **Zemin** | biçim kartları / kategori sekmeleri + adlarıyla yatay zemin şeridi |
+| Düzenle | Yerleşim · Görünüm | hızlı eylemler + boyut kaydıracı / hazır ayarlar, gölge, yansıma; ayar seçilince tek kaydıraç |
+| Tamamla | Marka · İndir | logo, etiket, saydamlık, ayar, gram, kod / çıktı türleri, CMYK, WhatsApp, kaydet |
+
+### Zemin seçici
+
+- **İnce kart (Zemin, Boyut):** kategori sekmeleri kartın BAŞLIK satırında
+  (ayrı satır kartı büyütüyordu); kart alanı 10,5 → 9rem, tuval aynı miktarda
+  büyür (`.stage-fit-compact`, masaüstünde `--studio-reserved` 25 → 23,5rem),
+  ikisi aynı eğriyle birlikte hareket eder. Adlar TEK satır: iki satırlık ad
+  kartın alt kenarında kesiliyor ve gizli kaydırma çubuğu yüzünden hiç
+  görünmüyordu. Uzun ad `title` ile tamamen okunur.
+- **Yumuşak geçişler:** seçim halkası, büyüme, gölge ve ad rengi aynı uzun
+  eğriyle (500 ms); seçilen zemin şeridin ortasına yumuşak kayar (ilk açılışta
+  anında). Kategori değişince seçim camı sekmeler arasında süzülür
+  (`glass-lens.tsx` — araç çubuğuyla ortak) ve şerit bulanıktan netleşir.
+  Palet kategoriye göre `key` ile yeniden kurulur: anahtar şeridin kendisine
+  verilseydi tekerlek/ok dinleyicileri eski öğede kalırdı.
+- **Kategori sekmeleri + adlarıyla YATAY şerit** (18.09.2026). Arada dikey
+  ızgara denendi ve bırakıldı: kart büyüdü, adlar kayboldu, sağda ikinci bir
+  kaydırma çubuğu çıktı (Kaan: "aşağı yukarı değil sağa sola"). Yatay şeridin
+  asıl kusuru fare tekerleğiydi: artık **tekerlek şeridi sağa/sola kaydırıyor**
+  (`use-horizontal-wheel.ts` — dikey hareketi yataya çevirir, şerit ucunda
+  olayı sayfaya bırakır, dokunmatik yüzeyin yatay hareketine dokunmaz). Aynı
+  davranış paneldeki bütün şeritlerde ve araç çubuğunda.
+- **Kaydırma çubukları gizli** (`.dock-strip`, `.dock-scroll`); devamın olduğunu
+  sağ kenardaki solma (`palette-fade`) söylüyor.
+- Seçili zemin **altın halka VE adıyla** belli (ad her örneğin altında, seçilide
+  altın ve kalın); yalnızca renge güvenilmiyor.
+- Seçili zemin yalnızca şeridin kendi kaydırmasıyla ortaya gelir; sayfanın
+  konumu değişmez.
+- **Sağ/sol oklar** (`scroll-arrows.tsx`): şeridin iki kenarında cam oklar;
+  bir ok yalnızca o yönde gidilecek yer varsa görünür, her basış görünen
+  genişliğin ~%80'i kadar kaydırır (son kart bir sonraki sayfada da görünsün).
+  Aynı oklar paneldeki diğer yatay şeritlerde de var.
+- **Zeminler arası çapraz geçiş** (`editor-stage.tsx`): yeni zemin eskisinin
+  üstünde 0,42 sn'de saydamlıktan belirir; eski zemin geçiş boyunca geçici bir
+  Konva düğümü olarak altta durur, bitince silinir. "Hareketi azalt"ta geçiş
+  yok. **Çıktı güvenliği:** geçiş ortasında indirme yapılırsa dosyaya iki
+  zeminin karışımı girerdi — `renderStage` dışa aktarmadan önce
+  `finishBackgroundFade` (`background-fade.ts`) ile geçişi anında bitiriyor.
+  Yüklenemeyen zemin (ders 23) `useLoadedImage`'den `null` döndüğü için geçiş
+  hiç başlamaz. Test ortamındaki sahte sahnenin `find`'ı artık gerçek Konva
+  gibi seçiciye göre dönüyor (önceden her seçiciye tutamak dönüyordu).
 - 93 katalog zemininin renk/desen adı `src/lib/background-names.ts` içinde
   kimliğe bağlıdır; sunucu sırası değişse de isim değişmez.
-- Kategoriler sürekli bir chip satırı kaplamıyor; başlıktaki
-  `Desen · 17` düğmesi bir menü açıyor.
-- Son kart yarım görünüyor (`palette-fade`): devamı olduğu belli olsun.
 
 ### Hazır görünüm ayarları
 
@@ -247,14 +313,13 @@ ekranın söylediğiyle dosyanın içindekinin ayrışması demekti. Gölge ve y
 
 Stüdyo çalışma alanı ve kesim sonuç kartı beyazdır. Navbar koyu, bulanık camlı,
 kenarlardan boşluklu bir kapsüldür. Başlık, yan düğmelerin genişliğinden bağımsız ortalanır.
-Masaüstünde denetçi sağda yüzer; tuvalin iki yanında eşit alan ayrılır, böylece
-fotoğraf ekranın ortasında kalır. Dock ayrı satırda ve ekran merkezindedir;
+Tuval ekranın ortasındadır; sağda artık ayrı bir kart yok. Panel ayrı satırda ve ekran merkezindedir;
 fotoğrafın hiçbir bölümünü örtmez ve sürükleme sırasında kaybolmaz.
 Yerleşim ve görünüm paletinin düğmeleri kendi satırlarında ortalanır.
 
-Telefonda tuval, açılabilir denetçi ve dock normal akışta yer alır. Tuval yapışkan
+Telefonda tuval ve panel normal akışta yer alır; araç çubuğu dar ekranda yatay kayar. Tuval yapışkan
 değildir; uzun araçlar sayfa kaydırılarak kullanılır. `--studio-reserved` telefonlarda
-`max(15rem, 48dvh)`, masaüstünde `21rem` olarak fotoğrafa ayrılan yüksekliği sınırlar.
+`max(15rem, 48dvh)`, masaüstünde `25rem` (bar + menü kartı alanı için 21rem'den büyütüldü) olarak fotoğrafa ayrılan yüksekliği sınırlar.
 Ölçüm hook'u dar kapsayıcılarda 240 px altına da inebilir; sahne kapsayıcıdan taşmaz.
 
 ## Üst çubuk
@@ -313,7 +378,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**297 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi).
+**312 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
