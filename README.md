@@ -68,13 +68,14 @@ Fotoğraflar'daki gibi** ince bir Liquid Glass araç barı ve onun üstünde aç
 menü kartı var (18.09.2026'da sağdaki denetçi kaldırıldı). Ayrıntı: [frontend README](frontend/README.md) →
 "Stüdyo düzeni".
 
-Faz 6'da admin API'sinin ilk bölümü (kullanıcılar, bonus krediler, kullanım
-istatistikleri) uygulandı. Admin'in verdiği krediler dönem kotasını
-büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde harcanır; her
-admin eylemi yalnızca eklemeye açık bir denetim günlüğüne yazılır. Arayüz
-tarafında `/admin` paneli (genel bakış, kullanıcılar, kullanıcı ayrıntısı ve
-zemin kütüphanesi) yöneticilere açık; yetki her istekte backend'de kontrol
-ediliyor, arayüzün bir düğmeyi gizlemesi yetkilendirme sayılmıyor. Ayrıntı:
+Faz 6'da admin API'si (kullanıcılar, bonus krediler, kullanım istatistikleri,
+zemin yönetimi, yönetici ekleme/çıkarma) uygulandı. Admin'in verdiği krediler
+dönem kotasını büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde
+harcanır; her admin eylemi yalnızca eklemeye açık bir denetim günlüğüne
+yazılır. Arayüz tarafında `/admin` paneli (genel bakış, kullanıcılar,
+kullanıcı ayrıntısı ve zemin kütüphanesi) yöneticilere açık; yetki her
+istekte backend'de kontrol ediliyor, arayüzün bir düğmeyi gizlemesi
+yetkilendirme sayılmıyor. Ayrıntı:
 [backend README](backend/README.md) → "Admin API",
 [frontend README](frontend/README.md) → "Yönetim paneli".
 
@@ -91,7 +92,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **377** (pytest + gerçek PostgreSQL/Redis) · frontend **378** (Vitest) |
+| Testler | backend **383** (pytest + gerçek PostgreSQL/Redis) · frontend **384** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -176,7 +177,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 377 test — yerel PostgreSQL ve Redis ister
+cd backend && pytest             # 383 test — yerel PostgreSQL ve Redis ister
 cd frontend && npm test          # 378 test
 cd frontend && npm run kontrol   # lint + test + build
 ```

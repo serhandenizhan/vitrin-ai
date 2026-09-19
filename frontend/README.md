@@ -1076,6 +1076,15 @@ seçimi yalnızca gösterim — sayfa elle açılsa da veri gelmez.
   idempotency anahtarını hata sonrası KORUR, başarıdan sonra YENİLER;
   **geri alma** (onaylı); **hesap silme** — e-posta birebir yazılmadan düğme
   kapalı, yönetici hesabında hiç sunulmuyor (backend de `409 admin_target`).
+- **Yönetici ekleme/çıkarma (19.09.2026, PR #25 incelemesi — Codex'in bulduğu
+  eksik: `admin_add`/`admin_remove` denetim eylemleri tanımlıydı ama kullanan
+  bir uç/arayüz yoktu).** Kullanıcı başlığının yanında "Yönetici yap" /
+  "Yöneticiliği kaldır" düğmesi; hesap silmedeki aynı desen — hedefin
+  e-postası birebir yazılana kadar onay düğmesi kapalı. `POST`/`DELETE
+  /api/admin/users/{id}/admin`'e gidiyor; son yöneticinin kaldırılması
+  backend'de `409 last_admin` ile reddedilir, arayüz bunu olduğu gibi
+  gösterir (kendi tarafında ayrı bir "son yönetici" kontrolü YOK — asıl
+  kontrol backend'de).
 - **Etiketler kaynağından:** abonelik durumları ve tahsilat türleri
   migration CHECK kısıtlarından birebir (ders 19).
 - **Zeminler (19.09.2026):** yükleme formu (JPEG/PNG/WebP/HEIC, 20 MB, paket

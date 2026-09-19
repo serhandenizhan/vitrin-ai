@@ -509,6 +509,8 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 | `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
 | `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
 | `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |
+| `POST /api/admin/users/{id}/admin` | Kullanıcıya yönetici yetkisi verir; gövdede hedefin e-postası doğrulanır (yanlış hesaba tıklanarak yapılamaz). İdempotent: zaten yönetici olan biri için ikinci istek yeni bir `admin_add` denetim satırı açmaz. `admin_users`'a önceden yalnızca doğrudan veritabanı erişimiyle satır eklenebiliyordu (PR #25 incelemesi: `admin_add`/`admin_remove` denetim eylemleri tanımlıydı ama kullanan bir uç yoktu) |
+| `DELETE /api/admin/users/{id}/admin` | Yönetici yetkisini kaldırır; aynı e-posta doğrulaması. **Son yönetici** (kendisi dahil) `409 last_admin` ile reddedilir — panel sahipsiz kalmasın diye, `DELETE /api/account`'taki son-yönetici korumasıyla aynı gerekçe |
 | `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
 | `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
 | `GET /api/admin/backgrounds` | Zemin kütüphanesinin TAMAMI (Faz 6, Kaan — `/admin` → Zeminler). `GET /api/backgrounds`ten farkı: pakete/kotaya bakmaz ve **pasif zeminleri de** döndürür (`is_active`, `tier`, `created_at` + imzalı `url`/`thumbnail_url`). Okuma ucu olduğu için hız sınırı fail-open |

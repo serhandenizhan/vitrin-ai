@@ -97,14 +97,23 @@ function DetailBody({
   return (
     <div className="space-y-5">
       <section className="glass-panel rounded-3xl p-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="min-w-0 truncate text-xl font-semibold">{detail.account.email ?? "(e-posta yok)"}</h2>
-          {billing?.is_admin ? (
-            <span className="text-gold flex items-center gap-1 text-xs font-medium">
-              <ShieldCheck className="size-4" aria-hidden />
-              Yönetici
-            </span>
-          ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 truncate text-xl font-semibold">{detail.account.email ?? "(e-posta yok)"}</h2>
+            {billing?.is_admin ? (
+              <span className="text-gold flex items-center gap-1 text-xs font-medium">
+                <ShieldCheck className="size-4" aria-hidden />
+                Yönetici
+              </span>
+            ) : null}
+          </div>
+          <AdminRoleForm
+            userId={userId}
+            email={detail.account.email}
+            isAdmin={Boolean(billing?.is_admin)}
+            disabled={!billing}
+            onChanged={onChanged}
+          />
         </div>
         <dl className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Abonelik" value={subscriptionLabel(billing?.status)} />
@@ -364,6 +373,112 @@ function GrantList({ grants, onRevoked }: { grants: CreditGrant[]; onRevoked: ()
         </p>
       ) : null}
     </ListCard>
+  );
+}
+
+/**
+ * Yönetici yetkisi verme/kaldırma (PR #25 incelemesi — `admin_add`/`admin_remove`
+ * denetim eylemleri tanımlıydı ama kullanan bir uç/arayüz yoktu).
+ *
+ * Hesap silmedeki aynı desen: yanlış hesaba tıklanarak yapılamasın diye
+ * hedefin e-postası birebir yazılana kadar düğme kapalı. Backend son
+ * yöneticinin kaldırılmasını ayrıca reddediyor (409 `last_admin`); bu arayüz
+ * onu göstermek dışında bir şey yapmıyor — asıl kontrol backend'de.
+ */
+function AdminRoleForm({
+  userId,
+  email,
+  isAdmin,
+  disabled,
+  onChanged,
+}: {
+  userId: string;
+  email: string | null;
+  isAdmin: boolean;
+  disabled: boolean;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const matches = Boolean(email) && typed.trim().toLocaleLowerCase("tr") === email!.toLocaleLowerCase("tr");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!matches) return;
+    setBusy(true);
+    setError("");
+    const result = await adminFetch(`/api/admin/users/${userId}/admin`, {
+      method: isAdmin ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: typed.trim() }),
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setOpen(false);
+    setTyped("");
+    onChanged();
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="press on-dark-muted flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs ring-1 ring-white/15 hover:text-white disabled:opacity-40"
+      >
+        <ShieldCheck className="size-3.5" aria-hidden />
+        {isAdmin ? "Yöneticiliği kaldır" : "Yönetici yap"}
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={(event) => void submit(event)} className="flex flex-wrap items-center gap-2">
+      <label className="text-sm">
+        <span className="sr-only">
+          {isAdmin ? "Yetkiyi kaldırmak için kullanıcının e-posta adresi" : "Yönetici yapmak için kullanıcının e-posta adresi"}
+        </span>
+        <input
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          placeholder={email ?? ""}
+          autoComplete="off"
+          className="min-h-9 w-56 rounded-full bg-white/8 px-3 text-sm text-white ring-1 ring-white/15 outline-none placeholder:text-white/30 focus:ring-[#d6a756]"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={!matches || busy}
+        className={
+          "press min-h-9 rounded-full px-3 text-xs font-medium disabled:opacity-40 " +
+          (isAdmin ? "bg-red-500/20 text-red-200" : "bg-gold text-black")
+        }
+      >
+        {busy ? "İşleniyor…" : isAdmin ? "Kaldır" : "Yönetici yap"}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          setTyped("");
+          setError("");
+        }}
+        className="press on-dark-muted min-h-9 rounded-full px-2 text-xs hover:text-white"
+      >
+        Vazgeç
+      </button>
+      {error ? (
+        <p role="alert" className="w-full text-xs text-red-300">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 }
 

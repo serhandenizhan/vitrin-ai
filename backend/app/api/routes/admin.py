@@ -66,6 +66,13 @@ class UserDeletionRequest(StrictModel):
     email: str = Field(min_length=1, max_length=254)
 
 
+class AdminRoleConfirmation(StrictModel):
+    # Yönetici yetkisi vermek/kaldırmak yanlış hesaba tıklanarak yapılamaz;
+    # hedefin e-postası doğrulanır (aynı `same_email` karşılaştırması, hesap
+    # silmedekiyle aynı desen).
+    email: str = Field(min_length=1, max_length=254)
+
+
 def _supabase_unavailable(exc: Exception):
     return billing_error(
         "supabase_unavailable",
@@ -296,6 +303,97 @@ async def delete_user(
         )
     await db.commit()
     return {"action_id": str(action["id"]), "status": action["status"]}
+
+
+@router.post(
+    "/api/admin/users/{user_id}/admin",
+    status_code=201,
+    dependencies=[Depends(limit_admin)],
+)
+async def add_admin(
+    user_id: uuid.UUID,
+    payload: AdminRoleConfirmation,
+    admin: CurrentUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session),
+    supabase: SupabaseAdminService = Depends(get_supabase_admin),
+) -> dict[str, bool]:
+    """Bir kullanıcıya yönetici yetkisi verir.
+
+    `admin_users`'a satır yalnızca doğrudan veritabanı erişimiyle eklenebiliyordu
+    (bkz. `app/models/admin_user.py`); bu uç var olan bir yöneticinin panelden
+    yeni bir yönetici ekleyebilmesini sağlıyor — kullanıcının KENDİSİNİ
+    yönetici yapabileceği bir yol hâlâ yok, çünkü uç `require_admin`'in
+    arkasında.
+    """
+    try:
+        target_email = await supabase.get_user_email(user_id)
+    except (SupabaseAdminConfigurationError, SupabaseAdminError) as exc:
+        raise _supabase_unavailable(exc) from exc
+    if not target_email:
+        raise billing_error("not_found", "Kullanıcı bulunamadı.", 404)
+    if not same_email(payload.email, target_email):
+        raise billing_error(
+            "confirmation_mismatch",
+            "Yönetici yapmak için kullanıcının e-posta adresini doğru yazın.",
+            400,
+        )
+
+    # İdempotent: zaten yönetici olan biri için ikinci istek olmamış bir eylemi
+    # günlüğe düşürmemeli (ders 15'in aynı sınıfı — bkz. `background_update`).
+    already = await one(db, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=user_id)
+    if not already:
+        await execute(db, "INSERT INTO admin_users(user_id) VALUES(:uid)", uid=user_id)
+        await admin_audit.record(db, admin.id, "admin_add", "user", user_id, {"email": target_email})
+    await db.commit()
+    return {"is_admin": True}
+
+
+@router.delete(
+    "/api/admin/users/{user_id}/admin",
+    dependencies=[Depends(limit_admin)],
+)
+async def remove_admin(
+    user_id: uuid.UUID,
+    payload: AdminRoleConfirmation,
+    admin: CurrentUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session),
+    supabase: SupabaseAdminService = Depends(get_supabase_admin),
+) -> dict[str, bool]:
+    """Bir kullanıcının yönetici yetkisini kaldırır.
+
+    Son yönetici (kendisi dahil) bu uçtan kaldırılamaz — panel sahipsiz
+    kalırdı ve yetkiyi geri vermenin tek yolu veritabanına elle girmek olurdu
+    (`DELETE /api/account`'taki son-yönetici korumasıyla aynı gerekçe).
+    Satırlar kilitleniyor ki iki yönetici aynı anda birbirini kaldırırken
+    ikisi de "başka biri var" görmesin.
+    """
+    try:
+        target_email = await supabase.get_user_email(user_id)
+    except (SupabaseAdminConfigurationError, SupabaseAdminError) as exc:
+        raise _supabase_unavailable(exc) from exc
+    if not target_email:
+        raise billing_error("not_found", "Kullanıcı bulunamadı.", 404)
+    if not same_email(payload.email, target_email):
+        raise billing_error(
+            "confirmation_mismatch",
+            "Yönetici yetkisini kaldırmak için kullanıcının e-posta adresini doğru yazın.",
+            400,
+        )
+
+    admins = await many(db, "SELECT user_id FROM admin_users ORDER BY user_id FOR UPDATE")
+    if not any(row["user_id"] == user_id for row in admins):
+        await db.commit()
+        return {"is_admin": False}
+    if len(admins) == 1:
+        raise billing_error(
+            "last_admin",
+            "Son yönetici yetkisi kaldırılamaz; önce başka bir yönetici ekleyin.",
+            409,
+        )
+    await execute(db, "DELETE FROM admin_users WHERE user_id=:uid", uid=user_id)
+    await admin_audit.record(db, admin.id, "admin_remove", "user", user_id, {"email": target_email})
+    await db.commit()
+    return {"is_admin": False}
 
 
 @router.post(

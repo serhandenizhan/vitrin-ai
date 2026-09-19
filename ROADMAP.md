@@ -803,7 +803,17 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 **Serhan'ın backend'i — PR 1 uygulandı (17.09.2026).** Dal
 `feature/faz-6-admin-api`, migration `0007`. Kullanıcı onayıyla kapsam dört
 madde genişletildi (zemin yönetimi uçları, denetim günlüğü, yönetici
-ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
+ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı. Zemin
+yönetimi ve denetim günlüğü PR 2 gelmeden Kaan'ın kendi dalında yapıldı
+(yukarıdaki "Zemin yönetim paneli" maddesi); **yönetici ekleme/çıkarma
+19.09.2026'da PR #25'in incelemesinde eksik bulundu (Codex) ve aynı PR'a
+eklendi:** `POST`/`DELETE /api/admin/users/{id}/admin`, hedefin e-postası
+doğrulanır (yanlış hesaba tıklanarak yapılamaz), son yönetici `409
+last_admin` ile korunur, `admin_add`/`admin_remove` denetim satırları artık
+gerçekten yazılıyor (önceden yalnızca `ACTIONS` listesinde tanımlıydılar,
+kullanan bir uç yoktu). `admin_users`'a satır hâlâ **yalnızca** bu uçlar ya da
+doğrudan veritabanı erişimiyle eklenebiliyor — kullanıcının kendini yönetici
+yapabileceği bir yol yok (`app/models/admin_user.py`).
 
 - **Kredi modeli kararı — bonus krediler ayrı tabloda (`credit_grants`).**
   `subscription_periods.quota_snapshot`, `0006`'daki `period_snapshot`

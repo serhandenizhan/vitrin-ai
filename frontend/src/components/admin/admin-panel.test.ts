@@ -186,6 +186,77 @@ describe("Bonus kredi formu — idempotency anahtarı İŞİ tanımlar", () => {
   });
 });
 
+describe("Yönetici yetkisi verme/kaldırma", () => {
+  const baseDetail = {
+    account: { id: USER_ID, email: "musteri@vitrin.example", created_at: null, last_sign_in_at: null, email_confirmed_at: null },
+    billing: {
+      status: "active", access_until: null, deletion_requested_at: null, used_this_period: 1,
+      quota_snapshot: 10, period_ends_at: null, plan_id: "free", background_tier: "basic",
+      bonus_available: 0, project_count: 0, last_usage_at: null, is_admin: false,
+    },
+    periods: [], credit_grants: [], transactions: [], consents: [], recent_usage: [], open_actions: [],
+  };
+
+  it("e-posta birebir yazılana kadar 'Yönetici yap' kapalı, doğru yazınca POST gidiyor", async () => {
+    const calls = mockFetch((url) =>
+      url.endsWith("/admin") ? Response.json({ is_admin: true }, { status: 201 }) : Response.json(baseDetail),
+    );
+    render(createElement(AdminUserDetail, { userId: USER_ID, onBack: () => {} }));
+    await screen.findByText("musteri@vitrin.example");
+
+    fireEvent.click(screen.getByRole("button", { name: "Yönetici yap" }));
+    const button = () => screen.getByRole("button", { name: "Yönetici yap" }) as HTMLButtonElement;
+    expect(button().disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Yönetici yapmak için kullanıcının e-posta adresi"), {
+      target: { value: "musteri@vitrin.example" },
+    });
+    expect(button().disabled).toBe(false);
+    fireEvent.click(button());
+
+    await waitFor(() => expect(calls.some((call) => call.init?.method === "POST" && call.url.endsWith("/admin"))).toBe(true));
+  });
+
+  it("yöneticide 'Yöneticiliği kaldır' gösteriliyor ve DELETE gidiyor", async () => {
+    const calls = mockFetch((url) =>
+      url.endsWith("/admin")
+        ? Response.json({ is_admin: false })
+        : Response.json({ ...baseDetail, billing: { ...baseDetail.billing, is_admin: true } }),
+    );
+    render(createElement(AdminUserDetail, { userId: USER_ID, onBack: () => {} }));
+    await screen.findByText("musteri@vitrin.example");
+
+    fireEvent.click(screen.getByRole("button", { name: "Yöneticiliği kaldır" }));
+    fireEvent.change(screen.getByLabelText("Yetkiyi kaldırmak için kullanıcının e-posta adresi"), {
+      target: { value: "musteri@vitrin.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Kaldır" }));
+
+    await waitFor(() => expect(calls.some((call) => call.init?.method === "DELETE" && call.url.endsWith("/admin"))).toBe(true));
+  });
+
+  it("backend reddederse (ör. son yönetici) hata gösteriliyor, form açık kalıyor", async () => {
+    mockFetch((url) =>
+      url.endsWith("/admin")
+        ? Response.json({ error: "Son yönetici yetkisi kaldırılamaz; önce başka bir yönetici ekleyin." }, { status: 409 })
+        : Response.json({ ...baseDetail, billing: { ...baseDetail.billing, is_admin: true } }),
+    );
+    render(createElement(AdminUserDetail, { userId: USER_ID, onBack: () => {} }));
+    await screen.findByText("musteri@vitrin.example");
+
+    fireEvent.click(screen.getByRole("button", { name: "Yöneticiliği kaldır" }));
+    fireEvent.change(screen.getByLabelText("Yetkiyi kaldırmak için kullanıcının e-posta adresi"), {
+      target: { value: "musteri@vitrin.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Kaldır" }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Son yönetici yetkisi kaldırılamaz; önce başka bir yönetici ekleyin.",
+    );
+  });
+});
+
 describe("Zeminler sekmesi (Faz 6, Kaan)", () => {
   const background = (over: Record<string, unknown> = {}) => ({
     id: "1f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c",
@@ -391,7 +462,12 @@ describe("Zeminler — paket, yayın durumu ve silme (19.09.2026)", () => {
       await vi.waitFor(() => expect(card().getByRole("switch", { name: "Yayına al" })).toBeTruthy());
 
       resolveRefresh(Response.json([row()]));
-      await Promise.resolve();
+      // adminFetch birden fazla mikro görev içeriyor (fetch + response.json());
+      // tek bir Promise.resolve() bunları hepsini boşaltmadığı için eskiden bu
+      // doğrulama, düzeltme olmadan da (yanlışlıkla) yeşil geçiyordu.
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(card().getByRole("switch", { name: "Yayına al" })).toBeTruthy();
     } finally {
       vi.useRealTimers();

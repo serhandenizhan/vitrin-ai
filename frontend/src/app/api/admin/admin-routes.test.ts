@@ -142,6 +142,47 @@ describe("DELETE /api/admin/users/[id]", () => {
   });
 });
 
+describe("POST/DELETE /api/admin/users/[id]/admin", () => {
+  const url = `http://localhost/api/admin/users/${USER_ID}/admin`;
+
+  it("yabancı Origin'i reddediyor, aynı Origin'i geçiriyor (POST)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST } = await import("./users/[id]/admin/route");
+    const denied = await POST(json(url, "POST", { email: "a@b.example" }, "https://kotu.test"), context(USER_ID));
+    expect(denied.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+    const sent = captureBackend(201, { is_admin: true });
+    const allowed = await POST(json(url, "POST", { email: " a@b.example " }), context(USER_ID));
+    expect(allowed.status).toBe(201);
+    expect(sent[0]).toMatchObject({ method: "POST", body: { email: "a@b.example" } });
+  });
+
+  it("yabancı Origin'i reddediyor, aynı Origin'i geçiriyor (DELETE)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { DELETE } = await import("./users/[id]/admin/route");
+    const denied = await DELETE(json(url, "DELETE", { email: "a@b.example" }, "https://kotu.test"), context(USER_ID));
+    expect(denied.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+    const sent = captureBackend(200, { is_admin: false });
+    const allowed = await DELETE(json(url, "DELETE", { email: " a@b.example " }), context(USER_ID));
+    expect(allowed.status).toBe(200);
+    expect(sent[0]).toMatchObject({ method: "DELETE", body: { email: "a@b.example" } });
+  });
+
+  it("e-posta yazılmadan backend'e gitmiyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST, DELETE } = await import("./users/[id]/admin/route");
+
+    expect((await POST(json(url, "POST", {}), context(USER_ID))).status).toBe(400);
+    expect((await DELETE(json(url, "DELETE", {}), context(USER_ID))).status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/admin/credits/[id]/revoke", () => {
   const url = `http://localhost/api/admin/credits/${KEY}/revoke`;
 
