@@ -203,7 +203,51 @@ Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
-## Stüdyo düzeni: ince bar + menü kartı (18.09.2026)
+## Stüdyo düzeni (güncel: 19.09.2026)
+
+**Masaüstü aşamalı akış** (`composition-editor.tsx` → `desktopLayout`):
+
+| Aşama | Solda | Ortada | Sağda / altta |
+|---|---|---|---|
+| 1 Sahne | — | tuval | geniş zemin kütüphanesi + biçimler (`stage-backgrounds.tsx` → `BackgroundLibrary`), ✓ |
+| 2 Düzenle | dik zemin barı (`BackgroundRail`) | tuval | panel: Yerleşim · Görünüm · Marka; ‹ Sahne / ✓ Tamamla |
+| 3 Tamamla | — | tuval | altında çıktı barı (PNG, JPEG, CMYK, WhatsApp, taslak), ‹ Düzenle |
+
+- Geçiş perdesi `stage-curtain.tsx` (CSS: `globals.css` → "Aşama geçiş perdesi"):
+  açılışta kapalı başlar ve kalkar; ✓/geri geçişlerinde iner, aşama
+  `onCovered`'da (320 ms) değişir, ~1,7 sn'de kalkar. Yedek zaman aşımı var
+  (gizli sekmede animasyon ilerlemese de perde kalkar). "Hareketi azalt"ta yok.
+- Tuval sütunu her aşamada aynı konumda; `--panel-w` ve `--studio-reserved-lg`
+  aşamaya göre inline veriliyor.
+- Üst bar adımları masaüstünde yalnız geri (`navigateRef`); "Dışa Aktar" gizli.
+- Aşağıdaki panel/zemin barı açıklamaları Aşama 2'nin paneli ve telefon için geçerli.
+
+**Masaüstü (`lg` ve üstü):** ortada tuval, hemen yanında sağda tek bir panel
+kartı, tuvalin altında ince zemin barı. Üst bar, panel ve zemin barı aynı cam
+(`liquid-glass`), arka plan `.studio-backdrop`.
+
+- **Panel:** üstte eşit sekmeli segment kontrolü (Boyut · Yerleşim · Görünüm ·
+  Marka · İndir) + kapat; altında yalnız seçili aracın gruplu listesi
+  (`PANEL_GROUP` / `PANEL_ROW`, `dock.tsx`). Bileşenler (`DockAction`, `Toggle`,
+  `Slider`, `CornerRow`, `DockStrip`) `useDockVariant()` ile panelde satır
+  biçimine geçiyor. Görünüm'de üç kaydıraç birlikte açık.
+- **Tuval:** sütun genişliği biçimin en/boy oranından (`.stage-column`,
+  `--stage-ratio`); dikey pay `--studio-reserved-lg` (tek kaynak). Panel
+  kapanınca `--panel-w` küçülür, tuval büyür. Altında biçim künyesi.
+- **Zemin barı:** seçili zeminin görseli + adı + **favori kalbi**, kategori
+  segmentleri, yuvarlak örnekler; oklar iki yandaki kenar payında.
+- **Favoriler (öne alınan iş, geçici):** yalnızca bu tarayıcıda
+  (`lib/favorite-backgrounds.ts`). Favoriler rafından seçim kullanıcıyı
+  kendi kategorisine atlatmıyor.
+- **Üst bar:** geri, `01 Sahne · 02 Düzenle · 03 Tamamla` adımları
+  (`studio-steps.ts`), kısayollar, ana menü, altın **Dışa Aktar** (İndir'i açar).
+- **Test:** jsdom'da `matchMedia` yok → `useIsDesktop()` hep telefon döner;
+  masaüstü testleri `matchMedia`'yı taklit ediyor.
+
+**Telefon:** aşağıdaki "ince bar + menü kartı" düzeni geçerli (zemin artık
+bardaki bir araç değil, tuvalin altındaki bar).
+
+### Telefon: ince bar + menü kartı (18.09.2026)
 
 Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar ve fotoğrafın
 altında **ince bir Liquid Glass bar** ile onun üstünde açılan **menü kartı**
@@ -378,7 +422,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**336 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
+**351 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu ve yansıma mesafesi).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -1034,6 +1078,17 @@ seçimi yalnızca gösterim — sayfa elle açılsa da veri gelmez.
   kapalı, yönetici hesabında hiç sunulmuyor (backend de `409 admin_target`).
 - **Etiketler kaynağından:** abonelik durumları ve tahsilat türleri
   migration CHECK kısıtlarından birebir (ders 19).
+- **Zeminler (19.09.2026):** yükleme formu (JPEG/PNG/WebP/HEIC, 20 MB, paket
+  seviyesi) + kütüphane ızgarası. Liste `GET /api/admin/backgrounds`ten geliyor
+  ve **pasif zeminleri de** gösteriyor (kullanıcıya giden listeden farkı bu).
+  Önizleme adresleri süreli imzalı R2 URL'leri; liste `expires_in` dolmadan
+  kendini yeniliyor (süre istemciye sabitlenmiyor). **Güncelleme/silme yok** —
+  kategori ve baskı uyarısı burada değil `lib/background-catalog.ts`'te.
+  Her kartta **paket seçici** (Temel / Tüm paketler) ve **Yayında** anahtarı
+  var; ikisi de `PATCH` ile gidiyor ve ekrana **sunucunun döndürdüğü** değer
+  yazılıyor (istemcinin tahmini değil — ayrışırlarsa kullanıcı yanlış paketi
+  görürdü). **Silme iki adımlı** (çöp kutusu → "Sil"/"Vazgeç") ve geri
+  alınamaz; sunucu reddederse kart listede kalır ve hata görünür.
 
 ## Ödemeler (Faz 5)
 

@@ -71,8 +71,12 @@ menü kartı var (18.09.2026'da sağdaki denetçi kaldırıldı). Ayrıntı: [fr
 Faz 6'da admin API'sinin ilk bölümü (kullanıcılar, bonus krediler, kullanım
 istatistikleri) uygulandı. Admin'in verdiği krediler dönem kotasını
 büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde harcanır; her
-admin eylemi yalnızca eklemeye açık bir denetim günlüğüne yazılır. Ayrıntı:
-[backend README](backend/README.md) → "Admin API".
+admin eylemi yalnızca eklemeye açık bir denetim günlüğüne yazılır. Arayüz
+tarafında `/admin` paneli (genel bakış, kullanıcılar, kullanıcı ayrıntısı ve
+zemin kütüphanesi) yöneticilere açık; yetki her istekte backend'de kontrol
+ediliyor, arayüzün bir düğmeyi gizlemesi yetkilendirme sayılmıyor. Ayrıntı:
+[backend README](backend/README.md) → "Admin API",
+[frontend README](frontend/README.md) → "Yönetim paneli".
 
 ### Ölçümler
 
@@ -173,7 +177,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 cd backend && pytest             # 361 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 336 test
+cd frontend && npm test          # 351 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

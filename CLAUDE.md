@@ -120,7 +120,20 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   `/admin` sayfası + `app/api/admin/**` vekilleri; yöneticilik bilgisi
   `GET /api/admin/me`'den (403 dönmez, yalnız GÖSTERİM — hesap menüsündeki
   bağlantı ve ilk ekran). Arayüzdeki etiket eşlemeleri (abonelik durumu,
-  tahsilat türü) tahminle değil migration CHECK kısıtlarından yazılır.
+  tahsilat türü) tahminle değil migration CHECK kısıtlarından yazılır. **Zemin
+  yönetimi (Kaan, 19.09.2026):** `/admin` → Zeminler; `GET /api/admin/backgrounds`
+  kütüphanenin TAMAMINI döndürür (pakete bakmaz, **pasif zeminleri de** verir —
+  panelin işi bir zeminin neden kullanıcıya gitmediğini gösterebilmek), yükleme
+  Faz 3'ten beri duran `POST /api/admin/backgrounds`. `PATCH .../{id}` paketi
+  ve yayın durumunu, `DELETE .../{id}` zemini kalıcı olarak değiştirir
+  (yazan uçlar, hız sınırı fail-closed). **Pasif, silinmiş değildir:** satır ve
+  R2 nesneleri durur, zemin yalnız kullanıcı listesinden çıkar — kütüphaneden
+  çekmenin normal yolu budur, silme geri alınamaz ve arayüzde iki adımlıdır.
+  Silmede sıra önce DB satırı sonra R2 nesneleri (ters sırası "satır duruyor,
+  dosyası yok" üretirdi — ders 25). **Hesap
+  silme EŞZAMANLI DEĞİL:** panel yalnız `deletion_requested_at` işaretleyip
+  kuyruğa `delete_account` atar, asıl silmeyi
+  `python -m app.services.billing.maintenance` yapar.
 - **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
   revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
   değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema
@@ -227,10 +240,10 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
 - **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). **Faz 5'ten beri R2 zorunlu:** arka plan kaldırma başarılı sonucu idempotency için geçici bir R2 nesnesi olarak saklamadan krediyi tüketmiyor; R2 yapılandırılmamışsa kesim hiç başlamaz ve `503 result_storage_unavailable` döner (eskiden bu cümle "kesim ve indirme akışı etkilenmez" diyordu). Yalnız arayüzü denemek için `USE_MOCK_BACKEND=true`.
 - **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 336 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 351 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, stüdyonun masaüstü aşamalı akışı ve geçiş perdesi (matchMedia taklidiyle), zemin favorileri ile gölge boyutu/yoğunluğu ve yansıma mesafesi, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Zemin kütüphanesi (öne alınan iş, 17.09.2026):** 93 zemin `backend/scripts/upload_backgrounds.py` ile R2 + `backgrounds` tablosuna "basic" olarak yüklendi; betik yükleme ucuyla aynı kontrolleri yapıp zemini aynı çözünürlükte JPEG %92'ye çevirir ve 480 px önizleme (`backgrounds/thumbs/<id>.jpg`) üretir. **Veritabanı yapısı bilinçli olarak değişmedi** (Kaan: "karışıklık olur"): kategori ve baskı uyarısı `frontend/src/lib/background-catalog.ts`'te (betikle üretilir, elle düzenlenmez), zemin kimliğine göre; katalogda olmayan zemin "Sade" sayılır. 4 kategori (`lib/background-categories.ts`): Sade, Doku & desen, Doğal & çiçekli, Lüks & koyu. Düşük çözünürlüklü 4 ChatGPT zemininde CMYK düğmesi önce "Bu görsel baskıya önerilmiyor. Yine de onaylıyor musunuz?" diye sorar — kontrol yalnız arayüzde, `/api/cmyk` hangi zeminin kullanıldığını bilmez. **Tuzak (PR #18'de KAPATILDI):** Faz 5'in hız sınırlayıcısı Redis ister ve Redis yoksa `GET /api/backgrounds` 500 veriyordu; vekil bütün 5xx'leri "200 + boş liste"ye çevirdiği için stüdyo sessizce gradyan yer tutuculara düşüyordu. Artık zemin listelemenin hız sınırı **fail-open** (para/webhook yüzeyleri fail-closed kaldı, bkz. yukarıdaki hız sınırı maddesi): Redis kapalıyken de 93 zemin dönüyor, yalnızca bir uyarı log'lanıyor. Arayüz de "kütüphane hazırlanıyor" ile "yüklenemedi"yi ayırıyor ve tekrar deneme sunuyor. Zeminler yine görünmüyorsa sıradaki şüpheli Redis değil, **R2 ayarları ya da CORS kuralı**. Yerelde Redis: `Yeni klasör\araclar\redis\` (redis-windows 8.10.1, kurulumsuz), `.claude/launch.json`'daki `redis` kaydı; backend'den önce başlatılır.
 - **Stüdyo ve katalog düzenlemeleri (öne alınan iş, 17.09.2026, Kaan):** stüdyo **A4 ile açılır**, "Kare 2000×2000" kaldırıldı (beyaz zeminli Pazaryeri duruyor). Düzenleme **üç adım**: 1 Boyut ve zemin → 2 Ürün (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma) → 3 Bitir (logo, etiket, indirme, CMYK, WhatsApp). Zemin artık **esnetilmiyor**, biçimi ortadan kırparak kaplıyor (`coverCrop`); fotoğraf/desenli zeminler yalnızca biçimin yönüne (dikey/yatay; kare = yatay) uyuyorsa listelenir, **Sade her biçimde** (`fitsOrientation`; yön katalogda, yükleme betiği ölçülerden üretir). "Işık havuzu" kaldırıldı, yerine **yansıma** (ayrı Konva katmanında `destination-in` ile silikleşen ayna kopya). **Gölge güçlendirildi** (`SHADOW` 50/34/%55): eski değer Konva'da ölçüldü, açık zeminde ~27/255, koyu zeminde ~0 koyulaşma veriyordu — önbellek teşhisi ölçümle çürütüldü, sebep zayıf değerlerdi. Katalog PNG yerine **JPEG + baskıya uygun CMYK** ve **logo** (stüdyoyla aynı depolama; `lib/print-download.ts`, `lib/logo-image.ts` ortak). Sol panelden eski çalışma ana sayfa dışındaki sayfalarda açılmıyordu: bekleyen çalışma `sessionStorage`'a yazılıp ana sayfaya gidiliyor (sağlayıcı her sayfada yeniden kuruluyor, bellek yetmez).
-- **Aynı günün sonraki turları (17.09.2026, Kaan):** indirme sonrası soru (katalog boyutunda önce "şablona ekle" → `lib/catalog-handoff.ts` ile Katalog'da "Tam sayfa", sonra "ana menüye dön"); katalogda 6 şablon, sayfa rengi ve siyah/beyaz metin (`applyTemplateColors`); logo stüdyoda ve katalogda sürüklenip kare köşelerden boyutlandırılıyor (`LogoSettings.position`), renkleri çevrilebiliyor; stüdyoda **gölge kapalı başlıyor**. **Tuzak:** Konva önbelleği `shadowEnabled` değişince yenilenmiyor, gölge aç/kapa için `clearCache()`+`cache()` şart. **Tuzak:** `sessionStorage`'tan okurken silmek geliştirmede (StrictMode, efekt iki kez) veriyi kaybettiriyor — önce oku, teslim edince sil. Bülten `/bulten` (içerik `lib/bulletin.ts`); **altın kuru yok**: ücret/lisans/yazılı izin isteyen veri kaynağı eklenmez (TCMB ticari kullanımda yazılı izin istiyor). Telefonda liste düzenleri içeriğe göre farklı (`globals.css` `.mobile-rail` yalnızca görselli listelerde; diğerleri kısa liste, açılır başlık, sekme).
+- **Aynı günün sonraki turları (17.09.2026, Kaan):** indirme sonrası soru (katalog boyutunda önce "şablona ekle" → `lib/catalog-handoff.ts` ile Katalog'da "Tam sayfa", sonra "ana menüye dön"); katalogda 6 şablon, sayfa rengi ve siyah/beyaz metin (`applyTemplateColors`); logo stüdyoda ve katalogda sürüklenip kare köşelerden boyutlandırılıyor (`LogoSettings.position`), renkleri çevrilebiliyor; stüdyoda **gölge kapalı başlıyor**. **Tuzak:** Konva önbelleği `shadowEnabled` değişince yenilenmiyor, gölge aç/kapa için `clearCache()`+`cache()` şart. **Gölge boyutu/yoğunluğu ve yansıma mesafesi (19.09.2026):** `Appearance`'a `shadowSize` (`SHADOW` çarpanı), `shadowOpacity` ve `reflectionGap` eklendi; aynı tuzak nedeniyle önbellek bu değerler değişince de yeniden alınıyor. Eski taslaklar `normalizeAppearance` ile varsayılanlara tamamlanıyor. **Tuzak:** `sessionStorage`'tan okurken silmek geliştirmede (StrictMode, efekt iki kez) veriyi kaybettiriyor — önce oku, teslim edince sil. Bülten `/bulten` (içerik `lib/bulletin.ts`); **altın kuru yok**: ücret/lisans/yazılı izin isteyen veri kaynağı eklenmez (TCMB ticari kullanımda yazılı izin istiyor). Telefonda liste düzenleri içeriğe göre farklı (`globals.css` `.mobile-rail` yalnızca görselli listelerde; diğerleri kısa liste, açılır başlık, sekme).
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - **README logosu öne alındı (Serhan, 17.09.2026):** Faz 6 kapanışı için planlanan iş, kullanıcı onayıyla şimdi yapıldı. Kök `README.md`'nin başında `docs/brand/vitrin-ai-logo-2.png` var. Marka işaretinin üç renk çeşidi de depoda duruyor: `vitrin-ai-logo.png` (beyaz), `vitrin-ai-logo-2.png` (altın), `vitrin-ai-logo-3.png` (siyah) — hepsi 1530×1040, saydam zeminli PNG. **README'de altın olan seçildi** çünkü GitHub hem açık hem koyu temada gösteriyor: beyaz çeşit açık temada, siyah çeşit koyu temada kayboluyor. İlk sürümde kullanılan `docs/brand/vitrin-ai-mark.svg` kaldırıldı (kullanıcı GitHub'da görünmediğini bildirdi). **Not:** PNG'lerdeki altın `#c9a15c`, arayüzün `--color-gold` değeri (`#d1a25b`) ile tam aynı değil; bu dosyalar arayüz bileşeninden (`frontend/src/components/brand-mark.tsx`) türetilmedi, ayrı tasarım çıktılarıdır — arayüz rengi değişirse bu dosyalar kendiliğinden güncellenmez.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
@@ -290,8 +303,32 @@ alarak büyür** — ikisi aynı eğriyle birlikte hareket eder
 (`.stage-fit-collapsed`, `.dock-card-area`). Dört kez yinelendi, sebepleri
 kalıcı ders: sağda ayrı kart → göz iki yere gidiyordu; içerik boyunda panel →
 bar her araçta kayıyordu; sabit kalın panel → görsel bütünlük bozuldu; geri
-tuşu kartı kapatıyordu → "geri" gezinmedir, kapatmak ayrı bir düğmedir. **Sağa yeni bir kart açılmaz, bar
-kalınlaştırılmaz;** yeni araç `STEP_TOOLS`'a eklenir. Zemin seçimi kategori
+tuşu kartı kapatıyordu → "geri" gezinmedir, kapatmak ayrı bir düğmedir. **Masaüstü AŞAMALI akış (19.09.2026, Kaan):** stüdyo
+masaüstünde üç gerçek aşama: **1 Sahne** (sağda geniş zemin kütüphanesi +
+biçimler, ✓ ile ilerler) → **2 Düzenle** (solda dik zemin barı, sağda
+Yerleşim · Görünüm · Marka paneli, altta ‹ Sahne / ✓ Tamamla) → **3 Tamamla**
+(yalnızca indirme seçenekleri, görselin altında, ‹ Düzenle). Her geçişte ve
+stüdyo açılışında koyu perde (`stage-curtain.tsx`; solda logo, "0N / 03" ve
+aşama adı); aşama perde KAPANINCA değişir, "hareketi azalt"ta perde yok. Üst
+bardaki adımlar masaüstünde yalnızca GERİYE tıklanır (`EditorStatus.mode`,
+`navigateRef` — efektten state değiştirilmez); "Dışa Aktar" masaüstünde gizli.
+Tuval her aşamada aynı DOM konumunda (Konva yeniden kurulmuyor). Aşama 2'de iki yan esnek ve EŞİT (`flex-1`, 17–26rem): solda ince DİK zemin barı, yuvarlak zeminler İKİ SIRA (`BackgroundRail`, yuvanın tuvale bakan kenarında), sağda panel — tuval üst barla aynı eksende kalır; panel kapanınca iki yan da 4,75rem'e iner. Aşama 2'de tuvalin altındaki künyede **Önizle**: basılı tutulunca (ya da **Boşluk** basılıyken) tutamaçlar gizlenir (`cleanView`); yazı alanlarında Boşluk normal çalışır. Ayrı önizleme aşaması yok, Aşama 3 zaten temiz görüntü. Telefon
+şimdilik eski düzende (kullanıcı kararı). **Önceki masaüstü düzeni (aynı gün;
+tasarım Claude'a bırakılmıştı):** zeminler bir araç değil, tuvalin altında **sabit,
+ince bir bar** (kategori segmentleri + yuvarlak örnekler, **Favoriler**
+rafı). Kalan araçlar (Boyut · Yerleşim · Görünüm · Marka · İndir) **sağdaki
+tek kartta** (`Dock` `variant="side"`, `lg` ve üstü): üstte eşit sekmeli
+segment kontrolü, altında yalnızca seçili aracın **gruplu listesi**
+(`PANEL_GROUP` / `PANEL_ROW`, iOS Ayarlar dili) — kaydırma gerektirmemeli.
+Altın yalnızca SEÇİLİ durumda. Tuval ve panel ekranın ortasında bir grup;
+tuval sütununun genişliği biçimden türüyor (`.stage-column`), tuval payı
+TEK kaynaktan (`--studio-reserved-lg`). Panel kapanınca `--panel-w` küçülür
+ve tuval büyür. Üst bar, panel ve zemin barı aynı cam (`liquid-glass`);
+arka plan `.studio-backdrop` (sıcak fildişi + ışık + ince doku). Telefonda
+alt bar düzeni duruyor. **Yeni araç `STEP_TOOLS`'a eklenir, ikinci bir panel
+açılmaz.** Masaüstü düzeninin testleri `matchMedia` taklidiyle
+(`composition-editor.test.ts` → "masaüstü düzeni") — jsdom'da `matchMedia`
+yok, taklit edilmezse testler yalnızca telefon düzenini sınar. Zemin seçimi kategori
 sekmeleri + ADLARIYLA YATAY şerit; paneldeki bütün şeritlerde fare tekerleği
 SAĞA/SOLA kaydırır (`use-horizontal-wheel.ts`) ve kaydırma çubuğu gizli.
 Dikey ızgara denendi ve bırakıldı: kart büyüdü, adlar kayboldu, ikinci bir
@@ -368,8 +405,11 @@ olunca karar verilecek.
 **Ölçüm (17.09.2026):** çıktı gerçekten 4 kanallı CMYK, alfasız, içinde
 "PSO Coated v3" profili gömülü (TIFF ve JPEG). **Profil 2,2 MB** ve her dosyaya
 gömülüyor: küçük bir görsel bile ~2,2 MB iniyor. Beyaz 0/0/0/0 çıkıyor (saydamlık
-beyaza düzleşiyor). Renk doğruluğu yalnızca sayısal kontrol edildi; matbaa
-provası ya da Acrobat/Photoshop ön kontrolüyle henüz doğrulanmadı.
+beyaza düzleşiyor). **18-19.09.2026: Kaan çıktıyı Photoshop'ta açıp iki kez
+kontrol etti — CMYK olarak açılıyor, çalışıyor.** Kaan'ın değerlendirmesi:
+"matbaada bir sorun çıkmaz" (19.09.2026). Fiziksel matbaa provası hâlâ
+yapılmadı; **kod tarafında yapılacak bir iş kalmadı**, açık olan tek şey
+aşağıdaki deploy adımı (profil dosyasının sunucuya konması).
 
 ### 2. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
 
@@ -390,13 +430,23 @@ Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kura
   değerleri) verilmezse hız sınırı bütün public trafiği proxy'nin tek kovasına
   koyar; sınır fiilen kalkar ve bunu yerelde fark etmenin yolu yoktur.
 
-Sağlayıcı yeni değil: aşağıdaki 5. maddede Supabase Auth için seçilen Resend'in
+Sağlayıcı yeni değil: aşağıdaki 6. maddede Supabase Auth için seçilen Resend'in
 aynısı. Fark, buradaki e-postanın Supabase'in gönderdiği kimlik doğrulama
 postası değil, uygulamanın kendi bildirimi olması — bu yüzden Supabase SMTP
 ayarından değil, kendi `RESEND_API_KEY`'imizle HTTP API'sinden gidiyor.
 Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
 
-### 4. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
+### 4. Bakım worker'ı canlıda periyodik çalışmalı — sahibi: Serhan
+
+`provider_actions` kuyruğunu (hesap silme, abonelik iptali, dunning e-postası,
+depolama temizliği) işleyen tek şey `python -m app.services.billing.maintenance`.
+Bir servis olarak kurulu değil; 19.09.2026'da test hesabının silinmesi elle
+çalıştırılana kadar "sırada" kaldı. **Canlıda periyodik çalıştırılmazsa
+(systemd timer / cron) hiçbir silme talebi, iptal ya da ödeme bildirimi
+tamamlanmaz** — arayüz "işlem sırada" der ve süresiz orada kalır. Yerelde bu
+fark edilmiyor çünkü kuyruk zaten boş duruyor.
+
+### 5. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
 
 KVKK Aydınlatma Metni, Gizlilik Politikası ve Kullanım Koşulları yayımlandı;
 kayıtlar sunucu zamanlı, istemciden değiştirilemeyen `user_consents` tablosuna
@@ -406,7 +456,7 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
 
-### 5. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
+### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 
 Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
 e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"

@@ -53,3 +53,8 @@ build/
 # dosyalari, kalici proje dokumantasyonu degil (bkz. CLAUDE.md, docs/superpowers
 # repodan cikarildi).
 docs/superpowers/
+
+# Geri bildirim icin repo koklerine birakilan ekran goruntuleri — asla
+# commit edilmez (19.09.2026: iki tanesi kok dizinde bulunup silindi).
+/Ekran görüntüsü*.png
+/screenshot*.png

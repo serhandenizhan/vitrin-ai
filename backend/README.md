@@ -511,6 +511,9 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 | `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |
 | `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
 | `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
+| `GET /api/admin/backgrounds` | Zemin kütüphanesinin TAMAMI (Faz 6, Kaan — `/admin` → Zeminler). `GET /api/backgrounds`ten farkı: pakete/kotaya bakmaz ve **pasif zeminleri de** döndürür (`is_active`, `tier`, `created_at` + imzalı `url`/`thumbnail_url`). Okuma ucu olduğu için hız sınırı fail-open |
+| `PATCH /api/admin/backgrounds/{id}` | Zeminin paketini (`tier`) ve yayın durumunu (`is_active`) değiştirir (Faz 6, Kaan). **Pasif, silinmiş değildir:** satır ve R2 nesneleri durur, zemin yalnız kullanıcı listesinden çıkar. Denetim satırı yalnız durum gerçekten değişince yazılır; hız sınırı yazan uç olduğu için fail-closed |
+| `DELETE /api/admin/backgrounds/{id}` | Zemini kalıcı siler — **geri alınamaz**. Sıra bilinçli: önce DB satırı, sonra R2 nesneleri (ters sırada "satır duruyor, dosyası yok" çıkardı — ders 25). Nesne silme patlarsa yalnız yer tutan dosya kalır, istek yine başarılı döner |
 | `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
 
 **Bonus krediler dönem kotasının DIŞINDADIR.** `subscription_periods.quota_snapshot`
