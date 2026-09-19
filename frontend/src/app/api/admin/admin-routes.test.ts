@@ -202,3 +202,185 @@ describe("GET vekilleri", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+
+describe("/api/admin/backgrounds (zemin yönetimi)", () => {
+  const url = "http://localhost/api/admin/backgrounds";
+
+  /** Cok parcali (multipart) istek: govde JSON degil, ayri bir yakalayici gerekiyor. */
+  function captureUpload(status = 201, body: unknown = { id: "yeni" }) {
+    const sent: { url: string; method: string; form: FormData | null }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      sent.push({
+        url: String(input),
+        method: init?.method ?? "GET",
+        form: init?.body instanceof FormData ? init.body : null,
+      });
+      return Response.json(body, { status });
+    });
+    return sent;
+  }
+
+  function upload(file: File, tier = "basic", origin = "http://localhost") {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("tier", tier);
+    return new Request(url, { method: "POST", headers: { Origin: origin }, body: form });
+  }
+
+  const png = () => new File([new Uint8Array([1, 2, 3])], "zemin.png", { type: "image/png" });
+
+  it("yabancı Origin'i backend'e gitmeden reddediyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST } = await import("./backgrounds/route");
+
+    const response = await POST(upload(png(), "basic", "https://kotu.test"));
+
+    expect(response.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("aynı Origin'i GEÇİRİYOR ve dosyayı backend'e iletiyor", async () => {
+    const sent = captureUpload();
+    const { POST } = await import("./backgrounds/route");
+
+    const response = await POST(upload(png()));
+
+    expect(response.status).toBe(201);
+    expect(sent[0].url).toContain("/api/admin/backgrounds");
+    expect(sent[0].method).toBe("POST");
+    expect((sent[0].form?.get("file") as File).name).toBe("zemin.png");
+  });
+
+  it("gövdeyi yeniden kuruyor: fazladan alan backend'e gitmiyor", async () => {
+    const sent = captureUpload();
+    const form = new FormData();
+    form.append("file", png());
+    form.append("tier", "full");
+    form.append("is_active", "false");
+    const { POST } = await import("./backgrounds/route");
+
+    await POST(new Request(url, { method: "POST", headers: { Origin: "http://localhost" }, body: form }));
+
+    expect(sent[0].form?.get("tier")).toBe("full");
+    expect(sent[0].form?.get("is_active")).toBeNull();
+  });
+
+  it("bilinmeyen paket seviyesini reddediyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST } = await import("./backgrounds/route");
+
+    const response = await POST(upload(png(), "premium"));
+
+    expect(response.status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("desteklenmeyen türü backend'e gitmeden reddediyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { POST } = await import("./backgrounds/route");
+
+    const response = await POST(upload(new File(["x"], "not.txt", { type: "text/plain" })));
+
+    expect(response.status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("Windows'ta boş content-type gelen .heic'i uzantıdan düzeltiyor", async () => {
+    const sent = captureUpload();
+    const { POST } = await import("./backgrounds/route");
+
+    await POST(upload(new File([new Uint8Array([1])], "foto.heic", { type: "" })));
+
+    expect((sent[0].form?.get("file") as File).type).toBe("image/heic");
+  });
+
+  it("listede backend'in hatasını olduğu gibi iletiyor", async () => {
+    captureBackend(403, { detail: "Bu işlem için yönetici yetkisi gerekiyor." });
+    const { GET } = await import("./backgrounds/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(403);
+  });
+});
+
+describe("/api/admin/backgrounds/[id] (paket, yayın durumu, silme)", () => {
+  const BG = "1f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c";
+  const url = `http://localhost/api/admin/backgrounds/${BG}`;
+
+  it("yabancı Origin'i backend'e gitmeden reddediyor (hem PATCH hem DELETE)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { PATCH, DELETE } = await import("./backgrounds/[id]/route");
+
+    const patched = await PATCH(json(url, "PATCH", { tier: "full" }, "https://kotu.test"), context(BG));
+    const deleted = await DELETE(
+      new Request(url, { method: "DELETE", headers: { Origin: "https://kotu.test" } }),
+      context(BG),
+    );
+
+    expect(patched.status).toBe(403);
+    expect(deleted.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("aynı Origin'i GEÇİRİYOR ve alan adlarını backend sözleşmesine çeviriyor", async () => {
+    const sent = captureBackend(200, { id: BG, tier: "full", is_active: false });
+    const { PATCH } = await import("./backgrounds/[id]/route");
+
+    const response = await PATCH(json(url, "PATCH", { tier: "full", isActive: false }), context(BG));
+
+    expect(response.status).toBe(200);
+    expect(sent[0].method).toBe("PATCH");
+    expect(sent[0].body).toEqual({ tier: "full", is_active: false });
+  });
+
+  it("gövdeyi yeniden kuruyor: bilinmeyen alan backend'e gitmiyor", async () => {
+    const sent = captureBackend(200, { id: BG, tier: "basic", is_active: true });
+    const { PATCH } = await import("./backgrounds/[id]/route");
+
+    await PATCH(json(url, "PATCH", { isActive: true, r2_key: "backgrounds/baska.jpg" }), context(BG));
+
+    expect(sent[0].body).toEqual({ is_active: true });
+  });
+
+  it("boş gövdeyi ve geçersiz değerleri backend'e gitmeden reddediyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { PATCH } = await import("./backgrounds/[id]/route");
+
+    expect((await PATCH(json(url, "PATCH", {}), context(BG))).status).toBe(400);
+    expect((await PATCH(json(url, "PATCH", { tier: "premium" }), context(BG))).status).toBe(400);
+    expect((await PATCH(json(url, "PATCH", { isActive: "evet" }), context(BG))).status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("UUID olmayan kimliği backend'e gitmeden 404 yapıyor", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { DELETE } = await import("./backgrounds/[id]/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/admin/backgrounds/..%2Fusers", {
+        method: "DELETE",
+        headers: { Origin: "http://localhost" },
+      }),
+      context("../users"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("silmeyi backend'e iletiyor", async () => {
+    const sent = captureBackend(200, { id: BG });
+    const { DELETE } = await import("./backgrounds/[id]/route");
+
+    const response = await DELETE(
+      new Request(url, { method: "DELETE", headers: { Origin: "http://localhost" } }),
+      context(BG),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sent[0].method).toBe("DELETE");
+    expect(sent[0].url).toContain(`/api/admin/backgrounds/${BG}`);
+  });
+});

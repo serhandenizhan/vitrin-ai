@@ -99,6 +99,17 @@ export type AdminUserDetail = {
   }[];
 };
 
+/** Zemin yönetim paneli satırı. Sözleşme: `GET /api/admin/backgrounds`. */
+export type AdminBackground = {
+  id: string;
+  tier: "basic" | "full";
+  is_active: boolean;
+  created_at: string;
+  url: string;
+  thumbnail_url: string;
+  expires_in: number;
+};
+
 export type AdminStats = {
   days: number;
   usage: { today: number; last_7_days: number; last_30_days: number; all_time: number };

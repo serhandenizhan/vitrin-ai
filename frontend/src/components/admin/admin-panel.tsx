@@ -10,8 +10,9 @@
  */
 
 import { useState } from "react";
-import { BarChart3, Users } from "lucide-react";
+import { BarChart3, Images, Users } from "lucide-react";
 
+import { AdminBackgrounds } from "@/components/admin/admin-backgrounds";
 import { AdminOverview } from "@/components/admin/admin-overview";
 import { AdminUserDetail } from "@/components/admin/admin-user-detail";
 import { AdminUsers } from "@/components/admin/admin-users";
@@ -19,7 +20,7 @@ import { useAdminStatus } from "@/components/admin/use-admin-status";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "users";
+type Tab = "overview" | "users" | "backgrounds";
 
 export function AdminPanel() {
   const { user, openSignIn } = useWorkspace();
@@ -69,6 +70,7 @@ export function AdminPanel() {
           [
             ["overview", "Genel bakış", BarChart3],
             ["users", "Kullanıcılar", Users],
+            ["backgrounds", "Zeminler", Images],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -95,6 +97,8 @@ export function AdminPanel() {
       <div key={tab + (openUserId ?? "")} className="soft-fade mt-10">
         {tab === "overview" ? (
           <AdminOverview />
+        ) : tab === "backgrounds" ? (
+          <AdminBackgrounds />
         ) : openUserId ? (
           <AdminUserDetail userId={openUserId} onBack={() => setOpenUserId(null)} />
         ) : (

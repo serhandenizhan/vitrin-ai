@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -183,5 +183,188 @@ describe("Bonus kredi formu — idempotency anahtarı İŞİ tanımlar", () => {
 
     expect(screen.queryByRole("button", { name: "Hesabı sil" })).toBeNull();
     expect(screen.getByText(/Yönetici hesapları panelden silinemez/)).toBeTruthy();
+  });
+});
+
+describe("Zeminler sekmesi (Faz 6, Kaan)", () => {
+  const background = (over: Record<string, unknown> = {}) => ({
+    id: "1f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c",
+    tier: "basic",
+    is_active: true,
+    created_at: "2026-09-18T10:00:00Z",
+    url: "https://signed.example/bg.jpg",
+    thumbnail_url: "https://signed.example/thumb.jpg",
+    expires_in: 900,
+    ...over,
+  });
+
+  /** Panele yonetici olarak girip Zeminler sekmesini acar. */
+  async function openTab(handler: Handler) {
+    const calls = mockFetch((url, init) =>
+      url === "/api/admin/me"
+        ? Response.json({ is_admin: true })
+        : url.startsWith("/api/admin/stats")
+          ? Response.json(stats)
+          : handler(url, init),
+    );
+    render(createElement(AdminPanel));
+    fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));
+    return calls;
+  }
+
+  it("pasif zemini de listeliyor ve sayıyor (panelin kullanıcı listesinden farkı)", async () => {
+    await openTab(() => Response.json([background(), background({ id: "2f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c", is_active: false, tier: "full" })]));
+
+    expect(await screen.findByText("1 yayında · 2 toplam")).toBeTruthy();
+    expect(screen.getByText("Pasif")).toBeTruthy();
+    // Her kartta paket secici var; "full" olan zeminde o dugme basili olmali.
+    const cards = within(screen.getByRole("list")).getAllByRole("button", { name: "Tüm paketler" });
+    expect(cards.map((button) => button.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+  });
+
+  it("liste alınamazsa hatayı gösteriyor, boş kütüphane gibi davranmıyor", async () => {
+    await openTab(() => Response.json({ error: "Zeminler yüklenemedi." }, { status: 503 }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Zeminler yüklenemedi.");
+    expect(screen.queryByText("Henüz zemin yok.")).toBeNull();
+  });
+
+  it("yükleme sonrası listeyi yeniliyor", async () => {
+    let listed = 0;
+    const calls = await openTab((url, init) => {
+      if (init?.method === "POST") return Response.json({ id: "yeni" }, { status: 201 });
+      listed += 1;
+      return Response.json(listed === 1 ? [] : [background()]);
+    });
+    expect(await screen.findByText("Henüz zemin yok.")).toBeTruthy();
+
+    const input = screen.getByLabelText("Zemin görseli") as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "zemin.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [file] });
+    fireEvent.change(input);
+    fireEvent.click(screen.getByRole("button", { name: "Yükle" }));
+
+    expect(await screen.findByRole("status")).toHaveProperty("textContent", "zemin.png yüklendi.");
+    await waitFor(() => expect(listed).toBe(2));
+    expect(calls.some((call) => call.init?.method === "POST")).toBe(true);
+  });
+
+  it("desteklenmeyen dosya türünü sunucuya hiç göndermiyor", async () => {
+    const calls = await openTab(() => Response.json([]));
+    await screen.findByText("Henüz zemin yok.");
+
+    const input = screen.getByLabelText("Zemin görseli") as HTMLInputElement;
+    Object.defineProperty(input, "files", {
+      value: [new File(["x"], "not.txt", { type: "text/plain" })],
+    });
+    fireEvent.change(input);
+    fireEvent.click(screen.getByRole("button", { name: "Yükle" }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Desteklenmeyen dosya türü. JPEG, PNG, WebP veya HEIC bir fotoğraf seçin.",
+    );
+    expect(calls.some((call) => call.init?.method === "POST")).toBe(false);
+  });
+});
+
+describe("Zeminler — paket, yayın durumu ve silme (19.09.2026)", () => {
+  const BG = "1f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c";
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: BG,
+    tier: "basic",
+    is_active: true,
+    created_at: "2026-09-18T10:00:00Z",
+    url: "https://signed.example/bg.jpg",
+    thumbnail_url: "https://signed.example/thumb.jpg",
+    expires_in: 900,
+    ...over,
+  });
+
+  async function openTab(handler: Handler) {
+    const calls = mockFetch((url, init) =>
+      url === "/api/admin/me"
+        ? Response.json({ is_admin: true })
+        : url.startsWith("/api/admin/stats")
+          ? Response.json(stats)
+          : handler(url, init),
+    );
+    render(createElement(AdminPanel));
+    fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));
+    return calls;
+  }
+
+  /** Kart icindeki dugmeler (yukleme formundakilerle ayni adi tasiyor). */
+  function card() {
+    return within(screen.getByRole("list"));
+  }
+
+  it("paketi değiştirince SUNUCUNUN döndürdüğü değeri gösteriyor", async () => {
+    const calls = await openTab((url, init) =>
+      init?.method === "PATCH"
+        ? Response.json({ id: BG, tier: "full", is_active: true })
+        : Response.json([row()]),
+    );
+    await screen.findByRole("list");
+
+    fireEvent.click(card().getByRole("button", { name: "Tüm paketler" }));
+
+    await waitFor(() =>
+      expect(card().getByRole("button", { name: "Tüm paketler" }).getAttribute("aria-pressed")).toBe("true"),
+    );
+    const patch = calls.find((call) => call.init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.init?.body))).toEqual({ tier: "full" });
+  });
+
+  it("pasife alınca kart 'Yayına al' diyor — silme İSTEĞİ GİTMİYOR", async () => {
+    const calls = await openTab((url, init) =>
+      init?.method === "PATCH"
+        ? Response.json({ id: BG, tier: "basic", is_active: false })
+        : Response.json([row()]),
+    );
+    await screen.findByRole("list");
+
+    fireEvent.click(card().getByRole("switch"));
+
+    expect(await card().findByRole("switch", { name: "Yayına al" })).toBeTruthy();
+    expect(calls.some((call) => call.init?.method === "DELETE")).toBe(false);
+  });
+
+  it("silme İKİ ADIMLI: ilk tıklama onay sorar, istek gitmez", async () => {
+    const calls = await openTab(() => Response.json([row()]));
+    await screen.findByRole("list");
+
+    fireEvent.click(card().getByRole("button", { name: "Zemini sil" }));
+
+    expect(card().getByRole("button", { name: "Sil" })).toBeTruthy();
+    expect(calls.some((call) => call.init?.method === "DELETE")).toBe(false);
+  });
+
+  it("onaydan sonra siliyor ve kartı listeden çıkarıyor", async () => {
+    await openTab((url, init) =>
+      init?.method === "DELETE" ? Response.json({ id: BG }) : Response.json([row()]),
+    );
+    await screen.findByRole("list");
+
+    fireEvent.click(card().getByRole("button", { name: "Zemini sil" }));
+    fireEvent.click(card().getByRole("button", { name: "Sil" }));
+
+    await waitFor(() => expect(screen.queryByRole("list")).toBeNull());
+    expect(screen.getByText("Henüz zemin yok.")).toBeTruthy();
+  });
+
+  it("sunucu reddederse kart LİSTEDE KALIR ve hata görünür", async () => {
+    await openTab((url, init) =>
+      init?.method === "DELETE"
+        ? Response.json({ error: "Zemin silinemedi." }, { status: 502 })
+        : Response.json([row()]),
+    );
+    await screen.findByRole("list");
+
+    fireEvent.click(card().getByRole("button", { name: "Zemini sil" }));
+    fireEvent.click(card().getByRole("button", { name: "Sil" }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Zemin silinemedi.");
+    expect(screen.getByRole("list")).toBeTruthy();
   });
 });
