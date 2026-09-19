@@ -456,3 +456,25 @@ async def test_stats_counts_real_usage_and_grants(
     assert dict(
         (row["status"], row["count"]) for row in body["subscriptions_by_status"]
     ) == {"active": 2}
+
+
+async def test_stats_outstanding_excludes_expired_credit_grants(
+    client, people, tokens, db_session
+):
+    admin_id, user_id = people
+    await execute(
+        db_session,
+        """INSERT INTO credit_grants(
+             user_id,amount,reason,granted_by,idempotency_key,expires_at
+           ) VALUES(:user_id,10,'süresi dolmuş',:admin_id,:key,clock_timestamp()-interval '1 day')""",
+        user_id=user_id,
+        admin_id=admin_id,
+        key=str(uuid.uuid4()),
+    )
+    await db_session.commit()
+
+    body = (
+        await client.get("/api/admin/stats?days=30", headers=tokens.headers(admin_id))
+    ).json()
+
+    assert body["credit_grants"] == {"granted": 10, "used": 0, "outstanding": 0}

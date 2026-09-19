@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.main import app
 from app.models.background import Background
+from app.models.project import Project
 from app.services import storage as storage_module
 from app.services.billing import limits
 
@@ -189,6 +190,35 @@ async def test_happy_path_uploads_and_creates_row(db_session, admin_headers):
     row = result.scalar_one()
     assert row.r2_key == f"backgrounds/{background_id}.jpg"
     assert row.is_active is True
+
+    from app.services.billing.db import many
+
+    audit = await many(
+        db_session,
+        "SELECT actor_id,action,detail FROM admin_audit_log WHERE subject_id=:id",
+        id=str(background_id),
+    )
+    assert len(audit) == 1
+    assert audit[0]["action"] == "background_create"
+    assert audit[0]["detail"]["tier"] == "basic"
+
+
+async def test_upload_rate_limit_is_fail_closed(db_session, admin_headers, monkeypatch):
+    async def _redis_down(_key: str):
+        raise RedisConnectionError("Redis kapalı")
+
+    monkeypatch.setattr(limits.admin_limiter, "retry_after", _redis_down)
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 500
+    storage_mock.upload.assert_not_called()
 
 
 async def test_r2_upload_failure_returns_502_and_creates_no_row(db_session, admin_headers):
@@ -591,6 +621,34 @@ async def test_delete_background_succeeds_even_if_storage_fails(db_session, admi
 
     assert response.status_code == 200
     assert (await db_session.execute(select(Background))).scalars().all() == []
+
+
+async def test_delete_background_rejects_a_saved_draft_reference(
+    db_session, admin_headers, create_user
+):
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    owner = await create_user()
+    project = Project(
+        id=uuid.uuid4(),
+        user_id=owner,
+        file_name="yuzuk.jpg",
+        result_r2_key=f"projects/{owner}/result.png",
+        thumbnail_r2_key=f"projects/{owner}/thumb.png",
+        editor_state={"backgroundId": str(bg.id)},
+    )
+    db_session.add_all([bg, project])
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın."
+    )
+    assert await db_session.scalar(select(Background).where(Background.id == bg.id))
+    storage_mock.delete.assert_not_called()
 
 
 async def test_delete_background_requires_admin_and_writes_audit(db_session, tokens, create_user, admin_headers):

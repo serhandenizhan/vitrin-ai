@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.main import app
+from app.models.background import Background
 from app.models.project import Project
 from app.services import storage as storage_module
 from app.services.storage import get_storage_service
@@ -511,6 +512,47 @@ async def test_patch_own_project_completes_and_stores_editor_state(db_session, t
     stored = await _reload(db_session, project.id)
     assert stored.workflow_status == "completed" and stored.downloaded_at is not None
     assert stored.editor_state == {"format": "a4", "scale": 1.2}
+
+
+async def test_patch_editor_state_synchronizes_the_background_foreign_key(
+    db_session, tokens, create_user
+):
+    owner = await create_user()
+    background = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    background_id = background.id
+    db_session.add(background)
+    await db_session.commit()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"editor_state": '{"backgroundId":"' + str(background_id) + '"}'},
+        headers=tokens.headers(owner),
+    )
+
+    assert response.status_code == 200
+    stored = await _reload(db_session, project.id)
+    assert stored.background_id == background_id
+
+
+async def test_patch_editor_state_rejects_a_missing_server_background(
+    db_session, tokens, create_user
+):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    missing = uuid.uuid4()
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"editor_state": '{"backgroundId":"' + str(missing) + '"}'},
+        headers=tokens.headers(owner),
+    )
+
+    assert response.status_code == 409
+    stored = await _reload(db_session, project.id)
+    assert stored.editor_state is None and stored.background_id is None
 
 
 async def test_patch_back_to_draft_clears_download_time_and_keeps_editor_state(

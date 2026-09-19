@@ -476,7 +476,10 @@ async def stats(
             db,
             """SELECT COALESCE(sum(amount),0)::int AS granted,
              COALESCE(sum(used),0)::int AS used,
-             COALESCE(sum(amount-used) FILTER (WHERE revoked_at IS NULL),0)::int AS outstanding
+             COALESCE(sum(amount-used) FILTER (
+               WHERE revoked_at IS NULL
+               AND (expires_at IS NULL OR expires_at>clock_timestamp())
+             ),0)::int AS outstanding
             FROM credit_grants""",
         ),
         "daily_usage": await _daily(db, "usage", days),

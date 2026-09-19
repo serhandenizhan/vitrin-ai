@@ -367,4 +367,34 @@ describe("Zeminler — paket, yayın durumu ve silme (19.09.2026)", () => {
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Zemin silinemedi.");
     expect(screen.getByRole("list")).toBeTruthy();
   });
+
+  it("mutasyondan önce başlayan periyodik GET, yeni durumu geri alamıyor", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let listCalls = 0;
+      let resolveRefresh!: (response: Response) => void;
+      await openTab((url, init) => {
+        if (init?.method === "PATCH") {
+          return Response.json({ id: BG, tier: "basic", is_active: false });
+        }
+        listCalls += 1;
+        if (listCalls === 1) return Response.json([row({ expires_in: 60 })]);
+        return new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        });
+      });
+      await screen.findByRole("list");
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.waitFor(() => expect(listCalls).toBe(2));
+      fireEvent.click(card().getByRole("switch"));
+      await vi.waitFor(() => expect(card().getByRole("switch", { name: "Yayına al" })).toBeTruthy());
+
+      resolveRefresh(Response.json([row()]));
+      await Promise.resolve();
+      expect(card().getByRole("switch", { name: "Yayına al" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

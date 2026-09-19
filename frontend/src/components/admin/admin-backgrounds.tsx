@@ -55,19 +55,24 @@ export function AdminBackgrounds() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rowError, setRowError] = useState("");
+  /** Mutasyondan önce başlamış liste isteğinin yeni sonucu ezmesini engeller. */
+  const mutationVersionRef = useRef(0);
 
   // setState efekt GOVDESINDE cagrilmiyor, istegin then'inde: efektten dogrudan
   // state degistirmek React 19 lint kuralini (`set-state-in-effect`) ihlal
   // ediyor ve gereksiz bir ekstra render turu aciyor.
   const load = useCallback(
-    () =>
-      adminFetch<AdminBackground[]>("/api/admin/backgrounds").then((result) => {
+    () => {
+      const startedAtVersion = mutationVersionRef.current;
+      return adminFetch<AdminBackground[]>("/api/admin/backgrounds").then((result) => {
+        if (startedAtVersion !== mutationVersionRef.current) return;
         setState(
           result.ok
             ? { status: "ready", items: result.data }
             : { status: "error", error: result.error },
         );
-      }),
+      });
+    },
     [],
   );
 
@@ -107,6 +112,7 @@ export function AdminBackgrounds() {
       setError(result.error);
       return;
     }
+    mutationVersionRef.current += 1;
     setDone(file.name + " yüklendi.");
     setFile(null);
     if (inputRef.current) inputRef.current.value = "";
@@ -130,6 +136,7 @@ export function AdminBackgrounds() {
       setRowError(result.error);
       return;
     }
+    mutationVersionRef.current += 1;
     // Sunucunun DONDURDUGU deger yaziliyor, istemcinin tahmini degil: iki taraf
     // ayrisirsa ekranda yanlis paket gorunur ve kullanici bunu fark edemez.
     setState((current) =>
@@ -156,6 +163,7 @@ export function AdminBackgrounds() {
       setRowError(result.error);
       return;
     }
+    mutationVersionRef.current += 1;
     setConfirmId(null);
     setState((current) =>
       current.status === "ready"

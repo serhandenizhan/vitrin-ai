@@ -12,7 +12,7 @@ import uuid
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, require_admin
@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.services import admin_audit
 from app.models.background import Background
+from app.models.project import Project
 from app.services.background_images import make_thumbnail, thumbnail_key
 from app.services.storage import (
     R2StorageService,
@@ -45,11 +46,12 @@ CONTENT_TYPE_TO_EXTENSION = {
     # Faz 3'teki geçici `X-Admin-Secret` paylaşılan secret'ı Faz 4'te kaldırıldı
     # (kök CLAUDE.md ders 8'deki geçici çözüm kapandı). Artık geçerli bir
     # Supabase oturumu VE `admin_users` tablosunda kayıt gerekiyor.
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
 )
 async def create_background(
     file: UploadFile = File(...),
     tier: Literal["basic", "full"] = Form("basic"),
+    admin: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict[str, str]:
@@ -109,8 +111,17 @@ async def create_background(
 
     try:
         db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
+        await admin_audit.record(
+            db,
+            admin.id,
+            "background_create",
+            "background",
+            str(background_id),
+            {"r2_key": r2_key, "tier": tier},
+        )
         await db.commit()
     except Exception:
+        await db.rollback()
         await delete_objects_quietly(storage, uploaded)
         raise
 
@@ -240,13 +251,34 @@ async def delete_background(
     zemin gösterilir. Nesne silme patlarsa yalnızca yer tutan bir dosya kalır
     ve bu log'lanır.
 
-    Geçmiş çalışmalar bu zemini kullanmış olabilir; onlar sonucu kendi PNG'si
-    olarak sakladığı için etkilenmez.
+    Kayıtlı çalışma zemini sonuç PNG'sine gömülü değildir; stüdyo taslağında
+    kimlikle tutulur. Bu yüzden kullanımda olan zemin kalıcı silinmez, normal
+    kaldırma yolu olan pasife alma kullanılır.
     """
-    result = await db.execute(select(Background).where(Background.id == background_id))
+    result = await db.execute(
+        select(Background)
+        .where(Background.id == background_id)
+        .with_for_update()
+    )
     background = result.scalar_one_or_none()
     if background is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zemin bulunamadı.")
+
+    referenced_project = await db.scalar(
+        select(Project.id)
+        .where(
+            or_(
+                Project.background_id == background_id,
+                Project.editor_state["backgroundId"].as_string() == str(background_id),
+            )
+        )
+        .limit(1)
+    )
+    if referenced_project is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın.",
+        )
 
     r2_key = background.r2_key
     await db.delete(background)

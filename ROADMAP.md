@@ -894,8 +894,8 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
       yapıldı — **PR'da Serhan'a ayrıca belirtilecek**.
       `PATCH /api/admin/backgrounds/{id}` paketi ve yayın durumunu,
       `DELETE` zemini kalıcı olarak değiştirir. Denetim eylemleri
-      (`background_update`/`background_delete`) `admin_audit.ACTIONS`'ta zaten
-      tanımlıydı, migration gerekmedi.
+      (`background_create`/`background_update`/`background_delete`)
+      `admin_audit.ACTIONS` ile sınırlandırılır, migration gerekmez.
     - **Zeminlerin hepsi şimdilik `basic` kalıyor (Kaan'ın kararı,
       19.09.2026).** `full` seviyesinin karşılığı olan bir plan sürümü henüz
       yayımlanmadı (veritabanında yalnız Deneme v1 var, o da `basic`); bir
@@ -919,6 +919,24 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     yapıyor. Yerelde bu worker çalışmadığı için panel "işlem sırada" diyordu —
     canlıda periyodik çalıştırılmazsa hiçbir silme talebi tamamlanmaz
     (`CLAUDE.md` açık takip maddesi).
+  - **PR #25 → Serhan devralma listesi (19.09.2026):** açık ve Serhan'a
+    atanmış tek yeni iş, production'da
+    `python -m app.services.billing.maintenance` için tekil/periyodik bir
+    çalıştırıcı kurmak, hata alarmını bağlamak ve gerçek bir kuyruk kaydının
+    `succeeded` olduğunu doğrulamaktır. `GET /api/admin/me` ile zemin
+    `PATCH`/`DELETE` uçları Serhan'ın alanı/PR 2 kapsamı diye işaretlenmiş olsa
+    da PR #25'te Kaan tarafından tamamlandı; PR 2 bunları yeniden yazmayacak,
+    yalnız dal çakışması kontrol edilecek. CMYK production profili Kaan'ın
+    sorumluluğunda; tarayıcıdaki zemin favorilerini hesaba bağlama işi bu PR'da
+    Serhan'a atanmış değildir.
+  - **PR #25 bağımsız inceleme düzeltmeleri (19.09.2026):** zemin yükleme artık
+    fail-closed admin hız sınırından geçiyor ve `background_create` audit izi
+    yazıyor. Kayıtlı taslağın kullandığı zemin kalıcı silinemiyor (`409`, pasife
+    alma öneriliyor); yeni taslaklarda `editor_state.backgroundId` aynı zamanda
+    `projects.background_id` FK alanına yazılarak bu kural DB seviyesinde de
+    korunuyor. Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
+    dışlıyor; panelde mutasyondan önce başlamış liste cevabı yeni durumu artık
+    geri alamıyor.
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
