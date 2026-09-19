@@ -679,6 +679,37 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   - Stüdyoda 4 kategori sekmesi: Sade (41), Doku & desen (22), Doğal & çiçekli (16),
     Lüks & koyu (14). Düşük çözünürlüklü 4 ChatGPT zemininde CMYK indirmeden önce
     onay penceresi.
+  - **Öne alınan iş — stüdyonun aşamalı akışı (Kaan'ın isteği, 19.09.2026).**
+    Masaüstünde Sahne → Düzenle → Tamamla gerçek ekranlar ve geçiş perdesi
+    (ayrıntı: `CLAUDE.md` "Araç yüzeyi", `frontend/README.md` "Stüdyo düzeni").
+    Telefon şimdilik eski düzende; aşamalı akışın telefona uyarlanması açık iş.
+    - **1 Sahne:** sağda geniş zemin kütüphanesi + çıktı biçimleri, ✓ ile
+      ilerler. **2 Düzenle:** solda dik zemin barı (yuvarlak zeminler iki
+      sıra), sağda Yerleşim · Görünüm · Marka paneli, altta ‹ Sahne / ✓
+      Tamamla. **3 Tamamla:** yalnız indirme seçenekleri, görselin altında.
+    - Perde `stage-curtain.tsx` (solda logo, "0N / 03", aşama perde KAPANINCA
+      değişir; "hareketi azalt" açıkken perde yok). Tuval her aşamada aynı DOM
+      konumunda — Konva sahnesi yeniden kurulmuyor.
+    - Üst bardaki adımlar masaüstünde yalnız GERİYE tıklanır (`navigateRef`;
+      efektten state değiştirilmiyor).
+    - **Önizle:** Aşama 2'de künye satırında; basılı tutunca ya da **Boşluk**
+      basılıyken tutamaçlar gizleniyor (yazı alanlarında Boşluk normal).
+    - **Görünüm'e üç yeni denetim:** gölge boyutu, gölge yoğunluğu ve yansıma
+      mesafesi (`Appearance.shadowSize/shadowOpacity/reflectionGap`). Eski
+      taslaklar `normalizeAppearance` ile varsayılanlara tamamlanıyor. Konva
+      önbelleği bu değerler değişince de yeniden alınıyor (aynı `shadowEnabled`
+      tuzağı).
+    - **Düzen turları (19.09.2026, Kaan'ın ekran görüntüleriyle üç tur):**
+      Aşama 1'de sağ panel tuvalle aynı dikey alanda (üstten `7vh` boşluk
+      kaldırıldı); Aşama 2'de zemin barı yuvanın ortasında (ne tuvale yapışık
+      ne en solda) ve satır yüksekliği `100dvh-5.25rem` + `pt-7` ile tuval
+      yüzen üst bara değmiyor. Sağ panel kendi boyunda ve ortalı kaldı.
+  - **Öne alınan iş — zemin favorileri (Kaan'ın onayı, 19.09.2026).** Kullanıcı
+    beğendiği zemini zemin barındaki kalple işaretliyor, "Favoriler" rafı en başta
+    çıkıyor. **Geçici çözüm:** yalnızca bu tarayıcıda (`localStorage`,
+    `vitrin-ai:favorite-backgrounds`, `lib/favorite-backgrounds.ts`); başka
+    cihazda görünmez. Hesaba bağlamak (tablo + RLS + API) ayrı bir iş, faz
+    planlamasında ele alınacak. Faz dışı olduğu önceden söylendi ve onaylandı (kural 6).
   - **PR #18 inceleme düzeltmeleri (17.09.2026, Codex incelemesi + bağımsız doğrulama):**
     - Backend testleri yerel Postgres + Redis ile çalıştırıldı: **299 test geçiyor**
       (yeni: önizleme yüklemesinin hata yolu, DB hatasında temizlik, Redis arızası,
@@ -772,7 +803,17 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 **Serhan'ın backend'i — PR 1 uygulandı (17.09.2026).** Dal
 `feature/faz-6-admin-api`, migration `0007`. Kullanıcı onayıyla kapsam dört
 madde genişletildi (zemin yönetimi uçları, denetim günlüğü, yönetici
-ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
+ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı. Zemin
+yönetimi ve denetim günlüğü PR 2 gelmeden Kaan'ın kendi dalında yapıldı
+(yukarıdaki "Zemin yönetim paneli" maddesi); **yönetici ekleme/çıkarma
+19.09.2026'da PR #25'in incelemesinde eksik bulundu (Codex) ve aynı PR'a
+eklendi:** `POST`/`DELETE /api/admin/users/{id}/admin`, hedefin e-postası
+doğrulanır (yanlış hesaba tıklanarak yapılamaz), son yönetici `409
+last_admin` ile korunur, `admin_add`/`admin_remove` denetim satırları artık
+gerçekten yazılıyor (önceden yalnızca `ACTIONS` listesinde tanımlıydılar,
+kullanan bir uç yoktu). `admin_users`'a satır hâlâ **yalnızca** bu uçlar ya da
+doğrudan veritabanı erişimiyle eklenebiliyor — kullanıcının kendini yönetici
+yapabileceği bir yol yok (`app/models/admin_user.py`).
 
 - **Kredi modeli kararı — bonus krediler ayrı tabloda (`credit_grants`).**
   `subscription_periods.quota_snapshot`, `0006`'daki `period_snapshot`
@@ -827,6 +868,85 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     göre arama bilinçli olarak Faz 7'ye ertelendi (gerekçesi orada).
     "Kullanıcı ara" yazıp ada göre çalışmaması, çalışmadığını söylemekten
     kötüdür — sonuç boş liste olarak döner, hata mesajı olarak değil.
+  - **`/admin` arayüzü — yapıldı (18.09.2026, Kaan).** Dal
+    `feature/faz6-kaan-admin-arayuz` (PR #22'nin üstüne); Kaan'ın kararıyla
+    main'e ara PR açılmıyor, **faz sonunda tek PR** (PR #22 main'e girdikten
+    sonra dal main'e taşınarak — stacked PR yok, ders 17).
+    - Backend: `GET /api/admin/me` (`{is_admin}`; 403 dönmez, yetkilendirme
+      değil). Serhan'ın alanı — PR'da ayrıca belirtilecek. 3 test (iki rol,
+      oturumsuz 401, geri alınan yetki anında `false`).
+    - Vekiller (`app/api/admin/**`): kimlik UUID kontrolü, gövdeyi bilinen
+      alanlarla yeniden kurma, geri dönüşü olmayan işlemlerde (kredi, geri
+      alma, silme) Origin kontrolü — red ve kabul yolu ayrı test edildi,
+      Origin kontrolü kaldırılınca testin kırmızı yandığı görüldü (ders 15).
+    - Sayfa `/admin` (arama motorlarına kapalı), hesap menüsünde yalnız
+      yöneticiye görünen "Yönetim paneli". Genel bakış (sayaçlar, günlük
+      kesim/kayıt grafikleri, abonelikler, bonus krediler, gelir,
+      operasyon), Kullanıcılar ("E-posta ile ara", sayfalama), kullanıcı
+      ayrıntısı (bonus kredi ver/geri al, hesap silme — e-posta birebir
+      yazılmadan düğme kapalı, yönetici hesabında hiç sunulmuyor).
+    - Kredi formu idempotency anahtarı İŞİ tanımlar: hata sonrası tekrar
+      denemede aynı anahtar, başarıdan sonra yeni anahtar (testli).
+    - Arayüzdeki durum/tür etiketleri migration'daki CHECK kısıtlarından
+      birebir alındı (ders 19); ilk taslakta tahminle yazılan `payment`
+      gerçekte `charge`, `canceling` eksikti — ikisi de düzeltildi.
+  - **Zemin yönetim paneli — yapıldı (19.09.2026, Kaan).** `/admin` →
+    **Zeminler** sekmesi: yükleme (`POST /api/admin/backgrounds`, Faz 3'ten
+    beri duran uç) ve kütüphane listesi. Backend'e yeni okuma ucu:
+    `GET /api/admin/backgrounds` — kullanıcı ucundan iki farkı var, ikisi de
+    bilinçli: pakete bakmıyor ve **pasif zeminleri de** döndürüyor (panelin
+    işi, bir zeminin neden kullanıcıya gitmediğini gösterebilmek). Testi aynı
+    veritabanında iki listeyi karşılaştırıyor, yoksa panel bir şey eklemiş
+    olmazdı. Hız sınırı okuma ucu olduğu için fail-open.
+    - **Güncelleme ve silme de eklendi (19.09.2026, Kaan'ın isteği).** İş
+      Serhan'ın PR 2 kapsamındaydı; önce uyarıldı (kural 6), sonra her iki
+      dalda da (`main`, `feature/faz-6-admin-api`) yazılmadığı doğrulanıp
+      yapıldı — **PR'da Serhan'a ayrıca belirtilecek**.
+      `PATCH /api/admin/backgrounds/{id}` paketi ve yayın durumunu,
+      `DELETE` zemini kalıcı olarak değiştirir. Denetim eylemleri
+      (`background_create`/`background_update`/`background_delete`)
+      `admin_audit.ACTIONS` ile sınırlandırılır, migration gerekmez.
+    - **Zeminlerin hepsi şimdilik `basic` kalıyor (Kaan'ın kararı,
+      19.09.2026).** `full` seviyesinin karşılığı olan bir plan sürümü henüz
+      yayımlanmadı (veritabanında yalnız Deneme v1 var, o da `basic`); bir
+      zemini şimdi `full` yapmak onu yöneticiler dışında herkesten gizlerdi.
+      Premium zemin ayrımı, ücretli plan sürümleri yayımlandığında ayarlanacak.
+    - **Pasif, silinmiş değildir (Kaan'ın kararı):** bir zemini kütüphaneden
+      çekmenin normal yolu pasife almak; satır ve dosyalar durur, istenince
+      geri açılır. Silme geri alınamaz olduğu için arayüzde iki adımlı.
+    - Kategori/baskı uyarısı panelde ayarlanmıyor; kaynak yine
+      `frontend/src/lib/background-catalog.ts` (veritabanı yapısı bilinçli
+      olarak değişmedi — Kaan, 17.09.2026).
+    - Vekil (`app/api/admin/backgrounds/route.ts`) tür/boyut kontrolü yapıyor
+      ve Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltiyor
+      (arka plan kaldırma vekiliyle aynı tuzak); testi eski bozuk koda karşı
+      kırmızı yandı (ders 15).
+  - **Hesap silme test hesabıyla denendi (19.09.2026, Kaan).** Panelden silme
+    isteği → `deletion_requested_at`, kuyrukta `delete_account`, denetim
+    günlüğünde TEK satır; worker çalıştırılınca Supabase Auth kullanıcısı
+    gitti, `subscriptions.user_id` NULL oldu, denetim satırı okunabilir kaldı.
+    **Silme EŞZAMANLI DEĞİL:** asıl işi `python -m app.services.billing.maintenance`
+    yapıyor. Yerelde bu worker çalışmadığı için panel "işlem sırada" diyordu —
+    canlıda periyodik çalıştırılmazsa hiçbir silme talebi tamamlanmaz
+    (`CLAUDE.md` açık takip maddesi).
+  - **PR #25 → Serhan devralma listesi (19.09.2026):** açık ve Serhan'a
+    atanmış tek yeni iş, production'da
+    `python -m app.services.billing.maintenance` için tekil/periyodik bir
+    çalıştırıcı kurmak, hata alarmını bağlamak ve gerçek bir kuyruk kaydının
+    `succeeded` olduğunu doğrulamaktır. `GET /api/admin/me` ile zemin
+    `PATCH`/`DELETE` uçları Serhan'ın alanı/PR 2 kapsamı diye işaretlenmiş olsa
+    da PR #25'te Kaan tarafından tamamlandı; PR 2 bunları yeniden yazmayacak,
+    yalnız dal çakışması kontrol edilecek. CMYK production profili Kaan'ın
+    sorumluluğunda; tarayıcıdaki zemin favorilerini hesaba bağlama işi bu PR'da
+    Serhan'a atanmış değildir.
+  - **PR #25 bağımsız inceleme düzeltmeleri (19.09.2026):** zemin yükleme artık
+    fail-closed admin hız sınırından geçiyor ve `background_create` audit izi
+    yazıyor. Kayıtlı taslağın kullandığı zemin kalıcı silinemiyor (`409`, pasife
+    alma öneriliyor); yeni taslaklarda `editor_state.backgroundId` aynı zamanda
+    `projects.background_id` FK alanına yazılarak bu kural DB seviyesinde de
+    korunuyor. Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
+    dışlıyor; panelde mutasyondan önce başlamış liste cevabı yeni durumu artık
+    geri alamıyor.
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -844,8 +964,10 @@ ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
     preflight kontrolü, TAC'ın %300'ü aşmadığının teyidi, matbaadan prova,
     matbaanın gerçekten PSO Coated v3 istediğinin teyidi, gömülü profilin
     2,2 MB'lik boyutunun kabul edilip edilmeyeceği kararı ve 40 MP dönüşümün
-    canlı sunucudaki süre/bellek yükünün ölçülmesi. (Renk doğruluğu şimdiye
-    kadar yalnızca sayısal olarak kontrol edildi.)
+    canlı sunucudaki süre/bellek yükünün ölçülmesi. **18-19.09.2026: Kaan
+    çıktıyı Photoshop'ta iki kez kontrol etti, CMYK olarak açılıyor —
+    "matbaada bir sorun çıkmaz" (Kaan, 19.09.2026).** Kod tarafında iş
+    kalmadı; fiziksel matbaa provası ve canlı sunucu ölçümü açık.
   - **Zaten doğrulanmış olan (PR #18, 17.09.2026):** profil ayarlı değilken
     `POST /api/cmyk` doğru mesajla 503 dönüyor
     (`"Baskı profili yapılandırılmamış. Sunucuda CMYK_ICC_PATH ayarlanmalı."`).

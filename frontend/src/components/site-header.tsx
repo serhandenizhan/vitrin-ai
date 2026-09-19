@@ -27,8 +27,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Gauge, LogIn, LogOut, Menu, PanelLeft, UserRound } from "lucide-react";
+import { ChevronDown, Gauge, LogIn, LogOut, Menu, PanelLeft, ShieldCheck, UserRound } from "lucide-react";
 
+import { useAdminStatus } from "@/components/admin/use-admin-status";
 import { NavPanel } from "@/components/nav-panel";
 import { NasilCalisirIcerik } from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
@@ -274,6 +275,8 @@ export function SiteHeader() {
 
 function AccountMenu() {
   const { user, signOut } = useWorkspace();
+  // Yalniz gosterim: baglanti yoneticiye gorunur, yetki backend'de (Faz 6).
+  const adminStatus = useAdminStatus(user?.id);
   const [open, setOpen] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [quotaError, setQuotaError] = useState(false);
@@ -345,6 +348,12 @@ function AccountMenu() {
             <UserRound className="size-4" strokeWidth={1.75} aria-hidden />
             Profil
           </Link>
+          {adminStatus === "admin" ? (
+            <Link href="/admin" role="menuitem" onClick={() => setOpen(false)} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm text-white/78 transition-colors hover:bg-white/9 hover:text-white">
+              <ShieldCheck className="size-4" strokeWidth={1.75} aria-hidden />
+              Yönetim paneli
+            </Link>
+          ) : null}
           <div className="flex min-h-10 items-center justify-between gap-3 rounded-xl px-3 text-sm" aria-label={`Kalan kredi: ${remaining}`}>
             <span className="flex items-center gap-3 text-white/62"><Gauge className="size-4" strokeWidth={1.75} aria-hidden />Kalan kredi</span>
             <strong className="text-gold text-xs font-semibold tabular-nums">{remaining}</strong>

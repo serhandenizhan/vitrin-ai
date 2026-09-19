@@ -16,13 +16,28 @@
  *   kaydıraçtan önce Görünüm menüsüne.
  * - Barın sağında KÜÇÜLT: kart ve bar tek küçük bir hapa iner, tuval o yeri
  *   alarak büyür (tuvalin büyümesi `.stage-fit-collapsed`'te, AYNI eğriyle).
+ *
+ * Masaüstü (Kaan, 19.09.2026): zeminler tuvalin altında SABİT bir şeride
+ * çıktı, kalan araçlar SAĞDAKİ panele (`variant="side"`). Tuval alttaki
+ * kart payını geri alıp sola kayarak büyüdü. Aynı içerik, aynı geri/küçült
+ * kuralları; yalnız yerleşim değişiyor. Telefonda alt bar düzeni duruyor —
+ * dar ekranda sağ panel tuvali sıkıştırırdı.
  */
 
-import { useRef, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronUp } from "lucide-react";
+import { createContext, useContext, useRef, type ComponentType, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronUp, X } from "lucide-react";
 
 import { ScrollArrows } from "@/components/composer/scroll-arrows";
 import { useHorizontalWheel } from "@/components/composer/use-horizontal-wheel";
+
+/**
+ * Panelin yerlesimi: menu icerigi (serit, eylem) buna gore kendini dizer.
+ * Sag panelde yatay serit yerine alt alta SATIRLAR (19.09.2026 referans gorseli).
+ */
+const DockVariantContext = createContext<"bottom" | "side">("bottom");
+export function useDockVariant() {
+  return useContext(DockVariantContext);
+}
 
 export type DockProps = {
   /** Açık menünün adı; aynı zamanda erişilebilir ad. */
@@ -50,6 +65,30 @@ export type DockProps = {
   canGoBack: boolean;
   /** Geri tuşunun erişilebilir adı (nereye döneceğini söyler). */
   backLabel: string;
+  /** "bottom": tuvalin altında bar + kart (telefon). "side": sağda panel (masaüstü). */
+  variant?: "bottom" | "side";
+  /** Sag panel basligindaki arac simgesi. */
+  icon?: ToolIcon;
+  /**
+   * Sag panelde secili ADIMIN butun araclari alt alta kart olarak (referans
+   * gorsel, 19.09.2026). Verilmezse tek kart (`title`/`children`) gosterilir.
+   */
+  sections?: DockSection[];
+  /** Sag panelin altindaki sabit satir (asama gecis dugmeleri). */
+  footer?: ReactNode;
+  activeSection?: string;
+  onSectionFocus?: (id: string) => void;
+};
+
+type ToolIcon = ComponentType<{ className?: string; strokeWidth?: number; "aria-hidden"?: boolean }>;
+
+export type DockSection = {
+  id: string;
+  title: string;
+  icon?: ToolIcon;
+  action?: ReactNode;
+  body?: ReactNode;
+  settings?: ReactNode;
 };
 
 export function Dock({
@@ -66,7 +105,22 @@ export function Dock({
   onBack,
   canGoBack,
   backLabel,
+  variant = "bottom",
+  icon,
+  sections,
+  activeSection,
+  onSectionFocus,
+  footer,
 }: DockProps) {
+  if (variant === "side") {
+    return (
+      <DockVariantContext.Provider value="side">
+        <SideDock
+          {...{ title, action, children, settings, tools, activeToolLabel, isCollapsed, onCollapsedChange, layerKey, onBack, canGoBack, backLabel, icon, sections, activeSection, onSectionFocus, footer }}
+        />
+      </DockVariantContext.Provider>
+    );
+  }
   return (
     <div className="flex w-full max-w-[min(40rem,100%)] flex-col items-center">
       {/* Kart alanı SABİT (küçültülünce sıfıra iner): kart alta hizalı, bu
@@ -141,6 +195,80 @@ export function Dock({
 }
 
 /**
+ * Sağ panel: üstte bar (geri · araçlar · küçült), altında seçili aracın
+ * menüsü panelin kalan yüksekliğini doldurur. Küçültülünce panel dar bir
+ * cam şeride iner, tuval genişleyerek o yeri alır (aynı eğri: `.side-dock`).
+ */
+function SideDock({
+  title,
+  action,
+  children,
+  settings,
+  tools,
+  activeToolLabel,
+  isCollapsed,
+  onCollapsedChange,
+  layerKey,
+  icon: Icon,
+  footer,
+}: Omit<DockProps, "compact" | "variant">) {
+  if (isCollapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => onCollapsedChange(false)}
+        aria-label="Barı büyüt"
+        className="press liquid-glass soft-enter flex w-11 flex-col items-center gap-2 rounded-full py-3 text-[0.75rem] font-medium"
+      >
+        <ChevronLeft className="size-4" strokeWidth={2.25} aria-hidden />
+        <span className="[writing-mode:vertical-rl]">{activeToolLabel}</span>
+      </button>
+    );
+  }
+  // Panel v2 (19.09.2026, tasarim Claude'a birakildi): tek kart; ustte
+  // esit sekmeli segment kontrolu + kapat, altinda secili aracin GRUPLU
+  // LISTESI (iOS Ayarlar dili). Tekrarlanan baslik yok — hangi aracin acik
+  // oldugunu sekme soyluyor. Altin yalnizca SECILI durumda.
+  void Icon;
+  return (
+    <div className="side-dock liquid-glass soft-enter flex max-h-full min-h-0 flex-col rounded-[1.5rem] p-2">
+      <div className="flex shrink-0 items-center gap-1">
+        <div className="min-w-0 flex-1">{tools}</div>
+        <button
+          type="button"
+          onClick={() => onCollapsedChange(true)}
+          aria-label="Barı küçült"
+          title="Paneli kapat"
+          className="press on-dark-muted flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-white/10 hover:text-[#f3f0eb]"
+        >
+          <X className="size-4" strokeWidth={1.5} aria-hidden />
+        </button>
+      </div>
+      <div role="group" aria-label={title} className="flex min-h-0 flex-col">
+        <div key={layerKey} className="glass-content-in dock-scroll min-h-0 space-y-3 overflow-y-auto px-2 pt-3 pb-2">
+          {action ? (
+            <div className="flex min-h-5 items-center justify-end px-1 text-[0.75rem]">{action}</div>
+          ) : null}
+          {children}
+          {settings ? <div className="space-y-3">{settings}</div> : null}
+        </div>
+      </div>
+      {footer ? <div className="mt-1 shrink-0 border-t border-white/10 px-1 pt-2">{footer}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Sag paneldeki gruplu liste kutusu: satirlar ince cizgilerle ayrilir.
+ * Paneldeki butun secenekler bu kutularin icinde durur — tek gorsel dil.
+ */
+export const PANEL_GROUP =
+  "overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/[0.07] divide-y divide-white/[0.07]";
+/** Gruplu listedeki tek satir. */
+export const PANEL_ROW =
+  "flex min-h-11 w-full items-center gap-3 px-3.5 text-left text-[0.8125rem] transition-colors";
+
+/**
  * Menü içindeki şerit — yalnızca birkaç öğeli, ortalanmış eylem satırları
  * için (biçim, yerleşim, marka, indirme). Zemin ızgara (bkz.
  * `background-palette.tsx`).
@@ -148,6 +276,14 @@ export function Dock({
 export function DockStrip({ children, label, centered = false }: { children: ReactNode; label: string; centered?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useHorizontalWheel(ref);
+  const variant = useDockVariant();
+  if (variant === "side") {
+    return (
+      <div aria-label={label} className={PANEL_GROUP + " flex flex-col"}>
+        {children}
+      </div>
+    );
+  }
   return (
     <ScrollArrows targetRef={ref} label={label.toLocaleLowerCase("tr")}>
       <div

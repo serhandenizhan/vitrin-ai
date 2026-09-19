@@ -41,6 +41,10 @@ def supabase():
     async def get_user(user_id):
         return service.accounts.get(str(user_id))
 
+    async def get_user_email(user_id):
+        account = service.accounts.get(str(user_id))
+        return account["email"] if account else None
+
     async def list_users(page, per_page, query=None):
         users = list(service.accounts.values())
         if query:
@@ -48,6 +52,7 @@ def supabase():
         return users[(page - 1) * per_page : page * per_page]
 
     service.get_user.side_effect = get_user
+    service.get_user_email.side_effect = get_user_email
     service.list_users.side_effect = list_users
     return service
 
@@ -102,6 +107,32 @@ def admin_only(client, people, tokens):
         return allowed
 
     return _check
+
+
+async def test_admin_me_answers_both_roles_without_an_error(client, people, tokens):
+    # Iki yol da ayri ayri (ders 15): yonetici "evet", siradan kullanici HATA
+    # degil "hayir" alir — arayuz menudeki baglantiyi buna gore gosteriyor.
+    admin_id, user_id = people
+    admin = await client.get("/api/admin/me", headers=tokens.headers(admin_id))
+    assert admin.status_code == 200 and admin.json() == {"is_admin": True}
+    regular = await client.get("/api/admin/me", headers=tokens.headers(user_id))
+    assert regular.status_code == 200 and regular.json() == {"is_admin": False}
+
+
+async def test_admin_me_requires_a_session(client):
+    assert (await client.get("/api/admin/me")).status_code == 401
+
+
+async def test_admin_me_reflects_a_revoked_role_immediately(
+    client, people, tokens, db_session
+):
+    # Rol token'da degil veritabaninda: yetki geri alininca ayni token'la
+    # yapilan bir sonraki istek "hayir" almali.
+    admin_id, _ = people
+    await execute(db_session, "DELETE FROM admin_users WHERE user_id=:uid", uid=admin_id)
+    await db_session.commit()
+    response = await client.get("/api/admin/me", headers=tokens.headers(admin_id))
+    assert response.json() == {"is_admin": False}
 
 
 async def test_user_list_joins_supabase_accounts_with_our_billing_rows(
@@ -394,6 +425,123 @@ async def test_admin_accounts_cannot_be_deleted_from_the_panel(
     )["deletion_requested_at"] is None
 
 
+async def test_add_admin_requires_email_confirmation_and_writes_audit(
+    client, people, tokens, db_session
+):
+    admin_id, user_id = people
+    wrong = await client.post(
+        f"/api/admin/users/{user_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": "yanlis@vitrin.example"},
+    )
+    assert wrong.status_code == 400
+    assert not await one(db_session, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=user_id)
+
+    response = await client.post(
+        f"/api/admin/users/{user_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": "musteri@vitrin.example"},
+    )
+    assert response.status_code == 201
+    assert response.json() == {"is_admin": True}
+    assert await one(db_session, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=user_id)
+    audit = await many(
+        db_session,
+        "SELECT actor_id,action,detail FROM admin_audit_log WHERE subject_id=:id",
+        id=str(user_id),
+    )
+    assert len(audit) == 1
+    assert audit[0]["action"] == "admin_add"
+    assert audit[0]["actor_id"] == admin_id
+
+
+async def test_add_admin_is_idempotent_and_does_not_duplicate_audit(
+    client, people, tokens, db_session, grant_admin
+):
+    admin_id, user_id = people
+    await grant_admin(user_id)
+
+    response = await client.post(
+        f"/api/admin/users/{user_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": "musteri@vitrin.example"},
+    )
+    assert response.status_code == 201
+    assert response.json() == {"is_admin": True}
+    assert await one(db_session, "SELECT id FROM admin_audit_log") is None
+
+
+async def test_add_admin_requires_admin(client, people, tokens):
+    _, user_id = people
+    response = await client.post(
+        f"/api/admin/users/{user_id}/admin",
+        headers=tokens.headers(user_id),
+        json={"email": "musteri@vitrin.example"},
+    )
+    assert response.status_code == 403
+
+
+async def test_remove_admin_requires_email_confirmation_and_writes_audit(
+    client, people, tokens, db_session, create_user, grant_admin, supabase
+):
+    admin_id, _ = people
+    second_email = "ikinci-admin@vitrin.example"
+    second_id = await create_user(second_email)
+    await grant_admin(second_id)
+    supabase.accounts[str(second_id)] = {"id": str(second_id), "email": second_email}
+
+    wrong = await client.request(
+        "DELETE",
+        f"/api/admin/users/{second_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": "yanlis@vitrin.example"},
+    )
+    assert wrong.status_code == 400
+    assert await one(db_session, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=second_id)
+
+    response = await client.request(
+        "DELETE",
+        f"/api/admin/users/{second_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": second_email},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"is_admin": False}
+    assert not await one(db_session, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=second_id)
+    audit = await many(
+        db_session,
+        "SELECT actor_id,action FROM admin_audit_log WHERE subject_id=:id",
+        id=str(second_id),
+    )
+    assert len(audit) == 1
+    assert audit[0]["action"] == "admin_remove"
+
+
+async def test_remove_admin_rejects_the_last_admin(client, people, tokens, db_session):
+    admin_id, _ = people
+    response = await client.request(
+        "DELETE",
+        f"/api/admin/users/{admin_id}/admin",
+        headers=tokens.headers(admin_id),
+        json={"email": "admin@vitrin.example"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "last_admin"
+    assert await one(db_session, "SELECT 1 FROM admin_users WHERE user_id=:uid", uid=admin_id)
+    assert await one(db_session, "SELECT id FROM admin_audit_log") is None
+
+
+async def test_remove_admin_requires_admin(client, people, tokens):
+    admin_id, user_id = people
+    response = await client.request(
+        "DELETE",
+        f"/api/admin/users/{admin_id}/admin",
+        headers=tokens.headers(user_id),
+        json={"email": "admin@vitrin.example"},
+    )
+    assert response.status_code == 403
+
+
 async def test_stats_fills_every_day_of_the_window(admin_only):
     """Delikli bir seri grafikte "o gün olmadı" gibi okunur; boş günler sıfır."""
     response = await admin_only("GET", "/api/admin/stats?days=7", 200)
@@ -430,3 +578,25 @@ async def test_stats_counts_real_usage_and_grants(
     assert dict(
         (row["status"], row["count"]) for row in body["subscriptions_by_status"]
     ) == {"active": 2}
+
+
+async def test_stats_outstanding_excludes_expired_credit_grants(
+    client, people, tokens, db_session
+):
+    admin_id, user_id = people
+    await execute(
+        db_session,
+        """INSERT INTO credit_grants(
+             user_id,amount,reason,granted_by,idempotency_key,expires_at
+           ) VALUES(:user_id,10,'süresi dolmuş',:admin_id,:key,clock_timestamp()-interval '1 day')""",
+        user_id=user_id,
+        admin_id=admin_id,
+        key=str(uuid.uuid4()),
+    )
+    await db_session.commit()
+
+    body = (
+        await client.get("/api/admin/stats?days=30", headers=tokens.headers(admin_id))
+    ).json()
+
+    assert body["credit_grants"] == {"granted": 10, "used": 0, "outstanding": 0}

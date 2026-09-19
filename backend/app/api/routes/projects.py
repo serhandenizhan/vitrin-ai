@@ -360,6 +360,7 @@ async def update_project_status(
     # Bütün girdi, satıra dokunmadan ÖNCE doğrulanır: yarıda kalan bir
     # doğrulama, oturumda yarım değiştirilmiş bir nesne bırakmamalı.
     parsed_state = None
+    parsed_background_id = None
     if editor_state is not None:
         try:
             parsed_state = json.loads(editor_state)
@@ -367,9 +368,31 @@ async def update_project_status(
             raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.") from exc
         if not isinstance(parsed_state, dict):
             raise HTTPException(status_code=400, detail="Geçersiz stüdyo taslağı.")
+        raw_background_id = parsed_state.get("backgroundId")
+        if isinstance(raw_background_id, str):
+            try:
+                parsed_background_id = uuid.UUID(raw_background_id)
+            except ValueError:
+                # Kod içindeki yer tutucu zeminlerin kimlikleri UUID değildir ve
+                # backgrounds tablosunda karşılıkları yoktur.
+                parsed_background_id = None
+        if parsed_background_id is not None:
+            background_exists = await db.scalar(
+                select(Background.id)
+                .where(Background.id == parsed_background_id)
+                .with_for_update()
+            )
+            if background_exists is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Taslakta seçili zemin artık mevcut değil.",
+                )
     project = await _get_owned_project(db, project_id, user)
     if parsed_state is not None:
         project.editor_state = parsed_state
+        # JSON taslak yeniden açmak için, FK ise zeminin taslak varken kalıcı
+        # silinmesini veritabanı seviyesinde engellemek için tutulur.
+        project.background_id = parsed_background_id
     if display_name is not None:
         project.file_name = display_name
     # Tamamlanmis calismanin taslak ayari kaydedilirken de "completed" gelir;

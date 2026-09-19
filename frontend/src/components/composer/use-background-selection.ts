@@ -11,7 +11,12 @@ import {
 import type { Background } from "@/lib/backgrounds";
 import { type OutputFormat, formatOrientation } from "@/lib/composition";
 
-export type BackgroundGroup = (typeof BACKGROUND_CATEGORIES)[number] & {
+/** Raf: katalog kategorileri + kullanicinin "Favoriler"i (19.09.2026). */
+export type BackgroundShelf = BackgroundCategory | "favoriler";
+
+export type BackgroundGroup = {
+  id: BackgroundShelf;
+  label: string;
   items: Background[];
 };
 
@@ -27,8 +32,8 @@ export type BackgroundSelection = {
    */
   fitting: Background[];
   select: (id: string) => void;
-  showCategory: (category: BackgroundCategory | null) => void;
-  activeCategory: BackgroundCategory | null;
+  showCategory: (category: BackgroundShelf | null) => void;
+  activeCategory: BackgroundShelf | null;
 };
 
 /**
@@ -50,6 +55,8 @@ export function useBackgroundSelection(
   backgrounds: Background[],
   format: OutputFormat,
   initialSelectedId: string | null = null,
+  /** Begenilen zemin kimlikleri; bossa "Favoriler" rafi hic olusmaz. */
+  favoriteIds: readonly string[] = [],
 ): BackgroundSelection {
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   /**
@@ -57,7 +64,7 @@ export function useBackgroundSelection(
    * kategorisi gosteriliyor — boylece "Pazaryeri" duz beyazi sectiginde sekme
    * de kendiliginden "Sade"ye geciyor, secili zemin gorunmez bir sekmede kalmiyor.
    */
-  const [activeCategory, setActiveCategory] = useState<BackgroundCategory | null>(null);
+  const [activeCategory, setActiveCategory] = useState<BackgroundShelf | null>(null);
 
   const orientation = formatOrientation(format);
   const fitting = useMemo(
@@ -75,26 +82,41 @@ export function useBackgroundSelection(
    * zemin tek izgarada karisiyordu. Bos kategori sekmesi gosterilmiyor;
    * yalnizca bir kategori doluysa (ornegin sunucu zemini yokken) sekme hic yok.
    */
-  const groups = useMemo(
-    () =>
-      BACKGROUND_CATEGORIES.map((category) => ({
-        ...category,
-        items: fitting.filter(
-          (background) => backgroundCategory(background.id) === category.id,
-        ),
-      })).filter((group) => group.items.length > 0),
-    [fitting],
-  );
+  const groups = useMemo(() => {
+    const categories: BackgroundGroup[] = BACKGROUND_CATEGORIES.map((category) => ({
+      id: category.id,
+      label: category.label,
+      items: fitting.filter(
+        (background) => backgroundCategory(background.id) === category.id,
+      ),
+    })).filter((group) => group.items.length > 0);
+    // Favoriler EN BASTA ve begenilme sirasiyla; bicime uymayan favori
+    // gosterilmiyor (diger raflarla ayni kural).
+    const favorites = favoriteIds
+      .map((id) => fitting.find((background) => background.id === id))
+      .filter((background): background is Background => Boolean(background));
+    return favorites.length > 0
+      ? [{ id: "favoriler" as const, label: "Favoriler", items: favorites }, ...categories]
+      : categories;
+  }, [fitting, favoriteIds]);
 
   const shownGroup =
     groups.find(
       (group) => group.id === (activeCategory ?? backgroundCategory(selected.id)),
     ) ?? groups[0];
 
-  const select = useCallback((id: string) => {
-    setSelectedId(id);
-    setActiveCategory(null);
-  }, []);
+  const select = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      // Favoriler rafindan secilen zemin kullaniciyi kendi kategorisine
+      // atlatmamali; raf acik kalir. Diger her durumda sekme secili zeminin
+      // kategorisine doner (Pazaryeri -> Sade).
+      setActiveCategory((current) =>
+        current === "favoriler" && favoriteIds.includes(id) ? current : null,
+      );
+    },
+    [favoriteIds],
+  );
 
   return {
     selected,

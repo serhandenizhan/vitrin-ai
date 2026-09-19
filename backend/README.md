@@ -505,11 +505,17 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 
 | Uç | Ne yapar |
 |---|---|
+| `GET /api/admin/me` | Oturumdaki kullanıcı yönetici mi: `{is_admin: bool}` (Faz 6, Kaan — `/admin` arayüzü için). **`require_admin`'e bağlı DEĞİL ve 403 dönmez**: sıradan kullanıcı da hata değil `false` alır, arayüz "Yönetim paneli" bağlantısını buna göre gösterir. Yetkilendirme sayılmaz — diğer her uç kendi kontrolünü yapar. Rol her istekte veritabanından okunur (yetki geri alınınca aynı token'la bir sonraki istek `false`) |
 | `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
 | `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
 | `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |
+| `POST /api/admin/users/{id}/admin` | Kullanıcıya yönetici yetkisi verir; gövdede hedefin e-postası doğrulanır (yanlış hesaba tıklanarak yapılamaz). İdempotent: zaten yönetici olan biri için ikinci istek yeni bir `admin_add` denetim satırı açmaz. `admin_users`'a önceden yalnızca doğrudan veritabanı erişimiyle satır eklenebiliyordu (PR #25 incelemesi: `admin_add`/`admin_remove` denetim eylemleri tanımlıydı ama kullanan bir uç yoktu) |
+| `DELETE /api/admin/users/{id}/admin` | Yönetici yetkisini kaldırır; aynı e-posta doğrulaması. **Son yönetici** (kendisi dahil) `409 last_admin` ile reddedilir — panel sahipsiz kalmasın diye, `DELETE /api/account`'taki son-yönetici korumasıyla aynı gerekçe |
 | `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
 | `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
+| `GET /api/admin/backgrounds` | Zemin kütüphanesinin TAMAMI (Faz 6, Kaan — `/admin` → Zeminler). `GET /api/backgrounds`ten farkı: pakete/kotaya bakmaz ve **pasif zeminleri de** döndürür (`is_active`, `tier`, `created_at` + imzalı `url`/`thumbnail_url`). Okuma ucu olduğu için hız sınırı fail-open |
+| `PATCH /api/admin/backgrounds/{id}` | Zeminin paketini (`tier`) ve yayın durumunu (`is_active`) değiştirir (Faz 6, Kaan). **Pasif, silinmiş değildir:** satır ve R2 nesneleri durur, zemin yalnız kullanıcı listesinden çıkar. Denetim satırı yalnız durum gerçekten değişince yazılır; hız sınırı yazan uç olduğu için fail-closed |
+| `DELETE /api/admin/backgrounds/{id}` | Zemini kalıcı siler — **geri alınamaz**. Sıra bilinçli: önce DB satırı, sonra R2 nesneleri (ters sırada "satır duruyor, dosyası yok" çıkardı — ders 25). Nesne silme patlarsa yalnız yer tutan dosya kalır, istek yine başarılı döner |
 | `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
 
 **Bonus krediler dönem kotasının DIŞINDADIR.** `subscription_periods.quota_snapshot`

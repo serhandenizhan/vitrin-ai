@@ -1,22 +1,26 @@
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 from fastapi import Form, Request
 from app.core.auth import get_current_user
 from fastapi.security import HTTPAuthorizationCredentials
 from app.services.billing.entitlements import background_tier
-from app.services.billing.limits import limit_scoped
+from app.services.billing.limits import limit_admin, limit_scoped
 from app.services.billing.provider import get_provider
 import uuid
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_admin
+from app.core.auth import CurrentUser, require_admin
 from app.core.config import settings
 from app.core.db import get_db_session
+from app.services import admin_audit
 from app.models.background import Background
+from app.models.project import Project
 from app.services.background_images import make_thumbnail, thumbnail_key
 from app.services.storage import (
     R2StorageService,
@@ -42,11 +46,12 @@ CONTENT_TYPE_TO_EXTENSION = {
     # Faz 3'teki geçici `X-Admin-Secret` paylaşılan secret'ı Faz 4'te kaldırıldı
     # (kök CLAUDE.md ders 8'deki geçici çözüm kapandı). Artık geçerli bir
     # Supabase oturumu VE `admin_users` tablosunda kayıt gerekiyor.
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
 )
 async def create_background(
     file: UploadFile = File(...),
     tier: Literal["basic", "full"] = Form("basic"),
+    admin: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     storage: R2StorageService = Depends(get_storage_service),
 ) -> dict[str, str]:
@@ -106,11 +111,186 @@ async def create_background(
 
     try:
         db.add(Background(id=background_id, r2_key=r2_key, tier=tier))
+        await admin_audit.record(
+            db,
+            admin.id,
+            "background_create",
+            "background",
+            str(background_id),
+            {"r2_key": r2_key, "tier": tier},
+        )
         await db.commit()
     except Exception:
+        await db.rollback()
         await delete_objects_quietly(storage, uploaded)
         raise
 
+    return {"id": str(background_id)}
+
+
+@router.get(
+    "/api/admin/backgrounds",
+    dependencies=[Depends(require_admin)],
+)
+async def list_admin_backgrounds(
+    request: Request,
+    admin: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    storage: R2StorageService = Depends(get_storage_service),
+) -> list[dict[str, object]]:
+    """Zemin yönetim paneli (Faz 6, Kaan) — kütüphanenin TAMAMI.
+
+    `GET /api/backgrounds`ten iki farkı var ve ikisi de bilinçli: kotaya/pakete
+    hiç bakmıyor (yönetici her iki `tier`ı da görmeli) ve **pasif zeminleri de
+    döndürüyor** — panelin asıl işi, kullanıcıya gitmeyen bir zeminin neden
+    gitmediğini gösterebilmek. Hız sınırı okuma ucu olduğu için fail-open
+    (`limit_scoped`); Redis arızası paneli karartmasın (modül başlığındaki
+    fail-open/fail-closed kuralı).
+    """
+    await limit_scoped(request, "admin", admin.id)
+    result = await db.execute(select(Background).order_by(Background.created_at.desc()))
+    return [
+        {
+            "id": str(bg.id),
+            "tier": bg.tier,
+            "is_active": bg.is_active,
+            "created_at": bg.created_at.isoformat(),
+            "url": storage.generate_presigned_url(bg.r2_key),
+            "thumbnail_url": storage.generate_presigned_url(thumbnail_key(bg.r2_key)),
+            "expires_in": settings.background_url_expiry_seconds,
+        }
+        for bg in result.scalars().all()
+    ]
+
+
+class BackgroundUpdate(BaseModel):
+    """`PATCH /api/admin/backgrounds/{id}` gövdesi — iki alan da isteğe bağlı."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tier: Literal["basic", "full"] | None = None
+    is_active: bool | None = None
+
+
+@router.patch(
+    "/api/admin/backgrounds/{background_id}",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
+)
+async def update_background(
+    background_id: uuid.UUID,
+    payload: BackgroundUpdate,
+    admin: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, object]:
+    """Zeminin paketini ve yayın durumunu değiştirir (Faz 6, Kaan).
+
+    PASİF = SİLİNMİŞ DEĞİL: satır ve R2 nesneleri yerinde kalır, zemin yalnızca
+    kullanıcıya giden listeden çıkar. Kaan'ın kararı (19.09.2026): bir zemini
+    kütüphaneden çekmenin normal yolu bu; silme geri alınamaz olduğu için ayrı
+    bir iş.
+
+    Hız sınırı **fail-closed** (`limit_admin`): burası yazan bir uç, okuma
+    tarafındaki fail-open gerekçesi burada geçerli değil.
+    """
+    fields = payload.model_dump(exclude_none=True)
+    if not fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Değiştirilecek bir alan gönderin.",
+        )
+
+    result = await db.execute(select(Background).where(Background.id == background_id))
+    background = result.scalar_one_or_none()
+    if background is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zemin bulunamadı.")
+
+    # Denetim satırı YALNIZ durumu gerçekten değiştiren istekte yazılır (Faz 6
+    # kuralı 5): aynı değeri ikinci kez göndermek günlükte olmamış bir eylem
+    # göstermemeli.
+    changed = {
+        name: value
+        for name, value in fields.items()
+        if getattr(background, name) != value
+    }
+    if changed:
+        before = {name: getattr(background, name) for name in changed}
+        for name, value in changed.items():
+            setattr(background, name, value)
+        await admin_audit.record(
+            db,
+            admin.id,
+            "background_update",
+            "background",
+            str(background_id),
+            {"before": before, "after": changed},
+        )
+        await db.commit()
+
+    return {
+        "id": str(background.id),
+        "tier": background.tier,
+        "is_active": background.is_active,
+    }
+
+
+@router.delete(
+    "/api/admin/backgrounds/{background_id}",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
+)
+async def delete_background(
+    background_id: uuid.UUID,
+    admin: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    storage: R2StorageService = Depends(get_storage_service),
+) -> dict[str, str]:
+    """Zemini kalıcı olarak siler — geri alınamaz (Faz 6, Kaan).
+
+    SIRA BİLİNÇLİ: önce veritabanı satırı, sonra R2 nesneleri. Ters sırada bir
+    hata, "satır duruyor ama gösterdiği dosya yok" durumunu üretirdi; bu,
+    sahipsiz bir nesneden daha kötüdür (ders 25) çünkü kullanıcıya kırık bir
+    zemin gösterilir. Nesne silme patlarsa yalnızca yer tutan bir dosya kalır
+    ve bu log'lanır.
+
+    Kayıtlı çalışma zemini sonuç PNG'sine gömülü değildir; stüdyo taslağında
+    kimlikle tutulur. Bu yüzden kullanımda olan zemin kalıcı silinmez, normal
+    kaldırma yolu olan pasife alma kullanılır.
+    """
+    result = await db.execute(
+        select(Background)
+        .where(Background.id == background_id)
+        .with_for_update()
+    )
+    background = result.scalar_one_or_none()
+    if background is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zemin bulunamadı.")
+
+    referenced_project = await db.scalar(
+        select(Project.id)
+        .where(
+            or_(
+                Project.background_id == background_id,
+                Project.editor_state["backgroundId"].as_string() == str(background_id),
+            )
+        )
+        .limit(1)
+    )
+    if referenced_project is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın.",
+        )
+
+    r2_key = background.r2_key
+    await db.delete(background)
+    await admin_audit.record(
+        db, admin.id, "background_delete", "background", str(background_id), {"r2_key": r2_key}
+    )
+    await db.commit()
+
+    # Satır gitti; nesneler artık kimsenin ulaşamadığı yer tutuculardır.
+    # `delete_objects_quietly` hatayı yutup log'luyor — bir depolama arızası,
+    # kullanıcının gözünde zaten tamamlanmış olan silmeyi 500'e çevirmemeli.
+    await delete_objects_quietly(storage, [r2_key, thumbnail_key(r2_key)])
     return {"id": str(background_id)}
 
 

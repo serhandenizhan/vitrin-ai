@@ -47,7 +47,12 @@ export function useScrollArrows(ref: RefObject<HTMLElement | null>) {
   return { ...edges, scrollPage };
 }
 
-/** Şeridi saran kutu: oklar şeridin üstünde, iki kenarda ortalı durur. */
+/**
+ * Şeridi saran kutu. Oklar şeridin ÜSTÜNE binmez (Kaan, 19.09.2026: "oklar çok
+ * kötü duruyor"): iki yanda ayrılmış kenar payında, şeritten bağımsız durur.
+ * Gidilecek yer yoksa ok kaybolmaz, soluklaşır — kenar payı sabit kaldığı
+ * için şerit de oklar belirip kaybolurken kıpırdamaz.
+ */
 export function ScrollArrows({
   targetRef,
   label,
@@ -60,9 +65,9 @@ export function ScrollArrows({
 }) {
   const { canLeft, canRight, scrollPage } = useScrollArrows(targetRef);
   const button =
-    "press liquid-glass-pill absolute top-1/2 z-20 flex size-8 -translate-y-1/2 items-center justify-center rounded-full transition-opacity duration-200";
+    "press absolute top-1/2 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/8 text-[#f3f0eb] ring-1 ring-white/15 transition-[opacity,background-color] duration-200 hover:bg-white/16";
   return (
-    <div className="relative">
+    <div className="relative px-9">
       {children}
       <button
         type="button"
@@ -70,9 +75,9 @@ export function ScrollArrows({
         aria-label={`Önceki ${label}`}
         tabIndex={canLeft ? 0 : -1}
         aria-hidden={canLeft ? undefined : true}
-        className={button + " left-0.5 " + (canLeft ? "opacity-100" : "pointer-events-none opacity-0")}
+        className={button + " left-1 " + (canLeft ? "opacity-100" : "pointer-events-none opacity-20")}
       >
-        <ChevronLeft className="size-4" strokeWidth={2.25} aria-hidden />
+        <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
       </button>
       <button
         type="button"
@@ -80,9 +85,9 @@ export function ScrollArrows({
         aria-label={`Sonraki ${label}`}
         tabIndex={canRight ? 0 : -1}
         aria-hidden={canRight ? undefined : true}
-        className={button + " right-0.5 " + (canRight ? "opacity-100" : "pointer-events-none opacity-0")}
+        className={button + " right-1 " + (canRight ? "opacity-100" : "pointer-events-none opacity-20")}
       >
-        <ChevronRight className="size-4" strokeWidth={2.25} aria-hidden />
+        <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
       </button>
     </div>
   );

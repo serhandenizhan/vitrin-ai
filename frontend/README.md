@@ -203,7 +203,51 @@ Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
-## Stüdyo düzeni: ince bar + menü kartı (18.09.2026)
+## Stüdyo düzeni (güncel: 19.09.2026)
+
+**Masaüstü aşamalı akış** (`composition-editor.tsx` → `desktopLayout`):
+
+| Aşama | Solda | Ortada | Sağda / altta |
+|---|---|---|---|
+| 1 Sahne | — | tuval | geniş zemin kütüphanesi + biçimler (`stage-backgrounds.tsx` → `BackgroundLibrary`), ✓ |
+| 2 Düzenle | dik zemin barı (`BackgroundRail`) | tuval | panel: Yerleşim · Görünüm · Marka; ‹ Sahne / ✓ Tamamla |
+| 3 Tamamla | — | tuval | altında çıktı barı (PNG, JPEG, CMYK, WhatsApp, taslak), ‹ Düzenle |
+
+- Geçiş perdesi `stage-curtain.tsx` (CSS: `globals.css` → "Aşama geçiş perdesi"):
+  açılışta kapalı başlar ve kalkar; ✓/geri geçişlerinde iner, aşama
+  `onCovered`'da (320 ms) değişir, ~1,7 sn'de kalkar. Yedek zaman aşımı var
+  (gizli sekmede animasyon ilerlemese de perde kalkar). "Hareketi azalt"ta yok.
+- Tuval sütunu her aşamada aynı konumda; `--panel-w` ve `--studio-reserved-lg`
+  aşamaya göre inline veriliyor.
+- Üst bar adımları masaüstünde yalnız geri (`navigateRef`); "Dışa Aktar" gizli.
+- Aşağıdaki panel/zemin barı açıklamaları Aşama 2'nin paneli ve telefon için geçerli.
+
+**Masaüstü (`lg` ve üstü):** ortada tuval, hemen yanında sağda tek bir panel
+kartı, tuvalin altında ince zemin barı. Üst bar, panel ve zemin barı aynı cam
+(`liquid-glass`), arka plan `.studio-backdrop`.
+
+- **Panel:** üstte eşit sekmeli segment kontrolü (Boyut · Yerleşim · Görünüm ·
+  Marka · İndir) + kapat; altında yalnız seçili aracın gruplu listesi
+  (`PANEL_GROUP` / `PANEL_ROW`, `dock.tsx`). Bileşenler (`DockAction`, `Toggle`,
+  `Slider`, `CornerRow`, `DockStrip`) `useDockVariant()` ile panelde satır
+  biçimine geçiyor. Görünüm'de üç kaydıraç birlikte açık.
+- **Tuval:** sütun genişliği biçimin en/boy oranından (`.stage-column`,
+  `--stage-ratio`); dikey pay `--studio-reserved-lg` (tek kaynak). Panel
+  kapanınca `--panel-w` küçülür, tuval büyür. Altında biçim künyesi.
+- **Zemin barı:** seçili zeminin görseli + adı + **favori kalbi**, kategori
+  segmentleri, yuvarlak örnekler; oklar iki yandaki kenar payında.
+- **Favoriler (öne alınan iş, geçici):** yalnızca bu tarayıcıda
+  (`lib/favorite-backgrounds.ts`). Favoriler rafından seçim kullanıcıyı
+  kendi kategorisine atlatmıyor.
+- **Üst bar:** geri, `01 Sahne · 02 Düzenle · 03 Tamamla` adımları
+  (`studio-steps.ts`), kısayollar, ana menü, altın **Dışa Aktar** (İndir'i açar).
+- **Test:** jsdom'da `matchMedia` yok → `useIsDesktop()` hep telefon döner;
+  masaüstü testleri `matchMedia`'yı taklit ediyor.
+
+**Telefon:** aşağıdaki "ince bar + menü kartı" düzeni geçerli (zemin artık
+bardaki bir araç değil, tuvalin altındaki bar).
+
+### Telefon: ince bar + menü kartı (18.09.2026)
 
 Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar ve fotoğrafın
 altında **ince bir Liquid Glass bar** ile onun üstünde açılan **menü kartı**
@@ -378,7 +422,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**312 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
+**378 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -1003,6 +1047,57 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   çalışma `sessionStorage`'a yazılır ve ana sayfaya gidilir; araç abone olunca açar
   (`workspace-provider.tsx`). Sağlayıcı her sayfada `SiteShell` ile yeniden kurulduğu için
   bellekte tutmak yetmez.
+
+## Yönetim paneli (`/admin`, Faz 6)
+
+Kaan, 18.09.2026. Backend: Serhan'ın admin API'si (`backend/README.md` →
+admin uçları). **Yetki backend'de** (`require_admin`); arayüzdeki her ekran
+seçimi yalnızca gösterim — sayfa elle açılsa da veri gelmez.
+
+- **Yöneticilik bilgisi:** `components/admin/use-admin-status.ts` →
+  `GET /api/admin/me`. Kullanıcı değişince yeniden sorulur; cevap gelene kadar
+  "kontrol ediliyor" (bağlantı bir an görünüp kaybolmasın). Hesap menüsünde
+  yalnız yöneticiye "Yönetim paneli" bağlantısı.
+- **Vekiller** (`app/api/admin/**`, ortak tip ve sınırlar `lib/admin-api.ts`):
+  kimlik UUID mi, sayılar backend sınırlarında mı; gövde bilinen alanlarla
+  yeniden kuruluyor (istemcinin fazladan alanı backend'e gitmiyor); kredi,
+  geri alma ve silmede Origin kontrolü.
+- **Genel bakış:** sayaçlar, günlük kesim ve kayıt grafikleri
+  (`daily-bars.tsx` — tek seri, altın, 2px aralıklı ince barlar, üzerine
+  gelince ipucu, ekran okuyucu tablosu; altının koyu yüzeydeki kontrastı
+  betikle ölçüldü), abonelik durumları, bonus kredi bakiyesi, gelir
+  hareketleri, bekleyen operasyon. Başarısız iş ORANI gösterilmiyor (payda
+  sıfırken yanıltıcı olur), iki sayı ayrı.
+- **Kullanıcılar:** "E-posta ile ara" (ad araması Faz 7'ye ertelendi),
+  sayfalama (toplam sayı yok; sonraki sayfa, satır sayısı sayfa boyuna
+  eşitse var sayılır).
+- **Kullanıcı ayrıntısı:** özet, dönemler, ödemeler, onaylar, bekleyen
+  sağlayıcı işleri; **bonus kredi** (dönem kotasını büyütmez) — form
+  idempotency anahtarını hata sonrası KORUR, başarıdan sonra YENİLER;
+  **geri alma** (onaylı); **hesap silme** — e-posta birebir yazılmadan düğme
+  kapalı, yönetici hesabında hiç sunulmuyor (backend de `409 admin_target`).
+- **Yönetici ekleme/çıkarma (19.09.2026, PR #25 incelemesi — Codex'in bulduğu
+  eksik: `admin_add`/`admin_remove` denetim eylemleri tanımlıydı ama kullanan
+  bir uç/arayüz yoktu).** Kullanıcı başlığının yanında "Yönetici yap" /
+  "Yöneticiliği kaldır" düğmesi; hesap silmedeki aynı desen — hedefin
+  e-postası birebir yazılana kadar onay düğmesi kapalı. `POST`/`DELETE
+  /api/admin/users/{id}/admin`'e gidiyor; son yöneticinin kaldırılması
+  backend'de `409 last_admin` ile reddedilir, arayüz bunu olduğu gibi
+  gösterir (kendi tarafında ayrı bir "son yönetici" kontrolü YOK — asıl
+  kontrol backend'de).
+- **Etiketler kaynağından:** abonelik durumları ve tahsilat türleri
+  migration CHECK kısıtlarından birebir (ders 19).
+- **Zeminler (19.09.2026):** yükleme formu (JPEG/PNG/WebP/HEIC, 20 MB, paket
+  seviyesi) + kütüphane ızgarası. Liste `GET /api/admin/backgrounds`ten geliyor
+  ve **pasif zeminleri de** gösteriyor (kullanıcıya giden listeden farkı bu).
+  Önizleme adresleri süreli imzalı R2 URL'leri; liste `expires_in` dolmadan
+  kendini yeniliyor (süre istemciye sabitlenmiyor). **Güncelleme/silme yok** —
+  kategori ve baskı uyarısı burada değil `lib/background-catalog.ts`'te.
+  Her kartta **paket seçici** (Temel / Tüm paketler) ve **Yayında** anahtarı
+  var; ikisi de `PATCH` ile gidiyor ve ekrana **sunucunun döndürdüğü** değer
+  yazılıyor (istemcinin tahmini değil — ayrışırlarsa kullanıcı yanlış paketi
+  görürdü). **Silme iki adımlı** (çöp kutusu → "Sil"/"Vazgeç") ve geri
+  alınamaz; sunucu reddederse kart listede kalır ve hata görünür.
 
 ## Ödemeler (Faz 5)
 

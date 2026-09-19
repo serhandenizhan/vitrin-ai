@@ -15,6 +15,7 @@
 
 import { useRef, type ComponentType } from "react";
 
+import { useDockVariant } from "@/components/composer/dock";
 import { GlassLens } from "@/components/composer/glass-lens";
 import { useHorizontalWheel } from "@/components/composer/use-horizontal-wheel";
 
@@ -37,6 +38,45 @@ export function ToolBar({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   useHorizontalWheel(containerRef);
+  const variant = useDockVariant();
+
+  if (variant === "side") {
+    // Sag panel: bes esit segment, ayrac yok (adimlar zaten ust barda),
+    // okunur boyutta etiket; secili segmentin altinda cam mercek kayar.
+    const all = groups.flatMap((group) => group.tools);
+    return (
+      <div
+        ref={containerRef}
+        role="tablist"
+        aria-label="Araçlar"
+        className="relative grid rounded-full bg-black/20 p-0.5"
+        style={{ gridTemplateColumns: `repeat(${all.length}, minmax(0, 1fr))` }}
+      >
+        <GlassLens containerRef={containerRef} activeKey={activeTool} />
+        {all.map((tool) => {
+          const Icon = tool.icon;
+          const isActive = activeTool === tool.id;
+          return (
+            <button
+              key={tool.id}
+              type="button"
+              role="tab"
+              data-lens-key={tool.id}
+              aria-selected={isActive}
+              onClick={() => onToolChange(tool.id)}
+              className={
+                "press relative z-10 flex h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-full text-[0.6875rem] leading-none transition-colors " +
+                (isActive ? "font-medium text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
+              }
+            >
+              <Icon className={"size-[1.0625rem] " + (isActive ? "text-gold" : "")} strokeWidth={isActive ? 2 : 1.6} aria-hidden />
+              {tool.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div

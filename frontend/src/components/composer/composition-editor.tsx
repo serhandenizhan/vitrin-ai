@@ -16,11 +16,15 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   CheckCircle2,
+  Eye,
+  ChevronLeft,
+  Heart,
+  Info,
   Contrast,
   Crosshair,
   Download,
-  Image as ImageIcon,
   ImagePlus,
   Loader2,
   MessageCircle,
@@ -35,7 +39,11 @@ import {
 import type Konva from "konva";
 
 import { useBackgrounds } from "@/components/composer/use-backgrounds";
-import { Dock, DockStrip } from "@/components/composer/dock";
+import { Dock, DockStrip, PANEL_GROUP, PANEL_ROW, useDockVariant } from "@/components/composer/dock";
+import { useIsDesktop } from "@/components/composer/use-is-desktop";
+import { BackgroundLibrary, BackgroundRail } from "@/components/composer/stage-backgrounds";
+import { StageCurtain } from "@/components/composer/stage-curtain";
+import { STUDIO_STEPS } from "@/components/composer/studio-steps";
 import { ToolBar } from "@/components/composer/tool-bar";
 import { finishBackgroundFade } from "@/components/composer/background-fade";
 import {
@@ -56,6 +64,10 @@ import {
   DEFAULT_FORMAT_NAME,
   normalizeAngle,
   isDefaultAppearance,
+  normalizeAppearance,
+  REFLECTION_GAP_RANGE,
+  SHADOW_OPACITY_RANGE,
+  SHADOW_SIZE_RANGE,
   logicalSize,
   fitToStage,
   MARKETPLACE_BACKGROUND_ID,
@@ -75,6 +87,11 @@ import {
 import { useLogo } from "@/lib/use-logo";
 import { useStageSize } from "@/components/composer/use-stage-size";
 import { useBackgroundSelection } from "@/components/composer/use-background-selection";
+import {
+  readFavoriteBackgrounds,
+  toggleFavorite,
+  writeFavoriteBackgrounds,
+} from "@/lib/favorite-backgrounds";
 import type { EditorDraft } from "@/lib/project-record";
 
 const EditorStage = dynamic(
@@ -103,12 +120,25 @@ export type CompositionEditorProps = {
   onSendToCatalog?: (jpegDataUrl: string) => boolean;
   /** Navbar'daki kısa çalışma özetini aktif adım ve araçla günceller. */
   onStatusChange?: (status: EditorStatus) => void;
+  /**
+   * Ustteki adim gostergesi / "Disa Aktar" icin: editor buraya bir gezinme
+   * fonksiyonu yazar, studyo tiklamada onu cagirir.
+   */
+  navigateRef?: React.RefObject<((request: StudioNavigation) => void) | null>;
   initialDraft?: EditorDraft | null;
   onSave?: (draft: EditorDraft) => Promise<boolean>;
   onDownloaded?: () => Promise<boolean>;
 };
 
+/** Ust bardan editore: `tool` (telefon) ya da `stage` (masaustu, yalniz geri). */
+export type StudioNavigation = { tool: string; stage?: number };
+
 export type EditorStatus = {
+  /**
+   * "stages": masaustu asamali akis — ust bardaki adimlar yalnizca GERIYE
+   * tiklanabilir. "tools": telefon — adim, arac cubugunu acar.
+   */
+  mode?: "stages" | "tools";
   step: number;
   totalSteps: number;
   stepLabel: string;
@@ -138,10 +168,9 @@ const EDITOR_STEPS = [
  * durum degil, secili aractan turetiliyor.
  */
 const STEP_TOOLS = {
-  1: [
-    { id: "boyut", label: "Boyut", icon: Ratio },
-    { id: "zemin", label: "Zemin", icon: ImageIcon },
-  ],
+  // Zemin artik bir arac degil: tuvalin altinda SABIT duran seritte (Kaan,
+  // 19.09.2026) — en sik degisen secim, bir menunun arkasinda durmamali.
+  1: [{ id: "boyut", label: "Boyut", icon: Ratio }],
   2: [
     { id: "yerlesim", label: "Yerleşim", icon: Move },
     { id: "gorunum", label: "Görünüm", icon: SlidersHorizontal },
@@ -151,6 +180,33 @@ const STEP_TOOLS = {
     { id: "indir", label: "İndir", icon: Download },
   ],
 } as const;
+
+/**
+ * Masaustu asamali akis (Kaan, 19.09.2026): Asama 1 "Sahne" = bicim + zemin,
+ * Asama 2 "Duzenle" = Yerlesim · Gorunum · Marka, Asama 3 "Tamamla" = indirme.
+ */
+const STAGE_TWO_TOOLS = ["yerlesim", "gorunum", "marka"] as const;
+const STAGE_TWO_GROUPS = [
+  {
+    step: 2,
+    label: "Düzenle",
+    tools: [...STEP_TOOLS[2], ...STEP_TOOLS[3].filter((tool) => tool.id === "marka")],
+  },
+];
+
+type StudioStage = 1 | 2 | 3;
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return true;
+  return Boolean(
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.classList.contains("reduce-motion"),
+  );
+}
+
+function isDesktopNow(): boolean {
+  return typeof window !== "undefined" && Boolean(window.matchMedia?.("(min-width: 64rem)").matches);
+}
 
 const TOOL_GROUPS = EDITOR_STEPS.map((item) => ({
   step: item.id,
@@ -163,15 +219,25 @@ const ALL_TOOLS: readonly { id: string; label: string }[] = EDITOR_STEPS.flatMap
   (item) => [...STEP_TOOLS[item.id]],
 );
 
+/** Sag panel basligindaki simge, arac kimligine gore. */
+const TOOL_ICONS: Record<string, (typeof STEP_TOOLS)[1][number]["icon"]> = Object.fromEntries(
+  EDITOR_STEPS.flatMap((item) => STEP_TOOLS[item.id].map((tool) => [tool.id, tool.icon])),
+);
+
 function toolLabel(id: string | null): string {
   return ALL_TOOLS.find((tool) => tool.id === id)?.label ?? "";
 }
 
 /**
- * Acilista secili gelen arac: bilincli olarak ILK arac degil "Zemin" — bicim
- * zaten makul bir varsayilanla (A4) aciliyor, kullanicinin ilk gercek karari zemin.
+ * Acilista secili gelen arac. Zemin seridi her zaman gorunur oldugu icin
+ * (19.09.2026) panel, zeminden sonraki ilk is olan yerlesimle aciliyor.
  */
-const DEFAULT_TOOL = "zemin";
+const DEFAULT_TOOL = "yerlesim";
+
+/** Eski taslaklarda kayitli "zemin" araci artik yok; varsayilana dusurulur. */
+function initialTool(saved: string | undefined): string {
+  return saved && ALL_TOOLS.some((tool) => tool.id === saved) ? saved : DEFAULT_TOOL;
+}
 
 type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
 
@@ -190,6 +256,13 @@ const ADJUSTMENTS = [
 ] as const;
 
 type AdjustmentId = (typeof ADJUSTMENTS)[number]["id"];
+
+/** Kaydiraclarin sinirlari — sag panelde ucu birden gosterildigi icin ortak. */
+const ADJUSTMENT_RANGES: Record<AdjustmentId, { min: number; max: number; step: number; format: (v: number) => string }> = {
+  brightness: { min: -0.3, max: 0.3, step: 0.01, format: (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+  contrast: { min: -40, max: 40, step: 1, format: (v) => `${v > 0 ? "+" : ""}${Math.round(v)}` },
+  saturation: { min: -1, max: 1, step: 0.02, format: (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+};
 
 /** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
 const MIN_SCALE_RATIO = 0.25;
@@ -236,6 +309,7 @@ export function CompositionEditor({
   onReturnToStart,
   onSendToCatalog,
   onStatusChange,
+  navigateRef,
   initialDraft,
   onSave,
   onDownloaded,
@@ -253,7 +327,7 @@ export function CompositionEditor({
   /** Baskiya onerilmeyen zeminde CMYK indirmeden once acilan onay. */
   const [pendingPrintFormat, setPendingPrintFormat] = useState<"jpeg" | "tiff" | null>(null);
   const [transform, setTransform] = useState<Transform | null>(initialDraft?.transform ?? null);
-  const [appearance, setAppearance] = useState<Appearance>(initialDraft?.appearance ?? DEFAULT_APPEARANCE);
+  const [appearance, setAppearance] = useState<Appearance>(() => normalizeAppearance(initialDraft?.appearance));
   // Studyo yalnizca istemcide acildigi icin (kullanici etkilesimiyle) tembel
   // baslangic degeri localStorage'i guvenle okuyabiliyor; sunucu cizimi yok.
   // Logo akisi studyo ve katalogda AYNI (bkz. lib/use-logo.ts).
@@ -270,7 +344,7 @@ export function CompositionEditor({
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   /** Arac cubugunda secili arac; panel bunun paletini gosteriyor. */
-  const [activeTool, setActiveTool] = useState<string>(initialDraft?.activeTool ?? DEFAULT_TOOL);
+  const [activeTool, setActiveTool] = useState<string>(initialTool(initialDraft?.activeTool));
   const step = stepOfTool(activeTool);
   /**
    * Bar kucultulmus mu (Kaan, 18.09.2026). Kucultulunce menu karti kalkar,
@@ -301,8 +375,98 @@ export function CompositionEditor({
    * Geri: once menunun icindeki alt katman (kaydirac -> Gorunum), sonra bir
    * onceki arac. Gecmis bossa sirada bir onceki arac (Zemin -> Boyut).
    */
+
   /** Tek satirlik menuler ince kartla acilir, tuval o kadar buyur. */
-  const isCompactMenu = activeTool === "zemin" || activeTool === "boyut";
+  const isCompactMenu = activeTool === "boyut";
+  const isDesktop = useIsDesktop();
+  /**
+   * Masaustu asamasi ve gecis perdesi. Studyo acilirken (masaustunde) perde
+   * kapali baslar ve kalkar; sonraki gecislerde iner, asama perdenin
+   * ARKASINDA degisir (`onCovered`), sonra kalkar.
+   */
+  const [stage, setStage] = useState<StudioStage>(1);
+  const [curtain, setCurtain] = useState<{ stage: StudioStage; mode: "initial" | "drop"; key: number } | null>(() =>
+    isDesktopNow() && !prefersReducedMotion() ? { stage: 1, mode: "initial", key: 0 } : null,
+  );
+  const applyStage = useCallback((next: StudioStage) => {
+    setStage(next);
+    setIsCollapsed(false);
+    if (next === 2) {
+      setActiveTool((current) =>
+        (STAGE_TWO_TOOLS as readonly string[]).includes(current) ? current : "yerlesim",
+      );
+    }
+  }, []);
+  const goToStage = useCallback(
+    (next: StudioStage) => {
+      if (next === stage) return;
+      if (prefersReducedMotion()) {
+        applyStage(next);
+        return;
+      }
+      setCurtain((current) => ({ stage: next, mode: "drop", key: (current?.key ?? 0) + 1 }));
+    },
+    [stage, applyStage],
+  );
+
+  // Ust bardan gelen istek. Efekt DEGIL, dogrudan cagrilan bir fonksiyon:
+  // studyo tiklamada `navigateRef.current(...)` cagiriyor. Efekt yalnizca
+  // guncel kapanisi ref'e yaziyor (efekt icinde state degismiyor).
+  useEffect(() => {
+    if (!navigateRef) return;
+    navigateRef.current = (request) => {
+      if (isDesktopNow() && request.stage) {
+        // Asamali akista ust adimlar yalnizca GERIYE gider; ileri ancak ✓ ile.
+        if (request.stage < stage) goToStage(request.stage as StudioStage);
+        return;
+      }
+      openTool(request.tool);
+    };
+    return () => {
+      navigateRef.current = null;
+    };
+  }, [navigateRef, openTool, stage, goToStage]);
+
+  /** Onizle (goz) basili tutulurken tutamaclar gizli (Asama 2). */
+  const [isCleanView, setIsCleanView] = useState(false);
+  // Kisayol: Asama 2'de BOSLUK basili tutulunca temiz gorunum. Yazi alanlarinda
+  // (etiket, gram, urun kodu) bosluk yazmaya devam etsin diye onlar haric.
+  // Bir dugmeye odakliyken de calisir; varsayilan engellendigi icin o dugme
+  // tiklanmis sayilmaz.
+  const cleanViewShortcut = isDesktop && stage === 2;
+  useEffect(() => {
+    if (!cleanViewShortcut) return;
+    function isTyping(target: EventTarget | null) {
+      return (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      );
+    }
+    function handleDown(event: KeyboardEvent) {
+      if (event.code !== "Space" || isTyping(event.target)) return;
+      event.preventDefault();
+      setIsCleanView(true);
+    }
+    function handleUp(event: KeyboardEvent) {
+      if (event.code !== "Space" || isTyping(event.target)) return;
+      event.preventDefault();
+      setIsCleanView(false);
+    }
+    function reset() {
+      setIsCleanView(false);
+    }
+    window.addEventListener("keydown", handleDown);
+    window.addEventListener("keyup", handleUp);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", handleDown);
+      window.removeEventListener("keyup", handleUp);
+      window.removeEventListener("blur", reset);
+    };
+  }, [cleanViewShortcut]);
+
+  /** Zemin seridinde uzerine gelinen zeminin adi (macOS Dock gibi baslikta). */
+  const [hoveredBackgroundName, setHoveredBackgroundName] = useState<string | null>(null);
   const toolIndex = ALL_TOOLS.findIndex((tool) => tool.id === activeTool);
   const previousTool =
     toolHistory.at(-1) ?? (toolIndex > 0 ? ALL_TOOLS[toolIndex - 1].id : null);
@@ -409,6 +573,21 @@ export function CompositionEditor({
 
   // Zemin secimi, bicime gore filtreleme ve kategori sekmeleri tek yerde
   // (bkz. use-background-selection.ts).
+  /**
+   * Begenilen zeminler (one alinan is, 19.09.2026): yalnizca bu tarayicida.
+   * Stüdyo yalnizca istemcide acildigi icin ilk deger dogrudan okunabiliyor.
+   */
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
+    typeof window === "undefined" ? [] : readFavoriteBackgrounds(),
+  );
+  const toggleFavoriteBackground = useCallback((id: string) => {
+    setFavoriteIds((current) => {
+      const next = toggleFavorite(current, id);
+      writeFavoriteBackgrounds(next);
+      return next;
+    });
+  }, []);
+
   const {
     selected: selectedBackground,
     shownGroup,
@@ -416,7 +595,7 @@ export function CompositionEditor({
     fitting: fittingBackgrounds,
     select: selectBackground,
     showCategory,
-  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null);
+  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null, favoriteIds);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -732,86 +911,31 @@ export function CompositionEditor({
   const tools = STEP_TOOLS[step];
 
   useEffect(() => {
+    if (isDesktop) {
+      const label = STUDIO_STEPS.find((item) => item.step === stage)?.label ?? "";
+      onStatusChange?.({
+        mode: "stages",
+        step: stage,
+        totalSteps: STUDIO_STEPS.length,
+        stepLabel: label,
+        toolLabel: stage === 2 ? toolLabel(activeTool) : label,
+      });
+      return;
+    }
     const stepLabel = EDITOR_STEPS.find((item) => item.id === step)?.label ?? "";
-    const toolLabel = tools.find((item) => item.id === activeTool)?.label ?? stepLabel;
+    const currentToolLabel = tools.find((item) => item.id === activeTool)?.label ?? stepLabel;
     onStatusChange?.({
+      mode: "tools",
       step,
       totalSteps: EDITOR_STEPS.length,
       stepLabel,
-      toolLabel,
+      toolLabel: currentToolLabel,
     });
-  }, [activeTool, onStatusChange, step, tools]);
+  }, [activeTool, onStatusChange, step, tools, isDesktop, stage]);
 
-  /**
-   * Dock'un basligi, sag ustteki baglam denetimi ve paleti.
-   *
-   * Tek yerde toplaniyor: "o an secili arac neyse dock onu gosterir" kurali
-   * bir switch olarak okunabilir kalsin, JSX'in icine dagilmasin.
-   */
-  const dock = (() => {
-    if (activeTool === "boyut") {
-      return {
-        title: "Çıktı boyutu",
-        action: <span className="on-dark-muted fine-print">{format.outputWidth}×{format.outputHeight}</span>,
-        body: (
-          <DockStrip label="Çıktı boyutları">
-            {(
-              Object.entries(OUTPUT_FORMATS) as [
-                OutputFormatName,
-                (typeof OUTPUT_FORMATS)[OutputFormatName],
-              ][]
-            ).map(([name, option]) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => changeFormat(name)}
-                aria-pressed={formatName === name}
-                className={
-                  "press w-28 shrink-0 snap-start rounded-xl px-2.5 py-2 text-left transition-colors " +
-                  (formatName === name
-                    ? "ring-gold bg-white/10 ring-2"
-                    : "ring-1 ring-white/12 hover:bg-white/6")
-                }
-              >
-                {/* Gercek en-boy onizlemesi: bicimi okumadan da ayirt edilsin. */}
-                <span
-                  className="mb-1.5 block w-7 rounded-[0.25rem] bg-white/25"
-                  style={{ aspectRatio: `${option.outputWidth} / ${option.outputHeight}` }}
-                  aria-hidden
-                />
-                <span className="block text-[0.75rem] font-medium">{option.label}</span>
-                <span className="on-dark-muted block text-[0.6875rem] leading-tight">
-                  {option.summary}
-                </span>
-              </button>
-            ))}
-          </DockStrip>
-        ),
-      };
-    }
-
-    if (activeTool === "zemin") {
-      return {
-        title: "Zemin",
-        // Kategori sekmeleri kartin BASLIK satirinda: ayri bir satir kart
-        // yuksekligini buyutuyor, tuvali kucultuyordu (18.09.2026).
-        action: (
-          <CategoryTabs
-            groups={backgroundGroups}
-            shownGroup={shownGroup}
-            onSelect={showCategory}
-          />
-        ),
-        body: (
-          <>
-            <BackgroundPalette
-              key={shownGroup?.id ?? "all"}
-              items={shownGroup?.items ?? fittingBackgrounds}
-              selectedId={selectedBackground.id}
-              onSelect={selectBackground}
-              gradientCss={gradientCss}
-            />
-
+  /** Zemin kutuphanesi durumu ve pazaryeri uyarisi (serit ve kutuphane ortak). */
+  const backgroundNotice = (
+    <>
             {/*
               Yer tutucu zeminler kullaniciya ACIKCA soyleniyor: gercek zemin
               kutuphanesi yokken "iste zeminleriniz" demek yanlis olurdu.
@@ -849,12 +973,184 @@ export function CompositionEditor({
                 </button>
               </p>
             ) : null}
+    </>
+  );
+
+  /**
+   * Zemin seridi — tuvalin altinda SABIT (Kaan, 19.09.2026): hangi arac acik
+   * olursa olsun gorunur, ince ve kucuk. Kategori sekmeleri basliginda.
+   */
+  const backgroundStrip = (
+    <div role="group" aria-label="Zemin" className="liquid-glass w-full rounded-[1.5rem] px-1 pt-1.5 pb-0.5">
+      {/* Referans gorsel: solda secili zeminin kucuk gorseli + adi, ortada
+          kategori sekmeleri (altin alt cizgi), altta yuvarlak ornekler. */}
+      <div className="grid min-h-8 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-white/8 px-3 pb-1.5">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden
+            className="size-6 shrink-0 overflow-hidden rounded-full ring-1 ring-white/20"
+            style={
+              selectedBackground.type === "placeholder"
+                ? { background: gradientCss(selectedBackground.gradient) }
+                : { backgroundImage: `url("${selectedBackground.thumbnailUrl ?? selectedBackground.url}")`, backgroundSize: "cover", backgroundPosition: "center" }
+            }
+          />
+          <span className="min-w-0 truncate text-[0.6875rem] leading-tight">
+            <span className="font-semibold tracking-[-0.01em]">Zemin</span>
+            <span className="on-dark-muted"> · {hoveredBackgroundName ?? selectedBackground.name}</span>
+          </span>
+          {/* Secili zemini begen / begeniyi kaldir. */}
+          <button
+            type="button"
+            onClick={() => toggleFavoriteBackground(selectedBackground.id)}
+            aria-pressed={favoriteIds.includes(selectedBackground.id)}
+            aria-label={
+              favoriteIds.includes(selectedBackground.id)
+                ? `${selectedBackground.name} favorilerden çıkar`
+                : `${selectedBackground.name} favorilere ekle`
+            }
+            title={favoriteIds.includes(selectedBackground.id) ? "Favorilerden çıkar" : "Favorilere ekle"}
+            className="press flex size-7 shrink-0 items-center justify-center rounded-full hover:bg-white/10"
+          >
+            <Heart
+              className={
+                "size-3.5 transition-colors duration-300 " +
+                (favoriteIds.includes(selectedBackground.id) ? "text-gold fill-current" : "on-dark-muted")
+              }
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          </button>
+        </span>
+        <span className="min-w-0 justify-self-center">
+          <CategoryTabs groups={backgroundGroups} shownGroup={shownGroup} onSelect={showCategory} />
+        </span>
+        <span aria-hidden />
+      </div>
+
+          <>
+            <BackgroundPalette
+              key={shownGroup?.id ?? "all"}
+              items={shownGroup?.items ?? fittingBackgrounds}
+              selectedId={selectedBackground.id}
+              onSelect={selectBackground}
+              onHoverName={setHoveredBackgroundName}
+              favoriteIds={favoriteIds}
+              gradientCss={gradientCss}
+            />
+
+            {backgroundNotice}
           </>
+    </div>
+  );
+
+  /**
+   * Dock'un basligi, sag ustteki baglam denetimi ve paleti.
+   *
+   * Tek yerde toplaniyor: "o an secili arac neyse dock onu gosterir" kurali
+   * bir switch olarak okunabilir kalsin, JSX'in icine dagilmasin.
+   */
+  /** Golge ve yansima ince ayarlari (19.09.2026) — yalnizca ozellik acikken. */
+  const shadowSliders = (
+    <>
+      <Slider
+        label="Gölge boyutu"
+        value={appearance.shadowSize}
+        min={SHADOW_SIZE_RANGE.min}
+        max={SHADOW_SIZE_RANGE.max}
+        step={SHADOW_SIZE_RANGE.step}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onStart={pushHistory}
+        onChange={(v) => setAppearance((a) => ({ ...a, shadowSize: v }))}
+      />
+      <Slider
+        label="Gölge yoğunluğu"
+        value={appearance.shadowOpacity}
+        min={SHADOW_OPACITY_RANGE.min}
+        max={SHADOW_OPACITY_RANGE.max}
+        step={SHADOW_OPACITY_RANGE.step}
+        format={(v) => `${Math.round(v * 100)}%`}
+        onStart={pushHistory}
+        onChange={(v) => setAppearance((a) => ({ ...a, shadowOpacity: v }))}
+      />
+    </>
+  );
+  const reflectionSlider = (
+    <Slider
+      label="Yansıma mesafesi"
+      value={appearance.reflectionGap}
+      min={REFLECTION_GAP_RANGE.min}
+      max={REFLECTION_GAP_RANGE.max}
+      step={REFLECTION_GAP_RANGE.step}
+      format={(v) => (v === 0 ? "bitişik" : `${Math.round(v * 2)} px`)}
+      onStart={pushHistory}
+      onChange={(v) => setAppearance((a) => ({ ...a, reflectionGap: v }))}
+    />
+  );
+
+  const dockFor = (tool: string) => {
+    if (tool === "boyut") {
+      return {
+        title: "Çıktı boyutu",
+        action: <span className="on-dark-muted fine-print">{format.outputWidth}×{format.outputHeight}</span>,
+        body: (
+          <DockStrip label="Çıktı boyutları">
+            {(
+              Object.entries(OUTPUT_FORMATS) as [
+                OutputFormatName,
+                (typeof OUTPUT_FORMATS)[OutputFormatName],
+              ][]
+            ).map(([name, option]) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => changeFormat(name)}
+                aria-pressed={formatName === name}
+                className={
+                  isDesktop
+                    ? PANEL_ROW + " press py-2 " + (formatName === name ? "bg-white/[0.05]" : "hover:bg-white/[0.04]")
+                    : "press w-28 shrink-0 snap-start rounded-xl px-2.5 py-2 text-left transition-colors " +
+                      (formatName === name
+                        ? "ring-gold bg-white/10 ring-2"
+                        : "ring-1 ring-white/12 hover:bg-white/6")
+                }
+              >
+                {/* Gercek en-boy onizlemesi: bicimi okumadan da ayirt edilsin. */}
+                <span
+                  className={isDesktop ? "flex size-8 shrink-0 items-center justify-center" : "contents"}
+                  aria-hidden
+                >
+                  <span
+                    className={isDesktop ? "block h-6 max-w-6 rounded-[0.2rem] ring-1 ring-white/35" : "mb-1.5 block w-7 rounded-[0.25rem] bg-white/25"}
+                    style={{ aspectRatio: `${option.outputWidth} / ${option.outputHeight}` }}
+                  />
+                </span>
+                <span className={isDesktop ? "min-w-0 flex-1" : "contents"}>
+                  <span className="block text-[0.75rem] font-medium">{option.label}</span>
+                  <span className="on-dark-muted block text-[0.6875rem] leading-tight">
+                    {option.summary}
+                  </span>
+                </span>
+                {isDesktop ? (
+                  // Referanstaki yuvarlak secim isareti.
+                  <span
+                    aria-hidden
+                    className={
+                      "flex size-[1.125rem] shrink-0 items-center justify-center rounded-full " +
+                      (formatName === name ? "bg-gold text-[#1a1917]" : "ring-1 ring-white/20")
+                    }
+                  >
+                    {formatName === name ? <Check className="size-3" strokeWidth={3} /> : null}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </DockStrip>
         ),
       };
     }
 
-    if (activeTool === "yerlesim") {
+    if (tool === "yerlesim") {
       return {
         title: "Yerleşim",
         body: (
@@ -872,16 +1168,83 @@ export function CompositionEditor({
       };
     }
 
-    if (activeTool === "gorunum") {
+    if (tool === "gorunum") {
       const preset = matchingPreset(appearance);
       // Ikinci katman: secilen ayarin TEK kaydiraci (iPhone gibi). Geri tusu
       // gorunum menusune doner.
+      if (isDesktop) {
+        return {
+          title: "Görünüm",
+          action: !isDefaultAppearance(appearance) ? (
+            <button
+              type="button"
+              onClick={() => setAppearance(DEFAULT_APPEARANCE)}
+              className="press on-dark-muted text-[0.75rem] underline underline-offset-2 hover:text-[#f3f0eb]"
+            >
+              sıfırla
+            </button>
+          ) : undefined,
+          body: (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-0.5 rounded-xl bg-black/20 p-0.5">
+                {APPEARANCE_PRESETS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      pushHistory();
+                      setAppearance((current) => applyPreset(current, item));
+                    }}
+                    aria-pressed={preset?.id === item.id}
+                    className={
+                      "press min-h-8 truncate rounded-[0.6rem] px-2 text-[0.75rem] transition-colors " +
+                      (preset?.id === item.id
+                        ? "text-gold bg-white/12 font-medium"
+                        : "on-dark-muted hover:text-[#f3f0eb]")
+                    }
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className={PANEL_GROUP}>
+                {ADJUSTMENTS.map((item) => {
+                  const range = ADJUSTMENT_RANGES[item.id];
+                  return (
+                    <Slider
+                      key={item.id}
+                      label={item.label}
+                      value={appearance[item.id]}
+                      min={range.min}
+                      max={range.max}
+                      step={range.step}
+                      format={range.format}
+                      onStart={pushHistory}
+                      onChange={(v) => setAppearance((a) => ({ ...a, [item.id]: v }))}
+                    />
+                  );
+                })}
+              </div>
+              <div className={PANEL_GROUP}>
+                <Toggle
+                  label="Gölge"
+                  isOn={appearance.shadow}
+                  onChange={(on) => setAppearance((a) => ({ ...a, shadow: on }))}
+                />
+                {appearance.shadow ? shadowSliders : null}
+                <Toggle
+                  label="Yansıma"
+                  isOn={appearance.reflection}
+                  onChange={(on) => setAppearance((a) => ({ ...a, reflection: on }))}
+                />
+                {appearance.reflection ? reflectionSlider : null}
+              </div>
+            </div>
+          ),
+        };
+      }
       if (adjustment) {
-        const range = {
-          brightness: { min: -0.3, max: 0.3, step: 0.01, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
-          contrast: { min: -40, max: 40, step: 1, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}` },
-          saturation: { min: -1, max: 1, step: 0.02, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
-        }[adjustment];
+        const range = ADJUSTMENT_RANGES[adjustment];
         const adjustmentLabel = ADJUSTMENTS.find((item) => item.id === adjustment)!.label;
         return {
           title: "Görünüm",
@@ -958,15 +1321,21 @@ export function CompositionEditor({
                 onChange={(on) => setAppearance((a) => ({ ...a, reflection: on }))}
               />
             </div>
+            {appearance.shadow || appearance.reflection ? (
+              <div className="mt-2 space-y-3 px-3">
+                {appearance.shadow ? shadowSliders : null}
+                {appearance.reflection ? reflectionSlider : null}
+              </div>
+            ) : null}
           </>
         ),
       };
     }
 
-    if (activeTool === "marka") {
+    if (tool === "marka") {
       return {
         title: "Marka",
-        action: (
+        action: isDesktop ? undefined : (
           <span className="on-dark-muted fine-print">
             Logo ve ürün bilgisi
           </span>
@@ -987,12 +1356,15 @@ export function CompositionEditor({
             />
             <DockStrip label="Marka öğeleri" centered>
               {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                <span className={isDesktop ? PANEL_ROW + " py-2" : "contents"}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={logoUrl}
                     alt="Yüklenen logo"
                     className="checkerboard size-9 shrink-0 self-center rounded-lg object-contain ring-1 ring-white/15"
                   />
+                  {isDesktop ? <span className="on-dark-muted text-[0.75rem]">Logo yüklendi</span> : null}
+                </span>
               ) : null}
               <DockAction
                 onClick={() => logoInputRef.current?.click()}
@@ -1018,14 +1390,14 @@ export function CompositionEditor({
             </DockStrip>
 
             {(logoUrl || label.enabled) ? (
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className={isDesktop ? "mt-3 space-y-3" : "mt-2 grid gap-2 sm:grid-cols-2"}>
                 {logoUrl ? (
                   <CornerRow
                     label="Logo konumu"
                     value={logo.position ? null : logo.corner}
                     onChange={(corner) => updateLogo({ corner, position: null })}
                   />
-                ) : <span />}
+                ) : isDesktop ? null : <span />}
                 {label.enabled ? (
                   <CornerRow
                     label="Etiket konumu"
@@ -1036,7 +1408,7 @@ export function CompositionEditor({
               </div>
             ) : null}
             {label.enabled ? (
-              <div className="mt-2 flex gap-2 sm:ml-auto sm:w-1/2 sm:pl-1">
+              <div className={isDesktop ? PANEL_GROUP + " mt-3" : "mt-2 flex gap-2 sm:ml-auto sm:w-1/2 sm:pl-1"}>
                 <Toggle
                   label="Koyu etiket"
                   isOn={label.theme === "dark"}
@@ -1097,11 +1469,12 @@ export function CompositionEditor({
         </>
       ),
     };
-  })();
+  };
+  const dock = dockFor(activeTool);
 
   /** Denetcideki ince ayarlar — secili araca gore. */
-  const inspectorBody = (() => {
-    if (activeTool === "yerlesim") {
+  const inspectorFor = (tool: string) => {
+    if (tool === "yerlesim") {
       return (
         <div>
           <div className="fine-print on-dark-muted mb-1.5 flex items-center justify-between">
@@ -1119,15 +1492,12 @@ export function CompositionEditor({
             onChange={(event) => setScaleRatio(Number(event.target.value) / 100)}
             className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15"
           />
-          <p className="fine-print on-dark-muted mt-2 hidden lg:block">
-            Sürükleyerek taşıyın, köşelerden boyutlandırın, üstteki tutamaçtan
-            döndürün.
-          </p>
+
         </div>
       );
     }
 
-    if (activeTool === "marka") {
+    if (tool === "marka") {
       return (
         <>
           <p className="text-[0.75rem] font-medium text-[#f3f0eb]">Logo</p>
@@ -1146,7 +1516,7 @@ export function CompositionEditor({
             <p role="alert" className="fine-print text-red-300">
               {logoMessage}
             </p>
-          ) : (
+          ) : isDesktop ? null : (
             <p className="fine-print on-dark-muted">
               Saydam PNG en iyi sonucu verir. Logo yalnızca bu tarayıcıda hatırlanır.
             </p>
@@ -1217,19 +1587,24 @@ export function CompositionEditor({
       );
     }
 
-    if (activeTool === "indir") {
+    if (tool === "indir") {
       return (
         <>
           <button
             type="button"
             onClick={() => setIsPrintInfoOpen((open) => !open)}
             aria-expanded={isPrintInfoOpen}
-            className="fine-print on-dark-muted underline underline-offset-2 hover:text-[#f3f0eb]"
+            className={
+              isDesktop
+                ? "press on-dark-muted flex items-center gap-1.5 px-1 text-[0.75rem] hover:text-[#f3f0eb]"
+                : "fine-print on-dark-muted underline underline-offset-2 hover:text-[#f3f0eb]"
+            }
           >
+            {isDesktop ? <Info className="size-3.5" strokeWidth={1.75} aria-hidden /> : null}
             CMYK ne demek?
           </button>
           {isPrintInfoOpen ? (
-            <p className="fine-print on-dark-muted leading-relaxed">
+            <p className={"fine-print on-dark-muted leading-relaxed " + (isDesktop ? "rounded-xl bg-white/[0.04] px-3 py-2.5" : "")}>
               Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu seçenek
               görseli, hedef baskı koşulunun ICC profiliyle CMYK renk uzayına
               çevirip profili dosyaya gömer. Saydam alanlar beyaza düzleştirilir,
@@ -1256,94 +1631,339 @@ export function CompositionEditor({
               {exportError}
             </p>
           ) : null}
-          <p className="fine-print on-dark-muted">
-            PNG çıktısı zaten kayıpsızdır; JPEG sıkıştırma uygular.
-          </p>
+          {isDesktop ? null : (
+            <p className="fine-print on-dark-muted">
+              PNG çıktısı zaten kayıpsızdır; JPEG sıkıştırma uygular.
+            </p>
+          )}
         </>
       );
     }
 
     return null;
-  })();
+  };
+  const inspectorBody = inspectorFor(activeTool);
 
-  return (
-    <div className="relative flex w-full flex-col lg:min-h-[calc(100dvh-4.25rem)]">
-      {/* Tuval üstte, bütün kontroller altında tek panelde (iPhone Fotoğraflar düzeni, 18.09.2026). */}
-      <div className="order-1 relative z-0 flex min-w-0 items-center justify-center bg-white px-3 py-5 lg:static lg:flex-1 lg:px-6">
-        <div
-          ref={containerRef}
-          className={
-            "stage-fit w-full min-w-0" +
-            (isCollapsed ? " stage-fit-collapsed" : isCompactMenu ? " stage-fit-compact" : "")
-          }
-          // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde
-          // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
-          // Dock ayrı satırda; dikey pay fotoğrafın tamamını görünür tutar.
-          style={{
-            maxWidth: `min(46rem, calc((100dvh - var(--studio-reserved)) * ${format.outputWidth / format.outputHeight}))`,
-          }}
-        >
-          <div
-            className="overflow-hidden rounded-[1.25rem] shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-white/12"
-            style={{ aspectRatio: `${format.outputWidth} / ${format.outputHeight}` }}
-          >
-            <EditorStage
-              cutoutUrl={cutoutUrl}
-              background={selectedBackground}
-              displayWidth={displaySize}
-              stageWidth={stageSize.width}
-              stageHeight={stageSize.height}
-              transform={transform}
-              appearance={appearance}
-              logoUrl={logoUrl}
-              logo={logo}
-              label={label}
-              onLogoChange={updateLogo}
-              onTransformChange={(next) => {
-                pushHistory();
-                setTransform(next);
-              }}
-              onCutoutSize={setCutoutSize}
-              onStageReady={handleStageReady}
-            />
+  const dockElement = (
+    <Dock
+      title={dock.title}
+      action={dock.action}
+      settings={inspectorBody}
+      tools={
+        <ToolBar
+          groups={isDesktop ? STAGE_TWO_GROUPS : TOOL_GROUPS}
+          activeTool={activeTool}
+          onToolChange={openTool}
+        />
+      }
+      footer={
+        isDesktop ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToStage(1)}
+              className="press on-dark-muted flex h-10 items-center gap-1 rounded-full pr-4 pl-2.5 text-[0.8125rem] hover:bg-white/10 hover:text-[#f3f0eb]"
+            >
+              <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
+              Sahne
+            </button>
+            <button
+              type="button"
+              onClick={() => goToStage(3)}
+              aria-label="Düzenlemeyi bitir, Tamamla aşamasına geç"
+              className="press bg-gold hover:bg-gold/90 ml-auto flex h-10 items-center gap-1.5 rounded-full px-5 text-[0.8125rem] font-medium text-[#1a1917] shadow-[0_6px_16px_-8px_rgb(209_162_91/0.8)]"
+            >
+              <Check className="size-4" strokeWidth={2.5} aria-hidden />
+              Tamamla
+            </button>
           </div>
-          <p className="fine-print text-muted-foreground mt-2 text-center lg:hidden">
-            Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
-            döndürün
-          </p>
+        ) : undefined
+      }
+      activeToolLabel={toolLabel(activeTool)}
+      isCollapsed={isCollapsed}
+      onCollapsedChange={setIsCollapsed}
+      compact={isCompactMenu}
+      variant={isDesktop ? "side" : "bottom"}
+      icon={TOOL_ICONS[activeTool]}
+      layerKey={`${activeTool}:${adjustment ?? ""}`}
+      onBack={goBack}
+      canGoBack={Boolean(adjustment || previousTool)}
+      backLabel={
+        adjustment
+          ? "Görünüm menüsüne dön"
+          : previousTool
+            ? `Önceki araç: ${toolLabel(previousTool)}`
+            : "Önceki araç"
+      }
+    >
+      {dock.body}
+    </Dock>
+  );
+
+  const canvasBlock = (
+          <div
+            ref={containerRef}
+            className={
+              "stage-fit relative w-full min-w-0" +
+              (isCollapsed ? " stage-fit-collapsed" : isCompactMenu ? " stage-fit-compact" : "")
+            }
+            // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde
+            // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
+            style={{
+              maxWidth: `min(var(--stage-cap), calc((100dvh - var(--studio-reserved)) * ${format.outputWidth / format.outputHeight}))`,
+            }}
+          >
+            <div
+              className="overflow-hidden rounded-[1rem] shadow-[0_24px_60px_-30px_rgba(40,30,15,0.45)]"
+              style={{ aspectRatio: `${format.outputWidth} / ${format.outputHeight}` }}
+            >
+              <EditorStage
+                cutoutUrl={cutoutUrl}
+                background={selectedBackground}
+                displayWidth={displaySize}
+                stageWidth={stageSize.width}
+                stageHeight={stageSize.height}
+                transform={transform}
+                appearance={appearance}
+                logoUrl={logoUrl}
+                logo={logo}
+                label={label}
+                onLogoChange={updateLogo}
+                onTransformChange={(next) => {
+                  pushHistory();
+                  setTransform(next);
+                }}
+                onCutoutSize={setCutoutSize}
+                onStageReady={handleStageReady}
+                cleanView={isCleanView}
+              />
+            </div>
+
+            <p className="fine-print text-muted-foreground mt-2 text-center lg:hidden">
+              Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
+              döndürün
+            </p>
+            {/* Masaustu kunye: galeri etiketi gibi, tuvalin altinda sessiz. */}
+            <div className="mt-3 hidden items-center justify-center gap-3 lg:flex">
+              <p className="flex items-center gap-2 text-[0.6875rem] tracking-[0.04em] text-[#1a1917]/45">
+                <span className="font-medium text-[#1a1917]/60">{format.label}</span>
+                <span aria-hidden className="size-0.5 rounded-full bg-current" />
+                <span className="tabular-nums">
+                  {format.outputWidth} × {format.outputHeight} px
+                </span>
+              </p>
+              {isDesktop && stage === 2 ? (
+                // Onizle: BASILI TUTUNCA tutamaclar gizlenir (Kaan, 19.09.2026).
+                // Kisayol: bosluk tusu (basili tut). Tuvalin USTUNDE degil,
+                // kunyenin yaninda — gorselin hicbir kosesini ortmuyor.
+                <button
+                  type="button"
+                  aria-label="Temiz görünüm (basılı tutun)"
+                  aria-pressed={isCleanView}
+                  title="Basılı tutun · kısayol: Boşluk"
+                  onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture?.(event.pointerId);
+                    setIsCleanView(true);
+                  }}
+                  onPointerUp={() => setIsCleanView(false)}
+                  onPointerCancel={() => setIsCleanView(false)}
+                  onLostPointerCapture={() => setIsCleanView(false)}
+                  onBlur={() => setIsCleanView(false)}
+                  className={
+                    "press liquid-glass flex h-8 items-center gap-1.5 rounded-full pr-2 pl-3 text-[0.75rem] transition-colors duration-300 " +
+                    (isCleanView ? "text-gold" : "text-[#f3f0eb]")
+                  }
+                >
+                  <Eye className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  Önizle
+                  <kbd className="on-dark-muted ml-0.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[0.625rem] font-normal">
+                    Boşluk
+                  </kbd>
+                </button>
+              ) : null}
+            </div>
+          </div>
+  );
+
+  /** Zemin secicilerinin ortak ozellikleri (Asama 1 kutuphane, Asama 2 dik bar). */
+  const shelfProps = {
+    groups: backgroundGroups,
+    shownGroup,
+    items: shownGroup?.items ?? fittingBackgrounds,
+    selectedId: selectedBackground.id,
+    favoriteIds,
+    onSelect: selectBackground,
+    onShowCategory: showCategory,
+    onToggleFavorite: toggleFavoriteBackground,
+    gradientCss,
+  };
+
+  const desktopLayout = (
+    // Asamali masaustu (Kaan, 19.09.2026). Tuval sutunu HER asamada ayni
+    // konumda (ikinci cocuk) — Konva sahnesi asama degisince yeniden kurulmuyor.
+    <div
+      className="relative flex h-[calc(100dvh-5.25rem)] w-full items-stretch justify-center gap-6 px-6 pt-7 pb-3"
+      style={{ "--studio-reserved-lg": stage === 3 ? "13rem" : "8.5rem" } as React.CSSProperties}
+    >
+      {/* Sol yuva Asama 2'de SAG PANELLE AYNI GENISLIKTE: tuval boylece ust
+          barla ayni eksende, ekranin tam ortasinda (Kaan, 19.09.2026). Dik
+          zemin bari yuvanin ORTASINDA: tuvale yapisik da durmuyor, en sola da
+          kacmiyor (Kaan, 19.09.2026 ucuncu tur). */}
+      <div
+        className={
+          stage === 2
+            ? "flex min-h-0 justify-center " +
+              (isCollapsed ? "w-[4.75rem] shrink-0" : "min-w-[17rem] max-w-[26rem] flex-1")
+            : "hidden"
+        }
+      >
+        {stage === 2 ? (
+          // Dik zemin bari (Kaan, 19.09.2026: "onceki gibi dik konum"). Yuva
+          // sag panelle esit genislikte kaliyor ki tuval ortada dursun; bar
+          // yuvanin tuvale bakan kenarinda.
+          <div className={"flex min-h-0 " + (isCollapsed ? "w-[4.75rem]" : "w-[7.25rem]")}>
+            <BackgroundRail {...shelfProps} selected={selectedBackground} compact={isCollapsed} />
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className="stage-column flex h-full min-h-0 min-w-0 flex-col"
+        style={
+          {
+            "--stage-ratio": format.outputWidth / format.outputHeight,
+            // Tuvalin yaninda kalan bolmelerin toplam genisligi.
+            "--panel-w":
+              stage === 1 ? "26rem" : stage === 2 ? (isCollapsed ? "11rem" : "36rem") : "0rem",
+          } as React.CSSProperties
+        }
+      >
+        <div className="relative z-0 flex min-h-0 min-w-0 flex-1 items-center justify-center py-1">
+          {canvasBlock}
+        </div>
+        {stage === 3 ? (
+          // Asama 3: yalnizca cikti — hazirlanan gorselin HEMEN ALTINDA.
+          <div role="group" aria-label="Çıktı" className="liquid-glass soft-enter mx-auto mt-3 w-full max-w-[44rem] shrink-0 rounded-[1.5rem] p-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => goToStage(2)}
+                className="press on-dark-muted flex h-10 shrink-0 items-center gap-1 rounded-full pr-4 pl-2.5 text-[0.8125rem] hover:bg-white/10 hover:text-[#f3f0eb]"
+              >
+                <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
+                Düzenle
+              </button>
+              <span className="h-6 w-px shrink-0 bg-white/12" aria-hidden />
+              <div className="min-w-0 flex-1">{dockFor("indir").body}</div>
+            </div>
+            <div className="space-y-1.5 px-3 pt-1 pb-1 text-center empty:hidden">{inspectorFor("indir")}</div>
+          </div>
+        ) : null}
+      </div>
+
+      {stage === 1 ? (
+        <aside aria-label="Sahne" className="relative z-10 flex h-full min-h-0 w-[26rem] shrink-0 flex-col py-1">
+          <BackgroundLibrary
+            {...shelfProps}
+            header={
+              <div className="shrink-0">
+                <div className="flex items-baseline justify-between px-1">
+                  <span className="text-[0.9375rem] font-medium tracking-[-0.01em]">Sahne</span>
+                  <span className="on-dark-muted text-[0.6875rem] tabular-nums">
+                    {format.outputWidth} × {format.outputHeight}
+                  </span>
+                </div>
+                <div role="group" aria-label="Çıktı boyutları" className="mt-2.5 grid grid-cols-2 gap-1.5">
+                  {(Object.entries(OUTPUT_FORMATS) as [OutputFormatName, (typeof OUTPUT_FORMATS)[OutputFormatName]][]).map(
+                    ([name, option]) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => changeFormat(name)}
+                        aria-pressed={formatName === name}
+                        className={
+                          "press flex min-h-10 items-center gap-2.5 rounded-xl px-2.5 text-left text-[0.75rem] transition-colors " +
+                          (formatName === name
+                            ? "bg-white/10 font-medium text-[#f3f0eb] ring-1 ring-[#d1a25b]/60"
+                            : "on-dark-muted bg-white/[0.035] ring-1 ring-white/8 hover:text-[#f3f0eb]")
+                        }
+                      >
+                        <span
+                          aria-hidden
+                          className={"block h-5 max-w-5 shrink-0 rounded-[0.2rem] ring-1 " + (formatName === name ? "ring-[#d1a25b]" : "ring-white/30")}
+                          style={{ aspectRatio: `${option.outputWidth} / ${option.outputHeight}` }}
+                        />
+                        <span className="min-w-0 truncate">{option.label}</span>
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            }
+            notice={<div className="shrink-0 empty:hidden">{backgroundNotice}</div>}
+            footer={
+              <div className="mt-2 flex shrink-0 items-center gap-3 border-t border-white/10 px-1 pt-3">
+                <span className="min-w-0 flex-1 truncate text-[0.75rem]">
+                  <span className="on-dark-muted">Seçili: </span>
+                  {selectedBackground.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goToStage(2)}
+                  aria-label="Sahneyi onayla, Düzenle aşamasına geç"
+                  className="press bg-gold hover:bg-gold/90 flex size-11 shrink-0 items-center justify-center rounded-full text-[#1a1917] shadow-[0_8px_20px_-8px_rgb(209_162_91/0.9)]"
+                >
+                  <Check className="size-5" strokeWidth={2.5} aria-hidden />
+                </button>
+              </div>
+            }
+          />
+        </aside>
+      ) : stage === 2 ? (
+        <aside
+          aria-label="Araç paneli"
+          className={
+            "relative z-10 flex min-h-0 flex-col justify-center " +
+            (isCollapsed ? "w-[4.75rem] shrink-0 items-start" : "min-w-[17rem] max-w-[26rem] flex-1")
+          }
+        >
+          {dockElement}
+        </aside>
+      ) : null}
+
+      {curtain ? (
+        <StageCurtain
+          key={curtain.key}
+          stage={curtain.stage}
+          mode={curtain.mode}
+          onCovered={() => applyStage(curtain.stage)}
+          onDone={() => setCurtain(null)}
+        />
+      ) : null}
+    </div>
+  );
+
+  const mobileLayout = (
+    // Telefon: tuval, zemin seridi ve alt bar alt alta (asamali akis
+    // simdilik yalniz masaustunde — Kaan, 19.09.2026).
+    <div className="relative flex w-full flex-col">
+      <div className="flex min-w-0 flex-col">
+        <div className="relative z-0 flex min-w-0 items-center justify-center px-3 py-5">
+          {canvasBlock}
+        </div>
+
+        <div className="relative z-10 flex shrink-0 justify-center px-3">
+          <div className="w-full max-w-[40rem]">{backgroundStrip}</div>
         </div>
       </div>
 
-      <div className="relative z-10 order-2 mt-2 flex shrink-0 justify-center px-3 pb-4 lg:px-6">
-        <Dock
-          title={dock.title}
-          action={dock.action}
-          settings={inspectorBody}
-          tools={
-            <ToolBar
-              groups={TOOL_GROUPS}
-              activeTool={activeTool}
-              onToolChange={openTool}
-            />
-          }
-          activeToolLabel={toolLabel(activeTool)}
-          isCollapsed={isCollapsed}
-          onCollapsedChange={setIsCollapsed}
-          compact={isCompactMenu}
-          layerKey={`${activeTool}:${adjustment ?? ""}`}
-          onBack={goBack}
-          canGoBack={Boolean(adjustment || previousTool)}
-          backLabel={
-            adjustment
-              ? "Görünüm menüsüne dön"
-              : previousTool
-                ? `Önceki araç: ${toolLabel(previousTool)}`
-                : "Önceki araç"
-          }
-        >
-          {dock.body}
-        </Dock>
-      </div>
+      <div className="relative z-10 mt-2 flex shrink-0 justify-center px-3 pb-4">{dockElement}</div>
+    </div>
+  );
+
+  /** Indirme sonrasi soru ve baski onayi — iki duzende de ortak. */
+  const dialogs = (
+    <>
       {afterDownload ? (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-5">
           <button
@@ -1464,7 +2084,14 @@ export function CompositionEditor({
           </div>
         </div>
       ) : null}
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {isDesktop ? desktopLayout : mobileLayout}
+      {dialogs}
+    </>
   );
 }
 
@@ -1490,6 +2117,28 @@ function Slider({
       uretirdi. */
   onStart?: () => void;
 }) {
+  const variant = useDockVariant();
+  if (variant === "side") {
+    return (
+      <div className="px-3.5 pt-2.5 pb-3">
+        <div className="mb-2 flex items-center justify-between text-[0.8125rem]">
+          <span>{label}</span>
+          <span className="on-dark-muted tabular-nums text-[0.75rem]">{format(value)}</span>
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={label}
+          onPointerDown={onStart}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15"
+        />
+      </div>
+    );
+  }
   return (
     <div>
       <div className="fine-print on-dark-muted mb-1.5 flex items-center justify-between">
@@ -1520,6 +2169,34 @@ function Toggle({
   isOn: boolean;
   onChange: (isOn: boolean) => void;
 }) {
+  const variant = useDockVariant();
+  if (variant === "side") {
+    return (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        onClick={() => onChange(!isOn)}
+        className={PANEL_ROW + " press hover:bg-white/[0.04]"}
+      >
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span
+          aria-hidden
+          className={
+            "relative h-[1.375rem] w-9 shrink-0 rounded-full transition-colors duration-300 " +
+            (isOn ? "bg-gold" : "bg-white/15")
+          }
+        >
+          <span
+            className={
+              "absolute top-0.5 left-0.5 size-[1.125rem] rounded-full bg-white shadow transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] " +
+              (isOn ? "translate-x-[0.875rem]" : "")
+            }
+          />
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -1553,10 +2230,11 @@ function CornerRow({
   value: Corner | null;
   onChange: (corner: Corner) => void;
 }) {
+  const variant = useDockVariant();
   return (
     <div role="group" aria-label={label}>
       <span className="fine-print on-dark-muted mb-1.5 block px-1">{label}</span>
-      <div className="flex gap-2">
+      <div className={variant === "side" ? "grid grid-cols-4 gap-0.5 rounded-xl bg-black/20 p-0.5" : "flex gap-2"}>
         {CORNERS.map((corner) => (
           <button
             key={corner.id}
@@ -1564,10 +2242,13 @@ function CornerRow({
             onClick={() => onChange(corner.id)}
             aria-pressed={value === corner.id}
             className={
-              "press min-h-9 flex-1 rounded-lg text-[0.75rem] transition-shadow " +
-              (value === corner.id
-                ? "ring-gold text-gold bg-white/10 ring-2"
-                : "on-dark-muted ring-1 ring-white/12 hover:bg-white/6 hover:text-[#f3f0eb]")
+              variant === "side"
+                ? "press min-h-8 truncate rounded-[0.6rem] text-[0.6875rem] transition-colors " +
+                  (value === corner.id ? "text-gold bg-white/12 font-medium" : "on-dark-muted hover:text-[#f3f0eb]")
+                : "press min-h-9 flex-1 rounded-lg text-[0.75rem] transition-shadow " +
+                  (value === corner.id
+                    ? "ring-gold text-gold bg-white/10 ring-2"
+                    : "on-dark-muted ring-1 ring-white/12 hover:bg-white/6 hover:text-[#f3f0eb]")
             }
           >
             {corner.label}
@@ -1596,6 +2277,21 @@ function DockAction({
   disabled?: boolean;
   icon?: React.ReactNode;
 }) {
+  const variant = useDockVariant();
+  if (variant === "side") {
+    // Sag panelde satir: solda yuvarlak simge kutusu, ad (referans gorsel).
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={PANEL_ROW + " press hover:bg-white/[0.06] disabled:opacity-40"}
+      >
+        <span className="on-dark-muted flex w-4 shrink-0 justify-center">{icon}</span>
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"

@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.main import app
 from app.models.background import Background
+from app.models.project import Project
 from app.services import storage as storage_module
 from app.services.billing import limits
 
@@ -189,6 +190,35 @@ async def test_happy_path_uploads_and_creates_row(db_session, admin_headers):
     row = result.scalar_one()
     assert row.r2_key == f"backgrounds/{background_id}.jpg"
     assert row.is_active is True
+
+    from app.services.billing.db import many
+
+    audit = await many(
+        db_session,
+        "SELECT actor_id,action,detail FROM admin_audit_log WHERE subject_id=:id",
+        id=str(background_id),
+    )
+    assert len(audit) == 1
+    assert audit[0]["action"] == "background_create"
+    assert audit[0]["detail"]["tier"] == "basic"
+
+
+async def test_upload_rate_limit_is_fail_closed(db_session, admin_headers, monkeypatch):
+    async def _redis_down(_key: str):
+        raise RedisConnectionError("Redis kapalı")
+
+    monkeypatch.setattr(limits.admin_limiter, "retry_after", _redis_down)
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/admin/backgrounds",
+        files={"file": ("bg.jpg", _jpeg_bytes(), "image/jpeg")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 500
+    storage_mock.upload.assert_not_called()
 
 
 async def test_r2_upload_failure_returns_502_and_creates_no_row(db_session, admin_headers):
@@ -415,3 +445,238 @@ async def test_checkout_rate_limit_stays_fail_closed_on_a_redis_outage():
             await limits.limit_checkout(user)
     finally:
         limits.checkout_limiter.retry_after = original
+
+
+async def test_admin_list_requires_admin(db_session, tokens, create_user):
+    # Oturum yetmez, rol gerekir (SECURITY.md 3.2) — RED yolu.
+    user_id = await create_user()
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(side_effect=lambda key: f"https://signed.example/{key}")
+    client = _client(db_session, storage_mock)
+
+    assert client.get("/api/admin/backgrounds").status_code == 401
+    assert (
+        client.get("/api/admin/backgrounds", headers=tokens.headers(user_id)).status_code == 403
+    )
+
+
+async def test_admin_list_includes_inactive_and_full_tier(db_session, admin_headers):
+    # Panelin asıl işi: kullanıcıya GİTMEYEN zemini de göstermek. Kullanıcı ucu
+    # (`GET /api/backgrounds`) yalnızca aktif + `basic` döndürüyor; bu iki liste
+    # AYNI veritabanında farklı sonuç vermeli, yoksa panel bir şey eklemiyor.
+    active = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg", is_active=True)
+    passive = Background(id=uuid.uuid4(), r2_key="backgrounds/p.jpg", is_active=False)
+    full = Background(id=uuid.uuid4(), r2_key="backgrounds/f.jpg", tier="full", is_active=True)
+    db_session.add_all([active, passive, full])
+    await db_session.commit()
+
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(
+        side_effect=lambda key: f"https://signed.example/{key}"
+    )
+    client = _client(db_session, storage_mock)
+
+    body = client.get("/api/admin/backgrounds", headers=admin_headers).json()
+
+    assert {row["id"] for row in body} == {str(active.id), str(passive.id), str(full.id)}
+    by_id = {row["id"]: row for row in body}
+    assert by_id[str(passive.id)]["is_active"] is False
+    assert by_id[str(full.id)]["tier"] == "full"
+    assert by_id[str(active.id)]["thumbnail_url"] == "https://signed.example/backgrounds/thumbs/a.jpg"
+    assert by_id[str(active.id)]["expires_in"] == settings.background_url_expiry_seconds
+
+    # Aynı veriyle kullanıcı ucu yalnızca aktif + basic görüyor.
+    public = client.get("/api/backgrounds").json()
+    assert {row["id"] for row in public} == {str(active.id)}
+
+
+async def test_admin_list_survives_a_redis_outage(db_session, admin_headers, monkeypatch):
+    # Okuma ucu fail-open: sınırlayıcının altyapı arızası paneli karartmamalı
+    # (kök CLAUDE.md hız sınırı kuralı).
+    db_session.add(Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg"))
+    await db_session.commit()
+
+    async def _redis_down(_key: str):
+        raise RedisConnectionError("Redis kapalı")
+
+    monkeypatch.setattr(limits.public_limiter, "retry_after", _redis_down)
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(side_effect=lambda key: f"https://signed.example/{key}")
+    client = _client(db_session, storage_mock)
+
+    response = client.get("/api/admin/backgrounds", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+async def test_update_background_requires_admin(db_session, tokens, create_user):
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    client = _client(db_session, AsyncMock())
+
+    assert client.patch(f"/api/admin/backgrounds/{bg.id}", json={"tier": "full"}).status_code == 401
+    user_id = await create_user()
+    assert (
+        client.patch(
+            f"/api/admin/backgrounds/{bg.id}",
+            json={"tier": "full"},
+            headers=tokens.headers(user_id),
+        ).status_code
+        == 403
+    )
+    await db_session.refresh(bg)
+    assert bg.tier == "basic"
+
+
+async def test_update_background_changes_tier_and_visibility(db_session, admin_headers):
+    # PASİF = SİLİNMİŞ DEĞİL: satır duruyor, yalnız kullanıcı listesinden çıkıyor.
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+
+    storage_mock = AsyncMock()
+    storage_mock.generate_presigned_url = MagicMock(side_effect=lambda key: f"https://signed.example/{key}")
+    client = _client(db_session, storage_mock)
+
+    body = client.patch(
+        f"/api/admin/backgrounds/{bg.id}",
+        json={"tier": "full", "is_active": False},
+        headers=admin_headers,
+    ).json()
+
+    assert body["tier"] == "full" and body["is_active"] is False
+    # Kullanıcı ucundan düştü ama satır ve nesneler duruyor.
+    assert client.get("/api/backgrounds").json() == []
+    assert len(client.get("/api/admin/backgrounds", headers=admin_headers).json()) == 1
+    storage_mock.delete.assert_not_called()
+
+
+async def test_update_background_writes_one_audit_row_only_when_changed(db_session, admin_headers):
+    # Faz 6 kuralı 5: idempotent tekrar, olmamış ikinci bir eylem göstermemeli.
+    from app.services.billing.db import many
+
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    client = _client(db_session, AsyncMock())
+
+    client.patch(f"/api/admin/backgrounds/{bg.id}", json={"is_active": False}, headers=admin_headers)
+    client.patch(f"/api/admin/backgrounds/{bg.id}", json={"is_active": False}, headers=admin_headers)
+
+    rows = await many(
+        db_session,
+        "SELECT action,detail FROM admin_audit_log WHERE subject_id=:id",
+        id=str(bg.id),
+    )
+    assert len(rows) == 1
+    assert rows[0]["action"] == "background_update"
+
+
+async def test_update_background_rejects_unknown_field(db_session, admin_headers):
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    client = _client(db_session, AsyncMock())
+
+    response = client.patch(
+        f"/api/admin/backgrounds/{bg.id}", json={"r2_key": "backgrounds/baska.jpg"}, headers=admin_headers
+    )
+
+    assert response.status_code == 422
+    await db_session.refresh(bg)
+    assert bg.r2_key == "backgrounds/a.jpg"
+
+
+async def test_delete_background_removes_row_and_both_objects(db_session, admin_headers):
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert (await db_session.execute(select(Background))).scalars().all() == []
+    # Asıl görsel VE küçük önizleme; biri unutulursa bucket'ta yer tutar.
+    assert {call.args[0] for call in storage_mock.delete.await_args_list} == {
+        "backgrounds/a.jpg",
+        "backgrounds/thumbs/a.jpg",
+    }
+
+
+async def test_delete_background_succeeds_even_if_storage_fails(db_session, admin_headers):
+    # Depolama arızası, kullanıcının gözünde tamamlanmış silmeyi 500'e
+    # çevirmemeli: satır zaten gitti, geri dönüş yok.
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    storage_mock.delete.side_effect = ClientError({"Error": {"Code": "500"}}, "DeleteObject")
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert (await db_session.execute(select(Background))).scalars().all() == []
+
+
+async def test_delete_background_rejects_a_saved_draft_reference(
+    db_session, admin_headers, create_user
+):
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    owner = await create_user()
+    project = Project(
+        id=uuid.uuid4(),
+        user_id=owner,
+        file_name="yuzuk.jpg",
+        result_r2_key=f"projects/{owner}/result.png",
+        thumbnail_r2_key=f"projects/{owner}/thumb.png",
+        editor_state={"backgroundId": str(bg.id)},
+    )
+    db_session.add_all([bg, project])
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın."
+    )
+    assert await db_session.scalar(select(Background).where(Background.id == bg.id))
+    storage_mock.delete.assert_not_called()
+
+
+async def test_delete_background_requires_admin_and_writes_audit(db_session, tokens, create_user, admin_headers):
+    from app.services.billing.db import many
+
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    user_id = await create_user()
+    assert client.delete(f"/api/admin/backgrounds/{bg.id}").status_code == 401
+    assert client.delete(f"/api/admin/backgrounds/{bg.id}", headers=tokens.headers(user_id)).status_code == 403
+    storage_mock.delete.assert_not_called()
+
+    client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+    rows = await many(
+        db_session, "SELECT action FROM admin_audit_log WHERE subject_id=:id", id=str(bg.id)
+    )
+    assert [row["action"] for row in rows] == ["background_delete"]
+
+
+async def test_delete_missing_background_returns_404(db_session, admin_headers):
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{uuid.uuid4()}", headers=admin_headers)
+
+    assert response.status_code == 404
+    storage_mock.delete.assert_not_called()

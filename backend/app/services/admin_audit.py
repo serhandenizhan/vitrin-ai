@@ -22,6 +22,7 @@ ACTIONS = (
     "credit_grant",
     "credit_revoke",
     "user_delete",
+    "background_create",
     "background_update",
     "background_delete",
     "admin_add",

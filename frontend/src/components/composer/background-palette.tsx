@@ -26,12 +26,12 @@
  */
 
 import { useEffect, useRef } from "react";
+import { Heart } from "lucide-react";
 
 import { GlassLens } from "@/components/composer/glass-lens";
 import { ScrollArrows } from "@/components/composer/scroll-arrows";
 import { useHorizontalWheel } from "@/components/composer/use-horizontal-wheel";
-import type { BackgroundGroup } from "@/components/composer/use-background-selection";
-import type { BackgroundCategory } from "@/lib/background-categories";
+import type { BackgroundGroup, BackgroundShelf } from "@/components/composer/use-background-selection";
 import type { Background } from "@/lib/backgrounds";
 
 /** Seçim geçişlerinin ortak eğrisi — iOS'un yay hissine yakın, uzun kuyruklu. */
@@ -44,7 +44,7 @@ export function CategoryTabs({
 }: {
   groups: BackgroundGroup[];
   shownGroup: BackgroundGroup | undefined;
-  onSelect: (category: BackgroundCategory | null) => void;
+  onSelect: (category: BackgroundShelf | null) => void;
 }) {
   const stripRef = useRef<HTMLDivElement | null>(null);
   useHorizontalWheel(stripRef);
@@ -56,7 +56,8 @@ export function CategoryTabs({
       ref={stripRef}
       role="tablist"
       aria-label="Zemin kategorileri"
-      className="dock-strip relative flex min-w-0 gap-0.5 overflow-x-auto"
+      // Sag paneldeki arac sekmeleriyle AYNI segment kontrolu (19.09.2026).
+      className="dock-strip relative flex min-w-0 overflow-x-auto rounded-full bg-black/20 p-0.5"
     >
       <GlassLens containerRef={stripRef} activeKey={shownGroup?.id} />
       {groups.map((group) => {
@@ -73,12 +74,15 @@ export function CategoryTabs({
             aria-label={`${group.label} · ${group.items.length}`}
             onClick={() => onSelect(group.id)}
             className={
-              "press relative z-10 flex min-h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[0.75rem] whitespace-nowrap transition-colors " +
+              "press relative z-10 flex min-h-7 shrink-0 items-center gap-1 rounded-full px-3 text-[0.6875rem] whitespace-nowrap transition-colors " +
               SOFT +
               " " +
               (isShown ? "font-semibold text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
             }
           >
+            {group.id === "favoriler" ? (
+              <Heart className="text-gold size-3 fill-current" strokeWidth={0} aria-hidden />
+            ) : null}
             {group.label}
             <span className="tabular-nums opacity-55" aria-hidden>
               {group.items.length}
@@ -90,30 +94,36 @@ export function CategoryTabs({
   );
 }
 
+/**
+ * macOS Dock düzeni (Kaan, 19.09.2026): görseller alta hizalı, üzerine gelinen
+ * büyür, iki komşusu daha az büyür (`.mac-dock`, globals.css). Seçili zeminin
+ * altında küçük bir nokta var; ad, şeridin başlığında yazıyor (üzerine
+ * gelinenin, yoksa seçilinin adı) — seçim yine renkle birlikte ADIYLA da belli.
+ */
 export function BackgroundPalette({
   items,
   selectedId,
   onSelect,
+  onHoverName,
+  favoriteIds = [],
   gradientCss,
 }: {
   items: Background[];
   selectedId: string;
   onSelect: (id: string) => void;
+  /** Üzerine gelinen zeminin adı (`null` = ayrıldı); başlıkta gösterilir. */
+  onHoverName?: (name: string | null) => void;
+  /** Begenilen zeminler — ornegin kosesinde kucuk altin kalp. */
+  favoriteIds?: readonly string[];
   gradientCss: (stops: (number | string)[]) => string;
 }) {
-  // Kategori degisince bilesen UST bilesende `key` ile yeniden kuruluyor
-  // (composition-editor.tsx): serit `glass-content-in` ile bulaniktan
-  // netlesiyor ve tekerlek/ok dinleyicileri YENI seride baglaniyor. Anahtar
-  // seridin kendisine verilseydi dinleyiciler eski ogede kalirdi.
   const stripRef = useRef<HTMLDivElement | null>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
   const hasCenteredRef = useRef(false);
   useHorizontalWheel(stripRef);
 
   // Seçili zemin şeridin ortasına getiriliyor — yalnızca şeridin KENDİ
-  // kaydırması; `scrollIntoView` mobilde bütün stüdyoyu kaydırıyordu. İlk
-  // açılışta anında (kart açılırken kayan şerit rahatsız ediyor), sonra
-  // YUMUŞAK kayarak.
+  // kaydırması; `scrollIntoView` mobilde bütün stüdyoyu kaydırıyordu.
   useEffect(() => {
     const strip = stripRef.current;
     const selected = selectedRef.current;
@@ -130,7 +140,8 @@ export function BackgroundPalette({
       <div
         ref={stripRef}
         aria-label="Zeminler"
-        className="dock-strip palette-fade glass-content-in relative flex snap-x gap-2 overflow-x-auto px-2 pt-1.5 pb-1"
+        onMouseLeave={() => onHoverName?.(null)}
+        className="dock-strip relative flex items-center gap-3 overflow-x-auto px-3 py-2"
       >
         {items.map((background) => {
           const isActive = background.id === selectedId;
@@ -140,17 +151,20 @@ export function BackgroundPalette({
               ref={isActive ? selectedRef : undefined}
               type="button"
               onClick={() => onSelect(background.id)}
+              onMouseEnter={() => onHoverName?.(background.name)}
+              onFocus={() => onHoverName?.(background.name)}
               aria-pressed={isActive}
-              className="press w-[3.75rem] shrink-0 snap-start text-center"
+              title={background.name}
+              className="press relative w-8 shrink-0"
             >
               <span
                 className={
-                  "block aspect-square w-full overflow-hidden rounded-[0.8rem] transition-[transform,box-shadow] " +
+                  "block aspect-square w-full overflow-hidden rounded-full transition-shadow " +
                   SOFT +
                   " " +
                   (isActive
-                    ? "ring-gold scale-[1.06] ring-2 shadow-[0_6px_16px_-8px_rgb(0_0_0/0.6)]"
-                    : "ring-1 ring-white/15 hover:scale-[1.04]")
+                    ? "ring-gold ring-2 ring-offset-2 ring-offset-[#1f1d1a]"
+                    : "ring-1 ring-white/15")
                 }
                 style={
                   background.type === "placeholder"
@@ -159,9 +173,6 @@ export function BackgroundPalette({
                 }
               >
                 {background.type === "server" ? (
-                  // <img>, CSS arka plani degil: `loading="lazy"` yalnizca
-                  // gorunen ornekleri indiriyor ve onizleme yoksa tam boyutlu
-                  // gorsele dusmek icin `onError` gerekiyor.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={background.thumbnailUrl ?? background.url}
@@ -179,20 +190,16 @@ export function BackgroundPalette({
                   />
                 ) : null}
               </span>
-              {/* Ad her zeminin altinda, TEK satir; secili olan altin ve kalin.
-                  Yalnizca renge guvenilmiyor (erisilebilirlik). Uzun ad
-                  `title` ile tamamen okunur. */}
-              <span
-                title={background.name}
-                className={
-                  "mt-1.5 block truncate text-[0.625rem] leading-3 transition-colors " +
-                  SOFT +
-                  " " +
-                  (isActive ? "text-gold font-semibold" : "on-dark-muted")
-                }
-              >
-                {background.name}
-              </span>
+              {favoriteIds.includes(background.id) ? (
+                <span
+                  aria-hidden
+                  className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-[#1f1d1a] ring-1 ring-white/15"
+                >
+                  <Heart className="text-gold size-2 fill-current" strokeWidth={0} />
+                </span>
+              ) : null}
+              {/* Ad erisilebilir metin olarak dugmede kaliyor; gorunur ad baslikta. */}
+              <span className="sr-only">{background.name}</span>
             </button>
           );
         })}
