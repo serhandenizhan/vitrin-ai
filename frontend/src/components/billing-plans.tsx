@@ -39,6 +39,36 @@ export function BillingPlans({ catalog }: { catalog: PlanPresentation[] }) {
   return <BillingPlansForUser key={user?.id ?? "anonymous"} catalog={catalog} />;
 }
 
+/** SSS de kartlarla ayni canli plan kotasini kullanir; iki metin ayrisamaz. */
+export function TrialQuotaAnswer() {
+  const [quota, setQuota] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    billingFetch<Plan[]>("/api/plans")
+      .then((plans) => {
+        if (active) setQuota(plans.find((plan) => plan.id === "deneme")?.monthly_quota ?? null);
+      })
+      .catch(() => {
+        if (active) setQuota(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (quota === undefined) return <>Deneme planının güncel aylık hakkı yükleniyor…</>;
+  if (quota === null) {
+    return <>Deneme planının güncel aylık hakkını yukarıdaki plan kartında görebilirsiniz.</>;
+  }
+  return (
+    <>
+      Ücretsiz Deneme planında ayda {quota} fotoğraf işleyebilirsiniz. Kullanım
+      hakkınız her ay yenilenir.
+    </>
+  );
+}
+
 function BillingPlansForUser({ catalog }: { catalog: PlanPresentation[] }) {
   const { user, openSignIn } = useWorkspace();
   const active = useRef(true);

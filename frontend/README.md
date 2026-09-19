@@ -26,6 +26,11 @@ npm run dev
 | `USE_MOCK_BACKEND` | `true` | Demo modu — backend hiç çağrılmaz, sabit bir örnek kesim döner. Giriş yine gerekir. |
 | `NEXT_PUBLIC_SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | boş | Supabase publishable (anon) anahtarı; tarayıcıya gitmek için tasarlandı, veriyi RLS koruyor. Boşsa site açılır ama giriş yapılamaz. `service_role`/secret anahtar buraya asla yazılmaz. |
+| `NEXT_PUBLIC_DATA_CONTROLLER_NAME` | boş | KVKK veri sorumlusu ve hizmet sağlayıcının gerçek kişi/tüzel kişi unvanı. |
+| `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` | boş | KVKK başvurusu, destek ve sözleşme iletişim e-postası. |
+| `NEXT_PUBLIC_LEGAL_ADDRESS` / `NEXT_PUBLIC_LEGAL_PHONE` | boş | Yasal metinlerde yayımlanan merkez adresi ve telefon. |
+| `NEXT_PUBLIC_LEGAL_KEP` | boş | Varsa KEP adresi. |
+| `NEXT_PUBLIC_LEGAL_REGISTRY_NUMBER` | boş | Şirket için MERSİS; gerçek kişi işletmesi için ilgili sicil/vergi bilgisi. |
 | `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. Kullanılan profil ECI **PSO Coated v3** (eci.org → `pso-coated_v3.zip` → `PSOcoated_v3.icc`). **Depoya konmaz:** lisansı gömmeye izin veriyor ama dağıtmaya izin vermiyor, depo herkese açık. Dosyayı depo dışına indirip yolunu buraya yazın (ayrıntı: kök `CLAUDE.md` açık takip maddesi 1). |
 
 > **`USE_MOCK_BACKEND` uyarısı:** bu değer `true` kaldığı sürece gerçek backend
@@ -198,6 +203,125 @@ Gizlilik, Kullanım Koşulları ve Çekim Rehberi gerçek sayfalara bağlıdır.
 Durum taşıyan tek parça `background-remover.tsx`; diğer bölümlerin hepsi sunucu
 bileşeni, yani istemciye hiç inmiyor.
 
+## Stüdyo düzeni: ince bar + menü kartı (18.09.2026)
+
+Stüdyo **beyaz bir çalışma alanı**, koyu camlı yüzen navbar ve fotoğrafın
+altında **ince bir Liquid Glass bar** ile onun üstünde açılan **menü kartı**
+kullanır. Örnek iPhone Fotoğraflar'ın düzenleme ekranı (Kaan, 18.09.2026).
+Aynı gün dört kez yinelendi; her turun sebebi bir sonrakinin kuralı oldu:
+
+1. Sağda yüzen denetçi + altta dock → her değişiklikte göz ve fare iki yere gidiyordu.
+2. Tuvalin altında tek panel, içerik boyunda → bar her araçta birkaç piksel kayıyor,
+   geri dönmek için düğme her seferinde yeniden aranıyordu.
+3. Aynı panel sabit 12,5rem → bar kalınlaştı, görsel bütünlük bozuldu.
+4. Geri tuşu kartı kapatıyordu → "geri" araçlar arasında gezinmek içindir;
+   kartı kapatmak ayrı bir "küçült" düğmesinin işi.
+
+**Şimdiki yapı** (`dock.tsx`, `tool-bar.tsx`):
+
+- **Bar (3,25rem) HİÇ KIPIRDAMAZ.** Solda ‹ geri, ince ayraç, altı araç, sağda ⌄ küçült; araçlar
+  simge + küçük adla; adımlar (Sahne · Düzenle · Tamamla — Kaan, 17.09) ince
+  ayraçlarla gruplu, "Devam" yok. Seçili aracın altında bir cam **mercek
+  kayarak** yer değiştirir.
+- **Menü kartı** barın üstündeki SABİT yükseklikli (10,5rem) alanın altına
+  hizalı açılır: kart büyüse de küçülse de bar yerinde kalır. Uzun içerik
+  kartın içinde kayar. Açılışta Zemin menüsü açık.
+- **Geri tuşu araçlar arasında gezer:** bir önceki araca döner (gezinme
+  geçmişi; geçmiş boşsa sırada bir önceki araç — Zemin → Boyut). Görünüm'de
+  kaydıraç açıksa önce Görünüm menüsüne. Kartı kapatmaz; gidilecek yer yoksa pasif.
+- **Küçült tuşu** kartı ve barı tek bir küçük hapa ("⌃ Zemin") indirir; tuval
+  o yeri alarak BÜYÜR. Bar ile tuval aynı eğriyle (520 ms) birlikte hareket
+  eder: kart alanı yüksekliği sıfıra iner (`.dock-card-area`), tuvalin
+  `--studio-reserved` payı küçülür (`.stage-fit-collapsed`; masaüstünde
+  25rem → 11,5rem; ince kartta 23,5rem) ve hesaplanan `max-width` geçişle kayar. Hapa ya da bir
+  araca basınca geri açılır.
+- **Geçişler:** kart açılırken barın üzerinden "camdan büyür" (ölçek + bulanıktan
+  netleşme, `glass-morph-in`); menü içinde katman değişince yalnızca içerik
+  bulanıktan netleşir (`glass-content-in`). Eğri iOS'un yay hissine yakın
+  (`cubic-bezier(0.32, 0.72, 0, 1)`), "hareketi azalt"ta kapalı.
+
+**Liquid Glass tonlaması** (`.liquid-glass`, `.liquid-glass-pill`): ton,
+üstteki navbar'ın camıyla (`glass-panel`) **aynı kömür grisi** (Kaan, 18.09.2026).
+Sırasıyla denenip bırakılanlar: koyu ilk sürüm ("Apple'dakine benzemiyor"),
+açık beyaz (beyaz çalışma alanında kayboldu), açık gri ("sadece gri değil" —
+hâlâ beyaz okundu). Liquid Glass hissi tondan değil katmanlardan geliyor:
+bulanıklık + doygunluk, üstte parlak iç çizgi ve ışık lekesi, `::before` ile
+köşelerde parlayan gradyan kenar, seçili aracın altında kayan cam mercek.
+**Premium tur:** üstte ince ışık bandı, alttan sıcak altın bir iç parıltı,
+keskin üst specular + çok ince iç kontur, sol üstte beyazdan sağ altta markanın
+altınına dönen kenar, iki katmanlı derin gölge; cam damlaları (mercek, geri/
+küçült) parlak üst yarım küreli.
+
+| Grup | Araç | Menü kartındaki içerik |
+| --- | --- | --- |
+| Sahne | Boyut · **Zemin** | biçim kartları / kategori sekmeleri + adlarıyla yatay zemin şeridi |
+| Düzenle | Yerleşim · Görünüm | hızlı eylemler + boyut kaydıracı / hazır ayarlar, gölge, yansıma; ayar seçilince tek kaydıraç |
+| Tamamla | Marka · İndir | logo, etiket, saydamlık, ayar, gram, kod / çıktı türleri, CMYK, WhatsApp, kaydet |
+
+### Zemin seçici
+
+- **İnce kart (Zemin, Boyut):** kategori sekmeleri kartın BAŞLIK satırında
+  (ayrı satır kartı büyütüyordu); kart alanı 10,5 → 9rem, tuval aynı miktarda
+  büyür (`.stage-fit-compact`, masaüstünde `--studio-reserved` 25 → 23,5rem),
+  ikisi aynı eğriyle birlikte hareket eder. Adlar TEK satır: iki satırlık ad
+  kartın alt kenarında kesiliyor ve gizli kaydırma çubuğu yüzünden hiç
+  görünmüyordu. Uzun ad `title` ile tamamen okunur.
+- **Yumuşak geçişler:** seçim halkası, büyüme, gölge ve ad rengi aynı uzun
+  eğriyle (500 ms); seçilen zemin şeridin ortasına yumuşak kayar (ilk açılışta
+  anında). Kategori değişince seçim camı sekmeler arasında süzülür
+  (`glass-lens.tsx` — araç çubuğuyla ortak) ve şerit bulanıktan netleşir.
+  Palet kategoriye göre `key` ile yeniden kurulur: anahtar şeridin kendisine
+  verilseydi tekerlek/ok dinleyicileri eski öğede kalırdı.
+- **Kategori sekmeleri + adlarıyla YATAY şerit** (18.09.2026). Arada dikey
+  ızgara denendi ve bırakıldı: kart büyüdü, adlar kayboldu, sağda ikinci bir
+  kaydırma çubuğu çıktı (Kaan: "aşağı yukarı değil sağa sola"). Yatay şeridin
+  asıl kusuru fare tekerleğiydi: artık **tekerlek şeridi sağa/sola kaydırıyor**
+  (`use-horizontal-wheel.ts` — dikey hareketi yataya çevirir, şerit ucunda
+  olayı sayfaya bırakır, dokunmatik yüzeyin yatay hareketine dokunmaz). Aynı
+  davranış paneldeki bütün şeritlerde ve araç çubuğunda.
+- **Kaydırma çubukları gizli** (`.dock-strip`, `.dock-scroll`); devamın olduğunu
+  sağ kenardaki solma (`palette-fade`) söylüyor.
+- Seçili zemin **altın halka VE adıyla** belli (ad her örneğin altında, seçilide
+  altın ve kalın); yalnızca renge güvenilmiyor.
+- Seçili zemin yalnızca şeridin kendi kaydırmasıyla ortaya gelir; sayfanın
+  konumu değişmez.
+- **Sağ/sol oklar** (`scroll-arrows.tsx`): şeridin iki kenarında cam oklar;
+  bir ok yalnızca o yönde gidilecek yer varsa görünür, her basış görünen
+  genişliğin ~%80'i kadar kaydırır (son kart bir sonraki sayfada da görünsün).
+  Aynı oklar paneldeki diğer yatay şeritlerde de var.
+- **Zeminler arası çapraz geçiş** (`editor-stage.tsx`): yeni zemin eskisinin
+  üstünde 0,42 sn'de saydamlıktan belirir; eski zemin geçiş boyunca geçici bir
+  Konva düğümü olarak altta durur, bitince silinir. "Hareketi azalt"ta geçiş
+  yok. **Çıktı güvenliği:** geçiş ortasında indirme yapılırsa dosyaya iki
+  zeminin karışımı girerdi — `renderStage` dışa aktarmadan önce
+  `finishBackgroundFade` (`background-fade.ts`) ile geçişi anında bitiriyor.
+  Yüklenemeyen zemin (ders 23) `useLoadedImage`'den `null` döndüğü için geçiş
+  hiç başlamaz. Test ortamındaki sahte sahnenin `find`'ı artık gerçek Konva
+  gibi seçiciye göre dönüyor (önceden her seçiciye tutamak dönüyordu).
+- 93 katalog zemininin renk/desen adı `src/lib/background-names.ts` içinde
+  kimliğe bağlıdır; sunucu sırası değişse de isim değişmez.
+
+### Hazır görünüm ayarları
+
+`appearance-presets.ts`: Doğal · Parlak · Sıcak · Net · Yumuşak. Değerler
+kaydıraçların kendi sınırları içinde. Kaydıraç elle oynatılınca seçili ön ayar
+işareti **kalkıyor** — arayüzün "Parlak" derken değerlerin başka bir şey olması,
+ekranın söylediğiyle dosyanın içindekinin ayrışması demekti. Gölge ve yansımaya
+ön ayar dokunmuyor: ikisi de kullanıcının kendi açtığı/kapattığı şeyler.
+
+### Tuval, dock ve telefon düzeni (17.09.2026 güncellemesi)
+
+Stüdyo çalışma alanı ve kesim sonuç kartı beyazdır. Navbar koyu, bulanık camlı,
+kenarlardan boşluklu bir kapsüldür. Başlık, yan düğmelerin genişliğinden bağımsız ortalanır.
+Tuval ekranın ortasındadır; sağda artık ayrı bir kart yok. Panel ayrı satırda ve ekran merkezindedir;
+fotoğrafın hiçbir bölümünü örtmez ve sürükleme sırasında kaybolmaz.
+Yerleşim ve görünüm paletinin düğmeleri kendi satırlarında ortalanır.
+
+Telefonda tuval ve panel normal akışta yer alır; araç çubuğu dar ekranda yatay kayar. Tuval yapışkan
+değildir; uzun araçlar sayfa kaydırılarak kullanılır. `--studio-reserved` telefonlarda
+`max(15rem, 48dvh)`, masaüstünde `25rem` (bar + menü kartı alanı için 21rem'den büyütüldü) olarak fotoğrafa ayrılan yüksekliği sınırlar.
+Ölçüm hook'u dar kapsayıcılarda 240 px altına da inebilir; sahne kapsayıcıdan taşmaz.
+
 ## Üst çubuk
 
 **11.09.2026'dan beri yüzen bir kapsül** (kullanıcı: "soluk ve eski moda
@@ -254,7 +378,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**281 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı).
+**312 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -393,9 +517,16 @@ URLs'e `http://localhost:3000/auth/callback`
 (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`),
 parola kuralı ve e-posta bağlantı süresi ayarlanmalı.
 
-**E-posta teslimi:** Resend SMTP sandbox bağlantısı doğrulandı (14.09.2026).
-Üretimde kendi alan adının SPF/DKIM ve gönderen adresi kurulumu bekliyor;
-bkz. kök `CLAUDE.md` açık takip maddesi 4.
+**E-posta teslimi — gerçek kullanıcılara HİÇ ulaşmıyor (17.09.2026'da
+doğrulandı).** Resend'in gönderen adresi hâlâ `onboarding@resend.dev`; bu
+alan adı yalnızca Resend hesap sahibinin kendi e-postasına teslimat yapıyor.
+Yerelde başka bir kullanıcıyla kayıt/parola sıfırlama denenirse Supabase
+Auth Logs'ta `/auth/v1/signup` veya `/auth/v1/recover` **500**, Resend
+Logs'ta karşılık gelen istek **403** görünür — 14.09.2026'daki "doğrulama"
+hesap sahibinin kendi adresiyle yapılmıştı, sandbox kısıtına hiç çarpmamıştı.
+Kök sebep, kaynaklar ve geçici kilit açma yolu (Supabase yönetici API'siyle
+parolayı e-postasız doğrudan ayarlamak) kök `CLAUDE.md` açık takip maddesi
+5'te.
 
 ### Geçmiş sunucuda
 
@@ -820,8 +951,8 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
 
 ### Zemin kütüphanesi: kategoriler ve baskı uyarısı (öne alınan iş, 17.09.2026)
 
-- **Kategoriler:** stüdyodaki zemin seçici 4 sekmeye ayrıldı — Sade, Doku & desen,
-  Doğal & çiçekli, Lüks & koyu. Tanımlar `src/lib/background-categories.ts`. Boş
+- **Kategoriler:** stüdyodaki zemin seçici 4 sekmeye ayrıldı — Sade, Desen,
+  Doğal, Lüks. Tanımlar `src/lib/background-categories.ts`. Boş
   kategori sekmesi çizilmez; yalnızca bir kategori doluysa (ör. sunucu zemini yokken)
   sekme hiç yoktur. Hazır gradyanlar ve katalogda olmayan her zemin "Sade" sayılır.
 - **Kategori nerede tutuluyor:** veritabanında DEĞİL. `src/lib/background-catalog.ts`
@@ -860,7 +991,8 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   ilk uyan zemine geçer.
 - **Yansıma:** ayrı Konva katmanında aynalanmış kopya, `destination-in` gradyanıyla aşağı doğru
   silikleşir (aynı katmanda ürünü de silerdi). Sürüklerken anlık takip eder; geri alma yığınına
-  yalnızca bırakınca yazılır.
+  yalnızca bırakınca yazılır. Eksen, kesimin saydam kenarları hariç görünür ürün
+  sınırlarından hesaplanır; boşluklu PNG dosyalarında yansıma ürünün altına bitişir.
 - **Gölge:** `SHADOW` sabiti (bulanıklık 50, kayma 34, opaklık %55). Eski değer Konva'da
   ölçüldü ve koyu zeminde görünmüyordu; önbellek gölgeyi kesiyor sanılmıştı, ölçüm bunu
   çürüttü. Önbelleğe yine de gölge payı veriliyor.

@@ -24,23 +24,21 @@
  * bkz. kok CLAUDE.md "Arayuz tasarim dili").
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LogIn, Menu, PanelLeft, UserRound } from "lucide-react";
+import { ChevronDown, Gauge, LogIn, LogOut, Menu, PanelLeft, UserRound } from "lucide-react";
 
 import { NavPanel } from "@/components/nav-panel";
-import {
-  HakkindaIcerik,
-  NasilCalisirIcerik,
-} from "@/components/nav-panel-contents";
+import { NasilCalisirIcerik } from "@/components/nav-panel-contents";
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { displayName } from "@/lib/profile";
 import { cn } from "@/lib/utils";
+import { billingFetch, type Subscription } from "@/lib/billing";
 
 const LINKS = [
-  { href: "/#dene", label: "Deneyin" },
+  { href: "/calismalar", label: "Çalışmalar" },
   { href: "/katalog", label: "Katalog" },
   { href: "/paketler", label: "Paketler" },
   { href: "/cekim-rehberi", label: "Rehber" },
@@ -50,16 +48,13 @@ const LINKS = [
 /** Panel aciyor; sirasi menudeki gorunum sirasi. */
 const PANELLER = [
   { ad: "nasil", etiket: "Nasıl çalışır" },
-  { ad: "hakkinda", etiket: "Hakkında" },
 ] as const;
 
 type PanelAdi = (typeof PANELLER)[number]["ad"] | "menu";
 
 export function SiteHeader() {
   const {
-    isSidebarOpen,
     toggleSidebar,
-    works,
     openSignIn,
     user,
     isAuthLoaded,
@@ -68,63 +63,63 @@ export function SiteHeader() {
   // Ayni anda tek panel: iki panelin ust uste binmesi ya da biri acikken
   // digerinin arkasinda kalmasi mumkun olmasin.
   const [acikPanel, setAcikPanel] = useState<PanelAdi | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const closePanel = () => setAcikPanel(null);
+  const isCompact = isScrolled && !isHovered && acikPanel === null;
+
+  useEffect(() => {
+    const update = () => setIsScrolled(window.scrollY > 64);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
 
   return (
     <>
       <header className="pointer-events-none sticky top-0 z-50 -mb-15 h-15 px-3 pt-3">
         <nav
           aria-label="Ana gezinme"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           className={cn(
-            "pointer-events-auto mx-auto flex h-12 w-full max-w-6xl items-center gap-1 rounded-full pr-1.5 pl-1.5 sm:gap-2",
+            "pointer-events-auto mx-auto flex h-12 w-full max-w-6xl items-center gap-1 rounded-full pr-1.5 pl-1.5 sm:gap-2 lg:max-w-none",
             "bg-[#171614]/80 text-[#f3f0eb] ring-1 ring-white/[0.09] backdrop-blur-xl backdrop-saturate-150",
-            "shadow-[0_12px_40px_-14px_rgba(0,0,0,0.75)]",
+            "shadow-[0_12px_40px_-14px_rgba(0,0,0,0.75)] transition-[width,box-shadow,background-color] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+            isCompact
+              ? "lg:w-[34.5rem] lg:bg-[#171614]/88 lg:shadow-[0_16px_48px_-16px_rgba(0,0,0,0.88)]"
+              : "lg:w-[min(72rem,calc(100vw-1.5rem))]",
           )}
         >
-          {/* Panel dugmesi en solda — calismalar ve ayarlar oraya bagli. */}
           <button
             type="button"
-            onClick={toggleSidebar}
-            aria-expanded={isSidebarOpen}
-            aria-label={
-              isSidebarOpen
-                ? "Çalışmalarım ve ayarlar panelini kapat"
-                : "Çalışmalarım ve ayarlar panelini aç"
-            }
-            className={cn(
-              "relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
-              isSidebarOpen
-                ? "bg-white/15 text-[#f3f0eb]"
-                : "text-[#f3f0eb]/80 hover:bg-white/10 hover:text-[#f3f0eb]",
-            )}
+            onClick={() => {
+              closePanel();
+              toggleSidebar();
+            }}
+            aria-label="Ayarlar panelini aç"
+            title="Ayarlar"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#f3f0eb]/65 transition-[background-color,color,transform] hover:scale-105 hover:bg-white/10 hover:text-[#f3f0eb]"
           >
-            <PanelLeft className="size-[1.05rem]" strokeWidth={1.75} aria-hidden />
-            {/* Gecmiste calisma varsa kucuk bir isaret — panelin bos olmadigini
-                acmadan once belli ediyor. */}
-            {works.length > 0 ? (
-              <span
-                aria-hidden
-                className="bg-gold absolute top-1.5 right-1.5 size-1.5 rounded-full"
-              />
-            ) : null}
+            <PanelLeft className="size-4" strokeWidth={1.75} aria-hidden />
           </button>
 
           <Link
             href="/#top"
-            onClick={closePanel}
+            onClick={() => { setIsHovered(true); closePanel(); }}
             className="flex h-full shrink-0 items-center gap-2 pr-2 pl-1 text-[1rem]"
           >
             <BrandMark className="text-gold h-[1.3rem] w-auto" />
             {/* Cok dar ekranda yalnizca isaret kaliyor: 320 px'te cubuk
                 tasiyordu. Isaret tek basina markayi tasiyabiliyor. */}
-            <span className="hidden font-semibold tracking-[-0.015em] whitespace-nowrap min-[380px]:inline">
+            <span className="hidden font-semibold tracking-[-0.015em] whitespace-nowrap min-[430px]:inline">
               Vitrin AI
             </span>
           </Link>
 
-          <span aria-hidden className="mx-1 hidden h-5 w-px bg-white/12 lg:block" />
-
-          <ul className="hidden items-center gap-0.5 lg:flex">
+          <div className={cn("hidden min-w-0 items-center overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-400 ease-out lg:flex", isCompact ? "pointer-events-none max-w-0 -translate-y-1 opacity-0" : "max-w-[48rem] translate-y-0 opacity-100")} aria-hidden={isCompact || undefined} inert={isCompact ? true : undefined}>
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-white/12" />
+          <ul className="flex items-center gap-0.5">
             {LINKS.map((link) => {
               const isActive = pathname === link.href;
               return (
@@ -174,6 +169,7 @@ export function SiteHeader() {
               );
             })}
           </ul>
+          </div>
 
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
             {/* Oturum bilgisi gelene kadar yer tutucu: once "Giris yap"
@@ -181,24 +177,7 @@ export function SiteHeader() {
             {!isAuthLoaded ? (
               <span aria-hidden className="h-9 w-9 sm:w-24" />
             ) : user ? (
-              // Hesap islemleri (cikis) sol panelde; ayri bir acilir menu
-              // eklemek yerine ayni yere gidiyor.
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                aria-label={`Hesabım: ${displayName(user)}`}
-                title={user.email ?? undefined}
-                className="flex h-9 max-w-[12rem] items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
-              >
-                <UserRound
-                  className="size-4 shrink-0"
-                  strokeWidth={1.75}
-                  aria-hidden
-                />
-                {/* E-posta yerine ad: kullanici istegi (13.09.2026). Adi
-                    olmayan eski hesaplarda e-postanin basi (lib/profile.ts). */}
-                <span className="hidden truncate sm:inline">{displayName(user)}</span>
-              </button>
+              <AccountMenu />
             ) : (
               <button
                 type="button"
@@ -289,14 +268,94 @@ export function SiteHeader() {
         <NasilCalisirIcerik />
       </NavPanel>
 
-      <NavPanel
-        acik={acikPanel === "hakkinda"}
-        onKapat={closePanel}
-        etiket="Vitrin AI hakkında"
-        ustBaslik="Vitrin AI hakkında"
-      >
-        <HakkindaIcerik />
-      </NavPanel>
     </>
+  );
+}
+
+function AccountMenu() {
+  const { user, signOut } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [quotaError, setQuotaError] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent | TouchEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("touchstart", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("touchstart", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void billingFetch<Subscription>("/api/subscriptions/me")
+      .then((value) => { if (active) setSubscription(value); })
+      .catch(() => { if (active) setQuotaError(true); });
+    return () => { active = false; };
+  }, [open]);
+
+  if (!user) return null;
+  const remaining = subscription
+    ? subscription.admin_exempt
+      ? "Sınırsız"
+      : String(subscription.billing_issue ? 0 : Math.max(0, (subscription.period?.quota_snapshot ?? 0) - (subscription.period?.used_this_period ?? 0)) + (subscription.bonus_credits ?? 0))
+    : quotaError ? "Alınamadı" : "Yükleniyor…";
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => {
+          if (!current) setQuotaError(false);
+          return !current;
+        })}
+        aria-label={`Hesap menüsü: ${displayName(user)}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={user.email ?? undefined}
+        className={cn(
+          "flex h-9 max-w-[12rem] items-center gap-1.5 rounded-full px-3 text-[0.875rem] transition-colors",
+          open ? "bg-white/12 text-[#f3f0eb]" : "text-[#f3f0eb]/80 hover:bg-white/10 hover:text-[#f3f0eb]",
+        )}
+      >
+        <UserRound className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        <span className="hidden truncate sm:inline">{displayName(user)}</span>
+        <ChevronDown className={cn("hidden size-3 shrink-0 opacity-60 transition-transform sm:block", open && "rotate-180")} aria-hidden />
+      </button>
+
+      {open ? (
+        <div role="menu" aria-label="Hesap menüsü" className="glass-panel soft-enter absolute top-full right-0 mt-2 w-64 overflow-hidden rounded-2xl p-2 shadow-[0_24px_64px_-24px_rgba(0,0,0,0.9)]">
+          <div className="border-b border-white/10 px-3 py-2.5">
+            <p className="truncate text-sm font-medium">{displayName(user)}</p>
+            <p className="on-dark-muted mt-0.5 truncate text-xs">{user.email}</p>
+          </div>
+          <Link href="/hesap" role="menuitem" onClick={() => setOpen(false)} className="mt-1 flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm text-white/78 transition-colors hover:bg-white/9 hover:text-white">
+            <UserRound className="size-4" strokeWidth={1.75} aria-hidden />
+            Profil
+          </Link>
+          <div className="flex min-h-10 items-center justify-between gap-3 rounded-xl px-3 text-sm" aria-label={`Kalan kredi: ${remaining}`}>
+            <span className="flex items-center gap-3 text-white/62"><Gauge className="size-4" strokeWidth={1.75} aria-hidden />Kalan kredi</span>
+            <strong className="text-gold text-xs font-semibold tabular-nums">{remaining}</strong>
+          </div>
+          <div className="my-1 h-px bg-white/10" />
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); void signOut(); }} className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200">
+            <LogOut className="size-4" strokeWidth={1.75} aria-hidden />
+            Çıkış yap
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

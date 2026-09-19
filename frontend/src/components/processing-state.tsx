@@ -58,7 +58,7 @@ export function ProcessingState({ onizlemeUrl }: ProcessingStateProps) {
       aria-live="polite"
       className="mx-auto flex w-full max-w-md flex-col items-center gap-6 py-10 text-center"
     >
-      <div className="relative aspect-square w-full max-w-[18rem] overflow-hidden rounded-[1.25rem] bg-[#e8e8ed] ring-1 ring-black/10">
+      <div className="relative aspect-square w-full max-w-[18rem] overflow-hidden rounded-[1.25rem] bg-[#26241f] ring-1 ring-white/12">
         {onizlemeUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

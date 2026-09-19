@@ -55,6 +55,7 @@ export function BackgroundRemover() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   /** Gecmisten acilan calismanin adi — o durumda `file` null oluyor. */
   const [openedFileName, setOpenedFileName] = useState<string | null>(null);
+  const [openedWorkId, setOpenedWorkId] = useState<string | null>(null);
   /** HEIC onizlemesi tarayicida cozulurken true. */
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   /**
@@ -115,6 +116,7 @@ export function BackgroundRemover() {
     setElapsedSeconds(null);
     setErrorMessage(null);
     setOpenedFileName(null);
+    setOpenedWorkId(null);
   }, [newRequestKey]);
 
   const handleFileSelected = useCallback(
@@ -141,6 +143,7 @@ export function BackgroundRemover() {
       setElapsedSeconds(null);
       setFile(selected);
       setOpenedFileName(null);
+      setOpenedWorkId(null);
       setStatus("ready");
 
       // JPEG/PNG/WebP icin onizleme her zaman senkron: eski davranis buydu
@@ -230,6 +233,8 @@ export function BackgroundRemover() {
         isMocked: mocked,
         durationSeconds: duration,
         result: blob,
+      }).then((work) => {
+        if (session === sessionRef.current) setOpenedWorkId(work?.id ?? null);
       });
 
       if (session !== sessionRef.current) return;
@@ -291,6 +296,7 @@ export function BackgroundRemover() {
             setIsMocked(work.isMocked);
             setElapsedSeconds(work.durationSeconds);
             setOpenedFileName(work.fileName);
+            setOpenedWorkId(work.id);
             setStatus("done");
           })
           .catch(() => {
@@ -304,6 +310,7 @@ export function BackgroundRemover() {
   );
 
   const showDropzone = status === "idle" || (status === "error" && !file);
+  /** Isleniyor ve sonuc: studyonun yuzeyiyle ayni koyu zemin. */
   const showPreview = status === "ready" || (status === "error" && file !== null);
 
   return (
@@ -336,9 +343,7 @@ export function BackgroundRemover() {
         </Alert>
       ) : null}
 
-      {/* Arac, tanitim bolumlerinin arasinda beyaz bir kart olarak duruyor —
-          Apple'in acik zeminli bolumlerinde one cikan urun karti gibi. */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm sm:p-9">
+      <div className="glass-panel-light rounded-[2rem] p-5 text-[#1a1917] transition-shadow duration-500 hover:shadow-[0_30px_70px_-34px_rgba(82,61,29,0.42)] sm:p-9">
         {/* `soft-enter`: ekranlar (yukleme -> onizleme -> isleniyor -> sonuc)
             birden degil yumusakca beliriyor. Kosullu cizim her gecis icin
             ogeyi yeniden bagladigi icin animasyon her seferinde oynuyor. */}
@@ -439,6 +444,7 @@ export function BackgroundRemover() {
               resultUrl={resultUrl}
               fileName={file?.name ?? openedFileName ?? "urun"}
               isMocked={isMocked}
+              workId={openedWorkId}
               elapsedSeconds={elapsedSeconds}
               onReset={reset}
             />

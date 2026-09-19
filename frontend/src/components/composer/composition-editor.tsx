@@ -16,23 +16,37 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Contrast,
   Crosshair,
   Download,
+  Image as ImageIcon,
   ImagePlus,
   Loader2,
   MessageCircle,
+  Move,
   Printer,
+  Ratio,
   RotateCw,
+  SlidersHorizontal,
+  Stamp,
   Trash2,
 } from "lucide-react";
 import type Konva from "konva";
 
-import { Button } from "@/components/ui/button";
 import { useBackgrounds } from "@/components/composer/use-backgrounds";
+import { Dock, DockStrip } from "@/components/composer/dock";
+import { ToolBar } from "@/components/composer/tool-bar";
+import { finishBackgroundFade } from "@/components/composer/background-fade";
+import {
+  BackgroundPalette,
+  CategoryTabs,
+} from "@/components/composer/background-palette";
+import {
+  APPEARANCE_PRESETS,
+  applyPreset,
+  matchingPreset,
+} from "@/components/composer/appearance-presets";
 import {
   OUTPUT_FORMATS,
   type OutputFormatName,
@@ -61,6 +75,7 @@ import {
 import { useLogo } from "@/lib/use-logo";
 import { useStageSize } from "@/components/composer/use-stage-size";
 import { useBackgroundSelection } from "@/components/composer/use-background-selection";
+import type { EditorDraft } from "@/lib/project-record";
 
 const EditorStage = dynamic(
   () => import("@/components/composer/editor-stage").then((m) => m.EditorStage),
@@ -86,6 +101,18 @@ export type CompositionEditorProps = {
    * donerse gorsel tasinamadi (tarayici depolamasi kapali/dolu).
    */
   onSendToCatalog?: (jpegDataUrl: string) => boolean;
+  /** Navbar'daki kısa çalışma özetini aktif adım ve araçla günceller. */
+  onStatusChange?: (status: EditorStatus) => void;
+  initialDraft?: EditorDraft | null;
+  onSave?: (draft: EditorDraft) => Promise<boolean>;
+  onDownloaded?: () => Promise<boolean>;
+};
+
+export type EditorStatus = {
+  step: number;
+  totalSteps: number;
+  stepLabel: string;
+  toolLabel: string;
 };
 
 /**
@@ -100,12 +127,69 @@ type AfterDownload = "catalog" | "home" | null;
  * secilmeli.
  */
 const EDITOR_STEPS = [
-  { id: 1, label: "Boyut ve zemin" },
-  { id: 2, label: "Ürün" },
-  { id: 3, label: "Bitir" },
+  { id: 1, label: "Sahne" },
+  { id: 2, label: "Düzenle" },
+  { id: 3, label: "Tamamla" },
 ] as const;
 
+/**
+ * Her adimin ARACLARI; alttaki arac cubugunda adim sirasiyla gruplanmis
+ * duruyor (18.09.2026, Kaan: iPhone Fotograflar duzeni). Adim artik ayri bir
+ * durum degil, secili aractan turetiliyor.
+ */
+const STEP_TOOLS = {
+  1: [
+    { id: "boyut", label: "Boyut", icon: Ratio },
+    { id: "zemin", label: "Zemin", icon: ImageIcon },
+  ],
+  2: [
+    { id: "yerlesim", label: "Yerleşim", icon: Move },
+    { id: "gorunum", label: "Görünüm", icon: SlidersHorizontal },
+  ],
+  3: [
+    { id: "marka", label: "Marka", icon: Stamp },
+    { id: "indir", label: "İndir", icon: Download },
+  ],
+} as const;
+
+const TOOL_GROUPS = EDITOR_STEPS.map((item) => ({
+  step: item.id,
+  label: item.label,
+  tools: STEP_TOOLS[item.id],
+}));
+
+/** Butun araclar bar sirasiyla — geri tusunun "siradaki onceki arac"i icin. */
+const ALL_TOOLS: readonly { id: string; label: string }[] = EDITOR_STEPS.flatMap(
+  (item) => [...STEP_TOOLS[item.id]],
+);
+
+function toolLabel(id: string | null): string {
+  return ALL_TOOLS.find((tool) => tool.id === id)?.label ?? "";
+}
+
+/**
+ * Acilista secili gelen arac: bilincli olarak ILK arac degil "Zemin" — bicim
+ * zaten makul bir varsayilanla (A4) aciliyor, kullanicinin ilk gercek karari zemin.
+ */
+const DEFAULT_TOOL = "zemin";
+
 type EditorStep = (typeof EDITOR_STEPS)[number]["id"];
+
+function stepOfTool(tool: string): EditorStep {
+  for (const item of EDITOR_STEPS) {
+    if (STEP_TOOLS[item.id].some((candidate) => candidate.id === tool)) return item.id;
+  }
+  return 1;
+}
+
+/** Gorunum aracinda tek kaydirac: once ayar secilir, sonra kaydirilir (iPhone gibi). */
+const ADJUSTMENTS = [
+  { id: "brightness", label: "Parlaklık" },
+  { id: "contrast", label: "Kontrast" },
+  { id: "saturation", label: "Doygunluk" },
+] as const;
+
+type AdjustmentId = (typeof ADJUSTMENTS)[number]["id"];
 
 /** Boyut kaydiracinin sinirlari — sigdirma olceginin katlari olarak. */
 const MIN_SCALE_RATIO = 0.25;
@@ -151,21 +235,25 @@ export function CompositionEditor({
   fileName,
   onReturnToStart,
   onSendToCatalog,
+  onStatusChange,
+  initialDraft,
+  onSave,
+  onDownloaded,
 }: CompositionEditorProps) {
   const { backgrounds, hasServerBackground, isUnavailable, isLoading, retry: retryBackgrounds } =
     useBackgrounds();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isPrintInfoOpen, setIsPrintInfoOpen] = useState(false);
-  const [formatName, setFormatName] = useState<OutputFormatName>(DEFAULT_FORMAT_NAME);
-  const [step, setStep] = useState<EditorStep>(1);
+  const [formatName, setFormatName] = useState<OutputFormatName>(initialDraft?.formatName ?? DEFAULT_FORMAT_NAME);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [afterDownload, setAfterDownload] = useState<AfterDownload>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   /** Baskiya onerilmeyen zeminde CMYK indirmeden once acilan onay. */
   const [pendingPrintFormat, setPendingPrintFormat] = useState<"jpeg" | "tiff" | null>(null);
-  const [transform, setTransform] = useState<Transform | null>(null);
-  const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
+  const [transform, setTransform] = useState<Transform | null>(initialDraft?.transform ?? null);
+  const [appearance, setAppearance] = useState<Appearance>(initialDraft?.appearance ?? DEFAULT_APPEARANCE);
   // Studyo yalnizca istemcide acildigi icin (kullanici etkilesimiyle) tembel
   // baslangic degeri localStorage'i guvenle okuyabiliyor; sunucu cizimi yok.
   // Logo akisi studyo ve katalogda AYNI (bkz. lib/use-logo.ts).
@@ -178,9 +266,55 @@ export function CompositionEditor({
     update: updateLogo,
     remove: removeLogo,
   } = useLogo();
-  const [label, setLabel] = useState<ProductLabel>(DEFAULT_LABEL);
+  const [label, setLabel] = useState<ProductLabel>(initialDraft?.label ?? DEFAULT_LABEL);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  /** Arac cubugunda secili arac; panel bunun paletini gosteriyor. */
+  const [activeTool, setActiveTool] = useState<string>(initialDraft?.activeTool ?? DEFAULT_TOOL);
+  const step = stepOfTool(activeTool);
+  /**
+   * Bar kucultulmus mu (Kaan, 18.09.2026). Kucultulunce menu karti kalkar,
+   * bar tek bir kucuk hapa iner ve tuval o yeri alarak BUYUR — ikisi ayni
+   * egriyle birlikte hareket eder (bkz. `.stage-fit-collapsed`).
+   */
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  /** Gorunum menusunde acik kaydirac; `null` = gorunum menusunun kendisi. */
+  const [adjustment, setAdjustment] = useState<AdjustmentId | null>(null);
+  /**
+   * Gezinme gecmisi: geri tusu bir onceki ARACA doner (Boyut -> Zemin ->
+   * Boyut...). Kartı kapatmak geri tusunun isi DEGIL — o "küçült" dugmesinde
+   * (Kaan: "geri tuşu barı kapatıyor").
+   */
+  const [toolHistory, setToolHistory] = useState<string[]>([]);
+
+  const openTool = useCallback(
+    (id: string) => {
+      if (id !== activeTool) setToolHistory((history) => [...history, activeTool].slice(-20));
+      setActiveTool(id);
+      setAdjustment(null);
+      setIsCollapsed(false);
+    },
+    [activeTool],
+  );
+
+  /**
+   * Geri: once menunun icindeki alt katman (kaydirac -> Gorunum), sonra bir
+   * onceki arac. Gecmis bossa sirada bir onceki arac (Zemin -> Boyut).
+   */
+  /** Tek satirlik menuler ince kartla acilir, tuval o kadar buyur. */
+  const isCompactMenu = activeTool === "zemin" || activeTool === "boyut";
+  const toolIndex = ALL_TOOLS.findIndex((tool) => tool.id === activeTool);
+  const previousTool =
+    toolHistory.at(-1) ?? (toolIndex > 0 ? ALL_TOOLS[toolIndex - 1].id : null);
+  const goBack = useCallback(() => {
+    if (adjustment) {
+      setAdjustment(null);
+      return;
+    }
+    if (!previousTool) return;
+    setToolHistory((history) => history.slice(0, -1));
+    setActiveTool(previousTool);
+  }, [adjustment, previousTool]);
 
   /**
    * Geri alma yigini.
@@ -282,7 +416,7 @@ export function CompositionEditor({
     fitting: fittingBackgrounds,
     select: selectBackground,
     showCategory,
-  } = useBackgroundSelection(backgrounds, format);
+  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -382,6 +516,8 @@ export function CompositionEditor({
 
       try {
         transformers.forEach((node) => node.hide());
+        // Suren bir zemin gecisi dosyaya iki zeminin karisimini sokmasin.
+        finishBackgroundFade(stage);
         stage.draw();
 
         // Sahne, disa aktarma suresince EKRAN olcusunden MANTIKSAL olcusune
@@ -448,10 +584,17 @@ export function CompositionEditor({
         dataUrl,
         `${fileName.replace(/\.[^.]+$/, "")}-${format.fileSlug}.${type === "jpeg" ? "jpg" : "png"}`,
       );
+      void onDownloaded?.();
       openAfterDownload();
     },
-    [renderStage, fileName, format, openAfterDownload],
+    [renderStage, fileName, format, openAfterDownload, onDownloaded],
   );
+
+  const saveDraft = useCallback(async () => {
+    if (!onSave) return;
+    setSaveStatus("saving");
+    setSaveStatus((await onSave({ formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool })) ? "saved" : "error");
+  }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
 
   /**
    * WhatsApp'ta paylas (one alinan is, 13.09.2026).
@@ -524,9 +667,12 @@ export function CompositionEditor({
       // Istek ve indirme katalogla ortak (lib/print-download.ts).
       const result = await downloadCmyk(dataUrl, printFormat, fileName.replace(/\.[^.]+$/, ""));
       setPrintStatus(result.ok ? "done" : { error: result.error });
-      if (result.ok) openAfterDownload();
+      if (result.ok) {
+        void onDownloaded?.();
+        openAfterDownload();
+      }
     },
-    [renderStage, fileName, openAfterDownload],
+    [renderStage, fileName, openAfterDownload, onDownloaded],
   );
 
   /** Katalog sorusuna "Evet": gorsel RGB JPEG olarak cizilip kataloga gidiyor. */
@@ -583,712 +729,621 @@ export function CompositionEditor({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [afterDownload]);
 
-  return (
-    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-10">
-      {/*
-        `min-w-0` sart: grid ogelerinin varsayilan `min-width: auto` degeri,
-        ogenin ICERIGINDEN daha dar olmasini engelliyor. Konva sahnesi kendine
-        acik bir piksel genisligi verdigi icin bu bir geri besleme dongusu
-        yaratiyordu: sahne 560 px -> kapsayici 560 px'e itiliyor ->
-        olcum 560 okuyor -> sahne 560'ta kaliyor. Sonuc, dar ekranlarda
-        kapsayicisindan tasan bir tuval. `min-w-0`, kapsayicinin gercek
-        kullanilabilir genisligi bildirmesini sagliyor.
-      */}
-      {/*
-        Telefonda tuval YAPISKAN: kullanici asagidaki ayarlari degistirirken
-        sonucu gorebilmeli. Onceden panel tuvalin altina duyuyor ve ayar
-        yapilirken tuval ekran disinda kaliyordu.
-        `top-14` ust cubugun yuksekligi kadar.
-      */}
-      <div
-        ref={containerRef}
-        className="mx-auto w-full min-w-0 lg:sticky lg:top-20"
-        // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde yalnizca
-        // genislige gore buyutmek tuvali ekranin altina tasiyordu.
-        style={{
-          maxWidth: `min(48rem, calc((100dvh - 10rem) * ${format.outputWidth / format.outputHeight}))`,
-        }}
-      >
-        <div
-          className="ring-black/8 overflow-hidden rounded-[1.25rem] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-12px_rgba(0,0,0,0.25)] ring-1"
-          style={{ aspectRatio: `${format.outputWidth} / ${format.outputHeight}` }}
-        >
-          <EditorStage
-            cutoutUrl={cutoutUrl}
-            background={selectedBackground}
-            displayWidth={displaySize}
-            stageWidth={stageSize.width}
-            stageHeight={stageSize.height}
-            transform={transform}
-            appearance={appearance}
-            logoUrl={logoUrl}
-            logo={logo}
-            label={label}
-            onLogoChange={updateLogo}
-            onTransformChange={(next) => {
-              pushHistory();
-              setTransform(next);
-            }}
-            onCutoutSize={setCutoutSize}
-            onStageReady={handleStageReady}
-          />
-        </div>
-        <p className="fine-print mt-3 text-center opacity-60">
-          Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
-          döndürün
-        </p>
-      </div>
+  const tools = STEP_TOOLS[step];
 
-      <div className="divide-black/8 rounded-2xl bg-[#f5f5f7] divide-y">
-        <div role="tablist" aria-label="Düzenleme adımları" className="grid grid-cols-3 gap-1.5 p-3">
-          {EDITOR_STEPS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={step === item.id}
-              onClick={() => setStep(item.id)}
-              className={
-                "press min-h-10 rounded-xl px-2 text-[0.8125rem] leading-tight transition-colors " +
-                (step === item.id
-                  ? "bg-black text-white"
-                  : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
-              }
-            >
-              <span className="mr-1 tabular-nums opacity-60">{item.id}</span>
-              {item.label}
-            </button>
-          ))}
-        </div>
+  useEffect(() => {
+    const stepLabel = EDITOR_STEPS.find((item) => item.id === step)?.label ?? "";
+    const toolLabel = tools.find((item) => item.id === activeTool)?.label ?? stepLabel;
+    onStatusChange?.({
+      step,
+      totalSteps: EDITOR_STEPS.length,
+      stepLabel,
+      toolLabel,
+    });
+  }, [activeTool, onStatusChange, step, tools]);
 
-        {step === 1 ? (
-          <>
-        {/*
-          Cikti bicimleri. Mantiksal sahne olcusu her bicimde ciktinin YARISI
-          oldugu icin disa aktarma orani tam 2 kaliyor — kesirli bir oran
-          Konva'nin ic hesabinda bir piksel kaybina yol aciyor (2000 yerine
-          1999 px uretildigi birebir olculdu). Ilk adimda: zemin listesi
-          bicimin yonune gore suzuluyor.
-        */}
-        <SectionHeading>Çıktı boyutu</SectionHeading>
-        <div className="grid grid-cols-2 gap-2 px-5 pb-5">
-          {(
-            Object.entries(OUTPUT_FORMATS) as [
-              OutputFormatName,
-              (typeof OUTPUT_FORMATS)[OutputFormatName],
-            ][]
-          ).map(([name, option]) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => changeFormat(name)}
-              aria-pressed={formatName === name}
-              className={
-                "press rounded-xl px-3 py-2 text-left transition-shadow " +
-                (formatName === name
-                  ? "ring-gold bg-white ring-2"
-                  : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
-              }
-            >
-              <span className="block text-[0.8125rem] font-medium">{option.label}</span>
-              <span className="fine-print block opacity-55">{option.summary}</span>
-            </button>
-          ))}
-        </div>
-
-        <SectionHeading>Zemin</SectionHeading>
-        <div className="px-5 pb-5">
-          {backgroundGroups.length > 1 ? (
-            <div
-              role="tablist"
-              aria-label="Zemin kategorileri"
-              className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1"
-            >
-              {backgroundGroups.map((group) => {
-                const isShown = group.id === shownGroup?.id;
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isShown}
-                    onClick={() => showCategory(group.id)}
-                    className={
-                      "press min-h-8 shrink-0 rounded-full px-3 text-[0.75rem] whitespace-nowrap transition-colors " +
-                      (isShown
-                        ? "bg-black text-white"
-                        : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
-                    }
-                  >
-                    {group.label}
-                    <span className="ml-1.5 tabular-nums opacity-55">{group.items.length}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {/* Kaydirilabilir: bir kategoride 40'tan fazla zemin olabiliyor ve
-              panelin geri kalani (yerlesim, cikti) asagida kaybolmamali. `p-1`
-              secili halkanin (ring-offset) kirpilmamasi icin. */}
-          <div className="-m-1 grid max-h-[15.5rem] grid-cols-6 gap-2 overflow-y-auto p-1 lg:grid-cols-4">
-            {(shownGroup?.items ?? fittingBackgrounds).map((background) => {
-              const isActive = background.id === selectedBackground.id;
-              return (
-                <button
-                  key={background.id}
-                  type="button"
-                  onClick={() => selectBackground(background.id)}
-                  title={background.name}
-                  aria-label={background.name}
-                  aria-pressed={isActive}
-                  // Secili halka `ring` yardimcilariyla veriliyor, keyfi bir
-                  // `shadow-[...]` ile degil: keyfi coklu golge denendiginde
-                  // Tailwind iki golge katmani uretti ama ikisi de SEFFAF
-                  // kaldi, yani secili zemin hic belli olmuyordu (tarayicida
-                  // olculerek yakalandi). `ring` bu isi tek bir ongorulebilir
-                  // ozellikle yapiyor.
-                  className={
-                    "aspect-square overflow-hidden rounded-full ring-offset-[#f5f5f7] transition-transform duration-200 " +
-                    (isActive
-                      ? "ring-gold scale-105 ring-2 ring-offset-2"
-                      : "ring-1 ring-black/15 hover:scale-105")
-                  }
-                  style={
-                    background.type === "placeholder"
-                      ? { background: gradientCss(background.gradient) }
-                      : undefined
-                  }
-                >
-                  {background.type === "server" ? (
-                    // <img>, CSS arka plani degil: `loading="lazy"` yalnizca
-                    // gorunen simgeleri indiriyor ve onizleme yoksa tam boyutlu
-                    // gorsele dusmek icin `onError` gerekiyor.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={background.thumbnailUrl ?? background.url}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      draggable={false}
-                      onError={(event) => {
-                        const image = event.currentTarget;
-                        if (image.dataset.fallback === "1") return;
-                        image.dataset.fallback = "1";
-                        image.src = background.url;
-                      }}
-                      className="size-full object-cover"
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-
-          {/*
-            Yer tutucu zeminler kullaniciya ACIKCA soyleniyor. Yol haritasi
-            "sessizce dusmeli" derken kirilma olmamasini kastediyor, kullanicinin
-            yanlis bilgilendirilmesini degil: gercek zemin kutuphanesi henuz
-            yokken "iste zeminleriniz" demek yanlis olurdu.
-          */}
-          {!isLoading && !hasServerBackground ? (
-            isUnavailable ? (
-              // "Hazirlaniyor" ile "yuklenemedi" ayri sebepler: kutuphane
-              // doluyken ariza yasandiginda ilk mesaj kullaniciyi YANLIS
-              // bilgilendiriyordu (PR #18 incelemesi). Burada ayrica tekrar
-              // deneme secenegi var — tek alternatif sayfayi yenilemekti.
-              <p role="status" className="fine-print mt-3 text-amber-800">
-                Zemin kütüphanesi şu an yüklenemedi; şimdilik sade zeminler.{" "}
-                <button
-                  type="button"
-                  onClick={retryBackgrounds}
-                  className="press font-medium underline underline-offset-2"
-                >
-                  Tekrar dene
-                </button>
-              </p>
-            ) : (
-              <p className="fine-print mt-3 opacity-60">
-                Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
-              </p>
-            )
-          ) : null}
-
-          {formatName === "marketplace" &&
-          selectedBackground.id !== MARKETPLACE_BACKGROUND_ID ? (
-            <p role="status" className="fine-print mt-3 text-amber-800">
-              Pazaryerleri genellikle düz beyaz zemin ister.{" "}
+  /**
+   * Dock'un basligi, sag ustteki baglam denetimi ve paleti.
+   *
+   * Tek yerde toplaniyor: "o an secili arac neyse dock onu gosterir" kurali
+   * bir switch olarak okunabilir kalsin, JSX'in icine dagilmasin.
+   */
+  const dock = (() => {
+    if (activeTool === "boyut") {
+      return {
+        title: "Çıktı boyutu",
+        action: <span className="on-dark-muted fine-print">{format.outputWidth}×{format.outputHeight}</span>,
+        body: (
+          <DockStrip label="Çıktı boyutları">
+            {(
+              Object.entries(OUTPUT_FORMATS) as [
+                OutputFormatName,
+                (typeof OUTPUT_FORMATS)[OutputFormatName],
+              ][]
+            ).map(([name, option]) => (
               <button
+                key={name}
                 type="button"
-                onClick={() => selectBackground(MARKETPLACE_BACKGROUND_ID)}
-                className="font-medium underline underline-offset-2"
+                onClick={() => changeFormat(name)}
+                aria-pressed={formatName === name}
+                className={
+                  "press w-28 shrink-0 snap-start rounded-xl px-2.5 py-2 text-left transition-colors " +
+                  (formatName === name
+                    ? "ring-gold bg-white/10 ring-2"
+                    : "ring-1 ring-white/12 hover:bg-white/6")
+                }
               >
-                Beyaza dön
-              </button>
-            </p>
-          ) : null}
-        </div>
-
-          </>
-        ) : null}
-
-        {step === 2 ? (
-          <>
-        <SectionHeading>Yerleşim</SectionHeading>
-        <div className="space-y-4 px-5 pb-5">
-          <div>
-            <div className="fine-print mb-2 flex items-center justify-between opacity-60">
-              <span>Boyut</span>
-              <span className="tabular-nums">{Math.round(currentRatio * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min={MIN_SCALE_RATIO * 100}
-              max={MAX_SCALE_RATIO * 100}
-              step={1}
-              value={Math.round(currentRatio * 100)}
-              disabled={!fitScale}
-              aria-label="Ürün boyutu"
-              onChange={(event) => setScaleRatio(Number(event.target.value) / 100)}
-              className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => rotateBy(15)}
-              disabled={!cutoutSize}
-              className="press flex-1 rounded-full bg-white"
-            >
-              <RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden />
-              15°
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={centerAndFit}
-              disabled={!cutoutSize}
-              className="press flex-1 rounded-full bg-white"
-            >
-              <Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />
-              Ortala
-            </Button>
-          </div>
-        </div>
-
-        <SectionHeading>
-          Görünüm
-          {!isDefaultAppearance(appearance) ? (
-            <button
-              type="button"
-              onClick={() => setAppearance(DEFAULT_APPEARANCE)}
-              className="ml-2 font-normal normal-case underline underline-offset-2 opacity-70 hover:opacity-100"
-            >
-              sıfırla
-            </button>
-          ) : null}
-        </SectionHeading>
-        <div className="space-y-3 px-5 pb-5">
-          <Slider
-            label="Parlaklık"
-            value={appearance.brightness}
-            min={-0.3}
-            max={0.3}
-            step={0.01}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, brightness: v }))}
-          />
-          <Slider
-            label="Kontrast"
-            value={appearance.contrast}
-            min={-40}
-            max={40}
-            step={1}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, contrast: v }))}
-          />
-          <Slider
-            label="Doygunluk"
-            value={appearance.saturation}
-            min={-1}
-            max={1}
-            step={0.02}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`}
-            onStart={pushHistory}
-            onChange={(v) => setAppearance((a) => ({ ...a, saturation: v }))}
-          />
-
-          <div className="flex gap-2 pt-1">
-            <Toggle
-              label="Gölge"
-              isOn={appearance.shadow}
-              onChange={(on) => setAppearance((a) => ({ ...a, shadow: on }))}
-            />
-            <Toggle
-              label="Yansıma"
-              isOn={appearance.reflection}
-              onChange={(on) => setAppearance((a) => ({ ...a, reflection: on }))}
-            />
-          </div>
-        </div>
-          </>
-        ) : null}
-
-        {step === 3 ? (
-          <>
-        {/* Logo (one alinan is, 13.09.2026) */}
-        <SectionHeading>Logo</SectionHeading>
-        <div className="space-y-3 px-5 pb-5">
-          <input
-            ref={logoInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            aria-label="Logo dosyası seç"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void handleLogoFile(file);
-            }}
-          />
-          {logoUrl ? (
-            <div className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoUrl}
-                alt="Yüklenen logo"
-                className="checkerboard size-12 shrink-0 rounded-lg object-contain ring-1 ring-black/10"
-              />
-              <div className="flex flex-1 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => logoInputRef.current?.click()}
-                  className="press flex-1 rounded-full bg-white"
-                >
-                  Değiştir
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={removeLogo}
-                  aria-label="Logoyu kaldır"
-                  className="press rounded-full bg-white"
-                >
-                  <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => logoInputRef.current?.click()}
-              className="press w-full rounded-full bg-white"
-            >
-              <ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />
-              Logo yükle
-            </Button>
-          )}
-
-          {logoUrl ? (
-            <>
-              {/* Kose secmek serbest konumu siliyor; boyut artik kaydiracla
-                  degil, sahnedeki kose karelerinden (Kaan, 17.09.2026). */}
-              <CornerPicker
-                label="Logo konumu"
-                value={logo.position ? null : logo.corner}
-                onChange={(corner) => updateLogo({ corner, position: null })}
-              />
-              <p className="fine-print opacity-55">
-                Logoya dokunun; sürükleyerek taşıyın, köşedeki karelerden boyutlandırın.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void invertCurrentLogo()}
-                className="press w-full rounded-full bg-white"
-              >
-                <Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />
-                Renkleri çevir
-              </Button>
-              <Slider
-                label="Saydamlık"
-                value={logo.opacity}
-                min={LOGO_OPACITY_RANGE.min}
-                max={LOGO_OPACITY_RANGE.max}
-                step={0.05}
-                format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(opacity) => updateLogo({ opacity })}
-              />
-            </>
-          ) : null}
-
-          {logoMessage ? (
-            <p role="alert" className="fine-print text-red-700">
-              {logoMessage}
-            </p>
-          ) : (
-            <p className="fine-print opacity-55">
-              Saydam PNG en iyi sonucu verir. Logo yalnızca bu tarayıcıda hatırlanır.
-            </p>
-          )}
-        </div>
-
-        {/* Urun etiketi (one alinan is, 13.09.2026) */}
-        <SectionHeading>Ürün etiketi</SectionHeading>
-        <div className="space-y-3 px-5 pb-5">
-          <div className="flex gap-2">
-            <Toggle
-              label={label.enabled ? "Etiket açık" : "Etiket kapalı"}
-              isOn={label.enabled}
-              onChange={(enabled) => setLabel((current) => ({ ...current, enabled }))}
-            />
-          </div>
-
-          {label.enabled ? (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="fine-print block opacity-60">Ayar</span>
-                  <select
-                    value={label.karat}
-                    onChange={(event) =>
-                      setLabel((current) => ({ ...current, karat: event.target.value }))
-                    }
-                    className="mt-1 min-h-9 w-full rounded-lg bg-white px-2 text-[0.8125rem] ring-1 ring-black/10"
-                  >
-                    <option value="">Yok</option>
-                    {KARAT_OPTIONS.map((karat) => (
-                      <option key={karat} value={karat}>
-                        {karat}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="fine-print block opacity-60">Gram</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="3,45"
-                    value={label.gram}
-                    onChange={(event) =>
-                      setLabel((current) => ({ ...current, gram: event.target.value }))
-                    }
-                    aria-invalid={gramProblem(label.gram) ? true : undefined}
-                    className="mt-1 min-h-9 w-full rounded-lg bg-white px-2 text-[0.8125rem] ring-1 ring-black/10 aria-invalid:ring-red-400"
-                  />
-                </label>
-              </div>
-              <label className="block">
-                <span className="fine-print block opacity-60">Ürün kodu</span>
-                <input
-                  type="text"
-                  placeholder="A-102"
-                  maxLength={MAX_CODE_LENGTH}
-                  value={label.code}
-                  onChange={(event) =>
-                    setLabel((current) => ({ ...current, code: event.target.value }))
-                  }
-                  className="mt-1 min-h-9 w-full rounded-lg bg-white px-2 text-[0.8125rem] ring-1 ring-black/10"
+                {/* Gercek en-boy onizlemesi: bicimi okumadan da ayirt edilsin. */}
+                <span
+                  className="mb-1.5 block w-7 rounded-[0.25rem] bg-white/25"
+                  style={{ aspectRatio: `${option.outputWidth} / ${option.outputHeight}` }}
+                  aria-hidden
                 />
-              </label>
-              {gramProblem(label.gram) ? (
-                <p role="alert" className="fine-print text-red-700">
-                  {gramProblem(label.gram)}
-                </p>
-              ) : null}
+                <span className="block text-[0.75rem] font-medium">{option.label}</span>
+                <span className="on-dark-muted block text-[0.6875rem] leading-tight">
+                  {option.summary}
+                </span>
+              </button>
+            ))}
+          </DockStrip>
+        ),
+      };
+    }
 
-              <CornerPicker
-                label="Etiket konumu"
-                value={label.corner}
-                onChange={(corner) => setLabel((current) => ({ ...current, corner }))}
+    if (activeTool === "zemin") {
+      return {
+        title: "Zemin",
+        // Kategori sekmeleri kartin BASLIK satirinda: ayri bir satir kart
+        // yuksekligini buyutuyor, tuvali kucultuyordu (18.09.2026).
+        action: (
+          <CategoryTabs
+            groups={backgroundGroups}
+            shownGroup={shownGroup}
+            onSelect={showCategory}
+          />
+        ),
+        body: (
+          <>
+            <BackgroundPalette
+              key={shownGroup?.id ?? "all"}
+              items={shownGroup?.items ?? fittingBackgrounds}
+              selectedId={selectedBackground.id}
+              onSelect={selectBackground}
+              gradientCss={gradientCss}
+            />
+
+            {/*
+              Yer tutucu zeminler kullaniciya ACIKCA soyleniyor: gercek zemin
+              kutuphanesi yokken "iste zeminleriniz" demek yanlis olurdu.
+              "Hazirlaniyor" ile "yuklenemedi" AYRI sebepler (PR #18).
+            */}
+            {!isLoading && !hasServerBackground ? (
+              isUnavailable ? (
+                <p role="status" className="fine-print mt-2 px-1 text-amber-300">
+                  Zemin kütüphanesi şu an yüklenemedi; şimdilik sade zeminler.{" "}
+                  <button
+                    type="button"
+                    onClick={retryBackgrounds}
+                    className="press font-medium underline underline-offset-2"
+                  >
+                    Tekrar dene
+                  </button>
+                </p>
+              ) : (
+                <p className="fine-print on-dark-muted mt-2 px-1">
+                  Zemin kütüphanesi hazırlanıyor. Şimdilik sade zeminler.
+                </p>
+              )
+            ) : null}
+
+            {formatName === "marketplace" &&
+            selectedBackground.id !== MARKETPLACE_BACKGROUND_ID ? (
+              <p role="status" className="fine-print mt-2 px-1 text-amber-300">
+                Pazaryerleri genellikle düz beyaz zemin ister.{" "}
+                <button
+                  type="button"
+                  onClick={() => selectBackground(MARKETPLACE_BACKGROUND_ID)}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Beyaza dön
+                </button>
+              </p>
+            ) : null}
+          </>
+        ),
+      };
+    }
+
+    if (activeTool === "yerlesim") {
+      return {
+        title: "Yerleşim",
+        body: (
+          <DockStrip label="Yerleşim eylemleri" centered>
+            <DockAction onClick={centerAndFit} disabled={!cutoutSize} icon={<Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              Ortala ve sığdır
+            </DockAction>
+            <DockAction onClick={() => rotateBy(-15)} disabled={!cutoutSize}>−15°</DockAction>
+            <DockAction onClick={() => rotateBy(15)} disabled={!cutoutSize} icon={<RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              15°
+            </DockAction>
+            <DockAction onClick={() => rotateBy(90)} disabled={!cutoutSize}>90°</DockAction>
+          </DockStrip>
+        ),
+      };
+    }
+
+    if (activeTool === "gorunum") {
+      const preset = matchingPreset(appearance);
+      // Ikinci katman: secilen ayarin TEK kaydiraci (iPhone gibi). Geri tusu
+      // gorunum menusune doner.
+      if (adjustment) {
+        const range = {
+          brightness: { min: -0.3, max: 0.3, step: 0.01, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+          contrast: { min: -40, max: 40, step: 1, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}` },
+          saturation: { min: -1, max: 1, step: 0.02, format: (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}` },
+        }[adjustment];
+        const adjustmentLabel = ADJUSTMENTS.find((item) => item.id === adjustment)!.label;
+        return {
+          title: "Görünüm",
+          action: <span className="on-dark-muted fine-print">{adjustmentLabel}</span>,
+          body: (
+            <div className="px-3 pt-4">
+              <Slider
+                label={adjustmentLabel}
+                value={appearance[adjustment]}
+                min={range.min}
+                max={range.max}
+                step={range.step}
+                format={range.format}
+                onStart={pushHistory}
+                onChange={(v) => setAppearance((a) => ({ ...a, [adjustment]: v }))}
               />
-              <div className="flex gap-2">
+            </div>
+          ),
+        };
+      }
+      return {
+        title: "Görünüm",
+        action: !isDefaultAppearance(appearance) ? (
+          <button
+            type="button"
+            onClick={() => setAppearance(DEFAULT_APPEARANCE)}
+            className="press on-dark-muted text-[0.75rem] underline underline-offset-2 hover:text-[#f3f0eb]"
+          >
+            sıfırla
+          </button>
+        ) : undefined,
+        body: (
+          <>
+            <DockStrip label="Hazır görünüm ayarları" centered>
+              {APPEARANCE_PRESETS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    pushHistory();
+                    setAppearance((current) => applyPreset(current, item));
+                  }}
+                  aria-pressed={preset?.id === item.id}
+                  className={
+                    "press min-h-9 shrink-0 snap-start rounded-full px-3.5 text-[0.8125rem] whitespace-nowrap transition-colors " +
+                    (preset?.id === item.id
+                      ? "ring-gold text-gold bg-white/10 ring-2"
+                      : "on-dark-muted ring-1 ring-white/12 hover:bg-white/6 hover:text-[#f3f0eb]")
+                  }
+                >
+                  {item.label}
+                </button>
+              ))}
+            </DockStrip>
+            <div className="flex flex-wrap justify-center gap-2 px-1">
+              {ADJUSTMENTS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setAdjustment(item.id)}
+                  className="press liquid-glass-pill min-h-9 rounded-full px-3.5 text-[0.8125rem]"
+                >
+                  {item.label}
+                </button>
+              ))}
+              <Toggle
+                label="Gölge"
+                isOn={appearance.shadow}
+                onChange={(on) => setAppearance((a) => ({ ...a, shadow: on }))}
+              />
+              <Toggle
+                label="Yansıma"
+                isOn={appearance.reflection}
+                onChange={(on) => setAppearance((a) => ({ ...a, reflection: on }))}
+              />
+            </div>
+          </>
+        ),
+      };
+    }
+
+    if (activeTool === "marka") {
+      return {
+        title: "Marka",
+        action: (
+          <span className="on-dark-muted fine-print">
+            Logo ve ürün bilgisi
+          </span>
+        ),
+        body: (
+          <>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-label="Logo dosyası seç"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void handleLogoFile(file);
+              }}
+            />
+            <DockStrip label="Marka öğeleri" centered>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoUrl}
+                    alt="Yüklenen logo"
+                    className="checkerboard size-9 shrink-0 self-center rounded-lg object-contain ring-1 ring-white/15"
+                  />
+              ) : null}
+              <DockAction
+                onClick={() => logoInputRef.current?.click()}
+                icon={<ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}
+              >
+                {logoUrl ? "Logoyu değiştir" : "Logo yükle"}
+              </DockAction>
+              {logoUrl ? (
+                <>
+                  <DockAction onClick={() => void invertCurrentLogo()} icon={<Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+                    Renkleri çevir
+                  </DockAction>
+                  <DockAction onClick={removeLogo} icon={<Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+                    Kaldır
+                  </DockAction>
+                </>
+              ) : null}
+              <Toggle
+                label="Ürün etiketi"
+                isOn={label.enabled}
+                onChange={(enabled) => setLabel((current) => ({ ...current, enabled }))}
+              />
+            </DockStrip>
+
+            {(logoUrl || label.enabled) ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {logoUrl ? (
+                  <CornerRow
+                    label="Logo konumu"
+                    value={logo.position ? null : logo.corner}
+                    onChange={(corner) => updateLogo({ corner, position: null })}
+                  />
+                ) : <span />}
+                {label.enabled ? (
+                  <CornerRow
+                    label="Etiket konumu"
+                    value={label.corner}
+                    onChange={(corner) => setLabel((current) => ({ ...current, corner }))}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            {label.enabled ? (
+              <div className="mt-2 flex gap-2 sm:ml-auto sm:w-1/2 sm:pl-1">
                 <Toggle
-                  label="Koyu"
+                  label="Koyu etiket"
                   isOn={label.theme === "dark"}
                   onChange={() => setLabel((current) => ({ ...current, theme: "dark" }))}
                 />
                 <Toggle
-                  label="Açık"
+                  label="Açık etiket"
                   isOn={label.theme === "light"}
                   onChange={() => setLabel((current) => ({ ...current, theme: "light" }))}
                 />
               </div>
-            </>
-          ) : (
-            <p className="fine-print opacity-55">
-              Ayar, gram ve ürün kodunu görselin köşesine ekler.
-            </p>
-          )}
-        </div>
+            ) : null}
+          </>
+        ),
+      };
+    }
 
-        <SectionHeading>
-          Dışa aktar
-          <span className="ml-2 font-normal normal-case opacity-50">
-            {format.outputWidth}×{format.outputHeight}
-          </span>
-        </SectionHeading>
-        <div className="flex gap-2 px-5 pb-5">
-          <Button
-            type="button"
-            onClick={() => download("png")}
-            disabled={isExporting}
-            className="press min-h-10 flex-1 rounded-full"
-          >
-            <Download className="size-4" strokeWidth={1.75} aria-hidden />
+    return {
+      title: "İndir",
+      action: (
+        <span className="on-dark-muted fine-print">
+          {format.outputWidth}×{format.outputHeight}
+        </span>
+      ),
+      body: (
+        <>
+        <DockStrip label="Çıktı türleri">
+          <DockAction onClick={() => download("png")} disabled={isExporting} icon={<Download className="size-3.5" strokeWidth={1.75} aria-hidden />}>
             PNG
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => download("jpeg")}
-            disabled={isExporting}
-            className="press min-h-10 flex-1 rounded-full bg-white"
-          >
-            JPEG
-          </Button>
-        </div>
-        <div className="-mt-2 px-5 pb-5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={shareToWhatsApp}
-            disabled={isExporting}
-            className="press min-h-10 w-full rounded-full bg-white"
-          >
-            <MessageCircle className="size-4" strokeWidth={1.75} aria-hidden />
-            WhatsApp&apos;ta paylaş
-          </Button>
-          {shareMessage ? (
-            <p role="status" className="fine-print mt-2 opacity-70">
-              {shareMessage}
-            </p>
-          ) : null}
-        </div>
-        {exportError ? (
-          <p role="alert" className="fine-print -mt-3 px-5 pb-5 text-red-700">
-            {exportError}
-          </p>
-        ) : null}
-
-        {/*
-          BASKIYA UYGUN CIKTI — artik gercek.
-
-          Donusum `sharp` (libvips + littleCMS) ile Next'in kendi sunucusunda
-          yapiliyor (bkz. app/api/cmyk/route.ts); Python backend'ine ve yol
-          haritasindaki hicbir faza dokunmuyor.
-
-          Tarayicida yapilamaz: canvas yalnizca RGB uretir, PNG formati
-          CMYK'yi hic desteklemez. Dort kanalli bir goruntu ve icine gomulu
-          bir cikti profili yalnizca sunucuda mumkun.
-        */}
-        <SectionHeading>
-          Baskıya uygun
-          <span className="ml-2 font-normal normal-case opacity-50">CMYK</span>
-        </SectionHeading>
-        <div className="px-5 pb-5">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => requestPrint("tiff")}
-              disabled={printStatus === "preparing"}
-              className="press min-h-10 flex-1 rounded-full bg-white"
-            >
-              {printStatus === "preparing" ? (
+          </DockAction>
+          <DockAction onClick={() => download("jpeg")} disabled={isExporting}>JPEG</DockAction>
+          <DockAction
+            onClick={() => requestPrint("tiff")}
+            disabled={printStatus === "preparing"}
+            icon={
+              printStatus === "preparing" ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Printer className="size-3.5" strokeWidth={1.75} aria-hidden />
-              )}
-              TIFF
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => requestPrint("jpeg")}
-              disabled={printStatus === "preparing"}
-              className="press min-h-10 flex-1 rounded-full bg-white"
-            >
-              JPEG
-            </Button>
-          </div>
+              )
+            }
+          >
+            CMYK TIFF
+          </DockAction>
+          <DockAction onClick={() => requestPrint("jpeg")} disabled={printStatus === "preparing"}>
+            CMYK JPEG
+          </DockAction>
+          <DockAction onClick={shareToWhatsApp} disabled={isExporting} icon={<MessageCircle className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+            WhatsApp
+          </DockAction>
+          {onSave ? (
+            <DockAction onClick={() => void saveDraft()} disabled={saveStatus === "saving"} icon={<CheckCircle2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              {saveStatus === "saving" ? "Kaydediliyor" : saveStatus === "saved" ? "Kaydedildi" : "Kaydet"}
+            </DockAction>
+          ) : null}
+        </DockStrip>
+        {saveStatus === "error" ? <p className="fine-print mt-2 text-red-300">Çalışma kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.</p> : null}
+        </>
+      ),
+    };
+  })();
 
+  /** Denetcideki ince ayarlar — secili araca gore. */
+  const inspectorBody = (() => {
+    if (activeTool === "yerlesim") {
+      return (
+        <div>
+          <div className="fine-print on-dark-muted mb-1.5 flex items-center justify-between">
+            <span>Boyut</span>
+            <span className="tabular-nums">{Math.round(currentRatio * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_SCALE_RATIO * 100}
+            max={MAX_SCALE_RATIO * 100}
+            step={1}
+            value={Math.round(currentRatio * 100)}
+            disabled={!fitScale}
+            aria-label="Ürün boyutu"
+            onChange={(event) => setScaleRatio(Number(event.target.value) / 100)}
+            className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15"
+          />
+          <p className="fine-print on-dark-muted mt-2 hidden lg:block">
+            Sürükleyerek taşıyın, köşelerden boyutlandırın, üstteki tutamaçtan
+            döndürün.
+          </p>
+        </div>
+      );
+    }
+
+    if (activeTool === "marka") {
+      return (
+        <>
+          <p className="text-[0.75rem] font-medium text-[#f3f0eb]">Logo</p>
+          {logoUrl ? (
+            <Slider
+              label="Saydamlık"
+              value={logo.opacity}
+              min={LOGO_OPACITY_RANGE.min}
+              max={LOGO_OPACITY_RANGE.max}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(opacity) => updateLogo({ opacity })}
+            />
+          ) : null}
+          {logoMessage ? (
+            <p role="alert" className="fine-print text-red-300">
+              {logoMessage}
+            </p>
+          ) : (
+            <p className="fine-print on-dark-muted">
+              Saydam PNG en iyi sonucu verir. Logo yalnızca bu tarayıcıda hatırlanır.
+            </p>
+          )}
+          <div className="border-t border-white/10 pt-3">
+            <p className="mb-2 text-[0.75rem] font-medium text-[#f3f0eb]">Ürün etiketi</p>
+            {label.enabled ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="fine-print on-dark-muted block">Ayar</span>
+              <select
+                value={label.karat}
+                onChange={(event) =>
+                  setLabel((current) => ({ ...current, karat: event.target.value }))
+                }
+                className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
+              >
+                <option value="">Yok</option>
+                {KARAT_OPTIONS.map((karat) => (
+                  <option key={karat} value={karat}>
+                    {karat}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="fine-print on-dark-muted block">Gram</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="3,45"
+                value={label.gram}
+                onChange={(event) =>
+                  setLabel((current) => ({ ...current, gram: event.target.value }))
+                }
+                aria-invalid={gramProblem(label.gram) ? true : undefined}
+                className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12 aria-invalid:ring-red-400"
+              />
+            </label>
+                </div>
+                <label className="mt-3 block">
+                  <span className="fine-print on-dark-muted block">Ürün kodu</span>
+                  <input
+                    type="text"
+                    placeholder="A-102"
+                    maxLength={MAX_CODE_LENGTH}
+                    value={label.code}
+                    onChange={(event) =>
+                      setLabel((current) => ({ ...current, code: event.target.value }))
+                    }
+                    className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
+                  />
+                </label>
+                {gramProblem(label.gram) ? (
+                  <p role="alert" className="fine-print mt-2 text-red-300">
+                    {gramProblem(label.gram)}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="fine-print on-dark-muted">
+                Ayar, gram ve ürün kodunu görselin köşesine eklemek için dock’tan etkinleştirin.
+              </p>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (activeTool === "indir") {
+      return (
+        <>
           <button
             type="button"
             onClick={() => setIsPrintInfoOpen((open) => !open)}
             aria-expanded={isPrintInfoOpen}
-            className="fine-print mt-2 underline underline-offset-2 opacity-60 hover:opacity-100"
+            className="fine-print on-dark-muted underline underline-offset-2 hover:text-[#f3f0eb]"
           >
-            Bu ne demek?
+            CMYK ne demek?
           </button>
-
           {isPrintInfoOpen ? (
-            <p className="fine-print mt-1.5 leading-relaxed opacity-70">
-              Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu
-              seçenek görseli, hedef baskı koşulunun ICC profiliyle CMYK renk
-              uzayına çevirip profili dosyaya gömer. Saydam alanlar beyaza
-              düzleştirilir, çünkü CMYK&apos;de saydamlık yoktur. TIFF matbaanın
-              tercih ettiği biçim; JPEG daha küçük.
+            <p className="fine-print on-dark-muted leading-relaxed">
+              Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu seçenek
+              görseli, hedef baskı koşulunun ICC profiliyle CMYK renk uzayına
+              çevirip profili dosyaya gömer. Saydam alanlar beyaza düzleştirilir,
+              çünkü CMYK&apos;de saydamlık yoktur. TIFF matbaanın tercih ettiği
+              biçim; JPEG daha küçük.
             </p>
           ) : null}
-
           {printStatus === "done" ? (
-            <p role="status" className="fine-print mt-2 opacity-60">
+            <p role="status" className="fine-print on-dark-muted">
               İndirildi.
             </p>
           ) : typeof printStatus === "object" ? (
-            <p role="alert" className="fine-print mt-2 text-red-700">
+            <p role="alert" className="fine-print text-red-300">
               {printStatus.error}
             </p>
           ) : null}
-
-          <p className="fine-print mt-3 opacity-55">
+          {shareMessage ? (
+            <p role="status" className="fine-print on-dark-muted">
+              {shareMessage}
+            </p>
+          ) : null}
+          {exportError ? (
+            <p role="alert" className="fine-print text-red-300">
+              {exportError}
+            </p>
+          ) : null}
+          <p className="fine-print on-dark-muted">
             PNG çıktısı zaten kayıpsızdır; JPEG sıkıştırma uygular.
           </p>
-        </div>
-          </>
-        ) : null}
+        </>
+      );
+    }
 
-        <div className="flex gap-2 p-4">
-          {step > 1 ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setStep((current) => (current - 1) as EditorStep)}
-              className="press min-h-10 flex-1 rounded-full bg-white"
-            >
-              <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
-              Geri
-            </Button>
-          ) : null}
-          {step < 3 ? (
-            <Button
-              type="button"
-              onClick={() => setStep((current) => (current + 1) as EditorStep)}
-              className="press min-h-10 flex-1 rounded-full"
-            >
-              Devam
-              <ArrowRight className="size-4" strokeWidth={1.75} aria-hidden />
-            </Button>
-          ) : null}
+    return null;
+  })();
+
+  return (
+    <div className="relative flex w-full flex-col lg:min-h-[calc(100dvh-4.25rem)]">
+      {/* Tuval üstte, bütün kontroller altında tek panelde (iPhone Fotoğraflar düzeni, 18.09.2026). */}
+      <div className="order-1 relative z-0 flex min-w-0 items-center justify-center bg-white px-3 py-5 lg:static lg:flex-1 lg:px-6">
+        <div
+          ref={containerRef}
+          className={
+            "stage-fit w-full min-w-0" +
+            (isCollapsed ? " stage-fit-collapsed" : isCompactMenu ? " stage-fit-compact" : "")
+          }
+          // Tuval ekran YUKSEKLIGINE de sigmali: A4 gibi dikey bicimlerde
+          // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
+          // Dock ayrı satırda; dikey pay fotoğrafın tamamını görünür tutar.
+          style={{
+            maxWidth: `min(46rem, calc((100dvh - var(--studio-reserved)) * ${format.outputWidth / format.outputHeight}))`,
+          }}
+        >
+          <div
+            className="overflow-hidden rounded-[1.25rem] shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-white/12"
+            style={{ aspectRatio: `${format.outputWidth} / ${format.outputHeight}` }}
+          >
+            <EditorStage
+              cutoutUrl={cutoutUrl}
+              background={selectedBackground}
+              displayWidth={displaySize}
+              stageWidth={stageSize.width}
+              stageHeight={stageSize.height}
+              transform={transform}
+              appearance={appearance}
+              logoUrl={logoUrl}
+              logo={logo}
+              label={label}
+              onLogoChange={updateLogo}
+              onTransformChange={(next) => {
+                pushHistory();
+                setTransform(next);
+              }}
+              onCutoutSize={setCutoutSize}
+              onStageReady={handleStageReady}
+            />
+          </div>
+          <p className="fine-print text-muted-foreground mt-2 text-center lg:hidden">
+            Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
+            döndürün
+          </p>
         </div>
       </div>
 
+      <div className="relative z-10 order-2 mt-2 flex shrink-0 justify-center px-3 pb-4 lg:px-6">
+        <Dock
+          title={dock.title}
+          action={dock.action}
+          settings={inspectorBody}
+          tools={
+            <ToolBar
+              groups={TOOL_GROUPS}
+              activeTool={activeTool}
+              onToolChange={openTool}
+            />
+          }
+          activeToolLabel={toolLabel(activeTool)}
+          isCollapsed={isCollapsed}
+          onCollapsedChange={setIsCollapsed}
+          compact={isCompactMenu}
+          layerKey={`${activeTool}:${adjustment ?? ""}`}
+          onBack={goBack}
+          canGoBack={Boolean(adjustment || previousTool)}
+          backLabel={
+            adjustment
+              ? "Görünüm menüsüne dön"
+              : previousTool
+                ? `Önceki araç: ${toolLabel(previousTool)}`
+                : "Önceki araç"
+          }
+        >
+          {dock.body}
+        </Dock>
+      </div>
       {afterDownload ? (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-5">
           <button
@@ -1437,7 +1492,7 @@ function Slider({
 }) {
   return (
     <div>
-      <div className="fine-print mb-1.5 flex items-center justify-between opacity-60">
+      <div className="fine-print on-dark-muted mb-1.5 flex items-center justify-between">
         <span>{label}</span>
         <span className="tabular-nums">{format(value)}</span>
       </div>
@@ -1450,7 +1505,7 @@ function Slider({
         aria-label={label}
         onPointerDown={onStart}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-black/15"
+        className="accent-gold h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15"
       />
     </div>
   );
@@ -1474,8 +1529,8 @@ function Toggle({
       className={
         "press min-h-9 flex-1 rounded-full px-3 text-[0.8125rem] transition-colors " +
         (isOn
-          ? "bg-black text-white"
-          : "bg-white text-black/70 ring-1 ring-black/10 hover:text-black")
+          ? "bg-gold font-medium text-[#1a1917]"
+          : "on-dark-muted ring-1 ring-white/15 hover:bg-white/8 hover:text-[#f3f0eb]")
       }
     >
       {label}
@@ -1483,8 +1538,13 @@ function Toggle({
   );
 }
 
-/** Dort kose secimi: 2x2 izgara, secili kose altin halkali. */
-function CornerPicker({
+/**
+ * Dort kose secimi — dock'ta YATAY tek sirada (17.09.2026).
+ *
+ * Eski 2x2 izgara sag paneldeyken dogruydu; dock'ta yuksekligi iki katina
+ * cikariyordu. Secili kose yine altin halkali ve `aria-pressed` tasiyor.
+ */
+function CornerRow({
   label,
   value,
   onChange,
@@ -1495,8 +1555,8 @@ function CornerPicker({
 }) {
   return (
     <div role="group" aria-label={label}>
-      <span className="fine-print mb-1.5 block opacity-60">{label}</span>
-      <div className="grid grid-cols-2 gap-2">
+      <span className="fine-print on-dark-muted mb-1.5 block px-1">{label}</span>
+      <div className="flex gap-2">
         {CORNERS.map((corner) => (
           <button
             key={corner.id}
@@ -1504,10 +1564,10 @@ function CornerPicker({
             onClick={() => onChange(corner.id)}
             aria-pressed={value === corner.id}
             className={
-              "press min-h-8 rounded-lg text-[0.75rem] transition-shadow " +
+              "press min-h-9 flex-1 rounded-lg text-[0.75rem] transition-shadow " +
               (value === corner.id
-                ? "ring-gold bg-white ring-2"
-                : "bg-white/70 ring-1 ring-black/10 hover:ring-black/25")
+                ? "ring-gold text-gold bg-white/10 ring-2"
+                : "on-dark-muted ring-1 ring-white/12 hover:bg-white/6 hover:text-[#f3f0eb]")
             }
           >
             {corner.label}
@@ -1518,11 +1578,34 @@ function CornerPicker({
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+/**
+ * Dock'taki hizli eylem dugmesi.
+ *
+ * Hepsi ayni olcude ve ayni yerde: dock bir PALET, yani icindeki ogeler
+ * birbirine benzemeli. Metin `whitespace-nowrap` — Turkce etiketler kisa
+ * ekranda iki satira dusup dock'u buyutuyordu.
+ */
+function DockAction({
+  children,
+  onClick,
+  disabled,
+  icon,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+}) {
   return (
-    <h3 className="px-5 pt-5 pb-3 text-[0.6875rem] font-semibold tracking-[0.08em] uppercase opacity-50">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="press on-dark-muted flex min-h-9 shrink-0 snap-start items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] whitespace-nowrap ring-1 ring-white/12 transition-colors hover:bg-white/8 hover:text-[#f3f0eb] disabled:opacity-40"
+    >
+      {icon}
       {children}
-    </h3>
+    </button>
   );
 }
 

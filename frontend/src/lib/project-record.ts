@@ -13,9 +13,25 @@ export type BackendProject = {
   created_at: string;
   is_mocked: boolean;
   duration_seconds: number | null;
+  workflow_status: "draft" | "completed";
+  downloaded_at: string | null;
+  editor_state: EditorDraft | null;
   result_url: string;
   thumbnail_url: string;
   expires_in: number;
+};
+
+import type { Appearance, OutputFormatName, Transform } from "@/lib/composition";
+import type { ProductLabel } from "@/lib/overlays";
+
+export type EditorDraft = {
+  formatName: OutputFormatName;
+  backgroundId: string;
+  transform: Transform | null;
+  appearance: Appearance;
+  label: ProductLabel;
+  step: 1 | 2 | 3;
+  activeTool: string;
 };
 
 export type BackendProjectPage = {
@@ -30,6 +46,9 @@ export type WorkRecord = {
   createdAt: number;
   isMocked: boolean;
   durationSeconds: number | null;
+  status: "draft" | "completed";
+  downloadedAt: number | null;
+  editorState: EditorDraft | null;
   /**
    * Sonuc gorselinin adresi — R2'nin imzali adresi DEGIL, ayni kokenden
    * vekil (`/api/projects/{id}/result`). Sebep: studyo gorseli tuvale ciziyor
@@ -61,6 +80,9 @@ export function toWorkRecord(project: BackendProject, now = Date.now()): WorkRec
     createdAt: Date.parse(project.created_at),
     isMocked: project.is_mocked,
     durationSeconds: project.duration_seconds,
+    status: project.workflow_status ?? "draft",
+    downloadedAt: project.downloaded_at ? Date.parse(project.downloaded_at) : null,
+    editorState: project.editor_state ?? null,
     resultUrl: `/api/projects/${encodeURIComponent(project.id)}/result`,
     thumbnailUrl: project.thumbnail_url,
     expiresAt: now + project.expires_in * 1000,

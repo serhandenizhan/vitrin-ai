@@ -7,9 +7,12 @@ noktayı kapatmak. Karar uç noktanın NE KORUDUĞUNA göre veriliyor:
 * `limit_checkout` / `limit_public` (para, sağlayıcı geri dönüşleri, webhook)
   **fail-closed** kalır: buradaki sınırın sessizce kalkması, Redis arızasında
   sınırsız checkout/webhook denemesi demek olurdu.
-* `limit_scoped` (yalnızca zemin listeleme) **fail-open**: burada korunan şey
-  yalnızca okuma trafiği, kaybedilen şey ise ürünün çekirdek özelliği. Aksi
-  hâlde Redis arızası 500'e, Next vekilinde "200 + boş liste"ye ve kullanıcının
+* `limit_scoped` (zemin listeleme, admin okuma uçları, destek formu)
+  **fail-open**: burada korunan şey okuma trafiği ya da hesaba bağlı, iz
+  bırakan bir yazma; kaybedilen şey ise ürünün kendisi. Destek formu için
+  ayrıca: Redis'in düştüğü an, kullanıcının sorun bildirmek isteyeceği andır —
+  o anda formu kapatmak yanlış yöne hata vermek olurdu. Zemin listelemede
+  fail-closed seçilseydi Redis arızası 500'e, Next vekilinde "200 + boş liste"ye ve kullanıcının
   gözünde 93 zeminlik kütüphanenin yok olmasına dönüşüyordu. Kök `CLAUDE.md`'nin
   erişim kuralı 1 ile aynı mantık: listeleme bir kapı değil.
 """
@@ -27,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 checkout_limiter = RequestRateLimiter(10, 60, redis_url=settings.redis_url)
 public_limiter = RequestRateLimiter(600, 60, redis_url=settings.redis_url)
+#: Faz 6 admin panelinin MUTASYON uçları (kredi verme, silme, rol değişikliği).
+#: Okuma uçları bu kovayı kullanmaz; onlar `limit_scoped` ile fail-open.
+admin_limiter = RequestRateLimiter(60, 60, redis_url=settings.redis_url)
+#: Destek formu: gerçek bir kullanıcı saatte birkaç mesajdan fazlasını yazmaz;
+#: sınır, oturumlu bir hesabın tabloyu 4000 karakterlik satırlarla doldurmasını
+#: engelliyor. Yön `limit_scoped` ile fail-open — gerekçe modül docstring'inde.
+support_limiter = RequestRateLimiter(5, 3600, redis_url=settings.redis_url)
 
 
 def client_ip(request: Request) -> str:
@@ -67,6 +77,22 @@ async def limit_checkout(user: CurrentUser = Depends(get_current_user)):
         )
 
 
+async def limit_admin(admin: CurrentUser = Depends(get_current_user)):
+    """Admin panelinin yazan uçları — **fail-closed**, bilinçli.
+
+    Burada korunan şey okuma trafiği değil: kredi verme, hesap silme ve rol
+    değişikliği. Redis arızasında sınırın sessizce kalkması, yetkisi ele
+    geçirilmiş tek bir admin oturumunun sınırsız hızla kredi basabilmesi
+    demek olurdu. Panelin OKUMA uçları aynı gerekçeyle ters yöne kuruldu
+    (`limit_scoped`, fail-open): orada kaybedilen şey yalnızca görünürlük.
+    """
+    retry = await admin_limiter.retry_after("billing:admin:" + str(admin.id))
+    if retry:
+        raise billing_error(
+            "rate_limited", "Çok fazla yönetici isteği. Biraz bekleyin.", 429, retry
+        )
+
+
 async def limit_public(request: Request):
     retry = await public_limiter.retry_after("billing:public:" + client_ip(request))
     if retry:
@@ -75,7 +101,9 @@ async def limit_public(request: Request):
         )
 
 
-async def limit_scoped(request: Request, name: str, user_id=None):
+async def limit_scoped(
+    request: Request, name: str, user_id=None, limiter: RequestRateLimiter = public_limiter
+):
     """Oturum varsa kullanıcı başına, yoksa IP başına sınırlar.
 
     Zemin listesine tarayıcı doğrudan gelmiyor; istek Next.js vekilinden
@@ -86,7 +114,7 @@ async def limit_scoped(request: Request, name: str, user_id=None):
     """
     scope = f"user:{user_id}" if user_id else f"ip:{client_ip(request)}"
     try:
-        retry = await public_limiter.retry_after(f"billing:{name}:{scope}")
+        retry = await limiter.retry_after(f"billing:{name}:{scope}")
     except RedisError:
         # FAIL-OPEN, bilinçli — gerekçe modül docstring'inde. Sessiz değil:
         # log'a yazılıyor ki "sınır neden uygulanmadı" sorusu cevaplanabilsin.

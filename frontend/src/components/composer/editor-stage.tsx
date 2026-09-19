@@ -64,6 +64,10 @@ import {
   snapToCenter,
 } from "@/lib/composition";
 import { useLoadedImage } from "@/components/composer/use-loaded-image";
+import {
+  BACKGROUND_FADE_CURRENT,
+  BACKGROUND_FADE_GHOST,
+} from "@/components/composer/background-fade";
 
 export { OUTPUT_SIZE, STAGE_SIZE, FIT_MARGIN, fitTransform };
 export type { Transform };
@@ -85,6 +89,13 @@ export type EditorStageProps = {
   /** Logo sahnede surukleyip kose karelerinden boyutlandirilinca. */
   onLogoChange?: (patch: Pick<LogoSettings, "size" | "position">) => void;
   onTransformChange: (transform: Transform) => void;
+  /**
+   * Tuvalde bir surukleme/olcekleme BASLADI mi, BITTI mi.
+   *
+   * Alt dock tuvalin uzerinde duruyor; urune dokunuldugu anda silikleip geri
+   * cekilmesi icin bu haber gerekiyor (17.09.2026, Serhan'in karari).
+   */
+  onInteractionChange?: (isInteracting: boolean) => void;
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onCutoutSize: (size: { width: number; height: number }) => void;
   onStageReady: (stage: Konva.Stage | null) => void;
@@ -103,9 +114,18 @@ export function EditorStage({
   label,
   onLogoChange,
   onTransformChange,
+  onInteractionChange,
   onCutoutSize,
   onStageReady,
 }: EditorStageProps) {
+  const beginInteraction = useCallback(
+    () => onInteractionChange?.(true),
+    [onInteractionChange],
+  );
+  const endInteraction = useCallback(
+    () => onInteractionChange?.(false),
+    [onInteractionChange],
+  );
   const stageRef = useRef<Konva.Stage | null>(null);
   const cutoutRef = useRef<Konva.Image | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -139,6 +159,60 @@ export function EditorStage({
     { keepPrevious: true },
   );
   const logoImage = useLoadedImage(logoUrl);
+
+  /**
+   * Zeminler arasi CAPRAZ GECIS (Kaan, 18.09.2026: "zeminler arasi daha iyi
+   * gecsin"). Yeni zemin eskisinin USTUNDE saydamliktan beliriyor; eski zemin
+   * gecis suresince alta eklenen gecici bir Konva dugumu ve gecis bitince
+   * siliniyor. React durumuna degil dogrudan Konva'ya yaziliyor: gecis bir
+   * CIZIM ayrintisi, bilesenin durumu degil (efekt icinde setState de kaskad
+   * render uretirdi).
+   *
+   * CIKTI GUVENLIGI: gecisin ortasinda indirme yapilirsa dosyaya iki zeminin
+   * karisimi girerdi. `renderStage` disa aktarmadan once
+   * `finishBackgroundFade` ile gecisi aninda bitiriyor (background-fade.ts).
+   * Yuklenemeyen zemin (ders 23) `useLoadedImage`'den `null` dondugu icin
+   * burada gecis hic baslamiyor; gradyana dogrudan dusuluyor.
+   */
+  const backgroundLayerRef = useRef<Konva.Layer | null>(null);
+  const backgroundNodeRef = useRef<Konva.Image | null>(null);
+  const shownBackgroundRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    const previous = shownBackgroundRef.current;
+    shownBackgroundRef.current = backgroundImage;
+    const layer = backgroundLayerRef.current;
+    const node = backgroundNodeRef.current;
+    if (!previous || !backgroundImage || previous === backgroundImage || !layer || !node) return;
+    const reduceMotion =
+      document.documentElement.classList.contains("reduce-motion") ||
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    if (reduceMotion) return;
+
+    const ghost = new Konva.Image({
+      image: previous,
+      width: stageWidth,
+      height: stageHeight,
+      crop: coverCrop(previous.width, previous.height, stageWidth, stageHeight),
+      name: BACKGROUND_FADE_GHOST,
+      listening: false,
+    });
+    layer.add(ghost);
+    ghost.moveToBottom();
+    node.opacity(0);
+    const tween = new Konva.Tween({
+      node,
+      duration: 0.42,
+      opacity: 1,
+      easing: Konva.Easings.EaseInOut,
+      onFinish: () => ghost.destroy(),
+    });
+    tween.play();
+    return () => {
+      tween.destroy();
+      node.opacity(1);
+      ghost.destroy();
+    };
+  }, [backgroundImage, stageWidth, stageHeight]);
 
   /**
    * Etiketin yazi tipi sitenin kendisi (Inter). `next/font` aileye karma bir
@@ -296,11 +370,32 @@ export function EditorStage({
     node.getLayer()?.batchDraw();
   }, [cutout, cacheScale, shadowOn]);
 
+  // Segmentasyon kaynak boyutunu korur; saydam kenarlar yansıma ekseni değildir.
+  const visibleBounds = useMemo(() => {
+    if (!cutout) return undefined;
+    const canvas = document.createElement("canvas");
+    canvas.width = cutout.width;
+    canvas.height = cutout.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return undefined;
+    context.drawImage(cutout, 0, 0);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let left = canvas.width, top = canvas.height, right = -1, bottom = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        if (data[(y * canvas.width + x) * 4 + 3] < 16) continue;
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
+      }
+    }
+    return right < left ? undefined : { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+  }, [cutout]);
+
   const reflection = useMemo(() => {
     const source = liveTransform ?? placement;
     if (!appearance.reflection || !cutout || !source) return null;
-    return reflectionPlacement(source, cutout.width, cutout.height);
-  }, [appearance.reflection, cutout, liveTransform, placement]);
+    return reflectionPlacement(source, cutout.width, cutout.height, visibleBounds);
+  }, [appearance.reflection, cutout, liveTransform, placement, visibleBounds]);
 
   const backgroundCrop = useMemo(
     () =>
@@ -355,11 +450,13 @@ export function EditorStage({
         pinchRef.current = null;
       }}
     >
-      <Layer listening={false}>
+      <Layer listening={false} ref={backgroundLayerRef}>
         {backgroundImage && backgroundCrop ? (
           // `crop`: zemin ESNETILMEDEN bicimi kapliyor (lib/composition.ts
           // `coverCrop`). Onceden dogrudan sahne olcusune zorlaniyordu.
           <KonvaImage
+            ref={backgroundNodeRef}
+            name={BACKGROUND_FADE_CURRENT}
             image={backgroundImage}
             width={stageWidth}
             height={stageHeight}
@@ -458,10 +555,18 @@ export function EditorStage({
             }}
             onMouseDown={() => setIsSelected(true)}
             onTouchStart={() => setIsSelected(true)}
+            onDragStart={beginInteraction}
+            onTransformStart={beginInteraction}
             onDragMove={trackLiveTransform}
             onTransform={trackLiveTransform}
-            onDragEnd={reportTransform}
-            onTransformEnd={reportTransform}
+            onDragEnd={() => {
+              reportTransform();
+              endInteraction();
+            }}
+            onTransformEnd={() => {
+              reportTransform();
+              endInteraction();
+            }}
           />
         ) : null}
 
@@ -522,8 +627,16 @@ export function EditorStage({
             draggable={Boolean(onLogoChange)}
             onMouseDown={() => setSelection("logo")}
             onTouchStart={() => setSelection("logo")}
-            onDragEnd={reportLogo}
-            onTransformEnd={reportLogo}
+            onDragStart={beginInteraction}
+            onTransformStart={beginInteraction}
+            onDragEnd={() => {
+              reportLogo();
+              endInteraction();
+            }}
+            onTransformEnd={() => {
+              reportLogo();
+              endInteraction();
+            }}
           />
         ) : null}
         <Transformer

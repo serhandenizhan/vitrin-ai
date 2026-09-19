@@ -476,3 +476,208 @@ async def test_project_queued_for_deletion_is_hidden_from_direct_get(
     assert client.get("/api/projects", headers=tokens.headers(owner)).json()["items"] == []
     response = client.get(f"/api/projects/{project.id}", headers=tokens.headers(owner))
     assert response.status_code == 404
+
+
+async def _reload(db_session, project_id: uuid.UUID) -> Project:
+    db_session.expire_all()
+    return await db_session.scalar(select(Project).where(Project.id == project_id))
+
+
+async def test_patch_requires_authentication(db_session, tokens, create_user):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(f"/api/projects/{project.id}", data={"workflow_status": "completed"})
+
+    assert response.status_code == 401
+
+
+async def test_patch_own_project_completes_and_stores_editor_state(db_session, tokens, create_user):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"workflow_status": "completed", "editor_state": '{"format": "a4", "scale": 1.2}'},
+        headers=tokens.headers(owner),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["workflow_status"] == "completed" and body["downloaded_at"] is not None
+    assert body["editor_state"] == {"format": "a4", "scale": 1.2}
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "completed" and stored.downloaded_at is not None
+    assert stored.editor_state == {"format": "a4", "scale": 1.2}
+
+
+async def test_patch_back_to_draft_clears_download_time_and_keeps_editor_state(
+    db_session, tokens, create_user
+):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+    url, headers = f"/api/projects/{project.id}", tokens.headers(owner)
+    client.patch(url, data={"workflow_status": "completed", "editor_state": '{"a": 1}'}, headers=headers)
+
+    response = client.patch(url, data={"workflow_status": "draft"}, headers=headers)
+
+    assert response.status_code == 200
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "draft" and stored.downloaded_at is None
+    # Taslak alanı gönderilmediyse eskisi silinmemeli.
+    assert stored.editor_state == {"a": 1}
+
+
+async def test_saving_editor_state_of_completed_project_keeps_download_time(
+    db_session, tokens, create_user
+):
+    # Tamamlanmış çalışmanın stüdyo ayarı kaydedilirken istemci "completed"
+    # gönderir; bu kayıt indirme zamanını "şimdi"ye çekmemeli (PR #22 incelemesi).
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+    url, headers = f"/api/projects/{project.id}", tokens.headers(owner)
+    first = client.patch(url, data={"workflow_status": "completed"}, headers=headers).json()
+
+    response = client.patch(
+        url, data={"workflow_status": "completed", "editor_state": '{"b": 2}'}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["downloaded_at"] == first["downloaded_at"]
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "completed" and stored.editor_state == {"b": 2}
+
+
+async def test_patch_other_users_project_returns_404_and_changes_nothing(
+    db_session, tokens, create_user
+):
+    # IDOR: sahiplik filtresi olmasaydı saldırgan başkasının çalışmasını
+    # "tamamlandı" işaretleyip taslağının üzerine yazabilirdi.
+    owner = await create_user()
+    attacker = await create_user()
+    project = await _insert_project(db_session, owner)
+    storage = _storage_mock()
+    client = _client(db_session, storage)
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"workflow_status": "completed", "editor_state": '{"ele": "gecirildi"}'},
+        headers=tokens.headers(attacker),
+    )
+
+    assert response.status_code == 404
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "draft" and stored.editor_state is None
+    storage.generate_presigned_url.assert_not_called()
+
+
+async def test_patch_is_rejected_if_browser_session_changed(db_session, tokens, create_user):
+    original_user = await create_user()
+    current_user = await create_user()
+    project = await _insert_project(db_session, current_user)
+    client = _client(db_session, _storage_mock())
+    headers = tokens.headers(current_user)
+    headers["X-Expected-User-Id"] = str(original_user)
+
+    response = client.patch(
+        f"/api/projects/{project.id}", data={"workflow_status": "completed"}, headers=headers
+    )
+
+    assert response.status_code == 409
+    assert (await _reload(db_session, project.id)).workflow_status == "draft"
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        ({"workflow_status": "archived"}, 400),
+        ({"workflow_status": "completed", "editor_state": "{bozuk"}, 400),
+        ({"workflow_status": "completed", "editor_state": "[1, 2]"}, 400),
+        ({"workflow_status": "completed", "editor_state": '"x"' + " " * 20_000}, 422),
+    ],
+    ids=["unknown-status", "invalid-json", "not-an-object", "too-large"],
+)
+async def test_patch_rejects_invalid_input_and_changes_nothing(
+    db_session, tokens, create_user, data, expected
+):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(f"/api/projects/{project.id}", data=data, headers=tokens.headers(owner))
+
+    assert response.status_code == expected
+    stored = await _reload(db_session, project.id)
+    assert stored.workflow_status == "draft" and stored.editor_state is None
+
+
+async def test_patch_renames_own_project_without_touching_status(
+    db_session, tokens, create_user
+):
+    # Yeniden adlandirma (18.09.2026): yalniz ad degisir; tamamlanmis calisma
+    # tamamlanmis kalir, indirme zamani ve taslak korunur.
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+    url, headers = f"/api/projects/{project.id}", tokens.headers(owner)
+    first = client.patch(
+        url, data={"workflow_status": "completed", "editor_state": '{"a": 1}'}, headers=headers
+    ).json()
+
+    response = client.patch(url, data={"file_name": "  Altın yüzük  "}, headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["file_name"] == "Altın yüzük"
+    assert body["workflow_status"] == "completed"
+    assert body["downloaded_at"] == first["downloaded_at"]
+    stored = await _reload(db_session, project.id)
+    assert stored.file_name == "Altın yüzük" and stored.editor_state == {"a": 1}
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 256])
+async def test_patch_rejects_invalid_name_and_changes_nothing(
+    db_session, tokens, create_user, name
+):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    before = project.file_name
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}", data={"file_name": name}, headers=tokens.headers(owner)
+    )
+
+    assert response.status_code == 400
+    assert (await _reload(db_session, project.id)).file_name == before
+
+
+async def test_patch_cannot_rename_other_users_project(db_session, tokens, create_user):
+    owner = await create_user()
+    intruder = await create_user()
+    project = await _insert_project(db_session, owner)
+    before = project.file_name
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(
+        f"/api/projects/{project.id}",
+        data={"file_name": "ele geçirildi"},
+        headers=tokens.headers(intruder),
+    )
+
+    assert response.status_code == 404
+    assert (await _reload(db_session, project.id)).file_name == before
+
+
+async def test_patch_with_no_fields_is_rejected(db_session, tokens, create_user):
+    owner = await create_user()
+    project = await _insert_project(db_session, owner)
+    client = _client(db_session, _storage_mock())
+
+    response = client.patch(f"/api/projects/{project.id}", data={}, headers=tokens.headers(owner))
+
+    assert response.status_code == 400

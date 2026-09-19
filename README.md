@@ -43,7 +43,7 @@ buna göre seçildi.
 ## Durum
 
 **Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
-bekliyor.**
+bekliyor. Faz 6 (admin paneli) sürüyor.**
 
 | Faz | Kapsam | Durum |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ bekliyor.**
 | 3 | Zemin kütüphanesi ve kompozisyon stüdyosu | ✅ |
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
-| 6 | Admin paneli | ⏳ |
+| 6 | Admin paneli | 🔄 backend API'si sürüyor |
 | 7 | Test, optimizasyon, sağlamlaştırma | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 
@@ -61,6 +61,18 @@ Faz 5'in kodu hazır ve testleri yeşil; ücretli satın alma **varsayılan olar
 kapalı**. Açılmadan önce gerçek iyzico merchant sandbox turu ile e-posta ve ters
 proxy ayarları tamamlanmalı. Ayrıntı:
 [ödeme kurulum ve işletim rehberi](docs/billing-runbook.md).
+
+Stüdyo arayüzü 17.09.2026'da yeniden düzenlendi (faza ait olmayan iş): sağdaki
+beyaz panel yerine **koyu araç yüzeyi** ve tuvalin hemen altında **iPhone
+Fotoğraflar'daki gibi** ince bir Liquid Glass araç barı ve onun üstünde açılan
+menü kartı var (18.09.2026'da sağdaki denetçi kaldırıldı). Ayrıntı: [frontend README](frontend/README.md) →
+"Stüdyo düzeni".
+
+Faz 6'da admin API'sinin ilk bölümü (kullanıcılar, bonus krediler, kullanım
+istatistikleri) uygulandı. Admin'in verdiği krediler dönem kotasını
+büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde harcanır; her
+admin eylemi yalnızca eklemeye açık bir denetim günlüğüne yazılır. Ayrıntı:
+[backend README](backend/README.md) → "Admin API".
 
 ### Ölçümler
 
@@ -160,8 +172,8 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 299 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 281 test
+cd backend && pytest             # 358 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 312 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

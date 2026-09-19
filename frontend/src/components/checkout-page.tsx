@@ -38,15 +38,15 @@ function SignedInCheckout({ id }: { id: string }) {
     finally { setCanceling(false); }
   }
   const pending = !expired && session?.status === "pending";
-  return <div className="mt-8">
+  return <div className="glass-panel-light mt-8 rounded-3xl p-4 sm:p-6">
     {error && <p role="alert">{error}</p>}
     {session?.status === "completed" ? <div role="status"><p>Aboneliğiniz doğrulandı ve kullanıma açıldı.</p><Link className="mt-4 inline-block underline" href="/hesap">Kredilerim ve ödeme geçmişim</Link></div> : expired || session?.status === "failed" ? <p>Bu ödeme oturumu sona erdi. <Link className="underline" href="/paketler">Yeni işlem başlatın</Link></p> : session?.checkout_form_content ?
-      <iframe title="iyzico güvenli ödeme formu" className="h-[700px] w-full rounded-2xl border-0 bg-white" sandbox="allow-scripts allow-forms allow-popups allow-top-navigation-by-user-activation" referrerPolicy="no-referrer" srcDoc={`<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body><div id="iyzipay-checkout-form" class="responsive"></div>${session.checkout_form_content}</body></html>`} /> : <p role="status">Ödeme formu hazırlanıyor veya ödeme doğrulanıyor…</p>}
+      <iframe title="iyzico güvenli ödeme formu" className="h-[700px] w-full rounded-2xl border-0 bg-white shadow-sm ring-1 ring-black/5" sandbox="allow-scripts allow-forms allow-popups allow-top-navigation-by-user-activation" referrerPolicy="no-referrer" srcDoc={`<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body><div id="iyzipay-checkout-form" class="responsive"></div>${session.checkout_form_content}</body></html>`} /> : <p role="status">Ödeme formu hazırlanıyor veya ödeme doğrulanıyor…</p>}
     {pending && <div className="mt-6 text-sm">
       <p>Başka bir paket seçmek istiyorsanız önce bu işlemi kapatın. <button type="button" disabled={canceling} onClick={() => void cancel()} className="underline disabled:opacity-40">{canceling ? "İptal ediliyor…" : "Bu işlemi iptal et, yeni plan seç"}</button></p>
       {/* Mesaj düğmenin YANINDA duruyor: kullanıcı oraya bakıyor, sayfanın
           tepesindeki yükleme hatası alanına değil. */}
-      {cancelError && <p role="alert" className="mt-3 rounded-xl border border-black/10 bg-white p-4">{cancelError}</p>}
+      {cancelError && <p role="alert" className="mt-3 rounded-xl bg-white/60 p-4 ring-1 ring-black/10">{cancelError}</p>}
     </div>}
   </div>;
 }

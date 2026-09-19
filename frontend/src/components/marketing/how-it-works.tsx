@@ -54,8 +54,9 @@ const TIPS = [
 
 export function HowItWorks() {
   return (
-    <section id="nasil" className="surface-mist section-rhythm">
-      <div className="mx-auto w-full max-w-5xl px-5">
+    <section id="nasil" className="surface-charcoal section-rhythm relative overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(45%_80%_at_50%_0%,rgba(214,167,86,0.14),transparent_74%)]" />
+      <div className="relative mx-auto w-full max-w-5xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
             Üç adımda bitiyor
@@ -75,7 +76,7 @@ export function HowItWorks() {
                 {step.numara}
               </span>
               <p className="display-feature mt-3 text-balance">{step.baslik}</p>
-              <p className="lede on-light-muted mt-2.5 text-pretty">
+              <p className="lede on-dark-muted mt-2.5 text-pretty">
                 {step.aciklama}
               </p>
             </Reveal>
@@ -84,11 +85,11 @@ export function HowItWorks() {
 
         {/* Cekim rehberi — ayri bir kart icinde, cunku bunlar adim degil oneri */}
         <Reveal delay={120}>
-          <div className="mt-10 rounded-2xl bg-white p-6 sm:mt-20 sm:p-10">
+          <div className="glass-panel mt-10 rounded-3xl p-6 sm:mt-20 sm:p-10">
             <h3 className="display-feature text-balance">
               En iyi sonuç için üç öneri
             </h3>
-            <p className="lede on-light-muted mt-2.5 max-w-2xl text-pretty">
+            <p className="lede on-dark-muted mt-2.5 max-w-2xl text-pretty">
               Sonucu en çok etkileyen şey fotoğrafın kendisi. Çekerken bu üçüne
               dikkat ederseniz kenarlar çok daha temiz çıkar.
             </p>
@@ -99,7 +100,7 @@ export function HowItWorks() {
                   <p className="text-[0.9375rem] font-semibold tracking-[-0.01em]">
                     {tip.baslik}
                   </p>
-                  <p className="fine-print on-light-muted mt-1.5 text-pretty">
+                  <p className="fine-print on-dark-muted mt-1.5 text-pretty">
                     {tip.aciklama}
                   </p>
                 </li>

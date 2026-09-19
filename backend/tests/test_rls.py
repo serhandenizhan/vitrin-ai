@@ -69,6 +69,8 @@ async def test_every_public_table_has_rls_enabled(db_session):
         "admin_users",
         "backgrounds",
         "user_consents",
+        "credit_grants",
+        "admin_audit_log",
         "alembic_version",
     } <= set(tables)
     assert [name for name, has_rls in tables.items() if not has_rls] == []

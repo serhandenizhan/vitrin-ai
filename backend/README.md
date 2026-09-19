@@ -188,8 +188,14 @@ select id from auth.users where email = '<e-posta>';
 | `GET /api/projects?limit=50&cursor=...` | Tek sayfa, en yeni önce; `{items, next_cursor}` (sayfa başına en fazla 100) |
 | `POST /api/projects` | Multipart: `result` (PNG), `thumbnail` (PNG/JPEG/WebP, ≤512 KB), `file_name`, `is_mocked`, `duration_seconds` → `201` |
 | `GET /api/projects/{id}` | Tek proje |
+| `PATCH /api/projects/{id}` | Form, hepsi isteğe bağlı ama en az biri zorunlu: `workflow_status` (`draft`/`completed`), `editor_state` (JSON nesne, ≤20.000 karakter), `file_name` (yeniden adlandırma, kayıttaki kuralla 1-255 karakter, kırpılır; gönderilmeyen alan değişmez — ad değiştirmek durumu ellemez). `completed` `downloaded_at`'i yalnız İLK tamamlanmada doldurur (tamamlanmış çalışmanın taslak kaydı indirme zamanını ezmez), `draft` temizler; `editor_state` gönderilmezse eskisi korunur |
 | `DELETE /api/projects/{id}` | `204` |
 | `DELETE /api/projects` | Kullanıcının tüm projeleri, `204` |
+
+`POST /api/support-requests` (oturum zorunlu; `kind` `issue`/`suggestion`,
+`message` 10–4000 karakter, isteğe bağlı `email`) satırı token'daki kullanıcıya
+yazar ve kullanıcı başına **saatte 5** istekle sınırlıdır (`support_limiter`,
+fail-open — Redis'in düştüğü an kullanıcının sorun bildirmek isteyeceği andır).
 
 Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 `expires_in` = `PROJECT_URL_EXPIRY_SECONDS`).
@@ -364,13 +370,13 @@ sunucu/instance seçin.
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
 | `UPLOAD_IP_RATE_LIMIT_REQUESTS` | `120` | Oturumsuz/geçersiz-token denemeleri; process/IP/pencere |
 | `UPLOAD_USER_RATE_LIMIT_REQUESTS` | `30` | Doğrulanmış kullanıcı başına upload; process/pencere |
-| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri fail-closed, zemin listeleme fail-open (bkz. `app/services/billing/limits.py`) |
+| `REDIS_URL` | `redis://localhost:6379/0` | Hız sınırlayıcı sayaçlarının tutulduğu Redis (yerelde `docker-compose.yml`'deki Redis'e işaret eder) — birden fazla worker/instance aynı sayacı paylaşır. Redis'e ulaşılamadığında davranış uç noktaya göre AYRI: para/webhook yüzeyleri ve admin yazma uçları fail-closed; zemin listeleme, admin okuma uçları ve destek formu fail-open (bkz. `app/services/billing/limits.py`) |
 | `REMBG_MODEL_NAME` | `birefnet-general` | Kullanılan segmentasyon modeli |
 | `DATABASE_URL` | `postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai` | Postgres bağlantı dizesi (yerelde `docker-compose.yml`'deki Postgres'e işaret eder) |
 | `SUPABASE_URL` | boş | Supabase proje adresi (`https://<ref>.supabase.co`). Token'ların `iss`'i ve JWKS adresi buradan türetiliyor. Boşsa oturum gerektiren uç noktalar `503` döner. Faz 3'teki `ADMIN_SECRET` kaldırıldı |
 | `SUPABASE_JWT_AUDIENCE` | `authenticated` | Beklenen `aud` değeri |
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
-| `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Project Settings → API Keys → Secret keys). Yalnızca hesap silme için; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` hiçbir şeye dokunmadan `503` döner |
+| `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Settings → API Keys → Secret keys). Hesap silme **ve** Faz 6 admin panelinin kullanıcı listesi/detayı için gerekli; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` ve `GET /api/admin/users` hiçbir şeye dokunmadan `503` döner |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |
@@ -489,3 +495,76 @@ Yeni billing testleri gerçek izole PostgreSQL kullanır, iyzico/R2 yan etkileri
 taklit edilir. `subscription_periods` DB seviyesinde değişmez olduğu için
 testler zamanı geriye alırken korumayı yalnızca `tests/test_billing.py`
 içindeki `backdate_period` yardımcısında ve yalnız o işlem süresince kapatır.
+
+## Admin API (Faz 6)
+
+Migration `0007`; iki yeni tablonun RLS/grant kısıtları aynı migration'dadır.
+HTTP sözleşmesi `app/api/routes/admin.py`, denetim yazımı
+`app/services/admin_audit.py`. Her uç `require_admin`'e bağlı — rol kontrolü
+backend'de ve her istekte `admin_users` tablosundan yapılır.
+
+| Uç | Ne yapar |
+|---|---|
+| `GET /api/admin/users` | Supabase Auth'taki sayfayı kendi abonelik/kota/kullanım satırlarımızla birleştirir (`query`, `page`, `per_page`) |
+| `GET /api/admin/users/{id}` | Dönemler, krediler, tahsilatlar, onaylar, son kullanım, açık sağlayıcı eylemleri |
+| `DELETE /api/admin/users/{id}` | Kullanıcının kendi silme akışıyla **aynı** kuyruğa girer; gövdede kullanıcının e-postası doğrulanır. Hedef bir yöneticiyse (çağıranın kendisi dahil) `409 admin_target` |
+| `POST /api/admin/users/{id}/credits` | Bonus kredi verir (`amount`, `reason`, `idempotency_key`, `expires_at?`) |
+| `POST /api/admin/credits/{id}/revoke` | Kullanılmamış kalanı geri alır |
+| `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
+
+**Bonus krediler dönem kotasının DIŞINDADIR.** `subscription_periods.quota_snapshot`
+migration `0006`'daki `period_snapshot` trigger'ıyla değişmez — dönem bir kanıt
+kaydıdır. Admin'in verdiği kredi `credit_grants` tablosunda durur ve
+`reserve()` yalnızca **dönem kotası tükendiğinde** ona başvurur; erişimi kapalı
+(`suspended`/`expired`) bir aboneliği **diriltmez**, süresi geçmiş ve iptal
+edilmiş krediler hiç sayılmaz, en yakında biten kredi önce harcanır.
+`usage_reservations.grant_id` krediyi hangi kovadan aldığını tutar: başarısız
+bir iş kredisini **alındığı** kovaya iade eder. Kullanılabilir bakiye
+`GET /api/subscriptions/me` yanıtında `bonus_credits` altında döner.
+
+`credit_grants` de değişmezdir: yalnız `used`, `revoked_at` ve hesap silmede
+`user_id`/`granted_by` → `NULL` serbesttir (bu iki sütun `auth.users`'a
+`ON DELETE SET NULL` ile bağlı; yasaklansaydı kredi vermiş bir yöneticinin
+hesabı hiç silinemezdi). Kimin verdiği bilgisi kalıcı olarak
+`admin_audit_log.actor_id`'de durur — o sütunun FK'si bilinçli olarak yoktur.
+
+**`admin_audit_log` yalnızca eklemeye açıktır** (`admin_audit_append_only`
+trigger'ı her `UPDATE`/`DELETE`'i reddeder). Yöneticinin sonradan
+düzenleyebildiği bir kayıt, "bu krediyi kim, ne zaman, neden verdi" sorusunu
+cevaplayamaz. Satır yalnız durumu GERÇEKTEN değiştiren istekte yazılır: aynı
+idempotency anahtarıyla tekrar gelen kredi isteği ve silmesi zaten istenmiş bir
+hesap için admin silmesi ikinci bir satır üretmez.
+
+**Yönetici hesapları panelden silinmez** (`409 admin_target`, çağıranın kendisi
+dahil); yönetici kendi hesabını `DELETE /api/account` ile siler ve **son
+yönetici** orada `409` alır (`admin_users` satırları kilitlenerek sayılır, iki
+yönetici aynı anda kendini silerken ikisi de "başka biri var" görmez).
+
+**Hız sınırı yönü uca göre seçilir:** okuma uçları `limit_scoped` ile
+**fail-open** (Redis arızası panelin bütün sayfalarını karartmasın), yazan
+uçlar `limit_admin` ile **fail-closed** (kredi verme ve hesap silme para/erişim
+yüzeyidir).
+
+**Kullanıcı araması e-posta (ya da tam kullanıcı kimliği) aramasıdır.**
+Davranış İKİ KEZ doğrulandı (17.09.2026): `supabase/auth` kaynağından
+(`internal/api/admin.go` → `internal/models/user.go` → `internal/api/mail.go`)
+ve canlı projeye karşı yalnızca okuma yapan bir çağrıyla. **Canlı ölçüm:**
+`filter='serhande'` 1 sonuç, `filter='SERHANDE'` **0 sonuç** — yani aşağıdaki
+küçük harfe çevirme olmasa büyük harf kullanan yönetici hiçbir şey bulamazdı.
+`full_name` taşıyan kullanıcı sayısı 0.
+
+- `filter` şu koşula çevriliyor:
+  `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
+  E-posta tarafı `ILIKE` **değil** `LIKE`, yani büyük/küçük harfe duyarlı.
+  GoTrue e-postaları `strings.ToLower` ile sakladığı için sorgu bizden küçük
+  harfe çevrilerek gidiyor — yoksa "Musteri" yazan yönetici hiçbir sonuç
+  görmezdi.
+- **`full_name` dalı bizde hiç çalışmaz:** uygulama profili `first_name` /
+  `last_name` / `business_name` anahtarlarıyla yazıyor
+  (`frontend/src/lib/profile.ts`); `full_name` diye bir alanımız yok. **Ada
+  göre arama desteklenmiyor** ve admin arayüzündeki alan etiketi bunu
+  söylemeli — "sayfada bulunanı da ara" gibi bir yama, aranan kişi başka
+  sayfadaysa sessizce "sonuç yok" derdi.
+- Barındırılan projenin `auth` sürümü bu kaynaktan eski olabileceği için dönen
+  sayfa sunucuda bir kez daha süzülüyor: sürüm `filter`'ı yok sayarsa sonuç
+  eksik olabilir ama asla yanlış olmaz. İki yön de test edilmiş durumda.

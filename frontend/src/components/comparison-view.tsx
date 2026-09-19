@@ -28,6 +28,7 @@ type ComparisonViewProps = {
   fileName: string;
   isMocked: boolean;
   elapsedSeconds: number | null;
+  workId: string | null;
   onReset: () => void;
 };
 
@@ -43,6 +44,7 @@ export function ComparisonView({
   fileName,
   isMocked,
   elapsedSeconds,
+  workId,
   onReset,
 }: ComparisonViewProps) {
   const { openStudio } = useWorkspace();
@@ -76,7 +78,7 @@ export function ComparisonView({
           <img
             src={resultUrl}
             alt="Arka planı kaldırılmış ürün görseli"
-            className="checkerboard aspect-square w-full rounded-2xl object-contain ring-1 ring-black/10"
+            className="checkerboard aspect-square w-full rounded-2xl object-contain ring-1 ring-white/12"
           />
           <figcaption className="fine-print mt-2 text-center opacity-70">
             Özgün fotoğraf burada gösterilemediği için yalnızca kesim
@@ -114,7 +116,7 @@ export function ComparisonView({
           <Button
             size="lg"
             className="press min-h-11 rounded-full"
-            onClick={() => openStudio({ cutoutUrl: resultUrl, fileName })}
+            onClick={() => openStudio({ cutoutUrl: resultUrl, fileName, workId: workId ?? undefined })}
           >
             <ImagePlus className="size-4" strokeWidth={1.75} aria-hidden />
             Arka plan ekle
@@ -192,7 +194,7 @@ export function ComparisonView({
 
 function Detay({ baslik, deger }: { baslik: string; deger: string }) {
   return (
-    <div className="bg-white px-2 py-3">
+    <div className="px-2 py-3">
       <dt className="fine-print opacity-55">{baslik}</dt>
       <dd className="mt-0.5 text-[0.8125rem] font-medium tabular-nums">
         {deger}
@@ -266,7 +268,7 @@ function OnceSonra({
     <div className="mx-auto w-full max-w-md">
       <div
         ref={kapsayiciRef}
-        className="checkerboard relative aspect-square w-full touch-none overflow-hidden rounded-2xl ring-1 ring-black/10 select-none"
+        className="checkerboard relative aspect-square w-full touch-none overflow-hidden rounded-2xl ring-1 ring-white/12 select-none"
         onPointerDown={(olay) => {
           surukleniyorRef.current = true;
           try {

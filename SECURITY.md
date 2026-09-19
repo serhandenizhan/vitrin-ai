@@ -273,7 +273,16 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   aboneliğe bağlanması; silme kuyruğundaki projenin doğrudan GET'te de
   gizlenmesi (IDOR/veri saklama tutarlılığı); Auth silindikten sonra çöken
   silme işinin PII temizliğini tamamlaması.
-- **Faz 6:** Admin rol kontrolü backend seviyesinde
+- **Faz 6:** Admin rol kontrolü backend seviyesinde (`require_admin`, her
+  istekte `admin_users` tablosundan — arayüzün bir düğmeyi gizlemesi
+  yetkilendirme sayılmaz); admin eylemlerinin **yalnızca eklemeye açık**
+  denetim günlüğü (`admin_audit_log`, DB trigger'ı `UPDATE`/`DELETE`'i
+  reddeder); admin uçlarında hız sınırının yönü uca göre seçilir (okuma
+  fail-open, kredi/silme/rol fail-closed); geri döndürülemez admin silme
+  işleminde kullanıcının e-postasının yazılarak doğrulanması; yönetici
+  hesaplarının panelden silinememesi ve son yöneticinin kendi hesabını
+  silememesi (panel sahipsiz kalmasın); destek formunda kullanıcı başına hız
+  sınırı
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
   son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
 
@@ -294,7 +303,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
 - [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
 - [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor
-- [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi (Faz 5'te sandbox aşaması — yalnızca kendi hesabına gönderim — kapatıldı; bu, gerçek müşterilere e-posta gitmesi için son adım — bkz. kök `CLAUDE.md` açık takip maddesi 4)
+- [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. kök `CLAUDE.md` açık takip maddesi 5
 
 ## Faz 5 uygulama sınırları
 

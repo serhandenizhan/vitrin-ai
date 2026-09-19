@@ -1,7 +1,7 @@
 """Hesap silme talebi: worker uzak iptali, ardından R2 ve Auth temizliğini tamamlar."""
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db_session
-from app.services.billing.db import one, execute, enqueue
+from app.services.billing.db import one, many, execute, enqueue
 from fastapi.responses import JSONResponse
 import secrets
 
@@ -25,7 +25,7 @@ class AccountDeletionConfirmation(BaseModel):
     email: str = Field(min_length=1, max_length=254)
 
 
-def _same_email(left: str, right: str) -> bool:
+def same_email(left: str, right: str) -> bool:
     return secrets.compare_digest(
         left.strip().casefold().encode("utf-8"),
         right.strip().casefold().encode("utf-8"),
@@ -42,7 +42,7 @@ async def delete_account(
 ) -> Response:
     # Arayuzdeki e-posta yazma adimi yalnizca bir gorunum engeli degil:
     # dogrudan API istegi de ayni geri dondurulemez onayi kanitlamali.
-    if not user.email or not _same_email(confirmation.email, user.email):
+    if not user.email or not same_email(confirmation.email, user.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hesabı silmek için oturumdaki e-posta adresini doğru yazın.",
@@ -56,6 +56,15 @@ async def delete_account(
     subscription = await one(db, "SELECT * FROM subscriptions WHERE user_id=:uid FOR UPDATE", uid=user.id)
     if not subscription:
         raise HTTPException(status_code=401, detail="Hesap bulunamadı.")
+    # Son yönetici kendini silerse admin paneli sahipsiz kalır ve yetkiyi geri
+    # vermenin tek yolu veritabanına elle girmek olur. Satırlar kilitleniyor ki
+    # iki yönetici aynı anda kendini silerken ikisi de "başka biri var" görmesin.
+    admins = await many(db, "SELECT user_id FROM admin_users ORDER BY user_id FOR UPDATE")
+    if len(admins) == 1 and admins[0]["user_id"] == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Son yönetici hesabı silinemez; önce başka bir yönetici ekleyin.",
+        )
     await execute(db, "UPDATE subscriptions SET deletion_requested_at=COALESCE(deletion_requested_at,now()) WHERE user_id=:uid", uid=user.id)
     action = await enqueue(db, user.id, "delete_account", user.id, "delete:" + str(user.id))
     await db.commit()

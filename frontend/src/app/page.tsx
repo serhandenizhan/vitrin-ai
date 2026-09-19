@@ -19,6 +19,7 @@ import { Hero } from "@/components/marketing/hero";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Specs } from "@/components/marketing/specs";
+import { About } from "@/components/marketing/about";
 import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
@@ -27,11 +28,13 @@ export default function HomePage() {
     <SiteShell>
         <Hero />
 
-        <section id="dene" className="surface-mist section-rhythm">
-          <div className="mx-auto w-full max-w-3xl px-5">
+        <section id="dene" className="surface-mist section-rhythm relative overflow-hidden">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[30rem] bg-[radial-gradient(48%_75%_at_50%_0%,rgba(214,167,86,0.16),transparent_76%)]" />
+          <div className="relative mx-auto w-full max-w-3xl px-5">
             <Reveal>
               <div className="mb-9 text-center">
-                <h2 className="display-section text-balance">
+                <p className="text-gold text-xs font-semibold tracking-[0.18em] uppercase">Kendi ürününüzle görün</p>
+                <h2 className="display-section mt-4 text-balance">
                   Kendi fotoğrafınızla deneyin
                 </h2>
                 <p className="lede on-light-muted mx-auto mt-3 max-w-lg text-pretty">
@@ -55,6 +58,7 @@ export default function HomePage() {
         <Highlights />
         <HowItWorks />
         <Specs />
+        <About />
     </SiteShell>
   );
 }

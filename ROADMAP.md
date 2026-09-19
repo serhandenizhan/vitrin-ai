@@ -553,16 +553,20 @@ takip maddeleri 2-3.
 
 **Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
 Resend bağlandı; dahili e-posta servisi bir kayıt denemesinde e-postayı hiç
-teslim etmemişti (kök CLAUDE.md açık takip maddesi 4). **Sandbox aşaması**
-(hesap + API key + Supabase'e bağlama) gerçek bir kayıt denemesiyle uçtan
-uca doğrulandı — e-posta ulaştı, Resend Logs'ta kayıt görüldü. **Bilinen
-sınırlama:** e-posta şu an spam'e düşüyor (kendi alan adımız yok, Resend'in
-paylaşılan gönderen adresi kullanılıyor) — son UX kontrolünde hatırlanacak,
-aşağıdaki alan adı doğrulama adımıyla birlikte düzelmesi bekleniyor.
+teslim etmemişti (kök CLAUDE.md açık takip maddesi 5). **Sandbox aşaması**
+(hesap + API key + Supabase'e bağlama) 14.09.2026'da hesap sahibinin KENDİ
+adresiyle test edildi — e-posta ulaştı, Resend Logs'ta kayıt görüldü.
+
+**Düzeltme (17.09.2026): o test yanıltıcıydı, sandbox gerçekte HİÇBİR
+harici kullanıcıya e-posta iletmiyor** — "spam'e düşüyor" değil, `onboarding@resend.dev`
+Resend'in yalnızca hesap sahibinin kendi adresine teslimat yapan test alan
+adı olduğu için Kaan'ın gerçek kayıt/parola sıfırlama denemesinde Resend
+403, Supabase 500 döndü. Kök sebep ve geçici kilit açma çözümü kök
+`CLAUDE.md` açık takip maddesi 5'te.
 
 **Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
 bağlı — bu kısım Faz 7'nin launch listesine ekleniyor (bkz. kök
-`CLAUDE.md` açık takip maddesi 4).
+`CLAUDE.md` açık takip maddesi 5).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -761,10 +765,68 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
   Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
-### Faz 6 — Admin paneli — ⏳ Planlanan
+### Faz 6 — Admin paneli — 🔄 Sürüyor
 
 - Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
+
+**Serhan'ın backend'i — PR 1 uygulandı (17.09.2026).** Dal
+`feature/faz-6-admin-api`, migration `0007`. Kullanıcı onayıyla kapsam dört
+madde genişletildi (zemin yönetimi uçları, denetim günlüğü, yönetici
+ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı.
+
+- **Kredi modeli kararı — bonus krediler ayrı tabloda (`credit_grants`).**
+  `subscription_periods.quota_snapshot`, `0006`'daki `period_snapshot`
+  trigger'ıyla değişmez; dönem bir kanıt kaydı ve öyle kalıyor. Admin'in
+  verdiği kredi dönemin DIŞINDA durur ve yalnız dönem kotası tükendiğinde
+  harcanır. Erişimi kapalı (`suspended`/`expired`) bir aboneliği **diriltmez** —
+  kredi bir erişim kapısı değil, bir bakiye. `usage_reservations.grant_id`
+  kaynağı tutuyor: başarısız bir iş kredisini **alındığı** kovaya iade ediyor
+  (aksi hâlde dönem sayacı olduğundan düşük kalır ve kullanıcı aynı dönemde bir
+  kredi fazla kullanırdı).
+- **`used_this_period`'i elle düşürmek bilinçli olarak EKLENMEDİ.** "Yanlış
+  harcanan krediyi geri ver" ihtiyacı bonus kredi verilerek karşılanıyor; dönem
+  sayacı gerçekte ne olduğunu anlatmaya devam ediyor ve düzeltmenin izi
+  `credit_grants` + `admin_audit_log`'ta kalıyor.
+- **`admin_audit_log` yalnızca eklemeye açık** (DB trigger'ı). `actor_id`'nin
+  FK'si yok: kredi vermiş bir yöneticinin hesabı silinse de iz kalmalı.
+  `credit_grants.granted_by` ise `ON DELETE SET NULL` olduğu için değişmezlik
+  kuralından NULL yönüne muaf — yasaklansaydı o yöneticinin hesabı hiç
+  silinemezdi (testler bu hatayı yakaladı).
+- **PR #22 incelemesi (18.09.2026) düzeltmeleri:** yönetici hesapları
+  panelden silinemiyor (`409 admin_target`), son yönetici kendi hesabını
+  silemiyor; denetim satırı yalnız durumu değiştiren istekte yazılıyor
+  (idempotent tekrar ikinci satır üretmiyor); `POST /api/support-requests`
+  kullanıcı başına saatte 5 istekle sınırlandı (fail-open) ve
+  `PATCH /api/projects/{id}` ile destek ucu testlendi.
+- **Kullanıcı e-postaları Supabase'in yönetici API'sinden** okunuyor; `auth`
+  şemasını doğrudan sorgulamama kararı (Faz 4) korundu.
+- **Arama davranışı iki kez doğrulandı (17.09.2026): önce `supabase/auth`
+  kaynağından, sonra canlı projeye karşı.** Ders 19 "muhtemelen böyledir"
+  demeyi yasakladığı için varsayım yerine önce kaynak okundu, sonra Serhan
+  `SUPABASE_SECRET_KEY`'i verince yalnızca okuma yapan bir çağrıyla ölçüldü.
+  **Canlı ölçüm:** `filter='serhande'` 1 sonuç, `filter='SERHANDE'` 0 sonuç;
+  `full_name` taşıyan kullanıcı 0. İki sürpriz:
+  1. GoTrue'nun `filter`'ı e-postada `ILIKE` değil **`LIKE`** kullanıyor, yani
+     büyük/küçük harfe duyarlı. E-postalar `strings.ToLower` ile saklandığı
+     için sorgu artık bizden küçük harfe çevrilerek gidiyor — yoksa "Musteri"
+     yazan yönetici hiçbir sonuç görmezdi.
+  2. `filter`'ın ad dalı `raw_user_meta_data->>'full_name'` alanına bakıyor;
+     bizim uygulamamız `first_name`/`last_name`/`business_name` yazıyor, yani
+     **ada göre arama fiilen yok**. Bilinçli karar: dönen sayfayı adlara göre
+     de süzmek EKLENMEDİ — aranan kişi başka sayfadaysa sessizce "sonuç yok"
+     derdi. Arama e-posta ve tam kullanıcı kimliğiyle sınırlı, arayüz etiketi
+     bunu söylemeli (Kaan).
+  Dönen sayfa yine de sunucuda süzülüyor: barındırılan `auth` sürümü daha eski
+  olup `filter`'ı yok sayarsa sonuç eksik olabilir ama yanlış olamaz.
+- Testler: 25 yeni backend testi (toplam 324). `0006 uygulanmış DB → 0007`
+  yolu ayrıca doğrulandı; kredi iadesinin doğru kovaya gittiğini sınayan test
+  eski (bozuk) davranışa karşı çalıştırılıp kırmızı yandığı görüldü.
 - Kaan: rol tabanlı `/admin` arayüzü, arka plan yükleme/yönetim paneli
+  - **Arama kutusunun etiketi "E-posta ile ara" olmalı, "kullanıcı ara"
+    değil.** Backend araması e-posta ve tam kullanıcı kimliğiyle sınırlı; ada
+    göre arama bilinçli olarak Faz 7'ye ertelendi (gerekçesi orada).
+    "Kullanıcı ara" yazıp ada göre çalışmaması, çalışmadığını söylemekten
+    kötüdür — sonuç boş liste olarak döner, hata mesajı olarak değil.
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -793,12 +855,92 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
     söylüyor. İkisi aynı işin iki aşaması, çelişki değil.
 - **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
 
+### Faza ait olmayan iş — stüdyo arayüzü yeniden düzenlendi (17.09.2026, Serhan)
+
+Bir fazın kapsamında değil; Serhan'ın açık isteğiyle yapıldı (kural 6 gereği
+önce söylendi). Stüdyonun sağındaki düz beyaz panel kaldırılıp yerine **koyu
+araç yüzeyi + sağda yüzen denetçi + altta camlı dock** kondu; bekleme ve
+inceleme ekranları da aynı yüzeye alındı. Tasarım dili iptal edilmedi, yanına
+"araç yüzeyi" diye ayrı bir madde eklendi (kök `CLAUDE.md`).
+
+Yeni: hazır görünüm ayarları (Doğal/Parlak/Sıcak/Net/Yumuşak). Kaydıraç elle
+oynatılınca ön ayar işareti kalkıyor. Ayrıntı ve tarayıcıda alınan ölçümler:
+`frontend/README.md` → "Stüdyo düzeni".
+
+**Kaan'ın incelemesi (18.09.2026, PR #22):** tarayıcıda bakıldı; genel
+tasarım kabul edildi, üç değişiklikle (faz dışı iş olduğu söylendi, Kaan bu
+PR'da yapılmasını onayladı — kural 6):
+1. **Sağdaki denetçi kaldırıldı, iPhone Fotoğraflar düzeni:** bütün kontroller
+   tuvalin altında tek panelde; altta araç çubuğu (adımlar ayraçla gruplu,
+   "Devam" yok), üstünde seçili aracın ayarları; görünümde tek kaydıraç.
+   Gerekçe: her değişiklik için sağa, sonra aşağıya gitmek gerekiyordu.
+   İkinci tur: panel yüksekliği her araçta değiştiği için geri dönmek
+   zorlaşıyordu → sabit yükseklik ve kenarda ‹ geri tuşu. Üçüncü tur: panel
+   kalınlaştı, cam Apple'a benzemedi, zemin şeridi sağa kaydırma istiyordu →
+   **ince bar (hiç kıpırdamaz) + üstünde açılan menü kartı**, açık (Apple
+   tonunda) Liquid Glass ve "camdan büyüyen" geçişler, zemin için kategori
+   sekmeleri + dikey ızgara. Dördüncü tur: geri tuşu kartı kapatıyordu →
+   geri artık araçlar arasında gezer (Boyut ↔ Zemin); ayrı bir **küçült**
+   düğmesi barı küçültür ve tuval o yeri alarak animasyonla büyür; cam
+   temaya uygun gri tonda.
+   Beşinci tur: cam hâlâ beyaz okunuyordu → ton, üstteki navbar'ın camıyla
+   aynı kömür grisine çekildi (iki cam aynı malzeme ailesinden). Altıncı
+   tur: dikey zemin ızgarası kartı büyütüp adları gizliyor ve ikinci bir
+   kaydırma çubuğu çıkarıyordu → adlarıyla yatay şerit, fare tekerleği
+   bütün şeritlerde sağa/sola kaydırır, kaydırma çubukları gizli. Yedinci
+   tur: şeritlere sağ/sol cam oklar; zeminler arası çapraz geçiş (indirme
+   geçişin ortasına denk gelirse geçiş önce bitiriliyor — dosyaya iki zeminin
+   karışımı girmesin). Sekizinci tur: zemin adları kartta kesiliyordu → tek
+   satır; Zemin/Boyut kartı inceldi ve tuval aynı oranda büyüdü; zemin ve
+   kategori seçimleri tek uzun eğriyle, sekmeler arasında kayan cam mercek;
+   Liquid Glass daha premium (ışık bandı, altın iç parıltı ve kenar).
+2. **Çalışmalarım'da ürün adını değiştirme** (faz dışı — Faz 4 özelliği;
+   önceden söylendi, Kaan bu PR'da yapılmasını onayladı): kartın başlığındaki
+   kalemle yerinde düzenleme (Enter kaydeder, Escape vazgeçer).
+   `PATCH /api/projects/{id}`'ye isteğe bağlı `file_name` eklendi; ad
+   değiştirmek durumu ve indirme zamanını ellemez. Sahiplik, geçersiz ad ve
+   başkasının çalışması için backend testleri; vekil ve arayüz testleri.
+3. **Yeni sayfalara giriş animasyonu:** `/calismalar`, `/destek`, `/hesap` ve
+   yasal sayfalar "tak diye" açılıyordu; diğer sayfalardaki `Reveal` deseni
+   eklendi (çalışma sekmeleri ve stüdyo araç değişimi `soft-fade`).
+
+İnceleme ayrıca bir hata buldu ve
+düzeltildi: stüdyonun taslak kaydı her zaman `draft` gönderdiği için
+**tamamlanmış (indirilmiş) bir çalışma** yeniden açılıp kaydedildiğinde ya da
+aynı oturumda indirildikten sonra kaydedildiğinde "Yarım kalan"a düşüyor ve
+indirme zamanı siliniyordu. Artık kayıt çalışmanın durumunu koruyor; backend
+de `downloaded_at`'i yalnız ilk tamamlanmada yazıyor. Frontend ve backend
+testleri eski koda karşı kırmızı yandı (ders 15). Aynı turda backend paketi
+yerel Postgres ile çalıştırıldı: 350 geçti; kalan 2 kırmızı
+(`test_billing.py` mutabakat testleri) `main`'de de aynı şekilde kırmızı,
+yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan).
+
 ### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Admin panelinde ADA GÖRE arama — bilinçli olarak ertelendi (Serhan'ın
+  sorusu üzerine karar, 17.09.2026).** Faz 6'da arama e-posta ve tam kullanıcı
+  kimliğiyle sınırlı kaldı. Üç gerekçe:
+  1. **Ölçülen kullanıcı sayısı 2** (canlı projede, ikisi de ekip). Arama
+     kutusunun kendisi bile henüz bir sorunu çözmüyor; ada göre arama olmayan
+     bir sorunun çözümü olurdu.
+  2. **Her iki uygulama yolu da "sessizce eskiyen ikinci kopya" üretiyor.**
+     GoTrue'nun `filter`'ı yalnız `email` ve `raw_user_meta_data->>'full_name'`
+     alanlarına bakıyor; bizim profil anahtarlarımız `first_name` /
+     `last_name` / `business_name`. Çalışması için ya `user_metadata`'ya bir de
+     `full_name` yazılmalı (ad iki yerde durur, biri güncellenip diğeri
+     kalırsa arama sessizce yanlışlanır) ya da ad kendi veritabanımıza
+     kopyalanmalı (profil verisi iki sistemde, KVKK yüzeyi büyür, sayfalama
+     melezleşir). İki kullanıcı için bu takas kötü.
+  3. **Arayüz henüz yazılmadı.** Arama sözleşmesini kimse listeyi kullanmadan
+     tasarlamak tahmin olurdu.
+  **Geri dönüş koşulu:** gerçek müşteri sayısı listede gezmeyi zorlaştırdığında.
+  O noktada doğru soru "ada göre arama ekleyelim mi" değil, **"profil verisi
+  nerede yaşamalı"**dır (Supabase `user_metadata` mı, kendi veritabanımız mı);
+  cevap ikincisiyse ada göre arama ikinci bir kopya gerektirmeden zaten gelir.
 - **Launch öncesi son kapı, dış girdiye bağlı olduğu için buraya taşındı
   (kullanıcı kararı 14.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
@@ -825,9 +967,10 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   - Resend'de alan adı doğrulama (SPF/DKIM) ve gönderen adresinin kendi
     alan adına çevrilmesi — Faz 5'te yalnızca sandbox (kendi hesabına
     gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan
-    sonra gider. **Son UX kontrolünde hatırlanmalı:** sandbox e-postaları
-    şu an spam'e düşüyor, bu adım muhtemelen bunu da düzeltecek
-    (kök `CLAUDE.md` açık takip maddesi 4).
+    sonra gider. **17.09.2026'da doğrulandı: bu adımdan önce gerçek
+    kullanıcıların hiçbiri e-posta alamıyor** (spam değil, sandbox'ın
+    hesap sahibi dışına hiç göndermemesi) — bkz. kök `CLAUDE.md` açık
+    takip maddesi 5.
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
 

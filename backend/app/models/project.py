@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -35,6 +35,9 @@ class Project(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     result_r2_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     thumbnail_r2_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    workflow_status: Mapped[str] = mapped_column(Text, nullable=False, default="draft")
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    editor_state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

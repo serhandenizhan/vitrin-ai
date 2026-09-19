@@ -1,4 +1,4 @@
-"""Supabase Auth yönetici API'si (Faz 4) — şu an yalnızca kullanıcı silme.
+"""Supabase Auth yönetici API'si: kullanıcı silme (Faz 4), okuma/listeleme (Faz 6).
 
 NEDEN veritabanından `delete from auth.users` DEĞİL: `auth` şeması Supabase'e
 ait ve iç tabloları (oturumlar, kimlikler, yenileme token'ları) sürümden sürüme
@@ -35,7 +35,9 @@ class SupabaseAdminService:
         # silinmiş bir hesapla kalırdı.
         if not settings.supabase_url or not settings.supabase_secret_key:
             raise SupabaseAdminConfigurationError(
-                "Hesap silme yapılandırılmamış; sunucuda SUPABASE_SECRET_KEY ayarlanmalı."
+                # Mesaj eylem adı içermiyor: aynı kontrol hesap silmede de,
+                # admin panelinin kullanıcı uçlarında da çalışıyor.
+                "Kullanıcı yönetimi yapılandırılmamış; sunucuda SUPABASE_SECRET_KEY ayarlanmalı."
             )
 
     def _headers(self) -> dict[str, str]:
@@ -70,6 +72,86 @@ class SupabaseAdminService:
             )
         email = response.json().get("email")
         return email if isinstance(email, str) and email else None
+
+    async def get_user(self, user_id: uuid.UUID) -> dict | None:
+        """Yönetici ekleme ve hesap silme onayı için kullanıcının kendi kaydı."""
+        self.ensure_configured()
+        url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}"
+        try:
+            async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise SupabaseAdminError("Kimlik doğrulama sunucusuna ulaşılamadı.") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise SupabaseAdminError(
+                f"Kullanıcı okunamadı (Supabase yanıtı: {response.status_code})."
+            )
+        return response.json()
+
+    async def list_users(
+        self, page: int, per_page: int, query: str | None = None
+    ) -> list[dict]:
+        """Admin panelinin kullanıcı listesi (Faz 6).
+
+        `auth.users` DOĞRUDAN SORGULANMIYOR — gerekçe modül açıklamasında.
+
+        ARAMA — davranış İKİ KEZ doğrulandı (17.09.2026): önce `supabase/auth`
+        kaynağından (`internal/api/admin.go` + `internal/models/user.go` +
+        `internal/api/mail.go`), sonra CANLI projeye karşı
+        (`ilfemklwjmlofeacbdsr`, yalnızca okuma). Canlı ölçüm: `filter`
+        destekleniyor (2 kullanıcıdan 1'ini döndürdü) ve e-posta eşleşmesi
+        gerçekten harfe duyarlı — `filter='serhande'` 1 sonuç verirken
+        `filter='SERHANDE'` **0 sonuç** verdi. Yani aşağıdaki küçük harfe
+        çevirme olmadan, büyük harf kullanan yönetici hiçbir sonuç görmezdi.
+        Üç somut sonuç ve her birinin buradaki karşılığı:
+
+        1. `filter` şu koşula çevriliyor:
+           `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`.
+           E-posta tarafı `ILIKE` DEĞİL `LIKE`, yani **büyük/küçük harfe
+           duyarlı**. GoTrue e-postaları `strings.ToLower` ile saklıyor
+           (`internal/api/mail.go`, `validateEmail`), bu yüzden sorgu buradan
+           küçük harfe çevrilerek gönderiliyor — aksi hâlde "Musteri" yazan
+           yönetici hiçbir sonuç görmezdi.
+        2. `full_name` dalı BİZDE hiç çalışmıyor: uygulama profili
+           `first_name` / `last_name` / `business_name` anahtarlarıyla yazıyor
+           (`frontend/src/lib/profile.ts`), `full_name` diye bir alan yok.
+           Canlı projede de doğrulandı: `full_name` taşıyan kullanıcı sayısı 0,
+           `user_metadata` anahtarları `account_type`, `city`, `first_name`,
+           `last_name`, `phone`, `terms_*`. Yani arama fiilen **e-posta (ya da
+           tam kullanıcı kimliği)** aramasıdır ve arayüzdeki etiket bunu
+           söylemeli.
+        3. Barındırılan `auth` sürümü bugün `filter`'ı destekliyor, ama sürüm
+           bizim kontrolümüzde değil. Bu yüzden dönen sayfa burada bir kez daha
+           süzülüyor: ileride bir sürüm `filter`'ı yok sayarsa sonuç EKSİK
+           olabilir ama asla YANLIŞ olmaz — arama kutusuna yazılanla
+           eşleşmeyen bir kullanıcı listeye giremez.
+        """
+        self.ensure_configured()
+        url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users"
+        params: dict[str, str | int] = {"page": page, "per_page": per_page}
+        if query:
+            params["filter"] = query.strip().casefold()
+        try:
+            async with httpx.AsyncClient(timeout=ADMIN_TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=self._headers(), params=params)
+        except httpx.HTTPError as exc:
+            raise SupabaseAdminError("Kimlik doğrulama sunucusuna ulaşılamadı.") from exc
+        if response.status_code >= 400:
+            raise SupabaseAdminError(
+                f"Kullanıcılar listelenemedi (Supabase yanıtı: {response.status_code})."
+            )
+        users = response.json().get("users") or []
+        if query:
+            needle = query.strip().casefold()
+            users = [
+                user
+                for user in users
+                if needle in str(user.get("email") or "").casefold()
+                or needle == str(user.get("id") or "").casefold()
+            ]
+        return users
 
     async def delete_user(self, user_id: uuid.UUID) -> None:
         self.ensure_configured()

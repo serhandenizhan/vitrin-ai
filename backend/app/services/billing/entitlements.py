@@ -193,6 +193,48 @@ class Reservation:
         self.result_key = result_key
 
 
+#: "Bu dönem şu anda kullanılabilir mi" koşulu. Kotayı BİLİNÇLİ olarak içermez:
+#: aynı koşul hem krediyi düşen atomik UPDATE'te hem de kota tükendiğinde
+#: "abonelik zaten kullanılamaz mıydı" sorusunu ayıran SELECT'te kullanılıyor.
+#: İkisi ayrı yazılsaydı kaçınılmaz olarak ayrışır ve bonus kredi, erişimi
+#: kapalı bir aboneliği sessizce açardı. Sabit bir SQL parçası — kullanıcı
+#: girdisi yok, parametreler her iki sorguda da bağlı (bound) geçiyor.
+_ENTITLED_PERIOD = """p.user_id=:uid AND p.status='active'
+        AND p.starts_at<=clock_timestamp() AND s.deletion_requested_at IS NULL
+        AND ((s.status IN ('active','trialing','canceling','canceled') AND p.ends_at>clock_timestamp())
+             OR (s.status='past_due' AND s.past_due_access_until>clock_timestamp()))"""
+
+
+async def _return_credit(db, period_id, grant_id):
+    """Alınan krediyi ALINDIĞI kovaya iade eder.
+
+    Kaynağa bakmadan dönemin sayacını düşürmek, bonus krediyle yapılan bir işin
+    başarısız olmasında dönemin sayacını olduğundan düşük gösterirdi: kullanıcı
+    aynı dönemde bir kredi fazla kullanabilirdi.
+    """
+    if grant_id is not None:
+        await execute(
+            db, "UPDATE credit_grants SET used=used-1 WHERE id=:id", id=grant_id
+        )
+    else:
+        await execute(
+            db,
+            "UPDATE subscription_periods SET used_this_period=used_this_period-1 WHERE id=:id",
+            id=period_id,
+        )
+
+
+async def available_credit_grants(db, user_id):
+    """Kullanıcının harcanabilir bonus kredisi (hesap ve admin ekranları için)."""
+    return await one(
+        db,
+        """SELECT COALESCE(sum(amount-used),0)::int AS available, min(expires_at) AS expires_at
+        FROM credit_grants WHERE user_id=:uid AND revoked_at IS NULL AND used<amount
+        AND (expires_at IS NULL OR expires_at>clock_timestamp())""",
+        uid=user_id,
+    )
+
+
 async def reserve(db, user_id, request_id, provider):
     if await one(db, "SELECT user_id FROM admin_users WHERE user_id=:uid", uid=user_id):
         await db.commit()
@@ -232,41 +274,65 @@ async def reserve(db, user_id, request_id, provider):
     await locked_subscription(db, user_id)
     row = await one(
         db,
-        """UPDATE subscription_periods p SET used_this_period=used_this_period+1
-        FROM subscriptions s WHERE p.subscription_id=s.id AND p.user_id=:uid AND p.status='active'
-        AND p.starts_at<=clock_timestamp() AND s.deletion_requested_at IS NULL
-        AND ((s.status IN ('active','trialing','canceling','canceled') AND p.ends_at>clock_timestamp())
-             OR (s.status='past_due' AND s.past_due_access_until>clock_timestamp()))
+        f"""UPDATE subscription_periods p SET used_this_period=used_this_period+1
+        FROM subscriptions s WHERE p.subscription_id=s.id AND {_ENTITLED_PERIOD}
         AND p.used_this_period<p.quota_snapshot RETURNING p.id""",
         uid=user_id,
     )
+    grant_id = None
     if not row:
-        await db.commit()
-        raise billing_error(
-            "quota_exceeded", "Bu dönemdeki krediniz tükendi.", 402, retry_safe=True
+        # Dönem kotası tükenmiş OLABİLİR ya da abonelik zaten kullanılamaz
+        # durumda olabilir; yukarıdaki tek sorgu ikisini ayırt etmiyor. Bonus
+        # kredi yalnızca BİRİNCİ durumda devreye girer: admin'in verdiği kredi
+        # askıya alınmış/süresi dolmuş bir aboneliği DİRİLTMEZ.
+        period = await one(
+            db,
+            f"""SELECT p.id FROM subscription_periods p JOIN subscriptions s ON p.subscription_id=s.id
+            WHERE {_ENTITLED_PERIOD}""",
+            uid=user_id,
         )
+        grant = (
+            await one(
+                db,
+                """UPDATE credit_grants SET used=used+1 WHERE id=(
+                SELECT id FROM credit_grants WHERE user_id=:uid AND revoked_at IS NULL
+                AND used<amount AND (expires_at IS NULL OR expires_at>clock_timestamp())
+                ORDER BY expires_at NULLS LAST, created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+                RETURNING id""",
+                uid=user_id,
+            )
+            if period
+            else None
+        )
+        if not grant:
+            await db.commit()
+            raise billing_error(
+                "quota_exceeded", "Bu dönemdeki krediniz tükendi.", 402, retry_safe=True
+            )
+        # Rezervasyon yine AKTİF DÖNEME bağlanır (`period_id` NOT NULL ve
+        # `usage_events` dönem üzerinden raporlanıyor); krediyi hangi kovadan
+        # aldığı `grant_id`'de durur.
+        row, grant_id = period, grant["id"]
     # `released` bir anahtar yeniden kullanılabilir: o iş kesin BAŞARISIZ olmuş
     # ve kredi iade edilmişti, yani aynı mantıksal iş henüz tamamlanmadı.
     reservation = await one(
         db,
-        """INSERT INTO usage_reservations(period_id,user_id,request_id)
-        VALUES(:pid,:uid,:rid)
+        """INSERT INTO usage_reservations(period_id,user_id,request_id,grant_id)
+        VALUES(:pid,:uid,:rid,:gid)
         ON CONFLICT(user_id,request_id) DO UPDATE SET period_id=excluded.period_id,
+        grant_id=excluded.grant_id,
         status='pending',resolved_at=NULL,result_r2_key=NULL,result_expires_at=NULL,
         created_at=now()
         WHERE usage_reservations.status='released' RETURNING id""",
         pid=row["id"],
         uid=user_id,
         rid=request_id,
+        gid=grant_id,
     )
     if not reservation:
         # Araya giren başka bir istek aynı anahtarı yeniden açtı; az önce
-        # alınan kredi geri verilir.
-        await execute(
-            db,
-            "UPDATE subscription_periods SET used_this_period=used_this_period-1 WHERE id=:id",
-            id=row["id"],
-        )
+        # alınan kredi ALINDIĞI kovaya geri verilir.
+        await _return_credit(db, row["id"], grant_id)
         await db.commit()
         raise billing_error(
             "request_in_progress", "Bu işlem hâlâ sürüyor; sonucunu bekleyin."
@@ -300,11 +366,7 @@ async def resolve_reservation(db, reservation_id, success, result_key=None):
                 uid=row["user_id"],
             )
         else:
-            await execute(
-                db,
-                "UPDATE subscription_periods SET used_this_period=used_this_period-1 WHERE id=:id",
-                id=row["period_id"],
-            )
+            await _return_credit(db, row["period_id"], row["grant_id"])
     await db.commit()
     return bool(row)
 

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Sol panel: gecmis calismalar ve ayarlar.
+ * Sol panel: hesap ve uygulama ayarlari.
  *
  * Kayan bir cekmece olarak duruyor, sabit bir sutun degil — sayfanin govdesi
  * tam genislikte donusumlu bolumlerden olusuyor (bkz. tasarim dili) ve kalici
@@ -17,46 +17,29 @@
  * Oturum yoksa liste yerine giris cagrisi gosteriliyor.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogIn, LogOut, Settings2, Trash2, UserRound, X } from "lucide-react";
+import { ChevronRight, LogIn, LogOut, Settings2, Trash2, UserRound, X } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { Button } from "@/components/ui/button";
+import type { Settings } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
-import type { WorkRecord } from "@/lib/work-history";
 
 export function WorkSidebar() {
   const {
     isSidebarOpen,
     closeSidebar,
     works,
-    isHistoryLoaded,
-    hasMoreWorks,
-    isLoadingMoreWorks,
-    loadMoreWorks,
-    removeWork,
     removeAllWorks,
-    openWork,
     settings,
     updateSettings,
     openSignIn,
     user,
     signOut,
-    refreshWorks,
   } = useWorkspace();
-
-  // Kucuk resimlerin imzali adresleri sureli. Panel acildiginda suresi
-  // dolmus (ya da bir dakika icinde dolacak) kayit varsa liste yenileniyor;
-  // aksi halde bir saat sonra acilan panelde resimler kirik gorunuyordu.
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    const soon = Date.now() + 60_000;
-    if (works.some((work) => work.expiresAt < soon)) refreshWorks();
-  }, [isSidebarOpen, works, refreshWorks]);
-
-  const [showSettings, setShowSettings] = useState(false);
   const router = useRouter();
 
   // Cekmece acikken Esc kapatsin.
@@ -89,12 +72,12 @@ export function WorkSidebar() {
       />
 
       <aside
-        aria-label="Çalışmalarım ve ayarlar"
+        aria-label="Hesap ve ayarlar"
         /* `inert` ile kapaliyken icerik klavye/ekran okuyucu icin de
            erisilemez oluyor; yalnizca gorunmez yapmak yetmiyordu. */
         inert={!isSidebarOpen}
         className={cn(
-          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/10 bg-[#1d1d1f] text-[#f5f5f7] shadow-2xl",
+          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/20 bg-[#171614]/82 text-[#f5f5f7] shadow-[24px_0_70px_-32px_rgba(0,0,0,0.78)] backdrop-blur-3xl backdrop-saturate-150",
           // Kayma `drawer` / `drawer-open` ile — sebebi globals.css'te yazili.
           "drawer",
           isSidebarOpen && "drawer-open",
@@ -103,9 +86,7 @@ export function WorkSidebar() {
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
           <span className="flex items-center gap-2 text-[1.0625rem]">
             <BrandMark className="text-gold h-[1.45rem] w-auto" />
-            <span className="font-semibold tracking-[-0.01em]">
-              Vitrin <span className="text-gold">AI</span>
-            </span>
+            <span className="font-semibold tracking-[-0.01em]">Ayarlar</span>
           </span>
           <button
             type="button"
@@ -118,37 +99,16 @@ export function WorkSidebar() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {showSettings ? (
-            <SettingsPanel
-              settings={settings}
-              onChange={updateSettings}
-              workCount={works.length}
-              onClearAll={removeAllWorks}
-            />
-          ) : (
-            <WorksPanel
-              works={works}
-              isLoaded={isHistoryLoaded}
-              isSignedIn={user !== null}
-              historyEnabled={settings.historyEnabled}
-              onOpen={openWork}
-              onDelete={removeWork}
-              onSignIn={openSignIn}
-              hasMore={hasMoreWorks}
-              isLoadingMore={isLoadingMoreWorks}
-              onLoadMore={loadMoreWorks}
-            />
-          )}
+          <SettingsPanel
+            settings={settings}
+            onChange={updateSettings}
+            workCount={works.length}
+            onClearAll={removeAllWorks}
+          />
         </div>
 
         {/* Alt serit: ayarlar, altinda cikis */}
         <div className="flex shrink-0 flex-col gap-1 border-t border-white/10 p-2">
-          <RailButton
-            Icon={Settings2}
-            label={showSettings ? "Çalışmalarıma dön" : "Ayarlar"}
-            isActive={showSettings}
-            onClick={() => setShowSettings((current) => !current)}
-          />
           {/* Oturum varsa cikis, yoksa giris. Olmayan bir oturumdan "cikis"
               gostermek yaniltici olurdu. */}
           {user ? (
@@ -220,148 +180,6 @@ function RailButton({
   );
 }
 
-function WorksPanel({
-  works,
-  isLoaded,
-  isSignedIn,
-  historyEnabled,
-  onOpen,
-  onDelete,
-  onSignIn,
-  hasMore,
-  isLoadingMore,
-  onLoadMore,
-}: {
-  works: WorkRecord[];
-  isLoaded: boolean;
-  isSignedIn: boolean;
-  historyEnabled: boolean;
-  onOpen: (work: WorkRecord) => void;
-  onDelete: (id: string) => void;
-  onSignIn: () => void;
-  hasMore: boolean;
-  isLoadingMore: boolean;
-  onLoadMore: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-[0.6875rem] font-semibold tracking-[0.08em] text-[#f5f5f7]/45 uppercase">
-        Çalışmalarım
-      </h2>
-
-      {isLoaded && !isSignedIn ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-[0.8125rem] font-medium">Giriş yapın</p>
-          <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
-            Çalışmalarınız hesabınızda saklanır; giriş yaptığınız her cihazdan
-            ulaşırsınız.
-          </p>
-          <Button
-            size="sm"
-            onClick={onSignIn}
-            className="bg-gold hover:bg-gold-soft mt-1 min-h-9 self-start rounded-full text-black"
-          >
-            Giriş yap
-          </Button>
-        </div>
-      ) : !historyEnabled ? (
-        <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
-          Geçmiş kaydı kapalı. Alttaki ayarlardan açabilirsiniz.
-        </p>
-      ) : !isLoaded ? (
-        <p className="text-[0.8125rem] text-[#f5f5f7]/50">Yükleniyor…</p>
-      ) : works.length === 0 ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-[0.8125rem] font-medium">Henüz çalışma yok</p>
-          <p className="text-[0.8125rem] leading-relaxed text-[#f5f5f7]/60">
-            Bir fotoğrafın arka planını kaldırdığınızda sonuç burada birikir ve
-            tek tıkla geri açılır.
-          </p>
-        </div>
-      ) : (
-        <>
-          <ul className="flex flex-col gap-1.5">
-            {works.map((work) => (
-              <WorkRow
-                key={work.id}
-                work={work}
-                onOpen={() => onOpen(work)}
-                onDelete={() => onDelete(work.id)}
-              />
-            ))}
-          </ul>
-
-          {hasMore ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isLoadingMore}
-              onClick={onLoadMore}
-              className="min-h-9 border-white/15 bg-transparent text-[#f5f5f7] hover:bg-white/10 hover:text-white"
-            >
-              {isLoadingMore ? "Yükleniyor…" : "Daha eski çalışmaları yükle"}
-            </Button>
-          ) : null}
-
-          <p className="mt-2 border-t border-white/10 pt-3 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-            Çalışmalar hesabınızda saklanır. Yalnızca arka planı kaldırılmış
-            sonuç tutulur, özgün fotoğrafınız saklanmaz.
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function WorkRow({
-  work,
-  onOpen,
-  onDelete,
-}: {
-  work: WorkRecord;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
-  // Kucuk resim R2'nin sureli imzali adresi; suresi dolunca panel listeyi
-  // yeniliyor (bkz. WorkSidebar).
-  const thumbUrl = work.thumbnailUrl;
-
-  return (
-    <li className="flex items-center gap-3 rounded-lg p-1.5 transition-colors hover:bg-white/8">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={thumbUrl}
-          alt=""
-          className="checkerboard size-11 shrink-0 rounded-md object-contain"
-        />
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[0.8125rem] font-medium">
-            {work.fileName}
-          </span>
-          <span className="text-[0.6875rem] text-[#f5f5f7]/50">
-            {formatRelative(work.createdAt)}
-            {work.isMocked ? " · demo" : ""}
-          </span>
-        </span>
-      </button>
-
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`${work.fileName} kaydını sil`}
-        className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#f5f5f7]/40 transition-colors hover:bg-white/10 hover:text-[#f5f5f7]"
-      >
-        <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
-      </button>
-    </li>
-  );
-}
 
 function SettingsPanel({
   settings,
@@ -369,10 +187,8 @@ function SettingsPanel({
   workCount,
   onClearAll,
 }: {
-  settings: { historyEnabled: boolean; reduceMotion: boolean };
-  onChange: (
-    patch: Partial<{ historyEnabled: boolean; reduceMotion: boolean }>,
-  ) => void;
+  settings: Settings;
+  onChange: (patch: Partial<Settings>) => void;
   workCount: number;
   onClearAll: () => void;
 }) {
@@ -382,19 +198,47 @@ function SettingsPanel({
         Ayarlar
       </h2>
 
-      <Toggle
-        label="Çalışmalarımı hesabımda sakla"
-        description="Kapatırsanız yeni sonuçlar kaydedilmez. Mevcut kayıtlar silinmez."
-        checked={settings.historyEnabled}
-        onChange={(value) => onChange({ historyEnabled: value })}
-      />
+      <SettingsGroup title="Çalışmalar">
+        <Toggle
+          label="Çalışmalarımı sakla"
+          description="Yeni sonuçları hesabınızdaki geçmişe ekler."
+          checked={settings.historyEnabled}
+          onChange={(value) => onChange({ historyEnabled: value })}
+        />
+        <Toggle
+          label="Silmeden önce sor"
+          description="Tek çalışma ve tüm geçmiş silmelerinde onay ister."
+          checked={settings.confirmDeletes}
+          onChange={(value) => onChange({ confirmDeletes: value })}
+        />
+      </SettingsGroup>
 
-      <Toggle
-        label="Hareketi azalt"
-        description="Kaydırma animasyonlarını kapatır. İşletim sisteminizde bu ayar zaten açıksa animasyonlar hep kapalıdır."
-        checked={settings.reduceMotion}
-        onChange={(value) => onChange({ reduceMotion: value })}
-      />
+      <SettingsGroup title="Görünüm ve erişilebilirlik">
+        <Toggle
+          label="Kompakt çalışma ızgarası"
+          description="Çalışmalar panelinde aynı anda daha fazla kart gösterir."
+          checked={settings.compactSidebar}
+          onChange={(value) => onChange({ compactSidebar: value })}
+        />
+        <Toggle
+          label="Yüksek kontrast"
+          description="İkincil metinleri ve cam yüzey kenarlarını belirginleştirir."
+          checked={settings.highContrast}
+          onChange={(value) => onChange({ highContrast: value })}
+        />
+        <Toggle
+          label="Hareketi azalt"
+          description="Geçiş ve kaydırma animasyonlarını kapatır."
+          checked={settings.reduceMotion}
+          onChange={(value) => onChange({ reduceMotion: value })}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Hesap">
+        <SettingsLink href="/hesap" label="Profil ve güvenlik" />
+        <SettingsLink href="/hesap#abonelik" label="Paket, kredi ve ödemeler" />
+        <SettingsLink href="/gizlilik" label="Gizlilik tercihleri" />
+      </SettingsGroup>
 
       <div className="border-t border-white/10 pt-5">
         <p className="text-[0.8125rem] font-medium">Geçmişi temizle</p>
@@ -407,7 +251,11 @@ function SettingsPanel({
           variant="outline"
           size="sm"
           disabled={workCount === 0}
-          onClick={onClearAll}
+          onClick={() => {
+            if (!settings.confirmDeletes || window.confirm("Tüm çalışma geçmişiniz kalıcı olarak silinsin mi?")) {
+              onClearAll();
+            }
+          }}
           className="mt-3 min-h-9 rounded-full border-white/20 bg-transparent text-[#f5f5f7] hover:bg-white/10 hover:text-[#f5f5f7]"
         >
           <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -416,11 +264,33 @@ function SettingsPanel({
       </div>
 
       <p className="border-t border-white/10 pt-5 text-[0.6875rem] leading-relaxed text-[#f5f5f7]/45">
-        Kredi ve ekip ayarları ücretli planlarla birlikte gelecek. Özgün
-        fotoğraflarınız sunucuda saklanmaz; yalnızca sonuçlar hesabınızda
-        durur.
+        Tercihler bu tarayıcıda saklanır. Özgün fotoğraflarınız sunucuda
+        tutulmaz; yalnızca kaydetmeyi seçtiğiniz sonuçlar hesabınızda durur.
       </p>
     </div>
+  );
+}
+
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3 border-t border-white/10 pt-4 first:border-0 first:pt-0">
+      <h3 className="text-[0.6875rem] font-semibold tracking-[0.07em] text-[#f5f5f7]/45 uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function SettingsLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-10 items-center justify-between rounded-lg px-2 text-[0.8125rem] text-[#f5f5f7]/75 transition-colors hover:bg-white/8 hover:text-white"
+    >
+      {label}
+      <ChevronRight className="size-3.5 opacity-50" strokeWidth={1.75} aria-hidden />
+    </Link>
   );
 }
 
@@ -465,16 +335,4 @@ function Toggle({
       </span>
     </button>
   );
-}
-
-/** "3 dk önce" gibi kisa bir zaman ifadesi. */
-function formatRelative(timestamp: number): string {
-  const seconds = Math.round((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "az önce";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} dk önce`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} sa önce`;
-  const days = Math.round(hours / 24);
-  return `${days} gün önce`;
 }

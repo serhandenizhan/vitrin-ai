@@ -46,7 +46,7 @@ export function useStageSize(
     function applyWidth(width: number) {
       if (width <= 0) return;
       setDisplaySize(
-        Math.max(INITIAL_DISPLAY_SIZE, Math.min(width, MAX_DISPLAY_SIZE)),
+        Math.max(1, Math.min(width, MAX_DISPLAY_SIZE)),
       );
     }
 

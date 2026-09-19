@@ -37,15 +37,18 @@ const COLUMNS: {
       { label: "Zeminler", href: "/#zeminler" },
       { label: "Nasıl çalışır", href: "/#nasil" },
       { label: "Teknik bilgiler", href: "/#teknik" },
+      { label: "Hakkımızda", href: "/#hakkimizda" },
     ],
   },
   {
     title: "Sayfalar",
     items: [
+      { label: "Çalışmalar", href: "/calismalar" },
       { label: "Katalog", href: "/katalog" },
       { label: "Paketler", href: "/paketler" },
       { label: "Çekim rehberi", href: "/cekim-rehberi" },
       { label: "Bülten", href: "/bulten" },
+      { label: "Destek ve SSS", href: "/destek" },
     ],
   },
   {
@@ -76,16 +79,6 @@ const SOCIAL: { name: string; href: string | null; icon: React.ReactNode }[] = [
     href: null,
     icon: (
       <path d="M14 3.8v10.7a3.6 3.6 0 1 1-3.6-3.6M14 3.8c.4 2.6 2.2 4.3 5 4.5" />
-    ),
-  },
-  {
-    name: "YouTube",
-    href: null,
-    icon: (
-      <>
-        <rect x="2.8" y="5.8" width="18.4" height="12.4" rx="4" />
-        <path d="M10.4 9.4v5.2l4.4-2.6z" fill="currentColor" />
-      </>
     ),
   },
   {

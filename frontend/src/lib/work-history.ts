@@ -19,6 +19,7 @@
  */
 
 import type { WorkRecord } from "@/lib/project-record";
+import type { EditorDraft } from "@/lib/project-record";
 
 export type { WorkRecord } from "@/lib/project-record";
 
@@ -71,6 +72,49 @@ export async function saveWork(
 
     const response = await fetch("/api/projects", {
       method: "POST",
+      body: form,
+      headers: { "X-Expected-User-Id": expectedUserId },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as WorkRecord;
+  } catch {
+    return null;
+  }
+}
+
+/** Calismanin adini degistirir; durum ve taslak degismez. */
+export async function renameWork(
+  id: string,
+  fileName: string,
+  expectedUserId: string,
+): Promise<WorkRecord | null> {
+  try {
+    const form = new FormData();
+    form.append("fileName", fileName);
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: form,
+      headers: { "X-Expected-User-Id": expectedUserId },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as WorkRecord;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateWorkStatus(
+  id: string,
+  status: "draft" | "completed",
+  expectedUserId: string,
+  editorState?: EditorDraft,
+): Promise<WorkRecord | null> {
+  try {
+    const form = new FormData();
+    form.append("status", status);
+    if (editorState) form.append("editorState", JSON.stringify(editorState));
+    const response = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body: form,
       headers: { "X-Expected-User-Id": expectedUserId },
     });

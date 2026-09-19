@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ user: { id: "a" }, isAuthLoaded: true, openSignIn: vi.fn() }));
 vi.mock("@/components/workspace-provider", () => ({ useWorkspace: () => state }));
-import { BillingPlans, type PlanPresentation } from "./billing-plans";
+import { BillingPlans, TrialQuotaAnswer, type PlanPresentation } from "./billing-plans";
 // Sunum verisi sayfadan geliyor (fiyat/kota backend'den); testler de aynı
 // sözleşmeyi kullanıyor.
 const CATALOG: PlanPresentation[] = [
@@ -69,6 +69,16 @@ it("yayımlanmamış planı 'Yakında' gösterir, çalışır gibi bir düğme k
   expect(screen.queryByRole("button", { name: "Paketi seç" })).toBeNull();
   // Ücretsiz planın gerçek kotası backend'den geliyor, sayfaya yazılmıyor.
   expect(screen.getByText(/ayda 10 fotoğraf/)).toBeTruthy();
+});
+
+it("SSS Deneme planının canlı aylık kotasını gösterir", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json([
+    { id: "deneme", name: "Deneme", plan_version_id: "v1", price_minor_units: 0, currency: "TRY", monthly_quota: 10, background_tier: "basic", trial_period_days: 0 },
+  ])));
+  render(createElement(TrialQuotaAnswer));
+
+  expect(await screen.findByText(/ayda 10 fotoğraf işleyebilirsiniz/)).toBeTruthy();
+  expect(screen.queryByText(/Bir sınır koymadık/)).toBeNull();
 });
 
 it("yayımlanan ücretli planın fiyatını backend'den alır", async () => {

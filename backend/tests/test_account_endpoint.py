@@ -273,3 +273,91 @@ async def test_admin_error_does_not_leak_key(monkeypatch):
         await SupabaseAdminService().delete_user(USER_ID)
 
     assert "sb_secret_gizli" not in str(info.value)
+
+
+def _mock_gotrue(monkeypatch, handler):
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        admin_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+
+
+@pytest.mark.asyncio
+async def test_user_search_is_case_insensitive_against_gotrues_real_semantics(monkeypatch):
+    """Sahte sunucu, GoTrue'nun GERÇEK süzme davranışını taklit ediyor.
+
+    `supabase/auth` kaynağında (17.09.2026 doğrulandı) koşul
+    `email LIKE '%f%' OR raw_user_meta_data->>'full_name' ILIKE '%f%'`;
+    e-posta tarafı `ILIKE` DEĞİL `LIKE`, yani büyük/küçük harfe duyarlı.
+    GoTrue e-postaları küçük harfe çevirerek sakladığı için sorgu da küçük
+    harfe çevrilerek gönderilmeli. Sahte sunucuyu "her şeyi bulan" bir süzgeç
+    yapsaydık bu test hiçbir şey kanıtlamazdı (kök CLAUDE.md ders 22).
+    """
+    monkeypatch.setattr(settings, "supabase_url", "https://proje.supabase.co")
+    monkeypatch.setattr(settings, "supabase_secret_key", "sb_secret_ornek")
+    stored = [{"id": str(uuid.uuid4()), "email": "musteri@vitrin.example"}]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        needle = request.url.params.get("filter")
+        matched = [u for u in stored if needle is None or needle in u["email"]]
+        return httpx.Response(200, json={"users": matched})
+
+    _mock_gotrue(monkeypatch, handler)
+
+    found = await SupabaseAdminService().list_users(1, 25, "MUSTERI")
+
+    assert [u["email"] for u in found] == ["musteri@vitrin.example"]
+
+
+@pytest.mark.asyncio
+async def test_user_search_never_returns_a_row_the_query_does_not_match(monkeypatch):
+    """Sunucu `filter`'ı YOK SAYSA bile (eski bir auth sürümü) sonuç yanlış olmaz."""
+    monkeypatch.setattr(settings, "supabase_url", "https://proje.supabase.co")
+    monkeypatch.setattr(settings, "supabase_secret_key", "sb_secret_ornek")
+    everyone = [
+        {"id": str(uuid.uuid4()), "email": "musteri@vitrin.example"},
+        {"id": str(uuid.uuid4()), "email": "baskasi@vitrin.example"},
+    ]
+    _mock_gotrue(
+        monkeypatch, lambda request: httpx.Response(200, json={"users": everyone})
+    )
+
+    found = await SupabaseAdminService().list_users(1, 25, "musteri")
+
+    assert [u["email"] for u in found] == ["musteri@vitrin.example"]
+
+
+async def test_last_admin_cannot_delete_own_account(db_session, create_user, grant_admin):
+    from fastapi import HTTPException
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    from app.services.billing.db import one
+    uid = await create_user()
+    await grant_admin(uid)
+    with pytest.raises(HTTPException) as exc:
+        await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+            CurrentUser(id=uid, email="test@test.example", session_id=None),
+            FakeStorage(), FakeAdmin(), db_session)
+    assert exc.value.status_code == 409
+    await db_session.rollback()
+    # Hiçbir şey kuyruğa girmemiş ve hesap silme işaretlenmemiş olmalı.
+    assert await one(db_session, "SELECT id FROM provider_actions") is None
+    assert (await one(db_session, "SELECT deletion_requested_at FROM subscriptions WHERE user_id=:uid",
+        uid=uid))["deletion_requested_at"] is None
+
+
+async def test_admin_can_delete_own_account_when_another_admin_remains(
+    db_session, create_user, grant_admin
+):
+    # Ders 15: yalnız RED yolunu sınamak, korumanın her yöneticiyi kilitleyen
+    # bozuk bir hâlini de yeşil geçirirdi.
+    from app.api.routes.account import delete_account, AccountDeletionConfirmation
+    uid, other = await create_user(), await create_user()
+    await grant_admin(uid)
+    await grant_admin(other)
+    response = await delete_account(AccountDeletionConfirmation(email="test@test.example"),
+        CurrentUser(id=uid, email="test@test.example", session_id=None),
+        FakeStorage(), FakeAdmin(), db_session)
+    assert response.status_code == 202

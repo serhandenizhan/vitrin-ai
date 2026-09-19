@@ -16,7 +16,7 @@
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle } from "lucide-react";
+import { Building2, LoaderCircle, Mail, MapPin, ShieldCheck, UserRound } from "lucide-react";
 
 import {
   AccountTypePicker,
@@ -34,6 +34,7 @@ import {
   MAX_BUSINESS_NAME_LENGTH,
   MAX_NAME_LENGTH,
   businessNameProblem,
+  displayName,
   formatPhone,
   isAccountType,
   isBusinessType,
@@ -75,19 +76,55 @@ export function AccountPanel() {
   const email = user.email ?? "";
 
   return (
-    <div className="space-y-5">
-      <Card title="Hesap bilgileri">
-        <dl className="text-[0.9375rem]">
-          <dt className="on-light-muted text-[0.8125rem]">E-posta</dt>
-          <dd className="mt-0.5 font-medium break-all">{email}</dd>
-        </dl>
-      </Card>
-
-      <ProfileCard user={user} />
-      <ChangePasswordCard email={email} />
-      <SignOutEverywhereCard />
-      <DeleteAccountCard email={email} />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(19rem,0.65fr)] lg:items-start">
+      <div className="space-y-6">
+        <AccountSummary user={user} />
+        <ProfileCard user={user} />
+      </div>
+      <aside className="space-y-6">
+        <ChangePasswordCard email={email} />
+        <SignOutEverywhereCard />
+        <DeleteAccountCard email={email} />
+      </aside>
     </div>
+  );
+}
+
+function AccountSummary({ user }: { user: AuthUser }) {
+  const accountLabel =
+    user.accountType === "company"
+      ? "Şirket hesabı"
+      : user.accountType === "individual"
+        ? "Bireysel hesap"
+        : "Hesap türü eklenmemiş";
+  const rows = [
+    { icon: Mail, label: "E-posta", value: user.email ?? "Eklenmemiş" },
+    { icon: user.accountType === "company" ? Building2 : UserRound, label: "Hesap türü", value: accountLabel },
+    { icon: MapPin, label: "Şehir", value: user.city || "Eklenmemiş" },
+    { icon: ShieldCheck, label: "Güvenlik", value: "Parola korumalı" },
+  ];
+  return (
+    <Card title="Hesap özeti">
+      <div className="mb-5 flex items-center gap-4 border-b border-black/8 pb-5">
+        <span className="bg-gold/15 text-gold flex size-12 items-center justify-center rounded-full text-[1.125rem] font-semibold">
+          {displayName(user).slice(0, 1).toLocaleUpperCase("tr-TR")}
+        </span>
+        <span className="min-w-0">
+          <strong className="block truncate text-[1.125rem]">{displayName(user)}</strong>
+          <span className="on-light-muted text-[0.8125rem]">{user.businessName || accountLabel}</span>
+        </span>
+      </div>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        {rows.map(({ icon: Icon, label, value }) => (
+          <div key={label} className="rounded-xl bg-white/45 p-3 ring-1 ring-black/5">
+            <dt className="on-light-muted flex items-center gap-2 text-[0.75rem]">
+              <Icon className="size-3.5" strokeWidth={1.75} aria-hidden /> {label}
+            </dt>
+            <dd className="mt-1 truncate text-[0.875rem] font-medium" title={value}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
   );
 }
 
@@ -548,11 +585,11 @@ function Card({
   return (
     <section
       className={cn(
-        "rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1",
-        tone === "danger" ? "ring-red-100" : "ring-black/5",
+        "glass-panel-light group rounded-3xl p-6 transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-[#d6a756]/35 hover:shadow-[0_28px_60px_-34px_rgba(82,61,29,0.46)]",
+        tone === "danger" ? "ring-1 ring-red-200/70" : "",
       )}
     >
-      <h2 className="mb-3 text-[1.0625rem] font-semibold tracking-[-0.01em]">{title}</h2>
+      <h2 className="mb-3 text-[1.0625rem] font-semibold tracking-[-0.01em] transition-colors duration-300 group-hover:text-[#8f6524]">{title}</h2>
       {children}
     </section>
   );
@@ -611,7 +648,7 @@ function PrimaryButton({
       type="button"
       {...props}
       className={cn(
-        "press bg-foreground text-background flex min-h-11 items-center justify-center gap-2 rounded-full px-6 text-[0.9375rem] font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
+        "press bg-foreground text-background flex min-h-11 items-center justify-center gap-2 rounded-full px-6 text-[0.9375rem] font-medium shadow-[0_12px_26px_-16px_rgba(0,0,0,0.65)] transition-[opacity,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-15px_rgba(0,0,0,0.7)] disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
     >
@@ -632,7 +669,7 @@ function SecondaryButton({
       type="button"
       {...props}
       className={cn(
-        "press flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-[0.9375rem] font-medium ring-1 ring-black/15 transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50",
+        "press flex min-h-11 items-center justify-center gap-2 rounded-full bg-white/45 px-5 text-[0.9375rem] font-medium ring-1 ring-black/12 transition-[background-color,transform,box-shadow] hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-[0_12px_26px_-20px_rgba(0,0,0,0.45)] disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
     >
