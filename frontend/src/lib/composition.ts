@@ -82,7 +82,21 @@ export type Appearance = {
    * 17.09.2026'da "isik havuzu"nun yerine geldi (Kaan: yansima istendi).
    */
   reflection: boolean;
+  /**
+   * Golgenin boyutu (19.09.2026, Kaan): `SHADOW` bulaniklik ve kaymasinin
+   * carpani; 1 = 17.09'da olculup secilen deger.
+   */
+  shadowSize: number;
+  /** Golgenin opakligi (alfa), 0..1. */
+  shadowOpacity: number;
+  /** Yansimanin urunun alt kenarindan uzakligi (sahne birimi; 0 = bitisik). */
+  reflectionGap: number;
 };
+
+/** Golge/yansima kaydiraclarinin sinirlari. */
+export const SHADOW_SIZE_RANGE = { min: 0.4, max: 2, step: 0.05 } as const;
+export const SHADOW_OPACITY_RANGE = { min: 0.1, max: 0.9, step: 0.05 } as const;
+export const REFLECTION_GAP_RANGE = { min: 0, max: 60, step: 1 } as const;
 
 /**
  * Golge olculeri (sahne koordinatinda; urun olcegine bolunerek veriliyor).
@@ -106,7 +120,28 @@ export const DEFAULT_APPEARANCE: Appearance = {
   // Kapali basliyor (Kaan, 17.09.2026).
   shadow: false,
   reflection: false,
+  shadowSize: 1,
+  shadowOpacity: 0.55,
+  reflectionGap: 0,
 };
+
+/**
+ * Kayitli bir gorunumu bugunku alanlarla tamamlar: 19.09.2026'dan onceki
+ * taslaklarda golge boyutu/opakligi ve yansima mesafesi yok.
+ */
+export function normalizeAppearance(saved: Partial<Appearance> | null | undefined): Appearance {
+  const merged = { ...DEFAULT_APPEARANCE, ...(saved ?? {}) };
+  const clamp = (value: unknown, range: { min: number; max: number }, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(range.max, Math.max(range.min, value))
+      : fallback;
+  return {
+    ...merged,
+    shadowSize: clamp(merged.shadowSize, SHADOW_SIZE_RANGE, DEFAULT_APPEARANCE.shadowSize),
+    shadowOpacity: clamp(merged.shadowOpacity, SHADOW_OPACITY_RANGE, DEFAULT_APPEARANCE.shadowOpacity),
+    reflectionGap: clamp(merged.reflectionGap, REFLECTION_GAP_RANGE, DEFAULT_APPEARANCE.reflectionGap),
+  };
+}
 
 /** Kullanici hicbir ayara dokunmamis mi — "sifirla" dugmesini pasif tutmak icin. */
 export function isDefaultAppearance(appearance: Appearance): boolean {
@@ -115,7 +150,10 @@ export function isDefaultAppearance(appearance: Appearance): boolean {
     appearance.contrast === DEFAULT_APPEARANCE.contrast &&
     appearance.saturation === DEFAULT_APPEARANCE.saturation &&
     appearance.shadow === DEFAULT_APPEARANCE.shadow &&
-    appearance.reflection === DEFAULT_APPEARANCE.reflection
+    appearance.reflection === DEFAULT_APPEARANCE.reflection &&
+    appearance.shadowSize === DEFAULT_APPEARANCE.shadowSize &&
+    appearance.shadowOpacity === DEFAULT_APPEARANCE.shadowOpacity &&
+    appearance.reflectionGap === DEFAULT_APPEARANCE.reflectionGap
   );
 }
 
@@ -261,6 +299,8 @@ export function reflectionPlacement(
   cutoutWidth: number,
   cutoutHeight: number,
   visibleBounds?: { x: number; y: number; width: number; height: number },
+  /** Urunun alt kenari ile yansima arasindaki bosluk (sahne birimi). */
+  gap = 0,
 ): { x: number; y: number; scaleX: number; scaleY: number; rotation: number; axisY: number; fadeHeight: number } {
   const radians = (transform.rotation * Math.PI) / 180;
   const bounds = visibleBounds ?? { x: 0, y: 0, width: cutoutWidth, height: cutoutHeight };
@@ -271,13 +311,15 @@ export function reflectionPlacement(
     ),
   );
   const axisY = Math.max(...ys);
+  // Bosluk: yansima ve silikleşme ayni miktarda asagi kayar.
+  const safeGap = Math.max(0, gap);
   return {
     x: transform.x,
-    y: 2 * axisY - transform.y,
+    y: 2 * axisY - transform.y + safeGap,
     scaleX: transform.scale,
     scaleY: -transform.scale,
     rotation: -transform.rotation,
-    axisY,
+    axisY: axisY + safeGap,
     fadeHeight: (axisY - Math.min(...ys)) * REFLECTION.fadeRatio,
   };
 }

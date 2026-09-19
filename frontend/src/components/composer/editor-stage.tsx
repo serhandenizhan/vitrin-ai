@@ -99,6 +99,11 @@ export type EditorStageProps = {
   /** Kesimin dogal olculeri — "sigdir" hesabi icin parent'a da lazim. */
   onCutoutSize: (size: { width: number; height: number }) => void;
   onStageReady: (stage: Konva.Stage | null) => void;
+  /**
+   * Temiz gorunum (goz simgesi basili tutulurken): tutamaclar ve secim
+   * cercevesi gizlenir, gorsel indirilecek haliyle gorunur. Secim korunur.
+   */
+  cleanView?: boolean;
 };
 
 export function EditorStage({
@@ -117,6 +122,7 @@ export function EditorStage({
   onInteractionChange,
   onCutoutSize,
   onStageReady,
+  cleanView = false,
 }: EditorStageProps) {
   const beginInteraction = useCallback(
     () => onInteractionChange?.(true),
@@ -362,13 +368,15 @@ export function EditorStage({
   // (Kaan: "golge hep sabit kaliyor", 17.09.2026).
   const cacheScale = placement?.scale ?? 1;
   const shadowOn = appearance.shadow;
+  // Golge boyutu/opakligi de onbellege islendigi icin degisince yeniden aliniyor.
+  const { shadowSize, shadowOpacity } = appearance;
   useEffect(() => {
     const node = cutoutRef.current;
     if (!node || !cutout) return;
     node.clearCache();
-    node.cache({ offset: Math.ceil((SHADOW.blur + SHADOW.offsetY) / (cacheScale || 1)) + 4 });
+    node.cache({ offset: Math.ceil(((SHADOW.blur + SHADOW.offsetY) * shadowSize) / (cacheScale || 1)) + 4 });
     node.getLayer()?.batchDraw();
-  }, [cutout, cacheScale, shadowOn]);
+  }, [cutout, cacheScale, shadowOn, shadowSize, shadowOpacity]);
 
   // Segmentasyon kaynak boyutunu korur; saydam kenarlar yansıma ekseni değildir.
   const visibleBounds = useMemo(() => {
@@ -394,8 +402,8 @@ export function EditorStage({
   const reflection = useMemo(() => {
     const source = liveTransform ?? placement;
     if (!appearance.reflection || !cutout || !source) return null;
-    return reflectionPlacement(source, cutout.width, cutout.height, visibleBounds);
-  }, [appearance.reflection, cutout, liveTransform, placement, visibleBounds]);
+    return reflectionPlacement(source, cutout.width, cutout.height, visibleBounds, appearance.reflectionGap);
+  }, [appearance.reflection, appearance.reflectionGap, cutout, liveTransform, placement, visibleBounds]);
 
   const backgroundCrop = useMemo(
     () =>
@@ -541,9 +549,9 @@ export function EditorStage({
             // sabit piksel verilseydi buyuk urunlerde golge kaybolurdu.
             shadowEnabled={appearance.shadow}
             shadowColor="#000000"
-            shadowBlur={SHADOW.blur / (placement.scale || 1)}
-            shadowOpacity={SHADOW.opacity}
-            shadowOffsetY={SHADOW.offsetY / (placement.scale || 1)}
+            shadowBlur={(SHADOW.blur * appearance.shadowSize) / (placement.scale || 1)}
+            shadowOpacity={appearance.shadowOpacity}
+            shadowOffsetY={(SHADOW.offsetY * appearance.shadowSize) / (placement.scale || 1)}
             dragBoundFunc={(position) => {
               // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
               // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
@@ -572,6 +580,7 @@ export function EditorStage({
 
         <Transformer
           ref={transformerRef}
+          visible={!cleanView}
           rotateEnabled
           // Kose tutamaklari yeterli: kenar tutamaklari en-boy oranini bozar ve
           // bir urun fotografinin oranini bozmak neredeyse her zaman istenmeyen
@@ -641,6 +650,7 @@ export function EditorStage({
         ) : null}
         <Transformer
           ref={logoTransformerRef}
+          visible={!cleanView}
           rotateEnabled={false}
           enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
           keepRatio

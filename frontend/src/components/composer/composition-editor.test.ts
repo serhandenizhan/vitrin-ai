@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -414,13 +414,14 @@ describe("CompositionEditor", () => {
       // Dock'un basligi `role="group"` ve erisilebilir adi; "o an hangi
       // paletin acik oldugu" DOM'dan okunabilen tek iz (Konva tuvaline
       // cizilenler okunamiyor, bkz. kok CLAUDE.md ders 26).
-      // Acilista Zemin menusu acik; bar ayni anda gorunur.
+      // Acilista Yerlesim menusu acik; zemin seridi her zaman gorunur (19.09.2026).
+      expect(screen.getByRole("group", { name: "Yerleşim" })).toBeTruthy();
       expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
       expect(screen.queryByRole("switch", { name: "Yansıma" })).toBeNull();
       // Arac cubugu adim sirasini koruyor: Sahne · Düzenle · Tamamla.
       const tabs = within(screen.getByRole("tablist", { name: "Araçlar" })).getAllByRole("tab");
       expect(tabs.map((tab) => tab.textContent)).toEqual([
-        "Boyut", "Zemin", "Yerleşim", "Görünüm", "Marka", "İndir",
+        "Boyut", "Yerleşim", "Görünüm", "Marka", "İndir",
       ]);
       // Sagdaki denetci ve "Devam" dugmesi yok (18.09.2026).
       expect(screen.queryByRole("tablist", { name: "Düzenleme adımları" })).toBeNull();
@@ -433,7 +434,8 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("switch", { name: "Gölge" })).toBeTruthy();
       expect(screen.getByRole("switch", { name: "Yansıma" })).toBeTruthy();
       expect(screen.queryByRole("switch", { name: /Işık havuzu/ })).toBeNull();
-      expect(screen.queryByRole("group", { name: "Zemin" })).toBeNull();
+      // Zemin seridi arac degisince kaybolmuyor.
+      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
     });
 
     it("zeminler biçimin yönüne göre süzülüyor; Sade her biçimde", () => {
@@ -452,7 +454,6 @@ describe("CompositionEditor", () => {
 
       openTool("Boyut");
       fireEvent.click(screen.getByRole("button", { name: /Instagram gönderi/ }));
-      openTool("Zemin");
       chooseCategory(/Lüks/);
       expect(screen.getByRole("button", { name: "R2 Yatay" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "R2 Dikey" })).toBeNull();
@@ -518,13 +519,13 @@ describe("CompositionEditor", () => {
 
       // Dock'un `role="group"` adi, o an hangi paletin acik oldugunun
       // DOM'dan okunabilen tek izi.
-      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Yerleşim" })).toBeTruthy();
       expect(screen.queryByRole("group", { name: "Çıktı boyutu" })).toBeNull();
 
       openTool("Boyut");
 
       expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
-      expect(screen.queryByRole("group", { name: "Zemin" })).toBeNull();
+      expect(screen.queryByRole("group", { name: "Yerleşim" })).toBeNull();
       expect(screen.getByRole("button", { name: /Katalog/ })).toBeTruthy();
     });
 
@@ -621,11 +622,11 @@ describe("CompositionEditor", () => {
 
     it("geri tuşu önce menü içindeki katmana, sonra bir önceki araca döner", () => {
       renderEditor();
-      // Acilista Zemin; sirada onceki arac Boyut.
+      // Acilista Yerlesim; sirada onceki arac Boyut.
       fireEvent.click(screen.getByRole("button", { name: "Önceki araç: Boyut" }));
       expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
-      // Boyut'tan geri: gecmiste Zemin var — Boyut <-> Zemin arasinda gidip gelinir.
-      openTool("Zemin");
+      // Boyut'tan geri: gecmiste Yerlesim var — ikisi arasinda gidip gelinir.
+      openTool("Yerleşim");
       fireEvent.click(screen.getByRole("button", { name: "Önceki araç: Boyut" }));
       expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
 
@@ -642,11 +643,11 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("tablist", { name: "Araçlar" })).toBeTruthy();
     });
 
-    it("tek satırlık menülerde (Zemin, Boyut) kart incelir ve tuval büyür", () => {
+    it("tek satırlık menüde (Boyut) kart incelir ve tuval büyür", () => {
       const { container } = renderEditor();
       const stage = container.querySelector(".stage-fit")!;
-      // Acilista Zemin: ince kart, buyuk tuval.
-      expect(stage.classList.contains("stage-fit-compact")).toBe(true);
+      // Acilista Yerlesim: normal kart.
+      expect(stage.classList.contains("stage-fit-compact")).toBe(false);
 
       openTool("Görünüm");
       expect(stage.classList.contains("stage-fit-compact")).toBe(false);
@@ -666,12 +667,14 @@ describe("CompositionEditor", () => {
       expect(stage.classList.contains("stage-fit-collapsed")).toBe(false);
 
       fireEvent.click(screen.getByRole("button", { name: "Barı küçült" }));
-      expect(screen.queryByRole("group", { name: "Zemin" })).toBeNull();
+      expect(screen.queryByRole("group", { name: "Yerleşim" })).toBeNull();
+      // Zemin seridi kucultmeden etkilenmez.
+      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
       expect(screen.queryByRole("tablist", { name: "Araçlar" })).toBeNull();
       expect(stage.classList.contains("stage-fit-collapsed")).toBe(true);
 
       fireEvent.click(screen.getByRole("button", { name: "Barı büyüt" }));
-      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Yerleşim" })).toBeTruthy();
       expect(screen.getByRole("tablist", { name: "Araçlar" })).toBeTruthy();
       expect(stage.classList.contains("stage-fit-collapsed")).toBe(false);
     });
@@ -803,5 +806,174 @@ describe("CompositionEditor", () => {
       expect(await screen.findByRole("alert")).toBeTruthy();
       expect(fetchMock).not.toHaveBeenCalled();
     });
+  });
+
+  describe("masaüstü düzeni ve favoriler (19.09.2026)", () => {
+    /** jsdom'da `matchMedia` yok; masaustu (>= 64rem) oldugunu soyleyen taklit. */
+    function stubDesktop({ reduceMotion = false }: { reduceMotion?: boolean } = {}) {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches:
+          query.includes("min-width: 64rem") ||
+          (reduceMotion && query.includes("prefers-reduced-motion")),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }));
+    }
+
+    beforeEach(() => localStorage.clear());
+
+    it("aşama 1 Sahne: sağda geniş zemin kütüphanesi ve biçimler, düzenleme paneli yok", () => {
+      stubDesktop({ reduceMotion: true });
+      renderEditor();
+
+      expect(screen.getByRole("complementary", { name: "Sahne" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Çıktı boyutları" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "R2 B" })).toBeTruthy();
+      expect(screen.queryByRole("complementary", { name: "Araç paneli" })).toBeNull();
+      expect(screen.queryByRole("group", { name: "Çıktı" })).toBeNull();
+    });
+
+    it("✓ ile Düzenle'ye, oradan Tamamla'ya geçiliyor; her aşamada geri dönülebiliyor", () => {
+      stubDesktop({ reduceMotion: true });
+      const { container } = renderEditor();
+      const column = container.querySelector<HTMLElement>(".stage-column")!;
+      expect(column.style.getPropertyValue("--panel-w")).toBe("26rem");
+
+      fireEvent.click(screen.getByRole("button", { name: "Sahneyi onayla, Düzenle aşamasına geç" }));
+      // Asama 2: solda dik zemin bari, sagda duzenleme paneli (yalniz asama 2 araclari).
+      expect(screen.getByRole("complementary", { name: "Araç paneli" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Zemin" })).toBeTruthy();
+      const tabs = within(screen.getByRole("tablist", { name: "Araçlar" })).getAllByRole("tab");
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["Yerleşim", "Görünüm", "Marka"]);
+      expect(column.style.getPropertyValue("--panel-w")).toBe("36rem");
+
+      // Panel kapaninca tuval o yeri alir.
+      fireEvent.click(screen.getByRole("button", { name: "Barı küçült" }));
+      expect(column.style.getPropertyValue("--panel-w")).toBe("11rem");
+      fireEvent.click(screen.getByRole("button", { name: "Barı büyüt" }));
+
+      fireEvent.click(screen.getByRole("button", { name: "Düzenlemeyi bitir, Tamamla aşamasına geç" }));
+      // Asama 3: yalnizca cikti, gorselin altinda.
+      const output = screen.getByRole("group", { name: "Çıktı" });
+      expect(within(output).getByRole("button", { name: "PNG" })).toBeTruthy();
+      expect(screen.queryByRole("complementary", { name: "Araç paneli" })).toBeNull();
+      expect(column.style.getPropertyValue("--panel-w")).toBe("0rem");
+
+      fireEvent.click(within(output).getByRole("button", { name: "Düzenle" }));
+      expect(screen.getByRole("complementary", { name: "Araç paneli" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Sahne" }));
+      expect(screen.getByRole("complementary", { name: "Sahne" })).toBeTruthy();
+    });
+
+    it("Düzenle'de Önizle basılı tutulunca ya da Boşluk tuşuyla temiz görünüm, bırakınca geri", () => {
+      stubDesktop({ reduceMotion: true });
+      renderEditor();
+      expect(screen.queryByRole("button", { name: /Temiz görünüm/ })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Sahneyi onayla, Düzenle aşamasına geç" }));
+
+      const eye = screen.getByRole("button", { name: "Temiz görünüm (basılı tutun)" });
+      expect(eye.getAttribute("aria-pressed")).toBe("false");
+      fireEvent.pointerDown(eye, { pointerId: 1 });
+      expect(eye.getAttribute("aria-pressed")).toBe("true");
+      fireEvent.pointerUp(eye, { pointerId: 1 });
+      expect(eye.getAttribute("aria-pressed")).toBe("false");
+      // Kisayol: BOSLUK basili iken acik, birakinca kapali.
+      fireEvent.keyDown(window, { key: " ", code: "Space" });
+      expect(eye.getAttribute("aria-pressed")).toBe("true");
+      fireEvent.keyUp(window, { key: " ", code: "Space" });
+      expect(eye.getAttribute("aria-pressed")).toBe("false");
+
+      // Yazi alaninda bosluk yazmaya devam eder, onizleme acilmaz.
+      openTool("Marka");
+      fireEvent.click(screen.getByRole("switch", { name: "Ürün etiketi" }));
+      const code = screen.getByPlaceholderText("A-102");
+      fireEvent.keyDown(code, { key: " ", code: "Space" });
+      expect(eye.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("Düzenle'de Görünüm'ün üç kaydıracı birlikte açık", () => {
+      stubDesktop({ reduceMotion: true });
+      renderEditor();
+      fireEvent.click(screen.getByRole("button", { name: "Sahneyi onayla, Düzenle aşamasına geç" }));
+      openTool("Görünüm");
+      expect(screen.getByLabelText("Parlaklık")).toBeTruthy();
+      expect(screen.getByLabelText("Kontrast")).toBeTruthy();
+      expect(screen.getByLabelText("Doygunluk")).toBeTruthy();
+      expect(screen.getByRole("switch", { name: "Gölge" })).toBeTruthy();
+    });
+
+    it("geçiş perdesi: açılışta görünür; ✓ sonrası aşama PERDENİN ARKASINDA değişir, perde kalkar", () => {
+      vi.useFakeTimers();
+      try {
+        stubDesktop();
+        renderEditor();
+        // Acilis perdesi (Asama 1).
+        expect(screen.getByRole("status", { name: "1. aşama: Sahne" })).toBeTruthy();
+        act(() => {
+          vi.advanceTimersByTime(2200);
+        });
+        expect(screen.queryByRole("status", { name: /aşama:/ })).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Sahneyi onayla, Düzenle aşamasına geç" }));
+        expect(screen.getByRole("status", { name: "2. aşama: Düzenle" })).toBeTruthy();
+        // Perde henuz inerken eski duzen duruyor...
+        expect(screen.getByRole("complementary", { name: "Sahne" })).toBeTruthy();
+        act(() => {
+          vi.advanceTimersByTime(340);
+        });
+        // ...perde kapaninca asama degisiyor.
+        expect(screen.getByRole("complementary", { name: "Araç paneli" })).toBeTruthy();
+        act(() => {
+          vi.advanceTimersByTime(2200);
+        });
+        expect(screen.queryByRole("status", { name: /aşama:/ })).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("seçili zemin beğenilince Favoriler rafı çıkıyor, tarayıcıda hatırlanıyor, geri alınabiliyor", () => {
+      renderEditor();
+      expect(screen.queryByRole("tab", { name: /Favoriler/ })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "R2 A favorilere ekle" }));
+      expect(screen.getByRole("tab", { name: "Favoriler · 1" })).toBeTruthy();
+      expect(JSON.parse(localStorage.getItem("vitrin-ai:favorite-backgrounds")!)).toEqual(["r2-a"]);
+
+      // Favoriler rafindan secim, kullaniciyi kendi kategorisine atlatmaz.
+      chooseCategory(/Favoriler/);
+      fireEvent.click(screen.getByRole("button", { name: "R2 A" }));
+      expect(screen.getByRole("tab", { name: "Favoriler · 1" }).getAttribute("aria-selected")).toBe("true");
+
+      fireEvent.click(screen.getByRole("button", { name: "R2 A favorilerden çıkar" }));
+      expect(screen.queryByRole("tab", { name: /Favoriler/ })).toBeNull();
+      expect(JSON.parse(localStorage.getItem("vitrin-ai:favorite-backgrounds")!)).toEqual([]);
+    });
+
+    it("favoriler yeniden açılışta tarayıcıdan okunuyor", () => {
+      localStorage.setItem("vitrin-ai:favorite-backgrounds", JSON.stringify(["r2-b"]));
+      renderEditor();
+      expect(screen.getByRole("tab", { name: "Favoriler · 1" })).toBeTruthy();
+    });
+  });
+
+  it("gölge açılınca boyut ve yoğunluk, yansıma açılınca mesafe kaydıracı çıkıyor", () => {
+    renderEditor();
+    openTool("Görünüm");
+    expect(screen.queryByLabelText("Gölge boyutu")).toBeNull();
+    expect(screen.queryByLabelText("Yansıma mesafesi")).toBeNull();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Gölge" }));
+    expect(screen.getByLabelText("Gölge boyutu")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Gölge yoğunluğu"), { target: { value: "0.3" } });
+    expect((screen.getByLabelText("Gölge yoğunluğu") as HTMLInputElement).value).toBe("0.3");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Yansıma" }));
+    fireEvent.change(screen.getByLabelText("Yansıma mesafesi"), { target: { value: "20" } });
+    expect(screen.getByText("40 px")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Gölge" }));
+    expect(screen.queryByLabelText("Gölge boyutu")).toBeNull();
   });
 });

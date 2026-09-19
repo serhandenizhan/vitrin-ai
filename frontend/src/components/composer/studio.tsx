@@ -16,12 +16,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Home, Keyboard } from "lucide-react";
+import { ArrowLeft, Download, Home, Keyboard } from "lucide-react";
 
 import {
   CompositionEditor,
   type EditorStatus,
+  type StudioNavigation,
 } from "@/components/composer/composition-editor";
+import { STUDIO_STEPS } from "@/components/composer/studio-steps";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -47,6 +49,8 @@ export function Studio() {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const helpRef = useRef<HTMLDivElement | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const navigateRef = useRef<((request: StudioNavigation) => void) | null>(null);
+  const requestTool = (tool: string, stage?: number) => navigateRef.current?.({ tool, stage });
   const [editorStatus, setEditorStatus] = useState<EditorStatus>({
     step: 1,
     totalSteps: 3,
@@ -161,34 +165,65 @@ export function Studio() {
         basilamiyordu. (Kok CLAUDE.md ders 13'un ayni sinifi: esit
         ozgullukte/oncelikte kazanani SIRA belirler.)
       */
-      className="soft-fade fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-white text-[#1a1917]"
+      className="studio-backdrop soft-fade fixed inset-0 z-[60] flex flex-col overflow-y-auto text-[#1a1917]"
     >
-      <header className="glass-panel sticky top-3 z-20 mx-auto mt-3 grid h-14 w-[calc(100%-1.5rem)] max-w-[68rem] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-full px-4 sm:px-5">
+      <header className="liquid-glass sticky top-3 z-20 mx-auto mt-3 grid h-14 w-[calc(100%-1.5rem)] max-w-[60rem] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-full px-2.5 text-[#f3f0eb]">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={closeStudio}
-          className="press justify-self-start -ml-1 rounded-full border-white/20 bg-white/5 text-[#f3f0eb] hover:bg-white/10 hover:text-[#f3f0eb]"
+          className="press rounded-full border-0 bg-transparent text-[#f3f0eb]/80 shadow-none hover:bg-white/10 hover:text-[#f3f0eb] justify-self-start"
         >
           <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
           Geri
         </Button>
 
-        <span className="mx-auto flex min-w-0 items-center gap-2.5">
+        {/* Referans gorsel (19.09.2026): ortada ad, altinda numarali adimlar;
+            secili adimin altinda altin cizgi. Adima basmak o adimin ilk aracini acar. */}
+        <span className="mx-auto flex min-w-0 flex-col items-center">
           <span className="flex items-center gap-2">
-            <BrandMark className="text-gold h-5 w-auto" />
-            <span className="text-[0.9375rem] font-medium tracking-[-0.01em]">
-              Stüdyo
+            <BrandMark className="text-gold h-4 w-auto" />
+            <span className="text-[0.875rem] font-medium tracking-[-0.01em]">Stüdyo</span>
+            <span
+              className="sr-only"
+              aria-label={`${editorStatus.step}. adım: ${editorStatus.stepLabel}, ${editorStatus.toolLabel}`}
+            >
+              · {editorStatus.toolLabel}
             </span>
           </span>
-          <span className="hidden h-5 w-px bg-white/20 sm:block" aria-hidden />
-          <span
-            className="on-dark-muted hidden max-w-36 truncate text-[0.75rem] sm:block"
-            aria-label={`${editorStatus.step}. adım: ${editorStatus.stepLabel}, ${editorStatus.toolLabel}`}
-          >
-            {editorStatus.step}/{editorStatus.totalSteps} · {editorStatus.toolLabel}
-          </span>
+          <nav aria-label="Düzenleme adımları" className="hidden items-center sm:flex">
+            {STUDIO_STEPS.map((item, index) => {
+              const isCurrent = editorStatus.step === item.step;
+              // Masaustu asamali akis: yalnizca GERIYE; ileri ancak ✓ ile.
+              const isLocked = editorStatus.mode === "stages" && item.step > editorStatus.step;
+              return (
+                <span key={item.step} className="flex items-center">
+                  {index > 0 ? <span className="mx-1 h-2.5 w-px bg-white/15" aria-hidden /> : null}
+                  <button
+                    type="button"
+                    onClick={() => requestTool(item.tool, item.step)}
+                    disabled={isLocked}
+                    aria-current={isCurrent ? "step" : undefined}
+                    className={
+                      "press relative flex items-center gap-1.5 px-2 pt-0.5 pb-1 text-[0.6875rem] transition-colors disabled:cursor-default disabled:opacity-40 " +
+                      (isCurrent ? "text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
+                    }
+                  >
+                    <span className={"tabular-nums " + (isCurrent ? "text-gold" : "")}>0{item.step}</span>
+                    {item.label}
+                    <span
+                      aria-hidden
+                      className={
+                        "bg-gold absolute inset-x-2 bottom-0 h-px rounded-full transition-opacity duration-300 " +
+                        (isCurrent ? "opacity-100" : "opacity-0")
+                      }
+                    />
+                  </button>
+                </span>
+              );
+            })}
+          </nav>
         </span>
 
         {/*
@@ -210,12 +245,12 @@ export function Studio() {
           >
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setIsHelpOpen((open) => !open)}
               aria-expanded={isHelpOpen}
               aria-haspopup="dialog"
-              className="press rounded-full border-white/20 bg-white/5 px-2.5 text-[#f3f0eb] hover:bg-white/10 hover:text-[#f3f0eb]"
+              className="press rounded-full border-0 bg-transparent text-[#f3f0eb]/80 shadow-none hover:bg-white/10 hover:text-[#f3f0eb] px-2.5"
             >
               <Keyboard className="size-4" strokeWidth={1.75} aria-hidden />
               <span className="hidden lg:inline">Kısayollar</span>
@@ -224,13 +259,14 @@ export function Studio() {
               <span
                 role="dialog"
                 aria-label="Klavye kısayolları"
-                className="glass-panel soft-enter absolute top-full right-0 mt-2 block w-64 rounded-2xl p-3 text-left"
+                className="liquid-glass soft-enter absolute top-full right-0 mt-3 block w-64 rounded-2xl p-3.5 text-left"
               >
                 <span className="mb-2 block text-[0.8125rem] font-medium">Klavye kısayolları</span>
                 <span className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[0.75rem]">
                   <kbd className="rounded-md bg-white/10 px-2 py-1">← ↑ ↓ →</kbd><span className="on-dark-muted self-center">Ürünü taşı</span>
                   <kbd className="rounded-md bg-white/10 px-2 py-1">Shift + ok</kbd><span className="on-dark-muted self-center">Hızlı taşı</span>
                   <kbd className="rounded-md bg-white/10 px-2 py-1">⌘/Ctrl + Z</kbd><span className="on-dark-muted self-center">Geri al</span>
+                  <kbd className="rounded-md bg-white/10 px-2 py-1">Boşluk</kbd><span className="on-dark-muted self-center">Önizle (basılı tut, Düzenle)</span>
                   <kbd className="rounded-md bg-white/10 px-2 py-1">Esc</kbd><span className="on-dark-muted self-center">Pencereyi kapat</span>
                 </span>
               </span>
@@ -238,14 +274,24 @@ export function Studio() {
           </span>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={returnToStart}
-            className="press -mr-1 rounded-full border-white/20 bg-white/5 text-[#f3f0eb] hover:bg-white/10 hover:text-[#f3f0eb]"
+            className="press rounded-full border-0 bg-transparent text-[#f3f0eb]/80 shadow-none hover:bg-white/10 hover:text-[#f3f0eb]"
           >
             <Home className="size-4" strokeWidth={1.75} aria-hidden />
-            <span className="hidden sm:inline">Ana menü</span>
+            <span className="hidden xl:inline">Ana menü</span>
           </Button>
+          {/* Referanstaki birincil eylem: altin "Disa Aktar" -> Indir araci. */}
+          <button
+            type="button"
+            onClick={() => requestTool("indir")}
+            // Masaustunde gizli: asamali akisi atlatirdi (indirme Asama 3'te).
+            className="press bg-gold hover:bg-gold/90 ml-1 flex h-9 lg:hidden items-center gap-1.5 rounded-full px-4 text-[0.8125rem] font-medium text-[#1a1917] shadow-[0_6px_16px_-8px_rgb(209_162_91/0.8)] transition-colors"
+          >
+            <Download className="size-4" strokeWidth={2} aria-hidden />
+            <span className="hidden sm:inline">Dışa Aktar</span>
+          </button>
         </span>
       </header>
 
@@ -262,6 +308,7 @@ export function Studio() {
           initialDraft={studio.initialDraft}
           onReturnToStart={returnToStart}
           onStatusChange={updateEditorStatus}
+          navigateRef={navigateRef}
           onSave={studio.workId ? (draft) => updateWorkStatus(studio.workId!, saveStatus(), draft) : undefined}
           onDownloaded={
             studio.workId

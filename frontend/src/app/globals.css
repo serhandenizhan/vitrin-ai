@@ -982,19 +982,24 @@ html.reduce-motion .soft-fade {
   transition: max-width 520ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .stage-fit.stage-fit-collapsed {
-  --studio-reserved: max(9rem, 22dvh);
+  --studio-reserved: max(14rem, 32dvh);
 }
 /* İnce menü kartı (Zemin, Boyut): kart 1,5rem kısalıyor, tuval aynı miktarda büyüyor. */
 .stage-fit.stage-fit-compact {
-  --studio-reserved: calc(max(15rem, 48dvh) - 1.5rem);
+  --studio-reserved: calc(max(20rem, 56dvh) - 1.5rem);
 }
+/* Masaüstünde (19.09.2026) alt kart yok: araçlar sağ panelde. Tuvalin
+   altında yalnızca sabit zemin şeridi kalıyor, bu yüzden ayrılan dikey pay
+   küçültme/ince kart durumlarından bağımsız. */
 @media (min-width: 64rem) {
-  .stage-fit.stage-fit-collapsed {
-    --studio-reserved: 11.5rem;
-  }
+  .stage-fit.stage-fit-collapsed,
   .stage-fit.stage-fit-compact {
-    --studio-reserved: 23.5rem;
+    --studio-reserved: var(--studio-reserved-lg);
   }
+}
+/* Sağ panel küçülünce tuval AYNI eğriyle genişliyor. */
+.side-dock-area {
+  transition: width 520ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .dock-card-area {
   transition:
@@ -1005,7 +1010,8 @@ html.reduce-motion .soft-fade {
 
 @media (prefers-reduced-motion: reduce) {
   .stage-fit,
-  .dock-card-area {
+  .dock-card-area,
+  .side-dock-area {
     transition: none;
   }
   .glass-morph-in,
@@ -1044,12 +1050,15 @@ html.reduce-motion .dock-card-area {
 
 /* Tuval, navbar ve alt kontrollerle birlikte görünür alana sığar. */
 @utility stage-fit {
-  --studio-reserved: max(15rem, 48dvh);
+  /* Telefonda zemin şeridi de tuvalin altında: pay onu da kapsıyor. */
+  --studio-reserved: max(20rem, 56dvh);
+  --stage-cap: 46rem;
 }
 
 @media (min-width: 64rem) {
   .stage-fit {
-    --studio-reserved: 25rem;
+    --studio-reserved: var(--studio-reserved-lg);
+    --stage-cap: 100%;
   }
 }
 
@@ -1070,3 +1079,98 @@ html.reduce-motion .dock-card-area {
 .dock-scroll { scrollbar-width: none; }
 .dock-strip::-webkit-scrollbar,
 .dock-scroll::-webkit-scrollbar { display: none; }
+
+/* Stüdyo çalışma alanı (19.09.2026, tasarım kararı Claude'a bırakıldı).
+   Sitenin sıcak fildişi paletinde bir "fotoğraf stüdyosu" hissi:
+   1) taban: #f6f4f1 → #ece7df sıcak degrade (sitenin açık yüzeyleri);
+   2) tuvalin arkasında yumuşak bir ışık (ürün ışık altında duruyor gibi);
+   3) sol üstten düşen çok hafif iki çapraz ışık huzmesi (pencere ışığı);
+   4) kenarlarda hafif koyulaşma — göz ortaya, ürüne gider;
+   5) çok ince bir kâğıt dokusu (SVG gürültü, %4) — düz dijital beyazı kırar.
+   Hiçbiri tuvalin içine girmez; tuval kendi zeminini çiziyor. */
+.studio-backdrop {
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.28  0 0 0 0 0.18  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+    radial-gradient(48% 58% at 44% 48%, rgb(255 255 255 / 0.9), transparent 72%),
+    linear-gradient(118deg, transparent 18%, rgb(255 255 255 / 0.35) 24%, transparent 31%, transparent 38%, rgb(255 255 255 / 0.22) 44%, transparent 52%),
+    radial-gradient(130% 110% at 50% 45%, transparent 58%, rgb(74 58 36 / 0.12)),
+    linear-gradient(180deg, #f6f4f1 0%, #ece7df 100%);
+  background-attachment: fixed;
+}
+
+/* Masaüstü tuval payı — TEK kaynak: tuval sütunu da tuvalin kendisi de
+   buradan okur (biri değişip diğeri unutulursa tuval ekrandan taşardı).
+   Üst bar 4,25rem + ince zemin barı ~5rem + künye + boşluklar. */
+:root {
+  --studio-reserved-lg: 12.5rem;
+}
+
+/* Tuval sütunu: genişliği biçimden (en/boy) türüyor, böylece panel tuvalin
+   hemen yanında durur. Alt sınır zemin barına yer bırakır, üst sınır panele. */
+@media (min-width: 64rem) {
+  .stage-column {
+    width: clamp(
+      22rem,
+      calc((100dvh - var(--studio-reserved-lg)) * var(--stage-ratio)),
+      calc(100vw - var(--panel-w, 21rem) - 5rem)
+    );
+    /* Bicim degisince tuval sutunu yumusakca daralir/genisler. */
+    transition: width 520ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-column { transition: none; }
+}
+
+/* Aşama geçiş perdesi (19.09.2026) — `stage-curtain.tsx`. Toplam 1,7 sn:
+   iner (0–19%) → içerik gelir → altın çizgi dolar → yukarı kalkar (80–100%).
+   "initial" perde kapalı başlar, yalnızca kalkar. Eğri sitenin geri kalanıyla aynı. */
+.stage-curtain-drop {
+  animation: curtain-drop 1700ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.stage-curtain-initial {
+  animation: curtain-initial 1500ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes curtain-drop {
+  0% { transform: translateY(-100%); }
+  19%, 80% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+@keyframes curtain-initial {
+  0%, 76% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+.stage-curtain .curtain-logo { animation: curtain-in-left 700ms 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stage-curtain .curtain-divider { animation: curtain-grow-y 600ms 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stage-curtain .curtain-number { animation: curtain-rise 600ms 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stage-curtain .curtain-title { animation: curtain-rise 700ms 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stage-curtain .curtain-sub { animation: curtain-rise 700ms 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stage-curtain .curtain-line { animation: curtain-grow-x 800ms 520ms cubic-bezier(0.65, 0, 0.35, 1) both; }
+.stage-curtain-initial .curtain-logo,
+.stage-curtain-initial .curtain-divider,
+.stage-curtain-initial .curtain-number,
+.stage-curtain-initial .curtain-title,
+.stage-curtain-initial .curtain-sub,
+.stage-curtain-initial .curtain-line { animation-delay: 60ms; }
+@keyframes curtain-in-left {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes curtain-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes curtain-grow-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes curtain-grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Dik zemin barında kaydırma kenarları yumuşak solsun. */
+@utility rail-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+}
