@@ -202,7 +202,7 @@ docs/        Ödeme runbook'u, tasarım kayıtları, araştırma notları
 | [`ROADMAP.md`](ROADMAP.md) | Fazlar, teknoloji kararlarının gerekçeleri, ölçüm geçmişi |
 | [`CLAUDE.md`](CLAUDE.md) | Geliştirme rehberi, kalıcı kurallar, çıkarılan dersler |
 | [`SECURITY.md`](SECURITY.md) | Katman katman güvenlik standartları ve launch kontrol listesi |
-| [`docs/billing-runbook.md`](docs/billing-runbook.md) | Ödeme kurulumu, işletim, kurtarma ve açılış kapıları |
+| [`docs/billing-runbook.md`](docs/billing-runbook.md) | Ödeme kurulumu, işletim, kurtarma, zorunlu kabul testleri, maliyet modeli ve açılış kapıları |
 | [`backend/README.md`](backend/README.md) | API, ortam değişkenleri, kimlik doğrulama, kota sözleşmesi |
 | [`frontend/README.md`](frontend/README.md) | Tasarım dili, bileşenler, test kapsamı |
 
