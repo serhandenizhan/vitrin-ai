@@ -124,10 +124,17 @@ export function BackgroundPalette({
 
   // Seçili zemin şeridin ortasına getiriliyor — yalnızca şeridin KENDİ
   // kaydırması; `scrollIntoView` mobilde bütün stüdyoyu kaydırıyordu.
+  // Zaten görünen bir zemin (kullanıcının az önce dokunduğu) KAYDIRILMIYOR:
+  // seçilen zemin parmağın altından kayıp gidiyordu (Serhan, 19.09.2026).
   useEffect(() => {
     const strip = stripRef.current;
     const selected = selectedRef.current;
     if (!strip || !selected) return;
+    if (hasCenteredRef.current) {
+      const box = strip.getBoundingClientRect();
+      const item = selected.getBoundingClientRect();
+      if (item.left >= box.left + 8 && item.right <= box.right - 8) return;
+    }
     strip.scrollTo?.({
       left: selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2,
       behavior: hasCenteredRef.current ? "smooth" : "auto",

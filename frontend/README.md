@@ -213,10 +213,24 @@ bileşeni, yani istemciye hiç inmiyor.
 | 2 Düzenle | dik zemin barı (`BackgroundRail`) | tuval | panel: Yerleşim · Görünüm · Marka; ‹ Sahne / ✓ Tamamla |
 | 3 Tamamla | — | tuval | altında çıktı barı (PNG, JPEG, CMYK, WhatsApp, taslak), ‹ Düzenle |
 
-- Geçiş perdesi `stage-curtain.tsx` (CSS: `globals.css` → "Aşama geçiş perdesi"):
-  açılışta kapalı başlar ve kalkar; ✓/geri geçişlerinde iner, aşama
-  `onCovered`'da (320 ms) değişir, ~1,7 sn'de kalkar. Yedek zaman aşımı var
-  (gizli sekmede animasyon ilerlemese de perde kalkar). "Hareketi azalt"ta yok.
+- Açılış perdesi `stage-curtain.tsx` (CSS: `globals.css` → "Stüdyo açılış perdesi"):
+  YALNIZCA stüdyo açılırken; kapalı başlar, ~1,5 sn'de kalkar. Yedek zaman aşımı
+  var (gizli sekmede animasyon ilerlemese de perde kalkar). "Hareketi azalt"ta
+  yok. ✓/geri geçişlerindeki perde 19.09.2026'da kaldırıldı ("her adımda
+  yorucu"). Aşama geçişi 20.09.2026'da seçildi (`stage-transition.ts`):
+  View Transitions + panel kayması birlikte, 1,1 sn; süre ve eğri tek kaynaktan
+  (`--stage-transition-ms` / `--stage-transition-ease`) bütün gruplara. Her aşama panelinin ayrı
+  `key`'i duruyor: yoksa React Sahne ve Düzenle `<aside>`'ını aynı düğüm olarak
+  kullanıyor ve panele verilecek giriş animasyonu oynamıyor (kök `CLAUDE.md` ders 29).
+- Masaüstünde tuval sütununun ve `.stage-fit`'in genişlik geçişi YOK: her kare
+  Konva'yı yeniden çizdiriyordu. Tuval aşama değişince tek seferde boyutlanır.
+- Aşama 3 çıktı barı genişliğini içerikten alır (`w-fit`): üst satırdaki çıktı
+  düğmeleri belirler, alt satır (‹ Düzenle · CMYK ne demek?) onlara hizalı,
+  açılan CMYK açıklaması barı genişletmez. Tuval sütunundan geniş olabilir,
+  ortalanıp iki yana taşar; dar ekranda düğmeler kaydırmasız sarar.
+- Zemin seçicilerde seçim halkası (2px + 2px ofset) kutunun dışına taşar;
+  kaydırma alanlarında bunun için iç pay var. Seçilen zemin artık yalnızca
+  GÖRÜNMÜYORSA kaydırılıyor — tıklanan zemin imlecin altından kaçmıyor.
 - Tuval sütunu her aşamada aynı konumda; `--panel-w` ve `--studio-reserved-lg`
   aşamaya göre inline veriliyor.
 - Üst bar adımları masaüstünde yalnız geri (`navigateRef`); "Dışa Aktar" gizli.
@@ -422,7 +436,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**378 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı).
+**400 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de

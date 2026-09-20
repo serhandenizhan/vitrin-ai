@@ -687,8 +687,12 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
       ilerler. **2 Düzenle:** solda dik zemin barı (yuvarlak zeminler iki
       sıra), sağda Yerleşim · Görünüm · Marka paneli, altta ‹ Sahne / ✓
       Tamamla. **3 Tamamla:** yalnız indirme seçenekleri, görselin altında.
-    - Perde `stage-curtain.tsx` (solda logo, "0N / 03", aşama perde KAPANINCA
-      değişir; "hareketi azalt" açıkken perde yok). Tuval her aşamada aynı DOM
+    - Perde `stage-curtain.tsx` (solda logo, "0N / 03"; "hareketi azalt"
+      açıkken yok) — 19.09.2026'dan beri YALNIZCA stüdyo açılışında (Serhan:
+      aşamalar arası perde "her adımda yorucu"). Aşama geçişi 20.09.2026'da
+      seçildi: tarayıcının sahne geçişi (View Transitions) + panellerin yandan
+      kayması birlikte, 1,1 sn (`stage-transition.ts`; on aday denendi).
+      Tuval her aşamada aynı DOM
       konumunda — Konva sahnesi yeniden kurulmuyor.
     - Üst bardaki adımlar masaüstünde yalnız GERİYE tıklanır (`navigateRef`;
       efektten state değiştirilmiyor).
@@ -796,18 +800,24 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
   Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
-### Faz 6 — Admin paneli — 🔄 Sürüyor
+### Faz 6 — Admin paneli — ✅ Kod tamamlandı (19.09.2026); matbaa provası ve canlı ölçüm bekliyor
 
 - Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
 
 **Serhan'ın backend'i — PR 1 uygulandı (17.09.2026).** Dal
 `feature/faz-6-admin-api`, migration `0007`. Kullanıcı onayıyla kapsam dört
 madde genişletildi (zemin yönetimi uçları, denetim günlüğü, yönetici
-ekleme/çıkarma, admin adına hesap silme); ilk üçü PR 2'ye kaldı. Zemin
-yönetimi ve denetim günlüğü PR 2 gelmeden Kaan'ın kendi dalında yapıldı
-(yukarıdaki "Zemin yönetim paneli" maddesi); **yönetici ekleme/çıkarma
-19.09.2026'da PR #25'in incelemesinde eksik bulundu (Codex) ve aynı PR'a
-eklendi:** `POST`/`DELETE /api/admin/users/{id}/admin`, hedefin e-postası
+ekleme/çıkarma, admin adına hesap silme). Admin adına hesap silme PR 1'de
+yapıldı; kalan üçü başlangıçta Serhan'ın "PR 2"sine planlanmıştı ama **PR 2
+artık yok — üçü de başka yerde tamamlandı** (19.09.2026 itibarıyla):
+- **Zemin yönetimi uçları** (`GET`/`PATCH`/`DELETE /api/admin/backgrounds`):
+  Kaan, PR #25 (aşağıdaki "Zemin yönetim paneli" maddesi).
+- **Denetim günlüğü:** YAZMA tarafı (`admin_audit_log` + her admin eyleminde
+  satır) PR 1 ve PR #25'te; OKUMA tarafı (`GET /api/admin/audit` + panelde
+  "Günlük" sekmesi) Faz 6 kapanış denetiminde eksik bulundu ve
+  `feature/faz6-admin-studyo-ux-iyilestirmeleri` dalında eklendi (aşağıda).
+- **Yönetici ekleme/çıkarma:** PR #25'in incelemesinde eksik bulundu (Codex) ve
+  aynı PR'a eklendi: `POST`/`DELETE /api/admin/users/{id}/admin`, hedefin e-postası
 doğrulanır (yanlış hesaba tıklanarak yapılamaz), son yönetici `409
 last_admin` ile korunur, `admin_add`/`admin_remove` denetim satırları artık
 gerçekten yazılıyor (önceden yalnızca `ACTIONS` listesinde tanımlıydılar,
@@ -947,6 +957,34 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     korunuyor. Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
     dışlıyor; panelde mutasyondan önce başlamış liste cevabı yeni durumu artık
     geri alamıyor.
+- **Faz 6 kapanış turu (19.09.2026, Serhan) — dal
+  `feature/faz6-admin-studyo-ux-iyilestirmeleri`.**
+  - **Denetim günlüğünü okuma (kapanış denetiminde bulunan eksik).**
+    `GET /api/admin/audit` (yalnız okur, `require_admin`, hız sınırı okuma ucu
+    olduğu için fail-open): en yeniden eskiye, `has_more` için bir satır fazla
+    okunur (toplam sayılmaz), `action` yalnız `admin_audit.ACTIONS`'tan biri
+    olabilir (aksi `422`). Eylemi yapanın e-postası Supabase yönetici
+    API'sinden; okunamazsa `null`, sayfa yine gelir. Hesabı silinmiş
+    yöneticinin satırı da listelenir (`actor_id`'nin FK'si yok). Panelde
+    **Günlük** sekmesi: eylem türü süzgeci, "kim · ne yaptı · neye" cümlesi,
+    Kullanıcılar sekmesiyle aynı sayfalama. Vekil bilinmeyen eylemi backend'e
+    hiç göndermiyor. Üstte "Admin · Serhan | Kaan" anahtarı: tek bir
+    yöneticinin kayıtlarını süzer (`?actor=`, sunucuda), anahtarda yalnız ad
+    (`user_metadata.first_name`, yalnız gösterim) yazar. Günlük yalnız
+    YÖNETİCİ eylemlerini tutar; kullanıcı işlemleri burada görünmez.
+    6 backend + 5 frontend testi.
+  - **Zeminler sekmesi:** stüdyodaki kategorilerle aynı süzgeç (Sade · Desen ·
+    Doğal · Lüks) ve yayın süzgeci (Yayında / Yayında değil); kartlarda
+    zeminin stüdyodaki adı ve kategorisi; bütün sayfada hover efektleri.
+  - **Çalışmalar:** silme iki adımlı (kartın içinde "Bu çalışma silinsin mi?").
+  - Stüdyo rötuşları (faz dışı değil, bu fazın stüdyo işinin devamı):
+    zeminler kategori içinde düzden karmaşığa (`backend/scripts/rank_backgrounds.py`
+    → `frontend/src/lib/background-order.ts`), aşamalar arası perde kaldırıldı
+    (yalnız açılışta; aşama geçişi View Transitions + panel kayması olarak seçildi),
+    adım düğmeleri gidilen adımın adını taşıyor, "Kısayollar" açılınca üst bar
+    yazılarının kaybolması düzeltildi (kök `CLAUDE.md` ders 28).
+  - **Açık — Faz 7'ye aday performans işi:** zemin değiştirirken takılma
+    ölçüldü (aşağıdaki Faz 7 maddesine bakın).
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -1043,6 +1081,41 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Kullanıcı etkinliği ekranı — FİKİR, kullanıcılar gelmeye başlayınca
+  değerlendirilecek (Serhan, 19.09.2026).** Admin panelindeki "Günlük" yalnız
+  YÖNETİCİ eylemlerini gösteriyor (`admin_audit_log`). Kullanıcıların kendi
+  işlemleri (kesim, indirme, ödeme, taslak kaydetme) ayrı tablolarda duruyor
+  (`usage_events`, `usage_reservations`, `billing_transactions`, `projects`)
+  ve panelde toplu bir görünümü yok. Karar verilirken bakılacaklar: bunun
+  değiştirilemez yönetici günlüğüyle KARIŞTIRILMAMASI (ayrı ekran/uç),
+  hacim (kullanıcı başına çok satır — sayfalama ve saklama süresi), KVKK
+  (kişisel veri; aydınlatma metni ve saklama süresiyle uyumlu olmalı) ve
+  gerçekten neye ihtiyaç duyulduğu (destek talebinde "bu kullanıcı ne yaptı"
+  sorusu mu, genel analitik mi). Şimdilik iş YOK, yalnız not.
+- **Stüdyoda zemin değiştirirken takılma — ÖLÇÜLDÜ, kısmen düzeltildi (19.09.2026).**
+  **Düzeltilen kısım:** aşama geçişlerinde tuval sütununun 520 ms'lik genişlik
+  geçişi her karede tuvali yeniden boyutlandırıp Konva'yı yeniden çizdiriyordu
+  (10–14 kez, her biri uzun kare); masaüstünde geçiş kaldırıldı, tuval tek
+  seferde boyutlanıyor (uzun kare 10–15 → 0–2). Aynı ölçümde `useStageSize`'ın
+  yalnız ilk kapsayıcıyı izlediği ve Tamamla'da tuvalin sağının/altının
+  KESİLDİĞİ bulundu, düzeltildi. Aynı gün asıl "kasma" sebebi de bulundu:
+  react-konva'ya her render'da yeni `filters` dizisi veriliyor, ürünün filtreli
+  önbelleği her render'da baştan hesaplanıyordu (Retina'da ~100 ms/kare);
+  dizi sabitlendi, dpr 2'de geçişler 35 → 60 fps (kök `CLAUDE.md` ders 30).
+  **Kalan (aşağısı):**
+  Tarayıcıda (1440×900, dpr 1, geliştirme modu) ölçüldü: sürükleme, üzerine
+  gelme ve kaydırma 60 fps; her zemin seçimi 60–70 ms'lik, ilk seçim ~390 ms'lik
+  bir kare üretiyor ve sürenin neredeyse tamamı Konva çiziminde. Sebep: zemin
+  görselleri tam çözünürlükte (3508×2480, 8,7 MP) ve 0,42 sn'lik çapraz geçişte
+  her karede ~500 px'lik tuvale küçültülerek İKİ kez çiziliyor; ilk seçimde buna
+  büyük JPEG'in ana iş parçacığında çözülmesi ekleniyor. Retina ekranda tuval 4
+  kat piksel. Aşama değişiminde de ~50 ms'lik bir kare var (panel kurulumu +
+  tuvalin yeniden çizimi). `backdrop-filter` ve stüdyo arka planı kapatılınca
+  sonuç değişmedi — cam efektleri sebep değil. **Önerilen düzeltme:** ekranda
+  zeminin tuval boyutuna (× dpr) küçültülmüş bir kopyasını kullanmak
+  (`createImageBitmap` + `resize*`, ya da `img.decode()` sonrası tek seferlik
+  offscreen çizim), dışa aktarmada tam çözünürlüğe dönmek. Dışa aktarma
+  kalitesini etkileyebileceği için ayrı ve ölçülerek yapılmalı.
 - **Admin panelinde ADA GÖRE arama — bilinçli olarak ertelendi (Serhan'ın
   sorusu üzerine karar, 17.09.2026).** Faz 6'da arama e-posta ve tam kullanıcı
   kimliğiyle sınırlı kaldı. Üç gerekçe:

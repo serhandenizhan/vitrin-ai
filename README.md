@@ -43,7 +43,8 @@ buna göre seçildi.
 ## Durum
 
 **Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
-bekliyor. Faz 6 (admin paneli) sürüyor.**
+bekliyor. Faz 6 (admin paneli) kodu tamamlandı; CMYK matbaa provası ve canlı
+ölçüm bekliyor.**
 
 | Faz | Kapsam | Durum |
 | --- | --- | --- |
@@ -53,7 +54,7 @@ bekliyor. Faz 6 (admin paneli) sürüyor.**
 | 3 | Zemin kütüphanesi ve kompozisyon stüdyosu | ✅ |
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
-| 6 | Admin paneli | 🔄 backend API'si sürüyor |
+| 6 | Admin paneli | ✅ kod tamamlandı — matbaa provası ve canlı ölçüm açık |
 | 7 | Test, optimizasyon, sağlamlaştırma | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 
@@ -69,7 +70,7 @@ menü kartı var (18.09.2026'da sağdaki denetçi kaldırıldı). Ayrıntı: [fr
 "Stüdyo düzeni".
 
 Faz 6'da admin API'si (kullanıcılar, bonus krediler, kullanım istatistikleri,
-zemin yönetimi, yönetici ekleme/çıkarma) uygulandı. Admin'in verdiği krediler
+zemin yönetimi, yönetici ekleme/çıkarma, denetim günlüğünü okuma) uygulandı. Admin'in verdiği krediler
 dönem kotasını büyütmez — ayrı bir bakiyede durur ve yalnız kota tükendiğinde
 harcanır; her admin eylemi yalnızca eklemeye açık bir denetim günlüğüne
 yazılır. Arayüz tarafında `/admin` paneli (genel bakış, kullanıcılar,
@@ -92,7 +93,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **383** (pytest + gerçek PostgreSQL/Redis) · frontend **384** (Vitest) |
+| Testler | backend **389** (pytest + gerçek PostgreSQL/Redis) · frontend **400** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -177,8 +178,8 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 383 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 378 test
+cd backend && pytest             # 389 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 400 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

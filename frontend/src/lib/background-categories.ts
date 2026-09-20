@@ -10,6 +10,7 @@
  * sayiliyor ve baski uyarisi almiyor: listede kaybolmasin, secici bozulmasin.
  */
 import { BACKGROUND_CATALOG } from "@/lib/background-catalog";
+import { BACKGROUND_ORDER } from "@/lib/background-order";
 import type { Orientation } from "@/lib/composition";
 
 export const BACKGROUND_CATEGORIES = [
@@ -63,3 +64,23 @@ export function needsPrintWarning(id: string): boolean {
 
 export const PRINT_WARNING_MESSAGE =
   "Bu görsel baskıya önerilmiyor. Yine de onaylıyor musunuz?";
+
+const ORDER_INDEX = new Map(BACKGROUND_ORDER.map((id, index) => [id, index]));
+
+/**
+ * Kategori icindeki sira: DUZDEN KARMASIGA (Serhan, 19.09.2026 — "duz zeminler
+ * en altta olmasin"). Sunucu listesi yukleme tarihine gore geliyordu ve duz
+ * zeminler sona dusuyordu. Sira `background-order.ts`'ten (betikle, gorsel
+ * karmasiklik olculerek uretilir). Yer tutucu gradyanlar (duz/yumusak) en
+ * basta; sira dosyasinda olmayan yeni bir zemin kategorisinin SONUNDA —
+ * betik yeniden calistirilana kadar kaybolmasin diye. Esitlikte gelen sira
+ * korunur (Array.prototype.sort kararli).
+ */
+export function compareBackgroundOrder(a: string, b: string): number {
+  return orderRank(a) - orderRank(b);
+}
+
+function orderRank(id: string): number {
+  if (id.startsWith("placeholder-")) return -1;
+  return ORDER_INDEX.get(id) ?? Number.MAX_SAFE_INTEGER;
+}

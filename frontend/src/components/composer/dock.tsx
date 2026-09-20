@@ -231,7 +231,7 @@ function SideDock({
   // oldugunu sekme soyluyor. Altin yalnizca SECILI durumda.
   void Icon;
   return (
-    <div className="side-dock liquid-glass soft-enter flex max-h-full min-h-0 flex-col rounded-[1.5rem] p-2">
+    <div className="side-dock liquid-glass flex max-h-full min-h-0 flex-col rounded-[1.5rem] p-2">
       <div className="flex shrink-0 items-center gap-1">
         <div className="min-w-0 flex-1">{tools}</div>
         <button
@@ -273,10 +273,32 @@ export const PANEL_ROW =
  * için (biçim, yerleşim, marka, indirme). Zemin ızgara (bkz.
  * `background-palette.tsx`).
  */
-export function DockStrip({ children, label, centered = false }: { children: ReactNode; label: string; centered?: boolean }) {
+export function DockStrip({
+  children,
+  label,
+  centered = false,
+  wrap = false,
+}: {
+  children: ReactNode;
+  label: string;
+  centered?: boolean;
+  /**
+   * Kaydirma YOK, dugmeler alt satira sarar (Tamamla asamasi, masaustu —
+   * Serhan, 19.09.2026: "alt dock kaydirmali olmasin"). Dugmeler az ve hepsi
+   * ayni anda gorulmeli; gizli kaydirma devamini sakliyordu.
+   */
+  wrap?: boolean;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
   useHorizontalWheel(ref);
   const variant = useDockVariant();
+  if (wrap) {
+    return (
+      <div aria-label={label} className="flex flex-wrap justify-center gap-2 px-2 pt-1.5 pb-2">
+        {children}
+      </div>
+    );
+  }
   if (variant === "side") {
     return (
       <div aria-label={label} className={PANEL_GROUP + " flex flex-col"}>

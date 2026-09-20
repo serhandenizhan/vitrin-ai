@@ -333,6 +333,16 @@ python scripts/upload_backgrounds.py --source "<klasör>" --plan plan.json --man
 python scripts/upload_backgrounds.py --manifest manifest.json --catalog-out ../frontend/src/lib/background-catalog.ts
 ```
 
+**Stüdyodaki sıra (19.09.2026):** kategori içinde zeminler düzden karmaşığa
+dizilir. Sıra `scripts/rank_backgrounds.py` ile üretilir: R2'deki her önizlemenin
+kenar şiddetini ölçer ve `frontend/src/lib/background-order.ts`'e yazar. Salt
+okumadır (R2'ye/DB'ye yazmaz). Yeni zemin yüklendikten sonra yeniden çalıştırın;
+sırada olmayan zemin kategorisinin sonuna düşer.
+
+```bash
+python scripts/rank_backgrounds.py --show
+```
+
 ## Docker
 
 ```bash
@@ -516,6 +526,7 @@ backend'de ve her istekte `admin_users` tablosundan yapılır.
 | `GET /api/admin/backgrounds` | Zemin kütüphanesinin TAMAMI (Faz 6, Kaan — `/admin` → Zeminler). `GET /api/backgrounds`ten farkı: pakete/kotaya bakmaz ve **pasif zeminleri de** döndürür (`is_active`, `tier`, `created_at` + imzalı `url`/`thumbnail_url`). Okuma ucu olduğu için hız sınırı fail-open |
 | `PATCH /api/admin/backgrounds/{id}` | Zeminin paketini (`tier`) ve yayın durumunu (`is_active`) değiştirir (Faz 6, Kaan). **Pasif, silinmiş değildir:** satır ve R2 nesneleri durur, zemin yalnız kullanıcı listesinden çıkar. Denetim satırı yalnız durum gerçekten değişince yazılır; hız sınırı yazan uç olduğu için fail-closed |
 | `DELETE /api/admin/backgrounds/{id}` | Zemini kalıcı siler — **geri alınamaz**. Sıra bilinçli: önce DB satırı, sonra R2 nesneleri (ters sırada "satır duruyor, dosyası yok" çıkardı — ders 25). Nesne silme patlarsa yalnız yer tutan dosya kalır, istek yine başarılı döner |
+| `GET /api/admin/audit` | Denetim günlüğünü OKUR (20.09.2026 — Faz 6 kapanış denetiminde okuma yolunun hiç olmadığı bulundu). Yalnız okuma; tablo zaten yalnız eklemeye açık. En yeniden eskiye, `page`/`per_page`; `has_more` için bir satır fazla okunur (toplam sayılmaz). `action` yalnız `admin_audit.ACTIONS`'tan biri olabilir (aksi `422`), `actor` ile tek yöneticinin kayıtları süzülür. Yanıt ayrıca `admins`: şu anki yöneticiler ve adları (panelin "Admin: Serhan | Kaan" anahtarı). Ad/e-posta Supabase yönetici API'sinden; okunamazsa `null` döner ve sayfa yine gelir — günlüğün kendisi veritabanında, ad yalnız gösterim. Hesabı silinmiş yöneticinin satırı da listelenir (`actor_id`'nin FK'si yok). Okuma ucu olduğu için hız sınırı fail-open |
 | `GET /api/admin/stats` | Özet sayaçlar + `days` penceresinde günlük seri |
 
 **Bonus krediler dönem kotasının DIŞINDADIR.** `subscription_periods.quota_snapshot`

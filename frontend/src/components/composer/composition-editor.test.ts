@@ -57,16 +57,21 @@ vi.mock("next/dynamic", async () => {
       function EditorStageMock({
         background,
         onStageReady,
+        onCutoutSize,
         onInteractionChange,
       }: {
         background: { id: string; url?: string };
         onStageReady: (stage: unknown) => void;
+        // Gercek sahne kesimin DOGAL olcusunu bildiriyor; yerlesim araclari
+        // (ortala/sigdir, dondurme, boyut kaydiraci) buna bagli.
+        onCutoutSize?: (size: { width: number; height: number }) => void;
         onInteractionChange?: (isInteracting: boolean) => void;
       }) {
         React.useEffect(() => {
           onStageReady(fakeStage);
+          onCutoutSize?.({ width: 2000, height: 2000 });
           return () => onStageReady(null);
-        }, [onStageReady]);
+        }, [onStageReady, onCutoutSize]);
         return React.createElement(
           "div",
           null,
@@ -265,6 +270,9 @@ describe("CompositionEditor", () => {
         ],
       };
       renderEditor();
+      // Varsayilan artik listenin ILK zemini (duz beyaz yer tutucu, 19.09.2026);
+      // gecisin sinanabilmesi icin once baska bir zemin seciliyor.
+      fireEvent.click(screen.getByRole("button", { name: "R2 A" }));
       expect(screen.getByTestId("stage-background").textContent).toBe(
         "r2-a|https://r2.example/a-initial",
       );
@@ -527,6 +535,21 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("group", { name: "Çıktı boyutu" })).toBeTruthy();
       expect(screen.queryByRole("group", { name: "Yerleşim" })).toBeNull();
       expect(screen.getByRole("button", { name: /Katalog/ })).toBeTruthy();
+    });
+
+    it("ilk döndürmede ürün boyutu DEĞİŞMİYOR (%100 kalıyor)", () => {
+      // Stüdyoya girip hiçbir şey taşımadan −15° / 15° / 90°'ye basmak, ürünü
+      // bir anda doğal boyutuna atlatıp tuvalden taşırıyordu: dönüşüm henüz
+      // yokken ölçek 1 varsayılıyordu, oysa sahnedeki ölçek "sığdırılmış"
+      // ölçek (Serhan, 20.09.2026). Kaydıraçtaki yüzde bunun aynası.
+      renderEditor();
+      openTool("Yerleşim");
+      expect(screen.getByLabelText("Ürün boyutu").getAttribute("value")).toBe("100");
+
+      for (const button of ["90°", "−15°", "15°"]) {
+        fireEvent.click(screen.getByRole("button", { name: button }));
+        expect(screen.getByLabelText("Ürün boyutu").getAttribute("value")).toBe("100");
+      }
     });
 
     it("dock sadece zemin göstermiyor: her adımın kendi paleti var", () => {
@@ -903,7 +926,7 @@ describe("CompositionEditor", () => {
       expect(screen.getByRole("switch", { name: "Gölge" })).toBeTruthy();
     });
 
-    it("geçiş perdesi: açılışta görünür; ✓ sonrası aşama PERDENİN ARKASINDA değişir, perde kalkar", () => {
+    it("geçiş perdesi YALNIZCA açılışta; ✓ ile aşama perdesiz ve anında değişir", () => {
       vi.useFakeTimers();
       try {
         stubDesktop();
@@ -915,19 +938,20 @@ describe("CompositionEditor", () => {
         });
         expect(screen.queryByRole("status", { name: /aşama:/ })).toBeNull();
 
+        // Asamalar arasi perde kaldirildi (Serhan, 19.09.2026: "her adimda
+        // yorucu"): yeni duzen AYNI tiklamada geliyor, zamanlayici beklemeden.
+        const sceneAside = screen.getByRole("complementary", { name: "Sahne" });
         fireEvent.click(screen.getByRole("button", { name: "Sahneyi onayla, Düzenle aşamasına geç" }));
-        expect(screen.getByRole("status", { name: "2. aşama: Düzenle" })).toBeTruthy();
-        // Perde henuz inerken eski duzen duruyor...
-        expect(screen.getByRole("complementary", { name: "Sahne" })).toBeTruthy();
-        act(() => {
-          vi.advanceTimersByTime(340);
-        });
-        // ...perde kapaninca asama degisiyor.
-        expect(screen.getByRole("complementary", { name: "Araç paneli" })).toBeTruthy();
-        act(() => {
-          vi.advanceTimersByTime(2200);
-        });
+        // YENI bir dugum olmali: React ayni `<aside>`i yeniden kullanirsa CSS
+        // animasyonu yeniden baslamiyor ve gecis hic gorunmuyordu (ayni gun,
+        // tarayicida olculdu).
+        expect(screen.getByRole("complementary", { name: "Araç paneli" })).not.toBe(sceneAside);
         expect(screen.queryByRole("status", { name: /aşama:/ })).toBeNull();
+        expect(screen.getByRole("complementary", { name: "Araç paneli" })).toBeTruthy();
+
+        fireEvent.click(screen.getByRole("button", { name: "Düzenlemeyi bitir, Tamamla aşamasına geç" }));
+        expect(screen.queryByRole("status", { name: /aşama:/ })).toBeNull();
+        expect(screen.getByRole("group", { name: "Çıktı" })).toBeTruthy();
       } finally {
         vi.useRealTimers();
       }

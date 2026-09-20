@@ -12,6 +12,8 @@ type Tab = "draft" | "completed";
 export function WorksPage() {
   const { works, isHistoryLoaded, user, openSignIn, openStudio, openWork, removeWork, renameWork } = useWorkspace();
   const [tab, setTab] = useState<Tab>("draft");
+  /** Silme iki adimli (Serhan, 19.09.2026): once kartin kendisinde onay sorulur. */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const visible = useMemo(() => works.filter((work) => work.status === tab), [works, tab]);
 
   return (
@@ -49,13 +51,21 @@ export function WorksPage() {
               <div className="p-5">
                 <WorkTitle name={work.fileName} onRename={(name) => renameWork(work.id, name)} />
                 <p className="mt-1 text-xs text-white/45">{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(work.createdAt)}</p>
+                {confirmId === work.id ? (
+                  <div role="group" aria-label="Silme onayı" className="soft-fade mt-5 flex items-center gap-2">
+                    <p className="min-w-0 flex-1 text-sm text-white/75">Bu çalışma silinsin mi?</p>
+                    <button type="button" onClick={() => { setConfirmId(null); void removeWork(work.id); }} className="press min-h-10 shrink-0 rounded-full bg-red-500/20 px-4 text-sm text-red-200 transition-colors hover:bg-red-500/30">Sil</button>
+                    <button type="button" autoFocus onClick={() => setConfirmId(null)} className="press min-h-10 shrink-0 rounded-full px-4 text-sm text-white/65 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white">Vazgeç</button>
+                  </div>
+                ) : (
                 <div className="mt-5 flex gap-2">
                   <button type="button" onClick={() => tab === "draft" ? openStudio({ cutoutUrl: work.resultUrl, fileName: work.fileName, workId: work.id, initialDraft: work.editorState }) : openWork(work)} className="press bg-gold flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium text-black">
                     {tab === "draft" ? <ImagePlus className="size-4" aria-hidden /> : <Download className="size-4" aria-hidden />}
                     {tab === "draft" ? "Devam et" : "Görüntüle"}
                   </button>
-                  <button type="button" onClick={() => void removeWork(work.id)} aria-label={`${work.fileName} çalışmasını sil`} className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/50 ring-1 ring-white/15 hover:bg-white/10 hover:text-white"><Trash2 className="size-4" aria-hidden /></button>
+                  <button type="button" onClick={() => setConfirmId(work.id)} aria-label={`${work.fileName} çalışmasını sil`} className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/50 ring-1 ring-white/15 hover:bg-white/10 hover:text-red-200"><Trash2 className="size-4" aria-hidden /></button>
                 </div>
+                )}
               </div>
             </Reveal>
           ))}

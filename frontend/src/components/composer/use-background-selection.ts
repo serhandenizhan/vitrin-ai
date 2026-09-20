@@ -6,6 +6,7 @@ import {
   BACKGROUND_CATEGORIES,
   type BackgroundCategory,
   backgroundCategory,
+  compareBackgroundOrder,
   fitsOrientation,
 } from "@/lib/background-categories";
 import type { Background } from "@/lib/backgrounds";
@@ -72,9 +73,23 @@ export function useBackgroundSelection(
     [backgrounds, orientation],
   );
 
+  /**
+   * Varsayilan secim listenin ILK zemini: ilk kategorinin duzden karmasiga
+   * sirasindaki ilki (Serhan, 19.09.2026). Eskiden sunucunun ilk zeminiydi
+   * (yukleme tarihine gore) ve izgara acilista ona kaydigi icin bastaki duz
+   * zeminler hic gorunmuyordu.
+   */
+  const firstInOrder = useMemo(() => {
+    const categoryIndex = (id: string) =>
+      BACKGROUND_CATEGORIES.findIndex((category) => category.id === backgroundCategory(id));
+    return [...fitting].sort(
+      (a, b) => categoryIndex(a.id) - categoryIndex(b.id) || compareBackgroundOrder(a.id, b.id),
+    )[0];
+  }, [fitting]);
+
   const selected: Background =
     fitting.find((background) => background.id === selectedId) ??
-    fitting[0] ??
+    firstInOrder ??
     backgrounds[0];
 
   /**
@@ -86,9 +101,10 @@ export function useBackgroundSelection(
     const categories: BackgroundGroup[] = BACKGROUND_CATEGORIES.map((category) => ({
       id: category.id,
       label: category.label,
-      items: fitting.filter(
-        (background) => backgroundCategory(background.id) === category.id,
-      ),
+      items: fitting
+        .filter((background) => backgroundCategory(background.id) === category.id)
+        // Duzden karmasiga (bkz. compareBackgroundOrder).
+        .sort((a, b) => compareBackgroundOrder(a.id, b.id)),
     })).filter((group) => group.items.length > 0);
     // Favoriler EN BASTA ve begenilme sirasiyla; bicime uymayan favori
     // gosterilmiyor (diger raflarla ayni kural).

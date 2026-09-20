@@ -281,8 +281,11 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   fail-open, kredi/silme/rol fail-closed); geri döndürülemez admin silme
   işleminde kullanıcının e-postasının yazılarak doğrulanması; yönetici
   hesaplarının panelden silinememesi ve son yöneticinin kendi hesabını
-  silememesi (panel sahipsiz kalmasın); destek formunda kullanıcı başına hız
-  sınırı
+  silememesi (panel sahipsiz kalmasın); denetim günlüğünün yalnız yöneticiye
+  açık, **salt okunur** bir uçtan (`GET /api/admin/audit`) görüntülenmesi —
+  okunan kayıt düzenlenemez, eylem türü sabit listeyle sınırlıdır ve kullanıcı
+  e-postaları `auth.users`'tan değil Supabase yönetici API'sinden gelir;
+  destek formunda kullanıcı başına hız sınırı
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
   son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
 

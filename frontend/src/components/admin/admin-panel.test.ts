@@ -339,6 +339,168 @@ describe("Zeminler sekmesi (Faz 6, Kaan)", () => {
   });
 });
 
+describe("Günlük sekmesi (19.09.2026)", () => {
+  const entry = (over: Record<string, unknown> = {}) => ({
+    id: 1,
+    actor_id: "a1",
+    actor_email: "admin@vitrin.example",
+    action: "credit_grant",
+    subject_type: "credit_grant",
+    subject_id: "g1",
+    detail: { amount: 3, reason: "telafi", user_id: "u1" },
+    created_at: "2026-09-19T10:00:00Z",
+    ...over,
+  });
+
+  async function openTab(handler: Handler) {
+    const calls = mockFetch((url, init) =>
+      url === "/api/admin/me"
+        ? Response.json({ is_admin: true })
+        : url.startsWith("/api/admin/stats")
+          ? Response.json(stats)
+          : handler(url, init),
+    );
+    render(createElement(AdminPanel));
+    fireEvent.click(await screen.findByRole("tab", { name: /Günlük/ }));
+    return calls;
+  }
+
+  it("kaydı okunur bir cümle olarak gösteriyor (kim · ne · neye · not)", async () => {
+    await openTab(() =>
+      Response.json({
+        items: [
+          entry(),
+          entry({
+            id: 2,
+            action: "background_update",
+            subject_type: "background",
+            subject_id: "cd65c3ac-1250-4c31-a383-471a3acb82e1",
+            detail: { before: { is_active: true }, after: { is_active: false } },
+          }),
+          entry({ id: 3, actor_email: null, action: "admin_add", detail: { email: "yeni@vitrin.example" } }),
+        ],
+        page: 1,
+        per_page: 50,
+        has_more: false,
+      }),
+    );
+    const list = await screen.findByRole("list", { name: "Günlük kayıtları" });
+    const rows = within(list).getAllByRole("listitem").map((row) => row.textContent);
+    expect(rows[0]).toContain("admin@vitrin.example bonus kredi verdi · 3 kredi");
+    expect(rows[0]).toContain("telafi");
+    expect(rows[1]).toContain("zemini güncelledi · Kömür");
+    expect(rows[1]).toContain("Yayından kaldırıldı");
+    expect(rows[2]).toContain("Silinmiş ya da okunamayan hesap yönetici yaptı · yeni@vitrin.example");
+  });
+
+  it("süzgeç eylemi isteğe ekliyor ve sayfayı başa alıyor", async () => {
+    const calls = await openTab(() => Response.json({ items: [entry()], page: 1, per_page: 50, has_more: true }));
+    await screen.findByRole("list", { name: "Günlük kayıtları" });
+    fireEvent.click(screen.getByRole("button", { name: "Sonraki" }));
+    await waitFor(() => expect(calls.some((call) => call.url.includes("page=2"))).toBe(true));
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Eylem türü" })).getByRole("button", { name: "Zemin silme" }));
+    await waitFor(() =>
+      expect(calls.at(-1)?.url).toBe("/api/admin/audit?page=1&action=background_delete"),
+    );
+  });
+
+  it("Admin anahtarı: taraflarda AD yazar (e-posta değil), seçili taraf süzer, tekrar basınca kalkar", async () => {
+    const SERHAN = "11111111-1111-4111-8111-111111111111";
+    const KAAN = "22222222-2222-4222-8222-222222222222";
+    const calls = await openTab(() =>
+      Response.json({
+        admins: [
+          { id: SERHAN, name: "Serhan" },
+          { id: KAAN, name: "Kaan" },
+        ],
+        items: [entry({ actor_email: "kaan@vitrin.example", actor_name: "Kaan" })],
+        page: 1,
+        per_page: 50,
+        has_more: false,
+      }),
+    );
+    const group = within(await screen.findByRole("group", { name: "Yöneticiye göre süz" }));
+    expect(group.getAllByRole("button").map((button) => button.textContent)).toEqual(["Serhan", "Kaan"]);
+    expect(group.queryByText(/@/)).toBeNull();
+
+    fireEvent.click(group.getByRole("button", { name: "Kaan" }));
+    await waitFor(() => expect(calls.at(-1)?.url).toBe(`/api/admin/audit?page=1&actor=${KAAN}`));
+    expect(group.getByRole("button", { name: "Kaan" }).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(group.getByRole("button", { name: "Kaan" }));
+    await waitFor(() => expect(calls.at(-1)?.url).toBe("/api/admin/audit?page=1"));
+  });
+
+  it("günlük alınamazsa hatayı gösteriyor, boş günlük gibi davranmıyor", async () => {
+    await openTab(() => Response.json({ error: "Günlük yüklenemedi." }, { status: 503 }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Günlük yüklenemedi.");
+    expect(screen.queryByText("Henüz kayıt yok.")).toBeNull();
+  });
+});
+
+describe("Zeminler — kategori ve yayın süzgeçleri (19.09.2026)", () => {
+  // Katalogdaki gercek kimlikler: "Kömür" (sade) ve "Yosun Dokusu" (doku).
+  const SADE = "cd65c3ac-1250-4c31-a383-471a3acb82e1";
+  const DOKU = "358d1dc7-6aeb-473f-99c4-fea332972aad";
+  const row = (id: string, isActive: boolean) => ({
+    id,
+    tier: "basic",
+    is_active: isActive,
+    created_at: "2026-09-18T10:00:00Z",
+    url: "https://signed.example/bg.jpg",
+    thumbnail_url: "https://signed.example/thumb.jpg",
+    expires_in: 900,
+  });
+
+  async function openTab() {
+    mockFetch((url) =>
+      url === "/api/admin/me"
+        ? Response.json({ is_admin: true })
+        : url.startsWith("/api/admin/stats")
+          ? Response.json(stats)
+          : Response.json([row(SADE, true), row(DOKU, false)]),
+    );
+    render(createElement(AdminPanel));
+    fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));
+    await screen.findByRole("list");
+  }
+
+  const names = () => within(screen.getByRole("list")).getAllByRole("listitem").map((item) => item.querySelector("p")?.textContent);
+
+  it("kartlarda stüdyodaki ad ve kategori yazıyor", async () => {
+    await openTab();
+    expect(names()).toEqual(["Kömür", "Yosun Dokusu"]);
+    expect(within(screen.getByRole("list")).getByText("Desen")).toBeTruthy();
+  });
+
+  it("kategori süzgeci yalnız o kategoriyi gösteriyor, Tümü geri getiriyor", async () => {
+    await openTab();
+    const group = within(screen.getByRole("group", { name: "Kategori" }));
+    fireEvent.click(group.getByRole("button", { name: /Desen/ }));
+    expect(names()).toEqual(["Yosun Dokusu"]);
+    fireEvent.click(group.getByRole("button", { name: /Tümü/ }));
+    expect(names()).toEqual(["Kömür", "Yosun Dokusu"]);
+  });
+
+  it("yayın süzgeci: Yayında / Yayında değil ayrı ayrı doğru zemini gösteriyor", async () => {
+    await openTab();
+    const group = within(screen.getByRole("group", { name: "Yayın durumu" }));
+    fireEvent.click(group.getByRole("button", { name: /Yayında değil/ }));
+    expect(names()).toEqual(["Yosun Dokusu"]);
+    fireEvent.click(group.getByRole("button", { name: /^Yayında\s*\d/ }));
+    expect(names()).toEqual(["Kömür"]);
+  });
+
+  it("iki süzgeç birlikte boş kalırsa boş kütüphane değil süzgeç mesajı çıkıyor", async () => {
+    await openTab();
+    fireEvent.click(within(screen.getByRole("group", { name: "Kategori" })).getByRole("button", { name: /Desen/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Yayın durumu" })).getByRole("button", { name: /^Yayında\s*\d/ }));
+    expect(screen.getByText("Bu süzgeçte zemin yok.")).toBeTruthy();
+    expect(screen.queryByText("Henüz zemin yok.")).toBeNull();
+  });
+});
+
 describe("Zeminler — paket, yayın durumu ve silme (19.09.2026)", () => {
   const BG = "1f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6c";
   const row = (over: Record<string, unknown> = {}) => ({

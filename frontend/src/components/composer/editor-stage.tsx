@@ -106,6 +106,19 @@ export type EditorStageProps = {
   cleanView?: boolean;
 };
 
+/**
+ * Ürün filtreleri — MODÜL DÜZEYİNDE SABİT (Serhan, 19.09.2026).
+ *
+ * Önceden JSX'te `filters={[...]}` yazılıydı: her render'da YENİ bir dizi.
+ * react-konva özellikleri `!==` ile karşılaştırdığı için bunu değişiklik sayıp
+ * Konva'ya yeniden veriyor, Konva da ürünün filtreli önbelleğini baştan
+ * hesaplıyordu (büyük görselde `getImageData` + piksel döngüsü). Stüdyodaki
+ * HER yeniden çizim — aşama değişimi, panel açılması, hover — ~90–115 ms'lik
+ * bir kare üretiyordu (Retina/dpr 2'de ölçüldü, üretim derlemesinde de aynı).
+ * Serhan'ın "geçişler kare kare" şikâyetinin asıl sebebi buydu.
+ */
+const PRODUCT_FILTERS = [Konva.Filters.Brighten, Konva.Filters.Contrast, Konva.Filters.HSL];
+
 export function EditorStage({
   cutoutUrl,
   background,
@@ -535,12 +548,10 @@ export function EditorStage({
             scaleY={placement.scale}
             rotation={placement.rotation}
             draggable
-            // Filtreler yukaridaki `cache()` ile birlikte calisiyor.
-            filters={[
-              Konva.Filters.Brighten,
-              Konva.Filters.Contrast,
-              Konva.Filters.HSL,
-            ]}
+            // Filtreler yukaridaki `cache()` ile birlikte calisiyor. SABIT dizi
+            // (bkz. PRODUCT_FILTERS) — her render'da yeni dizi, filtrelerin
+            // bastan hesaplanmasi demekti.
+            filters={PRODUCT_FILTERS}
             brightness={appearance.brightness}
             contrast={appearance.contrast}
             saturation={appearance.saturation}

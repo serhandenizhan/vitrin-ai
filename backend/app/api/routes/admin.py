@@ -15,7 +15,7 @@ API'si kullanılıyor (gerekçe `app/services/supabase_admin.py` modül açıkla
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -521,6 +521,107 @@ async def _daily(db, source: str, days: int):
         FROM span LEFT JOIN rows ON rows.day=span.day ORDER BY span.day""",
         days=days,
     )
+
+
+def _display_name(account: dict | None) -> str | None:
+    """Supabase `user_metadata`'daki AD — yalnız GÖSTERİM.
+
+    Kullanıcının düzenleyebildiği bir alan olduğu için hiçbir yetki kararında
+    kullanılmaz (kök `CLAUDE.md`, kimlik doğrulama maddesi); burada yalnız
+    günlükte "kim yaptı" sorusunu okunur kılıyor.
+    """
+    metadata = (account or {}).get("user_metadata") or {}
+    first = metadata.get("first_name")
+    return first.strip() if isinstance(first, str) and first.strip() else None
+
+
+@router.get("/api/admin/audit")
+async def audit_log(
+    request: Request,
+    page: int = Query(default=1, ge=1, le=1000),
+    per_page: int = Query(default=50, ge=1, le=100),
+    action: str | None = Query(default=None, max_length=60),
+    actor: uuid.UUID | None = Query(default=None),
+    admin: CurrentUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session),
+    supabase: SupabaseAdminService = Depends(get_supabase_admin),
+):
+    """Denetim günlüğünü OKUR (Serhan, 19.09.2026 — Faz 6 denetiminde eksik bulundu).
+
+    `admin_audit_log`'a Faz 6'dan beri her admin eyleminde satır yazılıyordu
+    ama onu okuyan hiçbir yol yoktu: kayıtlar yalnız veritabanına elle girilerek
+    görülebiliyordu. Bu uç yalnız OKUR; tablo zaten yalnız eklemeye açık.
+    Günlük YALNIZ YÖNETİCİ EYLEMLERİNİ tutar; kullanıcıların kendi işlemleri
+    (kesim, indirme, ödeme) burada değil, kendi tablolarında.
+
+    Sıra en yeniden eskiye (`admin_audit_log_recent` indeksi). `has_more` için
+    bir satır fazla okunuyor — toplam sayı sayılmıyor, günlük büyüdükçe
+    `count(*)` her sayfada pahalılaşırdı. `actor` ile tek bir yöneticinin
+    kayıtları süzülür (panelde "Admin: Serhan | Kaan" anahtarı); süzme
+    sunucuda, yoksa sayfalama yanlış olurdu.
+
+    `admins`: şu anki yöneticiler ve adları (anahtarın iki tarafı). Ad ve
+    e-posta Supabase'in yönetici API'sinden; okunamazsa `null`, sayfa yine
+    gelir: günlüğün kendisi veritabanında, ad/e-posta yalnız GÖSTERİM.
+    """
+    await limit_scoped(request, "admin", admin.id)
+    if action is not None and action not in admin_audit.ACTIONS:
+        raise HTTPException(status_code=422, detail="Bilinmeyen eylem türü.")
+    rows = await many(
+        db,
+        """SELECT id,actor_id,action,subject_type,subject_id,detail,created_at
+        FROM admin_audit_log
+        WHERE (CAST(:action AS text) IS NULL OR action=:action)
+          AND (CAST(:actor AS uuid) IS NULL OR actor_id=:actor)
+        ORDER BY created_at DESC,id DESC LIMIT :limit OFFSET :offset""",
+        action=action,
+        actor=actor,
+        limit=per_page + 1,
+        offset=(page - 1) * per_page,
+    )
+    has_more = len(rows) > per_page
+    rows = rows[:per_page]
+    admin_ids = [
+        row["user_id"]
+        for row in await many(db, "SELECT user_id FROM admin_users ORDER BY created_at,user_id")
+    ]
+
+    accounts: dict[str, dict | None] = {}
+    for user_id in {*admin_ids, *(row["actor_id"] for row in rows if row["actor_id"] is not None)}:
+        try:
+            accounts[str(user_id)] = await supabase.get_user(user_id)
+        except (SupabaseAdminError, SupabaseAdminConfigurationError):
+            accounts[str(user_id)] = None
+
+    def email_of(user_id) -> str | None:
+        email = (accounts.get(str(user_id)) or {}).get("email")
+        return email if isinstance(email, str) and email else None
+
+    return {
+        "page": page,
+        "per_page": per_page,
+        "has_more": has_more,
+        "admins": [
+            {"id": str(user_id), "name": _display_name(accounts.get(str(user_id)))}
+            for user_id in admin_ids
+        ],
+        "items": [
+            {
+                "id": row["id"],
+                "actor_id": str(row["actor_id"]) if row["actor_id"] else None,
+                "actor_email": email_of(row["actor_id"]) if row["actor_id"] else None,
+                "actor_name": _display_name(accounts.get(str(row["actor_id"])))
+                if row["actor_id"]
+                else None,
+                "action": row["action"],
+                "subject_type": row["subject_type"],
+                "subject_id": row["subject_id"],
+                "detail": row["detail"],
+                "created_at": row["created_at"].isoformat(),
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.get("/api/admin/stats")

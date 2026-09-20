@@ -135,3 +135,48 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 export async function relayJson(response: Response, status = response.status): Promise<Response> {
   return Response.json(await response.json(), { status, headers: NO_STORE });
 }
+
+/**
+ * Denetim günlüğü (`GET /api/admin/audit`, 19.09.2026). Eylem listesi
+ * backend'deki `admin_audit.ACTIONS`'ın AYNASI — biri değişirse öteki de
+ * değişmeli (vekil bilinmeyen eylemi backend'e hiç göndermiyor).
+ */
+export const AUDIT_PER_PAGE = 50;
+export const AUDIT_ACTIONS = [
+  "credit_grant",
+  "credit_revoke",
+  "user_delete",
+  "background_create",
+  "background_update",
+  "background_delete",
+  "admin_add",
+  "admin_remove",
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export function isAuditAction(value: unknown): value is AuditAction {
+  return typeof value === "string" && (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
+
+export type AdminAuditEntry = {
+  id: number;
+  actor_id: string | null;
+  /** Supabase'ten; okunamazsa ya da hesap silinmişse `null`. */
+  actor_email: string | null;
+  /** `user_metadata.first_name` — yalnız gösterim; yoksa `null`. */
+  actor_name: string | null;
+  action: string;
+  subject_type: string;
+  subject_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AdminAuditPage = {
+  /** Şu anki yöneticiler — panelde "Admin" anahtarının tarafları (e-posta YOK). */
+  admins: { id: string; name: string | null }[];
+  items: AdminAuditEntry[];
+  page: number;
+  per_page: number;
+  has_more: boolean;
+};
