@@ -250,6 +250,64 @@ plan değişimi, tam iade ve belirsiz sonuç uzlaştırma, hesap silme, raporlam
 mutabakatı ve systemd timer'ın yeniden başlatma sonrası çalışması. iframe ve
 3DS dönüşü gerçek tarayıcıda kontrol edilir; otomatik testler sağlayıcıyı taklit eder.
 
+## Zorunlu kabul testleri (açılış kapısı)
+
+Faz 5 tasarımından taşındı (15.09.2026; belgenin kendisi repodan çıkarılmıştı,
+bu liste ve aşağıdaki maliyet tablosu başka hiçbir dokümanda yoktu — 20.09.2026).
+Aşağıdakiler **davranış hedefleridir**: bir kısmı `backend/tests` içinde otomatik
+olarak, bir kısmı yalnızca gerçek merchant sandbox'ında doğrulanabilir (bkz. bir
+üstteki bölüm). Canlı checkout açılmadan önce her madde için ya geçen bir test ya
+da saklanmış bir sandbox kanıtı olmalıdır.
+
+- Son kotada iki eşzamanlı kesim isteği: yalnız biri rezervasyon alır.
+- OOM/timeout/yeniden başlatma: bekleyen rezervasyon yalnız bir kez serbest kalır.
+- Deneme aylık yenilenir; `past_due` kullanıcı UZAMAYAN 3 gün boyunca yalnız
+  mevcut dönemin kalan kotasını kullanır, yeni kota almaz, süre dolunca `expired`.
+- iyzico'da başarılı görünen yenileme webhook'tan önce bir kullanım isteğiyle
+  doğrulanırsa tek yeni dönem ve tek tahsilat kaydı oluşur; geç gelen webhook
+  hiçbir şey yapmaz.
+- Yenileme belirsiz/erişilemezken yeni dönem ya da kredi yaratılmaz; istek
+  `billing_renewal_pending` ve en fazla 60 sn `Retry-After` alır. Doğrulanmış
+  başarısızlık 3 günlük `past_due` penceresini ve TEK bir e-posta eylemini açar.
+- Aynı checkout anahtarı ikinci bir sağlayıcı aboneliği oluşturmaz; farklı
+  anahtarlı iki eşzamanlı deneme isteği tek oturum/hosted URL üretir. Süresi
+  dolan ya da başarısız oturum serbest bırakılır ve `trial_used_at` boş kalır;
+  yalnız doğrulanmış başarı onu bir kez yazar.
+- Eski bir webhook yeni dönemi değiştiremez; yanlış tutar/para birimi/plan
+  erişim açamaz.
+- Plan yayınlandıktan sonra arayüz ve iyzico aynı yeni sürümü kullanır; eski
+  dönem snapshot'ı değişmez.
+- İptal/iade çağrısı ile veritabanı yazımı arasındaki hata, eylem yeniden
+  denemesiyle toparlanır.
+- Chargeback iade çağırmaz; iade doğru tahsilata yalnız bir kez uygulanır.
+- Hesap silme, uzak iptal başarısızken Auth/R2 verisini silmez; mali geçmiş
+  korunur ya da takma adlandırılır.
+- `basic` kullanıcı doğrudan API ile `full` zemin adresini ya da `full` zemin
+  içeren bir projeyi alamaz.
+- Webhook yeniden denemesi ve günlük mutabakat, eksik sağlayıcı olayında alarm
+  üretir.
+- R2 silme hatası depolama silme işi olarak yeniden denenir; veritabanındaki
+  proje kaydı silme başarılı olmadan gitmez.
+
+## Maliyet modeli
+
+Faz 5 tasarımından taşındı (15.09.2026). **Rakamlar o tarihte kamuya açık
+tarifelerden alınmış tahminlerdir; canlıya çıkmadan önce güncel teklif ve
+faturalarla yeniden doğrulanmalıdır.** Backend satırındaki bellek, BiRefNet'in
+ölçülmüş 12–14 GB ayak izinden geliyor (kök `CLAUDE.md`, "Bilinen kısıt").
+
+| Kalem | Sağlayıcı | Aylık |
+| --- | --- | --- |
+| Backend (12–14 GB RAM) | Hetzner'in güncel 16 GB planı | Bölge, IPv4 ve vergiyle doğrulanacak |
+| Veritabanı + Auth | Supabase Pro | 25 USD + kullanım aşımı |
+| Nesne depolama | Cloudflare R2 | Depolama, egress ve istek sayısına göre |
+| Redis + bakım görevi | Aynı sunucu | Sunucu kaynağı içinde |
+| Frontend, e-posta, alan adı, izleme, yedek | Vercel / Resend / diğer | Production teklifleriyle hesaplanacak |
+| iyzico | Başarılı işlem başına | Kamuya açık kurumsal tarife %4,29 + 0,25 TL; imzalı teklif varsa onunla güncellenir |
+
+Sağlayıcı karşılaştırmasının tamamı (PayTR, Sipay, Param, Paddle, Stripe ve
+iyzico'nun neden seçildiği): `docs/research/payment-platform-research-2026-09-14.md`.
+
 ## Provider sözleşmesinin kaynakları
 
 - [Abonelik işlemleri](https://docs.iyzico.com/urunler/abonelik/abonelik-entegrasyonu/abonelik-islemleri)

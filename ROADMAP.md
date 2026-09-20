@@ -667,6 +667,9 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
 - **Açılış kapıları:** gerçek merchant sandbox/3DS testi, fiyatların yayını,
   hukuk/fatura/saklama süreçlerinin teyidi, systemd timer ve alarm izleme kurulumu.
   Checkout varsayılan kapalı. Ayrıntı: [ödeme runbook'u](docs/billing-runbook.md).
+  **Canlı açılış kapısı olan zorunlu kabul testleri ve maliyet modeli**
+  20.09.2026'da runbook'a taşındı (Faz 5 tasarım belgesi repodan çıkarılmıştı;
+  o iki bölüm başka hiçbir dokümanda yoktu).
 - **Öne alınan iş — zemin kütüphanesi (Kaan'ın onayı, 17.09.2026).** Zemin
   yükleme/yönetim paneli Faz 6'da (Kaan); ilk kütüphane panel olmadan yüklendi.
   Faz dışı olduğu önceden söylendi ve onaylandı (kural 6).
