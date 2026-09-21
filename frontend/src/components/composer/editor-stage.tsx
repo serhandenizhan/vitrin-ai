@@ -26,9 +26,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Group,
   Image as KonvaImage,
   Layer,
+  Line,
   Rect,
   Stage,
   Text,
@@ -104,6 +104,13 @@ export type EditorStageProps = {
    * cercevesi gizlenir, gorsel indirilecek haliyle gorunur. Secim korunur.
    */
   cleanView?: boolean;
+  /**
+   * Cizim icin gereken butun gorseller (kesim, sunucu zemini, logo) yuklendi
+   * mi. Coklu boyutta indirme gorunmez bir ikinci sahne kuruyor ve dosyayi
+   * ancak bu `true` olunca aliyor: erken alinsa cikti zeminsiz ya da logosuz
+   * inerdi (ders 23'un "yanlis cikti" sinifi).
+   */
+  onRenderReady?: (ready: boolean) => void;
 };
 
 /**
@@ -136,6 +143,7 @@ export function EditorStage({
   onCutoutSize,
   onStageReady,
   cleanView = false,
+  onRenderReady,
 }: EditorStageProps) {
   const beginInteraction = useCallback(
     () => onInteractionChange?.(true),
@@ -178,6 +186,13 @@ export function EditorStage({
     { keepPrevious: true },
   );
   const logoImage = useLoadedImage(logoUrl);
+  const isRenderReady =
+    Boolean(cutout) &&
+    (background.type !== "server" || Boolean(backgroundImage)) &&
+    (!logoUrl || Boolean(logoImage));
+  useEffect(() => {
+    onRenderReady?.(isRenderReady);
+  }, [isRenderReady, onRenderReady]);
 
   /**
    * Zeminler arasi CAPRAZ GECIS (Kaan, 18.09.2026: "zeminler arasi daha iyi
@@ -259,11 +274,12 @@ export function EditorStage({
     const measured = new Konva.Text({
       text,
       fontSize: metrics.fontSize,
+      letterSpacing: metrics.letterSpacing,
       fontFamily,
-      fontStyle: "600",
+      fontStyle: "500",
     });
-    const width = measured.width() + metrics.paddingX * 2;
-    const height = measured.height() + metrics.paddingY * 2;
+    const width = measured.width();
+    const height = measured.height();
     measured.destroy();
 
     const labelRect = stackLabelBox(
@@ -353,6 +369,39 @@ export function EditorStage({
     setLiveTransform(null);
     if (next) onTransformChange(next);
   }, [onTransformChange, readNode]);
+
+  /**
+   * Akilli kilavuzlar (Kaan, 21.09.2026: "Photoshop'taki gibi, dugmeye gerek
+   * olmadan ortalayalim"). Urun ya da logo suruklenirken merkezi sahnenin
+   * dikey/yatay ortasina yaklasinca oraya YAPISIYOR ve o eksende bir cizgi
+   * beliriyor; cizgi goruldugunde nesne tam ortadadir. Cizgiler yalnizca
+   * surukleme SIRASINDA var, birakilinca siliniyor — dolayisiyla disa
+   * aktarmaya hic girmiyor (indirme surukleme ortasinda baslatilamaz).
+   */
+  const [guides, setGuides] = useState({ vertical: false, horizontal: false });
+  const clearGuides = useCallback(
+    () => setGuides((g) => (g.vertical || g.horizontal ? { vertical: false, horizontal: false } : g)),
+    [],
+  );
+
+  /**
+   * Merkezi (cx, cy) olan nesneyi sahne ortasina yakalar; Konva
+   * `dragBoundFunc` MUTLAK (ekran) koordinat verdigi icin orta da o olcekte.
+   * Donen deger yakalanmis merkez.
+   */
+  const snapCenter = useCallback(
+    (cx: number, cy: number) => {
+      const midX = (stageWidth / 2) * displayScale;
+      const midY = (stageHeight / 2) * displayScale;
+      const x = snapToCenter(cx, midX);
+      const y = snapToCenter(cy, midY);
+      const vertical = x === midX;
+      const horizontal = y === midY;
+      setGuides((g) => (g.vertical === vertical && g.horizontal === horizontal ? g : { vertical, horizontal }));
+      return { x, y };
+    },
+    [stageWidth, stageHeight, displayScale],
+  );
 
   const trackLiveTransform = useCallback(() => {
     if (appearance.reflection) setLiveTransform(readNode());
@@ -563,15 +612,8 @@ export function EditorStage({
             shadowBlur={(SHADOW.blur * appearance.shadowSize) / (placement.scale || 1)}
             shadowOpacity={appearance.shadowOpacity}
             shadowOffsetY={(SHADOW.offsetY * appearance.shadowSize) / (placement.scale || 1)}
-            dragBoundFunc={(position) => {
-              // Merkeze yakalama sahne koordinatinda hesaplaniyor; Konva bu
-              // fonksiyona MUTLAK (ekran) koordinat veriyor, o yuzden sahne
-              // olcegiyle carpip boluyoruz.
-              return {
-                x: snapToCenter(position.x, (stageWidth / 2) * displayScale),
-                y: snapToCenter(position.y, (stageHeight / 2) * displayScale),
-              };
-            }}
+            // Urunun konumu zaten merkezi (offset merkeze kurulu).
+            dragBoundFunc={(position) => snapCenter(position.x, position.y)}
             onMouseDown={() => setIsSelected(true)}
             onTouchStart={() => setIsSelected(true)}
             onDragStart={beginInteraction}
@@ -579,6 +621,7 @@ export function EditorStage({
             onDragMove={trackLiveTransform}
             onTransform={trackLiveTransform}
             onDragEnd={() => {
+              clearGuides();
               reportTransform();
               endInteraction();
             }}
@@ -645,11 +688,23 @@ export function EditorStage({
             height={overlay.logoRect.height}
             opacity={logo.opacity}
             draggable={Boolean(onLogoChange)}
+            // Logonun konumu SOL-UST kose: merkezi yakalamak icin yarim
+            // olcusu (mutlak olcekte) eklenip cikariliyor.
+            dragBoundFunc={(position) => {
+              const node = logoRef.current;
+              if (!node) return position;
+              const scale = node.getAbsoluteScale();
+              const halfW = (node.width() * scale.x) / 2;
+              const halfH = (node.height() * scale.y) / 2;
+              const center = snapCenter(position.x + halfW, position.y + halfH);
+              return { x: center.x - halfW, y: center.y - halfH };
+            }}
             onMouseDown={() => setSelection("logo")}
             onTouchStart={() => setSelection("logo")}
             onDragStart={beginInteraction}
             onTransformStart={beginInteraction}
             onDragEnd={() => {
+              clearGuides();
               reportLogo();
               endInteraction();
             }}
@@ -687,27 +742,45 @@ export function EditorStage({
       <Layer listening={false}>
 
         {overlay.text && overlay.labelRect && overlay.metrics ? (
-          <Group x={overlay.labelRect.x} y={overlay.labelRect.y}>
-            <Rect
-              width={overlay.labelRect.width}
-              height={overlay.labelRect.height}
-              cornerRadius={overlay.labelRect.height / 2}
-              fill={label.theme === "dark" ? "rgba(12,11,10,0.74)" : "rgba(255,255,255,0.88)"}
-              stroke={label.theme === "dark" ? "rgba(212,175,110,0.55)" : "rgba(0,0,0,0.08)"}
-              strokeWidth={overlay.metrics.fontSize * 0.06}
-            />
-            <Text
-              text={overlay.text}
-              x={overlay.metrics.paddingX}
-              y={overlay.metrics.paddingY}
-              fontSize={overlay.metrics.fontSize}
-              fontFamily={fontFamily}
-              fontStyle="600"
-              fill={label.theme === "dark" ? "#f3f0eb" : "#1a1917"}
-            />
-          </Group>
+          // Sade etiket (Kaan, 21.09.2026): kart ve cerceve her zemine uymuyor,
+          // tasarimi bozuyordu. Yalnizca yazi; okunurlugu zeminden ayiran
+          // yumusak, zit renkli bir golge. `theme: "dark"` = acik yazi.
+          <Text
+            x={overlay.labelRect.x}
+            y={overlay.labelRect.y}
+            text={overlay.text}
+            fontSize={overlay.metrics.fontSize}
+            letterSpacing={overlay.metrics.letterSpacing}
+            fontFamily={fontFamily}
+            fontStyle="500"
+            fill={label.theme === "dark" ? "#fdfcfb" : "#1a1917"}
+            shadowColor={label.theme === "dark" ? "#000000" : "#ffffff"}
+            shadowBlur={overlay.metrics.fontSize * 0.5}
+            shadowOpacity={label.theme === "dark" ? 0.45 : 0.6}
+          />
         ) : null}
       </Layer>
+
+      {/* Merkez kilavuzlari — Photoshop'un akilli kilavuzu gibi macenta;
+          altin, altin urunun ve zeminin ustunde kayboluyordu. */}
+      {!cleanView && (guides.vertical || guides.horizontal) ? (
+        <Layer listening={false}>
+          {guides.vertical ? (
+            <Line
+              points={[stageWidth / 2, 0, stageWidth / 2, stageHeight]}
+              stroke="#ff2d9b"
+              strokeWidth={screenPixels(1)}
+            />
+          ) : null}
+          {guides.horizontal ? (
+            <Line
+              points={[0, stageHeight / 2, stageWidth, stageHeight / 2]}
+              stroke="#ff2d9b"
+              strokeWidth={screenPixels(1)}
+            />
+          ) : null}
+        </Layer>
+      ) : null}
     </Stage>
   );
 }

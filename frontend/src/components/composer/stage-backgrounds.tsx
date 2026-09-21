@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Heart } from "lucide-react";
+import { Heart, Sparkles } from "lucide-react";
 
 import type { BackgroundGroup, BackgroundShelf } from "@/components/composer/use-background-selection";
 import type { Background } from "@/lib/backgrounds";
@@ -27,6 +27,8 @@ type Common = {
   selectedId: string;
   favoriteIds: readonly string[];
   onSelect: (id: string) => void;
+  /** Fare bir zeminin uzerine gelince id, cikinca null (tuvalde onizleme). */
+  onPreview?: (id: string | null) => void;
   onShowCategory: (category: BackgroundShelf | null) => void;
   onToggleFavorite: (id: string) => void;
   gradientCss: (stops: (number | string)[]) => string;
@@ -37,6 +39,22 @@ function swatchStyle(
   gradientCss: Common["gradientCss"],
 ): React.CSSProperties | undefined {
   return background.type === "placeholder" ? { background: gradientCss(background.gradient) } : undefined;
+}
+
+/**
+ * Onizleme olaylari: YALNIZCA fare. Dokunmatikte `pointerenter` dokunusla
+ * birlikte geliyor ve cikis hic gelmeyebiliyor; tuval takili kalirdi.
+ */
+function previewHandlers(id: string, onPreview: Common["onPreview"]) {
+  if (!onPreview) return {};
+  return {
+    onPointerEnter: (event: React.PointerEvent) => {
+      if (event.pointerType === "mouse") onPreview(id);
+    },
+    onPointerLeave: (event: React.PointerEvent) => {
+      if (event.pointerType === "mouse") onPreview(null);
+    },
+  };
 }
 
 function Thumb({ background }: { background: Background }) {
@@ -130,8 +148,12 @@ function ShelfTabs({
           >
             {group.id === "favoriler" ? (
               <Heart className="text-gold size-3 shrink-0 fill-current" strokeWidth={0} aria-hidden />
+            ) : group.id === "oneriler" ? (
+              <Sparkles className="text-gold size-3 shrink-0" strokeWidth={2} aria-hidden />
             ) : null}
-            {vertical && group.id === "favoriler" ? null : <span className="truncate">{group.label}</span>}
+            {vertical && (group.id === "favoriler" || group.id === "oneriler") ? null : (
+              <span className="truncate">{group.label}</span>
+            )}
             {vertical ? null : (
               <span className="tabular-nums opacity-55" aria-hidden>
                 {group.items.length}
@@ -180,7 +202,7 @@ export function BackgroundLibrary({
   notice,
   ...props
 }: Common & { header?: ReactNode; footer?: ReactNode; notice?: ReactNode }) {
-  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onShowCategory, onToggleFavorite, gradientCss } = props;
+  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onPreview, onShowCategory, onToggleFavorite, gradientCss } = props;
   const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, shownGroup?.id ?? "");
   return (
     <div role="group" aria-label="Zemin" className="liquid-glass flex h-full min-h-0 flex-col rounded-[1.5rem] p-3">
@@ -207,6 +229,7 @@ export function BackgroundLibrary({
               <button
                 type="button"
                 onClick={() => onSelect(background.id)}
+                {...previewHandlers(background.id, onPreview)}
                 aria-pressed={isActive}
                 className="press block w-full text-left"
               >
@@ -257,7 +280,7 @@ export function BackgroundRail({
   compact = false,
   ...props
 }: Common & { selected: Background; compact?: boolean }) {
-  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onShowCategory, onToggleFavorite, gradientCss } = props;
+  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onPreview, onShowCategory, onToggleFavorite, gradientCss } = props;
   const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, shownGroup?.id ?? "");
   return (
     <div role="group" aria-label="Zemin" className="liquid-glass flex h-full min-h-0 w-full flex-col items-center rounded-[1.5rem] px-1.5 py-2.5">
@@ -284,6 +307,7 @@ export function BackgroundRail({
               ref={isActive ? (element) => { selectedRef.current = element; } : undefined}
               type="button"
               onClick={() => onSelect(background.id)}
+              {...previewHandlers(background.id, onPreview)}
               aria-pressed={isActive}
               title={background.name}
               className={"press relative shrink-0 " + (compact ? "size-11" : "size-10")}

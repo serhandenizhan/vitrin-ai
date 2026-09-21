@@ -336,6 +336,31 @@ export function logicalSize(format: OutputFormat): {
 }
 
 /**
+ * Bir sahnedeki yerlesimi BASKA bir bicime tasir (coklu boyutta indirme,
+ * Kaan 21.09.2026). Konum sahneye ORANLA korunur (sol ustte duran urun yeni
+ * bicimde de sol ustte), boyut ise "sigdir" olcegine gore: urun eski sahnede
+ * sigdirilmis halinin %120'siyse yenisinde de %120'si. Dogrudan piksel
+ * olcegi tasinsaydi dikey bir bicimden kareye geciste urun tasardi.
+ * `null` (kullanici hic dokunmamis) oldugu gibi kalir; sahne kendisi sigdirir.
+ */
+export function mapTransformToStage(
+  transform: Transform | null,
+  from: { width: number; height: number },
+  to: { width: number; height: number },
+  cutout: { width: number; height: number },
+): Transform | null {
+  if (!transform) return null;
+  const fitFrom = fitToStage(from.width, from.height, cutout.width, cutout.height).scale;
+  const fitTo = fitToStage(to.width, to.height, cutout.width, cutout.height).scale;
+  return {
+    x: (transform.x / from.width) * to.width,
+    y: (transform.y / from.height) * to.height,
+    scale: transform.scale * (fitTo / fitFrom),
+    rotation: transform.rotation,
+  };
+}
+
+/**
  * Bir gorseli verilen mantiksal sahneye ortalayip sigdiran donusum.
  *
  * `fitTransform`un kare olmayan sahneler icin genellestirilmis hali;

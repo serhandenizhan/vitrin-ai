@@ -7,8 +7,10 @@ import {
   FIT_MARGIN,
   OUTPUT_SIZE,
   STAGE_SIZE,
+  fitToStage,
   fitTransform,
   isDefaultAppearance,
+  mapTransformToStage,
   normalizeAngle,
   snapToCenter,
 } from "@/lib/composition";
@@ -84,6 +86,31 @@ describe("EXPORT_PIXEL_RATIO", () => {
     // 1999 px'lik tuval üretiyordu.
     expect(Number.isInteger(EXPORT_PIXEL_RATIO)).toBe(true);
     expect(STAGE_SIZE * EXPORT_PIXEL_RATIO).toBe(OUTPUT_SIZE);
+  });
+});
+
+describe("mapTransformToStage", () => {
+  const cutout = { width: 800, height: 400 };
+  const portrait = { width: 620, height: 877 };
+  const square = { width: 540, height: 540 };
+
+  it("konumu sahneye oranla, boyutu sigdir olcegine gore tasir", () => {
+    const fitP = fitToStage(portrait.width, portrait.height, cutout.width, cutout.height).scale;
+    const fitS = fitToStage(square.width, square.height, cutout.width, cutout.height).scale;
+    const moved = mapTransformToStage(
+      { x: portrait.width * 0.25, y: portrait.height * 0.75, scale: fitP * 1.2, rotation: 15 },
+      portrait,
+      square,
+      cutout,
+    );
+    expect(moved?.x).toBeCloseTo(square.width * 0.25);
+    expect(moved?.y).toBeCloseTo(square.height * 0.75);
+    expect(moved?.scale).toBeCloseTo(fitS * 1.2);
+    expect(moved?.rotation).toBe(15);
+  });
+
+  it("dokunulmamis yerlesim (null) sahneye birakilir", () => {
+    expect(mapTransformToStage(null, portrait, square, cutout)).toBeNull();
   });
 });
 

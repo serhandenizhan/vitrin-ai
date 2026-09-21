@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
@@ -22,13 +22,20 @@ function createFakeStage(toDataURL: () => string) {
   let width = 434;
   let height = 434;
   let scale = { x: 0.434, y: 0.434 };
+  // Konva gibi `visible()` hem okur hem yazar; disa aktarma onceki gorunurlugu
+  // saklayip geri yukluyor (Tamamla'nin temiz gorunumu korunsun diye).
   const transformer = {
-    visible: true,
+    shown: true,
+    visible(next?: boolean) {
+      if (next === undefined) return transformer.shown;
+      transformer.shown = next;
+      return transformer;
+    },
     hide() {
-      transformer.visible = false;
+      transformer.shown = false;
     },
     show() {
-      transformer.visible = true;
+      transformer.shown = true;
     },
   };
 
@@ -348,6 +355,53 @@ describe("CompositionEditor", () => {
       fireEvent.change(screen.getByPlaceholderText("3,45"), { target: { value: "üç" } });
 
       expect(screen.getByRole("alert").textContent).toMatch(/Gramı sayı olarak/);
+    });
+  });
+
+  describe("otomatik kayıt (21.09.2026)", () => {
+    function renderWithSave(onSave: ReturnType<typeof vi.fn>) {
+      return render(
+        createElement(CompositionEditor, {
+          cutoutUrl: "blob:cutout",
+          fileName: "product.png",
+          onSave: onSave as never,
+        }),
+      );
+    }
+
+    it("açılışta yazmaz; değişiklikten 1,5 sn sonra taslağı kaydeder", () => {
+      vi.useFakeTimers();
+      try {
+        const onSave = vi.fn().mockResolvedValue(true);
+        renderWithSave(onSave);
+        act(() => vi.advanceTimersByTime(3000));
+        expect(onSave).not.toHaveBeenCalled();
+
+        goToFinish();
+        fireEvent.click(screen.getByRole("switch", { name: "Ürün etiketi" }));
+        act(() => vi.advanceTimersByTime(1000));
+        expect(onSave).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(600));
+        expect(onSave).toHaveBeenCalledTimes(1);
+        expect(onSave.mock.calls[0][0].label.enabled).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("kazayla çıkışta (bileşen kapanınca) bekleyen değişikliği hemen gönderir", () => {
+      vi.useFakeTimers();
+      try {
+        const onSave = vi.fn().mockResolvedValue(true);
+        const view = renderWithSave(onSave);
+        goToFinish();
+        fireEvent.click(screen.getByRole("switch", { name: "Ürün etiketi" }));
+        view.unmount();
+        expect(onSave).toHaveBeenCalledTimes(1);
+        expect(onSave.mock.calls[0][0].label.enabled).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -726,10 +780,23 @@ describe("CompositionEditor", () => {
       fireEvent.click(screen.getByRole("button", { name: "JPEG" }));
 
       const dialog = screen.getByRole("alertdialog");
-      expect(within(dialog).getByText("İndirme işlemi başarıyla tamamlandı.")).toBeTruthy();
+      // Markali tesekkur karti (21.09.2026).
+      expect(within(dialog).getByText("Teşekkürler")).toBeTruthy();
+      expect(within(dialog).getByText(/İndirme işlemi başarıyla tamamlandı\./)).toBeTruthy();
       expect(within(dialog).getByText("Katalog görselinizi şablona eklemek ister misiniz?")).toBeTruthy();
       fireEvent.click(within(dialog).getByRole("button", { name: "Evet" }));
       expect(onSendToCatalog).toHaveBeenCalledWith("data:image/jpeg;base64,AAAA");
+    });
+
+    it("gizli tutamaçlar (Tamamla'nın temiz görünümü) indirmeden sonra geri gelmiyor", () => {
+      fakeStage = createFakeStage(() => "data:image/png;base64,AAAA");
+      renderWithCallbacks();
+      goToFinish();
+      openTool("İndir");
+      fakeStage.transformer.shown = false;
+      fireEvent.click(screen.getByRole("button", { name: "PNG" }));
+      expect(fakeStage.toDataURL).toHaveBeenCalledTimes(1);
+      expect(fakeStage.transformer.shown).toBe(false);
     });
 
     it("şablona Hayır denince ana menü soruluyor, Evet ana menüye dönüyor", () => {
@@ -776,7 +843,7 @@ describe("CompositionEditor", () => {
       expect(stage.width()).toBe(434);
       expect(stage.height()).toBe(434);
       expect({ x: stage.scaleX(), y: stage.scaleY() }).toEqual({ x: 0.434, y: 0.434 });
-      expect(stage.transformer.visible).toBe(true);
+      expect(stage.transformer.shown).toBe(true);
     }
 
     it("PNG indirmede sahneyi ve tutamakları geri yükler, hatayı gösterir", () => {

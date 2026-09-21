@@ -31,7 +31,9 @@ fotoğraf yükle  →  arka plan kalksın  →  zemine yerleştir  →  satışa
 | --- | --- |
 | **Arka plan kaldırma** | BiRefNet ile yüksek kenar hassasiyeti; ince zincir, tırnak montür ve küçük taşlar korunur |
 | **Kompozisyon stüdyosu** | Üç adım: boyut ve zemin, ürün (sürükle/ölçekle/döndür; parlaklık, kontrast, doygunluk; gölge, yansıma), bitir |
-| **Hazır ölçüler** | A4 katalog sayfası, Instagram (kare, dikey, hikâye), pazaryeri 2000×2000 beyaz zemin |
+| **Hazır ölçüler** | A4 katalog sayfası, Instagram (kare, dikey, hikâye), pazaryeri 2000×2000 beyaz zemin; hepsi tek tıkla birlikte indirilebilir |
+| **Akıllı zemin seçimi** | Ürünün rengine göre önerilen zeminler, üzerine gelince tuvalde önizleme, favoriler |
+| **Kaybolmayan çalışma** | Stüdyodaki her ayar otomatik kaydedilir; kazayla çıkılsa da "Yarım kalan"dan devam edilir |
 | **Baskıya uygun çıktı** | ICC profili gömülü CMYK TIFF/JPEG |
 | **Marka öğeleri** | Logo yerleşimi, ürün etiketi (ayar, gram, ürün kodu) |
 | **Hesap ve geçmiş** | Supabase Auth ile giriş; çalışmalar sunucuda saklanır, cihazdan bağımsız |
@@ -179,7 +181,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 cd backend && pytest             # 389 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 400 test
+cd frontend && npm test          # 412 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

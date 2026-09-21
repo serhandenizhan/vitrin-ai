@@ -714,6 +714,33 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
     `vitrin-ai:favorite-backgrounds`, `lib/favorite-backgrounds.ts`); başka
     cihazda görünmez. Hesaba bağlamak (tablo + RLS + API) ayrı bir iş, faz
     planlamasında ele alınacak. Faz dışı olduğu önceden söylendi ve onaylandı (kural 6).
+  - **Öne alınan iş — stüdyo iyileştirmeleri (Kaan'ın onayı, 21.09.2026).** Faz 6'nın
+    (yönetim paneli) kapsamı dışında; faz dışı olduğu önceden söylendi ve onaylandı
+    (kural 6). Serhan'ın `feature/faz6-admin-studyo-ux-iyilestirmeleri` dalına eklendi.
+    - **Otomatik kayıt:** editör ayarları (zemin, yerleşim, görünüm, etiket) her
+      değişiklikten 1,5 sn sonra, stüdyo kapanırken ve sekme kapanırken (`keepalive`)
+      kaydediliyor. Önceden yalnızca "Kaydet" ile gidiyordu; kazayla çıkan kullanıcı
+      "Yarım kalan"da boş bir taslak buluyordu.
+    - **Akıllı kılavuz:** ürün ve logo sürüklenirken sahne ortasına yapışıyor, pembe
+      kılavuz çizgisi beliriyor (yalnız sürüklerken; çıktıya girmez).
+    - **Sade ürün etiketi:** kutu/çerçeve kalktı, tek satır yazı + zıt gölge;
+      "Açık yazı / Koyu yazı" tek seçici. "Ayar" listesi Windows'ta beyaz üstüne
+      beyazdı (`color-scheme: dark`).
+    - **Marka paneli sığıyor** (logo eylemleri ve etiket alanları tek satır);
+      **Tamamla temiz görünüm** (tutamaçlar gizli, indirme sonrası da geri gelmiyor).
+    - **Zemin önizleme:** fare kartın üzerindeyken tuval o zemini geçici gösteriyor;
+      kayda ve çıktıya girmez, Tamamla'da ve dokunmatikte yok.
+    - **"Önerilen" rafı:** kesimin ortalama rengine göre 6 zemin (açıklık farkı,
+      nötr zemin artısı, aynı renk ailesi eksisi, neredeyse aynı renkler geriye).
+      Zemin renkleri bir kez ölçülüp tarayıcıda saklanıyor; R2 CORS yoksa raf boş kalır.
+    - **Birden fazla boyutta indirme:** Tamamla → "Birden fazla boyut". Görünmez
+      ikinci `EditorStage` her biçimi mantıksal ölçüde çiziyor; yerleşim oranla
+      taşınıyor (`mapTransformToStage`), Pazaryeri her zaman düz beyaz. Dosyalar
+      sırayla iniyor (ZIP yok).
+    - **Teşekkür kartı:** her indirmeden (PNG/JPEG/CMYK/çoklu) sonra logolu kart
+      ve "ana menüye dön" sorusu.
+    - **Yan çekmece gölgesi:** kapalıyken açık sayfalarda sol kenarda gri şerit
+      bırakıyordu; gölge artık yalnız açıkken.
   - **PR #18 inceleme düzeltmeleri (17.09.2026, Codex incelemesi + bağımsız doğrulama):**
     - Backend testleri yerel Postgres + Redis ile çalıştırıldı: **299 test geçiyor**
       (yeni: önizleme yüklemesinin hata yolu, DB hatasında temizlik, Redis arızası,

@@ -211,7 +211,25 @@ bileşeni, yani istemciye hiç inmiyor.
 |---|---|---|---|
 | 1 Sahne | — | tuval | geniş zemin kütüphanesi + biçimler (`stage-backgrounds.tsx` → `BackgroundLibrary`), ✓ |
 | 2 Düzenle | dik zemin barı (`BackgroundRail`) | tuval | panel: Yerleşim · Görünüm · Marka; ‹ Sahne / ✓ Tamamla |
-| 3 Tamamla | — | tuval | altında çıktı barı (PNG, JPEG, CMYK, WhatsApp, taslak), ‹ Düzenle |
+| 3 Tamamla | — | tuval (temiz görünüm, tutamaçsız) | altında çıktı barı (PNG, JPEG, CMYK, WhatsApp, taslak, Birden fazla boyut), ‹ Düzenle |
+
+**21.09.2026 eklemeleri (öne alınan iş, ayrıntı `ROADMAP.md` Faz 6):**
+
+- **Otomatik kayıt** — editör ayarları değişiklikten 1,5 sn sonra ve stüdyo/sekme
+  kapanırken (`keepalive`) `onSave` ile gider; açılışta yazmaz.
+- **Zemin önizleme** — `BackgroundLibrary`/`BackgroundRail` kartlarında `onPreview`
+  (yalnız fare). Sahne `previewBackground ?? selectedBackground` çizer; kayıt,
+  indirme ve Tamamla her zaman seçili zemini kullanır.
+- **"Önerilen" rafı** — `use-suggested-backgrounds.ts` + `lib/background-suggestions.ts`:
+  kesimin opak piksellerinin ve zemin önizlemelerinin ortalama rengi; renkler
+  `localStorage`'ta (`vitrin-ai:background-colors`). R2 CORS yoksa raf oluşmaz.
+- **Birden fazla boyut** — `multi-format-export.tsx`: ekran dışı ikinci `EditorStage`,
+  `onRenderReady` gelince `toDataURL`, 10 sn'de gelmezse hata (zeminsiz dosya
+  inmez). Yerleşim `mapTransformToStage`; Pazaryeri düz beyaz.
+- **Akıllı kılavuz** — ürün ve logo sahne ortasına yapışır, pembe çizgi yalnız
+  sürüklerken (`editor-stage.tsx` → `snapCenter`).
+- **Ürün etiketi** kutusuz tek satır; "Yazı rengi" segmenti. **Teşekkür kartı**
+  her indirmeden sonra.
 
 - Açılış perdesi `stage-curtain.tsx` (CSS: `globals.css` → "Stüdyo açılış perdesi"):
   YALNIZCA stüdyo açılırken; kapalı başlar, ~1,5 sn'de kalkar. Yedek zaman aşımı
@@ -436,7 +454,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**400 test** (bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**412 test** (21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
