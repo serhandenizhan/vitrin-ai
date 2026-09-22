@@ -387,6 +387,7 @@ describe("Günlük sekmesi (19.09.2026)", () => {
     const list = await screen.findByRole("list", { name: "Günlük kayıtları" });
     const rows = within(list).getAllByRole("listitem").map((row) => row.textContent);
     expect(rows[0]).toContain("admin@vitrin.example bonus kredi verdi · 3 kredi");
+    expect(rows[0]).toContain("Kimlik: a1");
     expect(rows[0]).toContain("telafi");
     expect(rows[1]).toContain("zemini güncelledi · Kömür");
     expect(rows[1]).toContain("Yayından kaldırıldı");
@@ -421,15 +422,35 @@ describe("Günlük sekmesi (19.09.2026)", () => {
       }),
     );
     const group = within(await screen.findByRole("group", { name: "Yöneticiye göre süz" }));
-    expect(group.getAllByRole("button").map((button) => button.textContent)).toEqual(["Serhan", "Kaan"]);
+    expect(group.getAllByRole("button").map((button) => button.textContent)).toEqual(["Serhan· 11111111", "Kaan· 22222222"]);
     expect(group.queryByText(/@/)).toBeNull();
 
-    fireEvent.click(group.getByRole("button", { name: "Kaan" }));
+    fireEvent.click(group.getByRole("button", { name: /Kaan/ }));
     await waitFor(() => expect(calls.at(-1)?.url).toBe(`/api/admin/audit?page=1&actor=${KAAN}`));
-    expect(group.getByRole("button", { name: "Kaan" }).getAttribute("aria-pressed")).toBe("true");
+    expect(group.getByRole("button", { name: /Kaan/ }).getAttribute("aria-pressed")).toBe("true");
 
-    fireEvent.click(group.getByRole("button", { name: "Kaan" }));
+    fireEvent.click(group.getByRole("button", { name: /Kaan/ }));
     await waitFor(() => expect(calls.at(-1)?.url).toBe("/api/admin/audit?page=1"));
+  });
+
+  it("iki yönetici aynı adı kullansa bile kayıtların kalıcı kimlikleri görünür", async () => {
+    const firstId = "11111111-1111-4111-8111-111111111111";
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    await openTab(() => Response.json({
+      admins: [{ id: firstId, name: "Kaan" }, { id: secondId, name: "Kaan" }],
+      items: [
+        entry({ id: 1, actor_id: firstId, actor_name: "Kaan" }),
+        entry({ id: 2, actor_id: secondId, actor_name: "Kaan" }),
+      ],
+      page: 1,
+      per_page: 50,
+      has_more: false,
+    }));
+    const rows = within(await screen.findByRole("list", { name: "Günlük kayıtları" })).getAllByRole("listitem");
+    expect(rows[0].textContent).toContain(`Kimlik: ${firstId}`);
+    expect(rows[1].textContent).toContain(`Kimlik: ${secondId}`);
+    const buttons = within(screen.getByRole("group", { name: "Yöneticiye göre süz" })).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["Kaan· 11111111", "Kaan· 22222222"]);
   });
 
   it("günlük alınamazsa hatayı gösteriyor, boş günlük gibi davranmıyor", async () => {

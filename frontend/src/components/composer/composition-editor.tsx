@@ -878,12 +878,6 @@ export function CompositionEditor({
     setExportError(EXPORT_ERROR_MESSAGE);
   }, []);
 
-  const saveDraft = useCallback(async () => {
-    if (!onSave) return;
-    setSaveStatus("saving");
-    setSaveStatus((await onSave({ formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool })) ? "saved" : "error");
-  }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
-
   /**
    * OTOMATIK KAYIT (Kaan, 21.09.2026: "elim carpti, calisma gitti"). Calisma
    * kesimden hemen sonra "Yarım kalan"a yaziliyordu ama editordeki AYARLAR
@@ -895,22 +889,65 @@ export function CompositionEditor({
    * (lib/work-history.ts).
    */
   const onSaveRef = useRef(onSave);
+  const canSave = Boolean(onSave);
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
   const pendingDraftRef = useRef<EditorDraft | null>(null);
   const lastSavedRef = useRef<string | null>(null);
+  const currentDraftRef = useRef<string | null>(null);
   const flushDraft = useCallback(() => {
     const draft = pendingDraftRef.current;
     pendingDraftRef.current = null;
     if (!draft || !onSaveRef.current) return;
-    lastSavedRef.current = JSON.stringify(draft);
-    void onSaveRef.current(draft);
+    const serialized = JSON.stringify(draft);
+    setSaveStatus("saving");
+    void onSaveRef.current(draft).then(
+      (saved) => {
+        if (saved) {
+          lastSavedRef.current = serialized;
+          if (currentDraftRef.current === serialized && !pendingDraftRef.current) setSaveStatus("saved");
+        } else if (currentDraftRef.current === serialized) {
+          // Başarısız isteği kaydedilmiş sayma. Daha yeni bir taslak varsa onu
+          // koru; yoksa bu taslak elle Kaydet veya çıkışta tekrar gönderilsin.
+          pendingDraftRef.current ??= draft;
+          setSaveStatus("error");
+        }
+      },
+      () => {
+        if (currentDraftRef.current === serialized) {
+          pendingDraftRef.current ??= draft;
+          setSaveStatus("error");
+        }
+      },
+    );
   }, []);
-  useEffect(() => {
+  const saveDraft = useCallback(async () => {
     if (!onSave) return;
     const draft: EditorDraft = { formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool };
     const serialized = JSON.stringify(draft);
+    setSaveStatus("saving");
+    let saved = false;
+    try {
+      saved = await onSave(draft);
+    } catch {
+      // Kaydet düğmesi de otomatik kayıtla aynı hata durumunu gösterir.
+    }
+    if (saved) {
+      lastSavedRef.current = serialized;
+      if (pendingDraftRef.current && JSON.stringify(pendingDraftRef.current) === serialized) {
+        pendingDraftRef.current = null;
+      }
+    } else if (currentDraftRef.current === serialized) {
+      pendingDraftRef.current ??= draft;
+    }
+    if (currentDraftRef.current === serialized) setSaveStatus(saved ? "saved" : "error");
+  }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
+  useEffect(() => {
+    if (!canSave) return;
+    const draft: EditorDraft = { formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool };
+    const serialized = JSON.stringify(draft);
+    currentDraftRef.current = serialized;
     // Ilk acilista (ya da elle kaydedilmis haliyle ayniysa) yazacak bir sey yok.
     if (lastSavedRef.current === null) {
       lastSavedRef.current = serialized;
@@ -920,7 +957,7 @@ export function CompositionEditor({
     pendingDraftRef.current = draft;
     const timer = window.setTimeout(flushDraft, 1500);
     return () => window.clearTimeout(timer);
-  }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool, flushDraft]);
+  }, [canSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool, flushDraft]);
   useEffect(() => {
     window.addEventListener("pagehide", flushDraft);
     return () => {
@@ -1722,7 +1759,6 @@ export function CompositionEditor({
             </div>
           </div>
         ) : null}
-        {saveStatus === "error" ? <p className="fine-print mt-2 text-red-300">Çalışma kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.</p> : null}
         </>
       ),
     };
@@ -2433,6 +2469,14 @@ export function CompositionEditor({
   return (
     <>
       {isDesktop ? desktopLayout : mobileLayout}
+      {saveStatus === "error" ? (
+        <div role="alert" className="fixed top-20 left-1/2 z-[70] flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-xl bg-[#321e1e] px-4 py-3 text-sm text-red-100 shadow-xl ring-1 ring-red-300/30">
+          <span className="min-w-0 flex-1">Çalışma kaydedilemedi. Bağlantınızı kontrol edin.</span>
+          <button type="button" onClick={() => void saveDraft()} className="press shrink-0 rounded-full px-3 py-1.5 font-medium ring-1 ring-red-200/50 hover:bg-white/10">
+            Yeniden dene
+          </button>
+        </div>
+      ) : null}
       {dialogs}
     </>
   );

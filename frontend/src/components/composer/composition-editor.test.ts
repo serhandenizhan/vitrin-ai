@@ -403,6 +403,31 @@ describe("CompositionEditor", () => {
         vi.useRealTimers();
       }
     });
+
+    it("başarısız otomatik kaydı kullanıcıya gösterir ve Kaydet ile yeniden dener", async () => {
+      vi.useFakeTimers();
+      try {
+        const onSave = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        renderWithSave(onSave);
+        goToFinish();
+        fireEvent.click(screen.getByRole("switch", { name: "Ürün etiketi" }));
+        await act(async () => {
+          vi.advanceTimersByTime(1600);
+          await Promise.resolve();
+        });
+        expect(onSave).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("alert").textContent).toContain("Çalışma kaydedilemedi");
+
+        await act(async () => {
+          fireEvent.click(screen.getByRole("button", { name: "Yeniden dene" }));
+          await Promise.resolve();
+        });
+        expect(onSave).toHaveBeenCalledTimes(2);
+        expect(screen.queryByText(/Çalışma kaydedilemedi/)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("zemin kategorileri ve baskı uyarısı (17.09.2026)", () => {

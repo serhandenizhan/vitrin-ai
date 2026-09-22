@@ -217,7 +217,7 @@ export function AdminAudit() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm leading-snug">
-                    <span className="font-medium" title={entry.actor_email ?? undefined}>
+                    <span className="font-medium">
                       {entry.actor_name ?? entry.actor_email ?? "Silinmiş ya da okunamayan hesap"}
                     </span>{" "}
                     <span className="text-white/70">{meta?.label ?? entry.action}</span>
@@ -228,6 +228,11 @@ export function AdminAudit() {
                       </>
                     ) : null}
                   </p>
+                  {entry.actor_id ? (
+                    <p className="on-dark-muted mt-0.5 break-all text-[0.6875rem]">
+                      {entry.actor_email ? `${entry.actor_email} · ` : null}Kimlik: {entry.actor_id}
+                    </p>
+                  ) : null}
                   {note ? <p className="on-dark-muted mt-0.5 truncate text-xs">{note}</p> : null}
                 </div>
                 <time dateTime={entry.created_at} className="on-dark-muted shrink-0 pt-0.5 text-xs tabular-nums">
@@ -312,6 +317,9 @@ function AdminSwitch({
               }
             >
               {admin.name ?? "Adsız yönetici"}
+              <span className="ml-1 text-[0.625rem] opacity-65" aria-label={`Kimlik: ${admin.id}`}>
+                · {admin.id.slice(0, 8)}
+              </span>
             </button>
           );
         })}

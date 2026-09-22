@@ -28,6 +28,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
 import { storeCatalogImport } from "@/lib/catalog-handoff";
+import { createSerialWriteQueue } from "@/lib/serial-write-queue";
 
 export function Studio() {
   const { studio, works, closeStudio, returnToStart, updateWorkStatus } = useWorkspace();
@@ -38,6 +39,9 @@ export function Studio() {
   // Iki kaynak: listedeki kayit (onceden indirilmis) ve bu oturumdaki
   // indirme (liste yuklu sayfada olmayabilir ya da henuz guncellenmemis olabilir).
   const downloadedHereRef = useRef(false);
+  // Taslak ve indirme aynı proje satırını güncelliyor. İstekler üst üste
+  // gönderilirse eski bir taslak, tamamlandı kaydından sonra işlenebiliyor.
+  const [enqueueWrite] = useState(createSerialWriteQueue);
   const saveStatus = (): "draft" | "completed" =>
     downloadedHereRef.current || works.some((work) => work.id === studio?.workId && work.status === "completed")
       ? "completed"
@@ -278,12 +282,12 @@ export function Studio() {
           onReturnToStart={returnToStart}
           onStatusChange={updateEditorStatus}
           navigateRef={navigateRef}
-          onSave={studio.workId ? (draft) => updateWorkStatus(studio.workId!, saveStatus(), draft) : undefined}
+          onSave={studio.workId ? (draft) => enqueueWrite(() => updateWorkStatus(studio.workId!, saveStatus(), draft)) : undefined}
           onDownloaded={
             studio.workId
               ? () => {
                   downloadedHereRef.current = true;
-                  return updateWorkStatus(studio.workId!, "completed");
+                  return enqueueWrite(() => updateWorkStatus(studio.workId!, "completed"));
                 }
               : undefined
           }

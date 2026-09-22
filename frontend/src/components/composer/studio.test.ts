@@ -112,27 +112,47 @@ describe("Studio taslak kaydı çalışmanın durumunu korur", () => {
 
   afterEach(() => cleanup());
 
-  it("yarım kalan çalışmayı taslak olarak kaydeder", () => {
+  it("yarım kalan çalışmayı taslak olarak kaydeder", async () => {
     state.works = [{ id: "w1", status: "draft" }];
     render(createElement(Studio));
     fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
-    expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "draft", { step: 2 });
+    await waitFor(() => expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "draft", { step: 2 }));
   });
 
-  it("tamamlanmış çalışmayı kaydetmek onu yarım kalana düşürmez", () => {
+  it("tamamlanmış çalışmayı kaydetmek onu yarım kalana düşürmez", async () => {
     state.works = [{ id: "w1", status: "completed" }];
     render(createElement(Studio));
     fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
-    expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "completed", { step: 2 });
+    await waitFor(() => expect(state.updateWorkStatus).toHaveBeenCalledWith("w1", "completed", { step: 2 }));
   });
 
-  it("aynı oturumda indirildikten sonra yapılan kayıt da tamamlanmış kalır", () => {
+  it("aynı oturumda indirildikten sonra yapılan kayıt da tamamlanmış kalır", async () => {
     // Liste henuz guncellenmemis olsa (ya da calisma yuklu sayfada olmasa)
     // bile indirme bu oturumda gerceklesti.
     state.works = [];
     render(createElement(Studio));
     fireEvent.click(screen.getByRole("button", { name: "İndir" }));
     fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
-    expect(state.updateWorkStatus).toHaveBeenLastCalledWith("w1", "completed", { step: 2 });
+    await waitFor(() => expect(state.updateWorkStatus).toHaveBeenLastCalledWith("w1", "completed", { step: 2 }));
+  });
+
+  it("uçuşta olan taslağı bitirmeden indirme durumunu göndermez", async () => {
+    state.works = [{ id: "w1", status: "draft" }];
+    let finishDraft!: (saved: boolean) => void;
+    state.updateWorkStatus.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { finishDraft = resolve; }),
+    );
+    render(createElement(Studio));
+    fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
+    await waitFor(() => expect(state.updateWorkStatus).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "İndir" }));
+    fireEvent.click(screen.getByRole("button", { name: "Taslağı kaydet" }));
+    expect(state.updateWorkStatus).toHaveBeenCalledTimes(1);
+
+    finishDraft(true);
+    await waitFor(() => expect(state.updateWorkStatus).toHaveBeenCalledTimes(3));
+    expect(state.updateWorkStatus.mock.calls.map((call) => (call as unknown[])[1])).toEqual([
+      "draft", "completed", "completed",
+    ]);
   });
 });
