@@ -76,3 +76,30 @@ describe("Çalışmalarım — ürün adını değiştirme (18.09.2026)", () => 
     expect(state.renameWork).not.toHaveBeenCalled();
   });
 });
+
+describe("Çalışmalarım — silme onayı (19.09.2026)", () => {
+  beforeEach(() => state.removeWork.mockReset());
+  afterEach(() => cleanup());
+
+  it("çöp kutusu hemen silmiyor, önce soruyor; Vazgeç silmeden kapatıyor", () => {
+    render(createElement(WorksPage));
+    fireEvent.click(screen.getByRole("button", { name: "yuzuk.jpg çalışmasını sil" }));
+
+    expect(state.removeWork).not.toHaveBeenCalled();
+    expect(screen.getByText("Bu çalışma silinsin mi?")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Vazgeç" }));
+    expect(state.removeWork).not.toHaveBeenCalled();
+    expect(screen.queryByText("Bu çalışma silinsin mi?")).toBeNull();
+    expect(screen.getByRole("button", { name: "yuzuk.jpg çalışmasını sil" })).toBeTruthy();
+  });
+
+  it("onaylanınca yalnızca o çalışma siliniyor", () => {
+    render(createElement(WorksPage));
+    fireEvent.click(screen.getByRole("button", { name: "yuzuk.jpg çalışmasını sil" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sil" }));
+
+    expect(state.removeWork).toHaveBeenCalledTimes(1);
+    expect(state.removeWork).toHaveBeenCalledWith("w1");
+  });
+});

@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Heart } from "lucide-react";
+import { Heart, Sparkles } from "lucide-react";
 
 import type { BackgroundGroup, BackgroundShelf } from "@/components/composer/use-background-selection";
 import type { Background } from "@/lib/backgrounds";
@@ -27,6 +27,8 @@ type Common = {
   selectedId: string;
   favoriteIds: readonly string[];
   onSelect: (id: string) => void;
+  /** Fare bir zeminin uzerine gelince id, cikinca null (tuvalde onizleme). */
+  onPreview?: (id: string | null) => void;
   onShowCategory: (category: BackgroundShelf | null) => void;
   onToggleFavorite: (id: string) => void;
   gradientCss: (stops: (number | string)[]) => string;
@@ -37,6 +39,22 @@ function swatchStyle(
   gradientCss: Common["gradientCss"],
 ): React.CSSProperties | undefined {
   return background.type === "placeholder" ? { background: gradientCss(background.gradient) } : undefined;
+}
+
+/**
+ * Onizleme olaylari: YALNIZCA fare. Dokunmatikte `pointerenter` dokunusla
+ * birlikte geliyor ve cikis hic gelmeyebiliyor; tuval takili kalirdi.
+ */
+function previewHandlers(id: string, onPreview: Common["onPreview"]) {
+  if (!onPreview) return {};
+  return {
+    onPointerEnter: (event: React.PointerEvent) => {
+      if (event.pointerType === "mouse") onPreview(id);
+    },
+    onPointerLeave: (event: React.PointerEvent) => {
+      if (event.pointerType === "mouse") onPreview(null);
+    },
+  };
 }
 
 function Thumb({ background }: { background: Background }) {
@@ -60,19 +78,34 @@ function Thumb({ background }: { background: Background }) {
   );
 }
 
-/** Secili zemini ortaya/gorunur alana getirir — yalnizca kendi kaydirmasiyla. */
-function useKeepSelectedVisible(selectedId: string, axis: "x" | "y") {
+/**
+ * Secili zemini gorunur alana getirir — yalnizca kendi kaydirmasiyla ve
+ * YALNIZCA gorunur degilse (Serhan, 19.09.2026). Eskiden her secimde secilen
+ * zemini ortaya kaydiriyordu: tiklanan zemin imlecin altindan kayip gidiyor,
+ * panel gereksiz yere oynuyordu. Artik tiklanan zemin zaten gorunur oldugu
+ * icin hic kaydirma olmuyor; kaydirma yalnizca acilista, kategori degisince
+ * ya da secim baska yerden (bicim degisimi) gelip ogeyi gorunmez biraktiginda.
+ */
+function useKeepSelectedVisible(selectedId: string, itemsKey: string) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const selectedRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const scroller = scrollerRef.current;
     const selected = selectedRef.current;
     if (!scroller || !selected) return;
-    if (axis === "y") {
-      const top = selected.offsetTop - (scroller.clientHeight - selected.offsetHeight) / 2;
-      scroller.scrollTo?.({ top, behavior: "smooth" });
-    }
-  }, [selectedId, axis]);
+    // Olcum ekran koordinatinda: offsetTop, offsetParent'a bagli oldugu icin
+    // kaydirma kutusuna gore degil baska bir ataya gore cikabiliyor.
+    const box = scroller.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    // Halka ve kenar solmasi icin kucuk bir pay.
+    const margin = 12;
+    const isVisible = item.top >= box.top + margin && item.bottom <= box.bottom - margin;
+    if (isVisible) return;
+    scroller.scrollTo?.({
+      top: scroller.scrollTop + item.top - box.top - (box.height - item.height) / 2,
+      behavior: "auto",
+    });
+  }, [selectedId, itemsKey]);
   return { scrollerRef, selectedRef };
 }
 
@@ -91,7 +124,9 @@ function ShelfTabs({
       className={
         vertical
           ? "flex flex-col gap-0.5"
-          : "dock-strip flex gap-0.5 overflow-x-auto rounded-full bg-black/20 p-0.5"
+          : // Icerik genisliginde ve ORTADA (Serhan, 19.09.2026): tam genislikte
+            // sola yaslanmis serit, sagda bos bir bant birakiyordu.
+            "dock-strip mx-auto flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full bg-black/20 p-0.5"
       }
     >
       {groups.map((group) => {
@@ -107,14 +142,18 @@ function ShelfTabs({
             onClick={() => onShowCategory(group.id)}
             className={
               "press flex shrink-0 items-center justify-center gap-1 rounded-full transition-colors duration-300 " +
-              (vertical ? "min-h-7 px-1 text-[0.625rem] " : "min-h-8 px-3 text-[0.75rem] ") +
+              (vertical ? "min-h-7 px-1 text-[0.625rem] " : "min-h-8 px-2.5 text-[0.75rem] ") +
               (isShown ? "bg-white/12 font-medium text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
             }
           >
             {group.id === "favoriler" ? (
               <Heart className="text-gold size-3 shrink-0 fill-current" strokeWidth={0} aria-hidden />
+            ) : group.id === "oneriler" ? (
+              <Sparkles className="text-gold size-3 shrink-0" strokeWidth={2} aria-hidden />
             ) : null}
-            {vertical && group.id === "favoriler" ? null : <span className="truncate">{group.label}</span>}
+            {vertical && (group.id === "favoriler" || group.id === "oneriler") ? null : (
+              <span className="truncate">{group.label}</span>
+            )}
             {vertical ? null : (
               <span className="tabular-nums opacity-55" aria-hidden>
                 {group.items.length}
@@ -163,10 +202,10 @@ export function BackgroundLibrary({
   notice,
   ...props
 }: Common & { header?: ReactNode; footer?: ReactNode; notice?: ReactNode }) {
-  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onShowCategory, onToggleFavorite, gradientCss } = props;
-  const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, "y");
+  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onPreview, onShowCategory, onToggleFavorite, gradientCss } = props;
+  const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, shownGroup?.id ?? "");
   return (
-    <div role="group" aria-label="Zemin" className="liquid-glass soft-enter flex h-full min-h-0 flex-col rounded-[1.5rem] p-3">
+    <div role="group" aria-label="Zemin" className="liquid-glass flex h-full min-h-0 flex-col rounded-[1.5rem] p-3">
       {header}
       <div className="mt-3 shrink-0">
         <ShelfTabs groups={groups} shownGroup={shownGroup} onShowCategory={onShowCategory} />
@@ -174,7 +213,9 @@ export function BackgroundLibrary({
       <div
         ref={scrollerRef}
         aria-label="Zeminler"
-        className="dock-scroll mt-3 grid min-h-0 flex-1 auto-rows-min grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto px-0.5 pt-0.5 pb-2"
+        // p-1.5: secim halkasi (2px) + ofseti (2px) kutunun DISINA tasiyor;
+        // pay olmadan kenar sutun/satirlardaki halka kaydirma alaninda kirpiliyordu.
+        className="dock-scroll mt-2 grid min-h-0 flex-1 auto-rows-min grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto p-1.5 pb-2"
       >
         {items.map((background) => {
           const isActive = background.id === selectedId;
@@ -188,6 +229,7 @@ export function BackgroundLibrary({
               <button
                 type="button"
                 onClick={() => onSelect(background.id)}
+                {...previewHandlers(background.id, onPreview)}
                 aria-pressed={isActive}
                 className="press block w-full text-left"
               >
@@ -238,10 +280,10 @@ export function BackgroundRail({
   compact = false,
   ...props
 }: Common & { selected: Background; compact?: boolean }) {
-  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onShowCategory, onToggleFavorite, gradientCss } = props;
-  const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, "y");
+  const { groups, shownGroup, items, selectedId, favoriteIds, onSelect, onPreview, onShowCategory, onToggleFavorite, gradientCss } = props;
+  const { scrollerRef, selectedRef } = useKeepSelectedVisible(selectedId, shownGroup?.id ?? "");
   return (
-    <div role="group" aria-label="Zemin" className="liquid-glass soft-enter flex h-full min-h-0 w-full flex-col items-center rounded-[1.5rem] px-1.5 py-2.5">
+    <div role="group" aria-label="Zemin" className="liquid-glass flex h-full min-h-0 w-full flex-col items-center rounded-[1.5rem] px-1.5 py-2.5">
       <span className="on-dark-muted mb-2 text-[0.625rem] font-medium tracking-[0.06em]">ZEMİN</span>
       <div className="w-full px-0.5">
         <ShelfTabs groups={groups} shownGroup={shownGroup} onShowCategory={onShowCategory} vertical />
@@ -251,8 +293,10 @@ export function BackgroundRail({
         ref={scrollerRef}
         aria-label="Zeminler"
         className={
-          "dock-scroll rail-fade min-h-0 flex-1 overflow-y-auto py-1.5 " +
-          (compact ? "flex w-full flex-col items-center gap-2.5" : "grid auto-rows-min grid-cols-2 gap-2 px-1")
+          // py-4 kenar solmasindan (rail-fade, 0,625rem) genis: en ust/alt
+          // zeminin halkasi solmada kaybolmuyor; px-1.5 yan halkalar icin.
+          "dock-scroll rail-fade min-h-0 flex-1 overflow-y-auto py-4 " +
+          (compact ? "flex w-full flex-col items-center gap-2.5" : "grid auto-rows-min grid-cols-2 gap-2 px-1.5")
         }
       >
         {items.map((background) => {
@@ -263,6 +307,7 @@ export function BackgroundRail({
               ref={isActive ? (element) => { selectedRef.current = element; } : undefined}
               type="button"
               onClick={() => onSelect(background.id)}
+              {...previewHandlers(background.id, onPreview)}
               aria-pressed={isActive}
               title={background.name}
               className={"press relative shrink-0 " + (compact ? "size-11" : "size-10")}

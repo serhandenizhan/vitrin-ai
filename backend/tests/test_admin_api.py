@@ -600,3 +600,107 @@ async def test_stats_outstanding_excludes_expired_credit_grants(
     ).json()
 
     assert body["credit_grants"] == {"granted": 10, "used": 0, "outstanding": 0}
+
+
+# --- Denetim günlüğünü okuma (19.09.2026, Faz 6 denetiminde eksik bulundu) ---
+
+
+async def _audit(db_session, actor_id, action, subject_id="s", detail="{}"):
+    await execute(
+        db_session,
+        """INSERT INTO admin_audit_log(actor_id,action,subject_type,subject_id,detail)
+        VALUES(:actor,:action,'user',:subject,CAST(:detail AS jsonb))""",
+        actor=actor_id,
+        action=action,
+        subject=subject_id,
+        detail=detail,
+    )
+
+
+async def test_audit_log_is_admin_only_and_lists_newest_first(admin_only, people, db_session):
+    admin_id, _ = people
+    await _audit(db_session, admin_id, "credit_grant", "ilk")
+    await _audit(db_session, admin_id, "admin_add", "ikinci")
+
+    response = await admin_only("GET", "/api/admin/audit", 200)
+    body = response.json()
+    assert [item["subject_id"] for item in body["items"]] == ["ikinci", "ilk"]
+    assert body["items"][0]["actor_email"] == "admin@vitrin.example"
+    assert body["has_more"] is False
+
+
+async def test_audit_log_filters_by_action_and_rejects_unknown_actions(
+    client, people, tokens, db_session
+):
+    admin_id, _ = people
+    await _audit(db_session, admin_id, "credit_grant", "kredi")
+    await _audit(db_session, admin_id, "background_delete", "zemin")
+
+    response = await client.get(
+        "/api/admin/audit?action=background_delete", headers=tokens.headers(admin_id)
+    )
+    assert [item["subject_id"] for item in response.json()["items"]] == ["zemin"]
+
+    unknown = await client.get("/api/admin/audit?action=drop_table", headers=tokens.headers(admin_id))
+    assert unknown.status_code == 422
+
+
+async def test_audit_log_pages_without_counting(client, people, tokens, db_session):
+    admin_id, _ = people
+    for index in range(3):
+        await _audit(db_session, admin_id, "credit_grant", f"s{index}")
+
+    first = (await client.get("/api/admin/audit?per_page=2", headers=tokens.headers(admin_id))).json()
+    second = (
+        await client.get("/api/admin/audit?per_page=2&page=2", headers=tokens.headers(admin_id))
+    ).json()
+    assert first["has_more"] is True and len(first["items"]) == 2
+    assert second["has_more"] is False and [i["subject_id"] for i in second["items"]] == ["s0"]
+
+
+async def test_audit_log_still_loads_when_supabase_is_down(client, people, tokens, db_session, supabase):
+    """E-posta yalnız gösterim: Supabase düşünce günlüğün kendisi kaybolmamalı."""
+    admin_id, _ = people
+    await _audit(db_session, admin_id, "admin_remove")
+    supabase.get_user.side_effect = SupabaseAdminError("down")
+
+    response = await client.get("/api/admin/audit", headers=tokens.headers(admin_id))
+    assert response.status_code == 200
+    assert response.json()["items"][0]["actor_email"] is None
+    assert response.json()["admins"] == [{"id": str(admin_id), "name": None}]
+
+
+async def test_audit_log_keeps_rows_of_a_deleted_admin(client, people, tokens, db_session):
+    """`actor_id`'nin FK'si yok: hesabı silinmiş yöneticinin izi de listelenir."""
+    admin_id, _ = people
+    gone = uuid.uuid4()
+    await _audit(db_session, gone, "credit_revoke", "eski")
+
+    response = await client.get("/api/admin/audit", headers=tokens.headers(admin_id))
+    item = response.json()["items"][0]
+    assert item["actor_id"] == str(gone) and item["actor_email"] is None
+
+
+async def test_audit_log_filters_by_admin_and_names_admins_without_emails(
+    client, people, tokens, db_session, grant_admin, create_user, supabase
+):
+    """Panelde "Admin: Serhan | Kaan" anahtarı: ad `user_metadata`'dan, süzme sunucuda."""
+    admin_id, _ = people
+    other = await create_user("kaan@vitrin.example")
+    await grant_admin(other)
+    supabase.accounts[str(admin_id)]["user_metadata"] = {"first_name": "Serhan"}
+    supabase.accounts[str(other)] = {"id": str(other), "email": "kaan@vitrin.example", "user_metadata": {"first_name": "Kaan"}}
+    await _audit(db_session, admin_id, "credit_grant", "serhanin")
+    await _audit(db_session, other, "background_delete", "kaanin")
+
+    everyone = (await client.get("/api/admin/audit", headers=tokens.headers(admin_id))).json()
+    assert {(a["id"], a["name"]) for a in everyone["admins"]} == {(str(admin_id), "Serhan"), (str(other), "Kaan")}
+    assert {i["actor_name"] for i in everyone["items"]} == {"Serhan", "Kaan"}
+
+    only_kaan = (
+        await client.get(f"/api/admin/audit?actor={other}", headers=tokens.headers(admin_id))
+    ).json()
+    assert [i["subject_id"] for i in only_kaan["items"]] == ["kaanin"]
+
+    bad = await client.get("/api/admin/audit?actor=not-a-uuid", headers=tokens.headers(admin_id))
+    assert bad.status_code == 422

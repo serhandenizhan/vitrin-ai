@@ -117,6 +117,10 @@ export async function updateWorkStatus(
       method: "PATCH",
       body: form,
       headers: { "X-Expected-User-Id": expectedUserId },
+      // Studyonun otomatik kaydi sekme kapanirken de gonderiliyor; keepalive
+      // olmadan tarayici istegi sayfayla birlikte iptal eder. Govde (taslak
+      // JSON) keepalive'in 64 KB sinirinin cok altinda.
+      keepalive: true,
     });
     if (!response.ok) return null;
     return (await response.json()) as WorkRecord;

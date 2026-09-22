@@ -10,8 +10,9 @@
  */
 
 import { useState } from "react";
-import { BarChart3, Images, Users } from "lucide-react";
+import { BarChart3, Images, ScrollText, Users } from "lucide-react";
 
+import { AdminAudit } from "@/components/admin/admin-audit";
 import { AdminBackgrounds } from "@/components/admin/admin-backgrounds";
 import { AdminOverview } from "@/components/admin/admin-overview";
 import { AdminUserDetail } from "@/components/admin/admin-user-detail";
@@ -20,7 +21,7 @@ import { useAdminStatus } from "@/components/admin/use-admin-status";
 import { useWorkspace } from "@/components/workspace-provider";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "users" | "backgrounds";
+type Tab = "overview" | "users" | "backgrounds" | "audit";
 
 export function AdminPanel() {
   const { user, openSignIn } = useWorkspace();
@@ -64,13 +65,14 @@ export function AdminPanel() {
       <div
         role="tablist"
         aria-label="Yönetim bölümleri"
-        className="glass-panel mx-auto flex w-fit gap-1 rounded-full p-1.5"
+        className="glass-panel dock-strip mx-auto flex w-fit max-w-full gap-1 overflow-x-auto rounded-full p-1.5"
       >
         {(
           [
             ["overview", "Genel bakış", BarChart3],
             ["users", "Kullanıcılar", Users],
             ["backgrounds", "Zeminler", Images],
+            ["audit", "Günlük", ScrollText],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -83,7 +85,7 @@ export function AdminPanel() {
               setOpenUserId(null);
             }}
             className={cn(
-              "press flex min-h-10 items-center gap-2 rounded-full px-5 text-sm transition-colors",
+              "press flex min-h-10 shrink-0 items-center gap-2 rounded-full px-5 text-sm transition-colors",
               tab === id ? "bg-gold text-[#171614]" : "text-white/65 hover:bg-white/8 hover:text-white",
             )}
           >
@@ -99,6 +101,8 @@ export function AdminPanel() {
           <AdminOverview />
         ) : tab === "backgrounds" ? (
           <AdminBackgrounds />
+        ) : tab === "audit" ? (
+          <AdminAudit />
         ) : openUserId ? (
           <AdminUserDetail userId={openUserId} onBack={() => setOpenUserId(null)} />
         ) : (

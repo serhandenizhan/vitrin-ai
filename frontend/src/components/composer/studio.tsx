@@ -28,6 +28,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
 import { storeCatalogImport } from "@/lib/catalog-handoff";
+import { createSerialWriteQueue } from "@/lib/serial-write-queue";
 
 export function Studio() {
   const { studio, works, closeStudio, returnToStart, updateWorkStatus } = useWorkspace();
@@ -38,6 +39,9 @@ export function Studio() {
   // Iki kaynak: listedeki kayit (onceden indirilmis) ve bu oturumdaki
   // indirme (liste yuklu sayfada olmayabilir ya da henuz guncellenmemis olabilir).
   const downloadedHereRef = useRef(false);
+  // Taslak ve indirme aynı proje satırını güncelliyor. İstekler üst üste
+  // gönderilirse eski bir taslak, tamamlandı kaydından sonra işlenebiliyor.
+  const [enqueueWrite] = useState(createSerialWriteQueue);
   const saveStatus = (): "draft" | "completed" =>
     downloadedHereRef.current || works.some((work) => work.id === studio?.workId && work.status === "completed")
       ? "completed"
@@ -192,38 +196,7 @@ export function Studio() {
               · {editorStatus.toolLabel}
             </span>
           </span>
-          <nav aria-label="Düzenleme adımları" className="hidden items-center sm:flex">
-            {STUDIO_STEPS.map((item, index) => {
-              const isCurrent = editorStatus.step === item.step;
-              // Masaustu asamali akis: yalnizca GERIYE; ileri ancak ✓ ile.
-              const isLocked = editorStatus.mode === "stages" && item.step > editorStatus.step;
-              return (
-                <span key={item.step} className="flex items-center">
-                  {index > 0 ? <span className="mx-1 h-2.5 w-px bg-white/15" aria-hidden /> : null}
-                  <button
-                    type="button"
-                    onClick={() => requestTool(item.tool, item.step)}
-                    disabled={isLocked}
-                    aria-current={isCurrent ? "step" : undefined}
-                    className={
-                      "press relative flex items-center gap-1.5 px-2 pt-0.5 pb-1 text-[0.6875rem] transition-colors disabled:cursor-default disabled:opacity-40 " +
-                      (isCurrent ? "text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
-                    }
-                  >
-                    <span className={"tabular-nums " + (isCurrent ? "text-gold" : "")}>0{item.step}</span>
-                    {item.label}
-                    <span
-                      aria-hidden
-                      className={
-                        "bg-gold absolute inset-x-2 bottom-0 h-px rounded-full transition-opacity duration-300 " +
-                        (isCurrent ? "opacity-100" : "opacity-0")
-                      }
-                    />
-                  </button>
-                </span>
-              );
-            })}
-          </nav>
+          <StepNav status={editorStatus} onRequest={requestTool} />
         </span>
 
         {/*
@@ -309,12 +282,12 @@ export function Studio() {
           onReturnToStart={returnToStart}
           onStatusChange={updateEditorStatus}
           navigateRef={navigateRef}
-          onSave={studio.workId ? (draft) => updateWorkStatus(studio.workId!, saveStatus(), draft) : undefined}
+          onSave={studio.workId ? (draft) => enqueueWrite(() => updateWorkStatus(studio.workId!, saveStatus(), draft)) : undefined}
           onDownloaded={
             studio.workId
               ? () => {
                   downloadedHereRef.current = true;
-                  return updateWorkStatus(studio.workId!, "completed");
+                  return enqueueWrite(() => updateWorkStatus(studio.workId!, "completed"));
                 }
               : undefined
           }
@@ -326,5 +299,47 @@ export function Studio() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Ust bardaki numarali adimlar. Secili adimin altinda altin cizgi — GECISSIZ
+ * (Serhan, 19.09.2026: kayan cizgi denendi, asamalar arasi bütün gecislerle
+ * birlikte kaldirildi).
+ */
+function StepNav({
+  status,
+  onRequest,
+}: {
+  status: EditorStatus;
+  onRequest: (tool: string, stage?: number) => void;
+}) {
+  return (
+    <nav aria-label="Düzenleme adımları" className="hidden items-center sm:flex">
+      {STUDIO_STEPS.map((item, index) => {
+        const isCurrent = status.step === item.step;
+        // Masaustu asamali akis: yalnizca GERIYE; ileri ancak ✓ ile.
+        const isLocked = status.mode === "stages" && item.step > status.step;
+        return (
+          <span key={item.step} className="flex items-center">
+            {index > 0 ? <span className="mx-1 h-2.5 w-px bg-white/15" aria-hidden /> : null}
+            <button
+              type="button"
+              onClick={() => onRequest(item.tool, item.step)}
+              disabled={isLocked}
+              aria-current={isCurrent ? "step" : undefined}
+              className={
+                "press relative flex items-center gap-1.5 px-2 pt-0.5 pb-1 text-[0.6875rem] disabled:cursor-default disabled:opacity-40 " +
+                (isCurrent ? "text-[#f3f0eb]" : "on-dark-muted hover:text-[#f3f0eb]")
+              }
+            >
+              <span className={"tabular-nums " + (isCurrent ? "text-gold" : "")}>0{item.step}</span>
+              {item.label}
+              {isCurrent ? <span aria-hidden className="bg-gold absolute inset-x-2 bottom-0 h-px rounded-full" /> : null}
+            </button>
+          </span>
+        );
+      })}
+    </nav>
   );
 }

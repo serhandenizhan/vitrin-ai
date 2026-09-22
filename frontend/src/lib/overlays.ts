@@ -210,13 +210,11 @@ export function stackLabelBox(label: Box, labelCorner: Corner, logo: Box | null,
   return { ...label, y };
 }
 
-/** Etiket olculeri: yazi boyu ve ic bosluk sahnenin kisa kenarina gore. */
+/**
+ * Etiket olculeri: sahnenin kisa kenarina gore, her bicimde ve ciktida ayni
+ * oranda. Kutu yok (sade etiket), yalnizca yazi boyu ve hafif harf araligi.
+ */
 export function labelMetrics(stageWidth: number, stageHeight: number) {
-  const shortEdge = Math.min(stageWidth, stageHeight);
-  const fontSize = shortEdge * 0.032;
-  return {
-    fontSize,
-    paddingX: fontSize * 0.9,
-    paddingY: fontSize * 0.55,
-  };
+  const fontSize = Math.min(stageWidth, stageHeight) * 0.026;
+  return { fontSize, letterSpacing: fontSize * 0.04 };
 }

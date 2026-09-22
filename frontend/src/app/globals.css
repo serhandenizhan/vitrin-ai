@@ -859,8 +859,20 @@ html.reduce-motion .soft-fade {
    Gerçek kırılma (refraction) tarayıcıda yok; his bu katmanlarla veriliyor.
    Bulanıklık `glass-panel`'deki ölçülen değeri (30px, kare maliyeti yok) aşmıyor.
    -------------------------------------------------------------------------- */
+/* KONUM KATMANDA (Serhan, 19.09.2026): `position: relative` burada katmansız
+   dururken Tailwind'in `absolute`/`sticky` sınıflarını (utilities katmanı)
+   HER ZAMAN eziyordu — katmansız CSS, katmanlı her kuralı özgüllükten bağımsız
+   yener. Sonuç: "Kısayollar" penceresi `absolute` yazılı olduğu hâlde akışa
+   giriyor, üst barı uzatıp bardaki yazıları açık zemine itiyordu ("yazılar
+   kayboluyor"); üst barın `sticky`'si de hiç çalışmıyordu. `components`
+   katmanında varsayılan olarak kalıyor, bir konum sınıfı verilince o kazanıyor.
+   (Ders 13'ün aynı sınıfı: kazananı sıra/katman belirler.) */
+@layer components {
+  .liquid-glass {
+    position: relative;
+  }
+}
 .liquid-glass {
-  position: relative;
   isolation: isolate;
   /* TON: üstteki navbar'ın camıyla (`glass-panel`) aynı kömür grisi (Kaan,
      18.09.2026: "üstteki bara yakın bir gri"). Açık ve açık-gri denemeler
@@ -1114,27 +1126,66 @@ html.reduce-motion .dock-card-area {
       calc((100dvh - var(--studio-reserved-lg)) * var(--stage-ratio)),
       calc(100vw - var(--panel-w, 21rem) - 5rem)
     );
-    /* Bicim degisince tuval sutunu yumusakca daralir/genisler. */
-    transition: width 520ms cubic-bezier(0.32, 0.72, 0, 1);
+    /* GEÇİŞ YOK (Serhan, 19.09.2026): genişlik 520 ms boyunca her karede
+       değişince `useStageSize` her karede yeni ölçü veriyor ve Konva sahnesi
+       (filtreli ürün önbelleğiyle) her karede yeniden çiziliyordu — tarayıcıda
+       ölçüldü: bir aşama geçişinde 10–14 yeniden boyutlama, her biri uzun kare.
+       Stüdyonun "kasması" ve panel kaymasının görünmemesi buradan geliyordu.
+       Artık tuval TEK seferde yeni boyutuna geçiyor, hareketi paneller taşıyor. */
+    transition: none;
+  }
+  .stage-fit {
+    transition: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage-column { transition: none; }
 }
 
-/* Aşama geçiş perdesi (19.09.2026) — `stage-curtain.tsx`. Toplam 1,7 sn:
-   iner (0–19%) → içerik gelir → altın çizgi dolar → yukarı kalkar (80–100%).
-   "initial" perde kapalı başlar, yalnızca kalkar. Eğri sitenin geri kalanıyla aynı. */
-.stage-curtain-drop {
-  animation: curtain-drop 1700ms cubic-bezier(0.32, 0.72, 0, 1) both;
+/* Stüdyo açılış perdesi (19.09.2026) — `stage-curtain.tsx`. Perde kapalı
+   başlar → içerik gelir → altın çizgi dolar → yukarı kalkar (76–100%).
+   Aşamalar arası "drop" perdesi 19.09.2026'da kaldırıldı (Serhan: "her adımda
+   yorucu"). Eğri sitenin geri kalanıyla aynı. */
+/* Aşamalar arası geçiş YOK (Serhan, 19.09.2026). Denenip kaldırılanlar:
+   "drop" perdesi (her adımda yorucu), yönlü panel kayması + kayan adım çizgisi
+   (görünmedi / beğenilmedi). Yeni bir geçiş seçilene kadar aşama anında değişir. */
+/* Aşama geçişi (Serhan'ın seçimi, 20.09.2026) — `stage-transition.ts`.
+   Tarayıcının sahne geçişi + panellerin yandan kayması BİRLİKTE: tuval kendi
+   yerinden yeni yerine/boyutuna taşınırken eski panel gidilen yönün tersine
+   çıkar, yeni panel o yönden girer. Yön `--stage-dir` (ileri 1, geri -1) kök
+   ögede; süre ve eğri BÜTÜN gruplarda aynı (senkron için tek kaynak). */
+:root { --stage-transition-ms: 1100ms; --stage-transition-ease: cubic-bezier(0.3, 0.1, 0.2, 1); }
+
+html[data-stage-transition]::view-transition-group(*),
+html[data-stage-transition]::view-transition-old(*),
+html[data-stage-transition]::view-transition-new(*) {
+  animation-duration: var(--stage-transition-ms);
+  animation-timing-function: var(--stage-transition-ease);
 }
+html[data-stage-transition]::view-transition-old(studio-rail),
+html[data-stage-transition]::view-transition-old(studio-panel) {
+  animation-name: stage-panel-out;
+}
+html[data-stage-transition]::view-transition-new(studio-rail),
+html[data-stage-transition]::view-transition-new(studio-panel) {
+  animation-name: stage-panel-in;
+}
+@keyframes stage-panel-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(calc(-160px * var(--stage-dir, 1))); }
+}
+@keyframes stage-panel-in {
+  from { opacity: 0; transform: translateX(calc(160px * var(--stage-dir, 1))); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-stage-transition]::view-transition-group(*),
+  html[data-stage-transition]::view-transition-old(*),
+  html[data-stage-transition]::view-transition-new(*) { animation: none; }
+}
+
 .stage-curtain-initial {
   animation: curtain-initial 1500ms cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-@keyframes curtain-drop {
-  0% { transform: translateY(-100%); }
-  19%, 80% { transform: translateY(0); }
-  100% { transform: translateY(-100%); }
 }
 @keyframes curtain-initial {
   0%, 76% { transform: translateY(0); }
@@ -1171,6 +1222,6 @@ html.reduce-motion .dock-card-area {
 
 /* Dik zemin barında kaydırma kenarları yumuşak solsun. */
 @utility rail-fade {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.625rem, #000 calc(100% - 0.625rem), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 0.625rem, #000 calc(100% - 0.625rem), transparent);
 }

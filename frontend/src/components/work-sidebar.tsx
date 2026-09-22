@@ -77,10 +77,13 @@ export function WorkSidebar() {
            erisilemez oluyor; yalnizca gorunmez yapmak yetmiyordu. */
         inert={!isSidebarOpen}
         className={cn(
-          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/20 bg-[#171614]/82 text-[#f5f5f7] shadow-[24px_0_70px_-32px_rgba(0,0,0,0.78)] backdrop-blur-3xl backdrop-saturate-150",
+          "fixed inset-y-0 left-0 z-[55] flex w-[min(20rem,88vw)] flex-col border-r border-white/20 bg-[#171614]/82 text-[#f5f5f7] backdrop-blur-3xl backdrop-saturate-150",
           // Kayma `drawer` / `drawer-open` ile — sebebi globals.css'te yazili.
           "drawer",
-          isSidebarOpen && "drawer-open",
+          // Golge YALNIZCA acikken: kapali cekmece ekran disinda duruyor ama
+          // 24px kaymali 70px'lik golgesi ~60px sayfanin icine tasiyor ve
+          // acik bolumlerde sol kenarda gri bir serit gibi gorunuyordu.
+          isSidebarOpen && "drawer-open shadow-[24px_0_70px_-32px_rgba(0,0,0,0.78)]",
         )}
       >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">

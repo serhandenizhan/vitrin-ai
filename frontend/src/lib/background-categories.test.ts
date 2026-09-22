@@ -65,3 +65,13 @@ describe("zemin kategorileri", () => {
     expect(needsPrintWarning("placeholder-white")).toBe(false);
   });
 });
+
+describe("compareBackgroundOrder — düzden karmaşığa (19.09.2026)", () => {
+  it("yer tutucular başta, sıra dosyasındakiler sırasıyla, bilinmeyen sonda", async () => {
+    const { compareBackgroundOrder } = await import("@/lib/background-categories");
+    const { BACKGROUND_ORDER } = await import("@/lib/background-order");
+    const [first, second] = BACKGROUND_ORDER;
+    const ids = ["yeni-yuklenen", second, "placeholder-white", first];
+    expect([...ids].sort(compareBackgroundOrder)).toEqual(["placeholder-white", first, second, "yeni-yuklenen"]);
+  });
+});

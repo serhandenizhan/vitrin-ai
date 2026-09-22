@@ -20,8 +20,10 @@ import {
   CheckCircle2,
   Eye,
   ChevronLeft,
+  ChevronRight,
   Heart,
   Info,
+  Layers,
   Contrast,
   Crosshair,
   Download,
@@ -31,7 +33,9 @@ import {
   Move,
   Printer,
   Ratio,
+  RotateCcw,
   RotateCw,
+  RotateCwSquare,
   SlidersHorizontal,
   Stamp,
   Trash2,
@@ -43,6 +47,7 @@ import { Dock, DockStrip, PANEL_GROUP, PANEL_ROW, useDockVariant } from "@/compo
 import { useIsDesktop } from "@/components/composer/use-is-desktop";
 import { BackgroundLibrary, BackgroundRail } from "@/components/composer/stage-backgrounds";
 import { StageCurtain } from "@/components/composer/stage-curtain";
+import { STAGE_VIEW_NAMES, runStageTransition } from "@/components/composer/stage-transition";
 import { STUDIO_STEPS } from "@/components/composer/studio-steps";
 import { ToolBar } from "@/components/composer/tool-bar";
 import { finishBackgroundFade } from "@/components/composer/background-fade";
@@ -93,6 +98,18 @@ import {
   writeFavoriteBackgrounds,
 } from "@/lib/favorite-backgrounds";
 import type { EditorDraft } from "@/lib/project-record";
+import { useSuggestedBackgrounds } from "@/components/composer/use-suggested-backgrounds";
+import { BrandMark } from "@/components/brand-mark";
+import type {
+  MultiExportJob,
+  MultiExportResult,
+} from "@/components/composer/multi-format-export";
+
+// Konva istemcide calisiyor; coklu disa aktarma da yalnizca istendiginde yuklenir.
+const MultiFormatExporter = dynamic(
+  () => import("@/components/composer/multi-format-export").then((m) => m.MultiFormatExporter),
+  { ssr: false },
+);
 
 const EditorStage = dynamic(
   () => import("@/components/composer/editor-stage").then((m) => m.EditorStage),
@@ -380,13 +397,22 @@ export function CompositionEditor({
   const isCompactMenu = activeTool === "boyut";
   const isDesktop = useIsDesktop();
   /**
-   * Masaustu asamasi ve gecis perdesi. Studyo acilirken (masaustunde) perde
-   * kapali baslar ve kalkar; sonraki gecislerde iner, asama perdenin
-   * ARKASINDA degisir (`onCovered`), sonra kalkar.
+   * Masaustu asamasi ve acilis perdesi. Perde YALNIZCA studyo acilirken
+   * (masaustunde) kapali baslar ve kalkar. Asamalar arasi gecislerdeki perde
+   * kaldirildi (Serhan, 19.09.2026: "her ileri/geri adimda cok yorucu");
+   * yerine daha basit/hizli bir gecis secilecek — secilene kadar asama anlik
+   * degisiyor.
    */
+  // Tuvalin kapsayicisi ve olcusu: asama gecisi (`goToStage`) olcumu senkron
+  // tetikledigi icin ikisi de gecisten ONCE tanimli olmali.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [displaySize, measureStage] = useStageSize(containerRef);
   const [stage, setStage] = useState<StudioStage>(1);
-  const [curtain, setCurtain] = useState<{ stage: StudioStage; mode: "initial" | "drop"; key: number } | null>(() =>
-    isDesktopNow() && !prefersReducedMotion() ? { stage: 1, mode: "initial", key: 0 } : null,
+  // Asamalar arasi GECIS ANIMASYONU YOK (Serhan, 19.09.2026): yonlu kayma +
+  // kayan adim cizgisi denendi, begenilmedi; yeni bir gecis secilene kadar
+  // asama aninda degisiyor. Yalniz acilis perdesi var.
+  const [showOpeningCurtain, setShowOpeningCurtain] = useState(
+    () => isDesktopNow() && !prefersReducedMotion(),
   );
   const applyStage = useCallback((next: StudioStage) => {
     setStage(next);
@@ -404,9 +430,9 @@ export function CompositionEditor({
         applyStage(next);
         return;
       }
-      setCurtain((current) => ({ stage: next, mode: "drop", key: (current?.key ?? 0) + 1 }));
+      runStageTransition(() => applyStage(next), measureStage, next > stage ? 1 : -1);
     },
-    [stage, applyStage],
+    [stage, applyStage, measureStage],
   );
 
   // Ust bardan gelen istek. Efekt DEGIL, dogrudan cagrilan bir fonksiyon:
@@ -513,12 +539,10 @@ export function CompositionEditor({
   } | null>(null);
 
   const stageRef = useRef<Konva.Stage | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const format = OUTPUT_FORMATS[formatName];
   const stageSize = useMemo(() => logicalSize(format), [format]);
 
-  const displaySize = useStageSize(containerRef);
 
   /**
    * Klavye kisayollari.
@@ -588,6 +612,8 @@ export function CompositionEditor({
     });
   }, []);
 
+  // Urunun rengine gore zemin sirasi ("Önerilen" rafi, 21.09.2026).
+  const suggestedIds = useSuggestedBackgrounds(cutoutUrl, backgrounds);
   const {
     selected: selectedBackground,
     shownGroup,
@@ -595,7 +621,27 @@ export function CompositionEditor({
     fitting: fittingBackgrounds,
     select: selectBackground,
     showCategory,
-  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null, favoriteIds);
+  } = useBackgroundSelection(backgrounds, format, initialDraft?.backgroundId ?? null, favoriteIds, suggestedIds);
+
+  /**
+   * Uzerine gelince onizleme (Kaan, 21.09.2026): 90'dan fazla zeminde her
+   * birine tek tek tiklamak yorucuydu. Fare bir zemin kartinin uzerindeyken
+   * tuval o zemini GECICI olarak gosteriyor; tiklayinca secilir, fare
+   * cikinca secili zemine donulur. Yalnizca fare ile (dokunmatikte hover yok)
+   * ve Tamamla asamasinda HIC: disa aktarma canli sahneyi cizdigi icin
+   * onizlenen zemin dosyaya girebilirdi.
+   */
+  // Hangi ASAMADA uzerine gelindigi de tutuluyor: asama degisince kart farenin
+  // altindan kalkiyor ve `pointerleave` hic gelmiyor; onizleme takili kalirdi.
+  const [hovered, setHovered] = useState<{ id: string; stage: StudioStage } | null>(null);
+  const setHoveredBackgroundId = useCallback(
+    (id: string | null) => setHovered(id ? { id, stage } : null),
+    [stage],
+  );
+  const previewBackground =
+    hovered && hovered.stage === stage && stage !== 3
+      ? (fittingBackgrounds.find((background) => background.id === hovered.id) ?? null)
+      : null;
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -662,11 +708,16 @@ export function CompositionEditor({
       setTransform((previous) => ({
         x: previous?.x ?? stageSize.width / 2,
         y: previous?.y ?? stageSize.height / 2,
-        scale: previous?.scale ?? 1,
+        // Henuz bir donusum yoksa sahnedeki olcek `fitScale`'dir (urunun
+        // sahneye sigdirilmis hali), 1 DEGIL. Varsayilan 1 birakilinca
+        // studyoda ilk dondurmede urun bir anda dogal boyutuna atliyordu:
+        // kesim buyuk oldugu icin %667'ye cikip tuvalden tasiyordu
+        // (Serhan, 20.09.2026).
+        scale: previous?.scale ?? fitScale ?? 1,
         rotation: normalizeAngle((previous?.rotation ?? 0) + degrees),
       }));
     },
-    [stageSize],
+    [stageSize, fitScale],
   );
 
   const currentRatio = transform && fitScale ? transform.scale / fitScale : 1;
@@ -689,6 +740,10 @@ export function CompositionEditor({
       // cercevesi ve koseleri CIKTIYA da girer. Disa aktarmadan once
       // gecici olarak gizleniyor, `finally` icinde geri aliniyor.
       const transformers = stage.find("Transformer");
+      // Geri alirken ONCEKI gorunurluge donuluyor, kosulsuz `show()` degil:
+      // Tamamla asamasi temiz gorunumde (tutamaclar gizli) ve indirme sonrasi
+      // hepsini gostermek secim cercevesini son gorselin ustune geri getiriyordu.
+      const wasVisible = transformers.map((node) => node.visible());
       const previousWidth = stage.width();
       const previousHeight = stage.height();
       const previousScale = { x: stage.scaleX(), y: stage.scaleY() };
@@ -733,7 +788,7 @@ export function CompositionEditor({
         stage.width(previousWidth);
         stage.height(previousHeight);
         stage.scale(previousScale);
-        transformers.forEach((node) => node.show());
+        transformers.forEach((node, index) => node.visible(wasVisible[index]));
         stage.draw();
         setIsExporting(false);
       }
@@ -769,11 +824,148 @@ export function CompositionEditor({
     [renderStage, fileName, format, openAfterDownload, onDownloaded],
   );
 
+  /**
+   * Birden fazla boyutta indirme (bkz. multi-format-export.tsx). Secim
+   * varsayilan olarak su anki bicim + digerleri; dosyalar sirayla iniyor.
+   */
+  const [isMultiOpen, setIsMultiOpen] = useState(false);
+  const [multiFormats, setMultiFormats] = useState<OutputFormatName[]>(
+    () => Object.keys(OUTPUT_FORMATS) as OutputFormatName[],
+  );
+  const [multiType, setMultiType] = useState<"png" | "jpeg">("jpeg");
+  const [multiJob, setMultiJob] = useState<MultiExportJob | null>(null);
+  const [multiProgress, setMultiProgress] = useState<{ done: number; total: number } | null>(null);
+  const startMultiExport = useCallback(() => {
+    if (multiFormats.length === 0) return;
+    setExportError(null);
+    setMultiProgress({ done: 0, total: multiFormats.length });
+    // Bicimler her zaman ayni sirada (OUTPUT_FORMATS), tiklama sirasinda degil.
+    const ordered = (Object.keys(OUTPUT_FORMATS) as OutputFormatName[]).filter((name) =>
+      multiFormats.includes(name),
+    );
+    setMultiJob({ formats: ordered, type: multiType });
+  }, [multiFormats, multiType]);
+  const handleMultiProgress = useCallback((done: number, total: number) => {
+    setMultiProgress({ done, total });
+  }, []);
+  const handleMultiDone = useCallback(
+    (results: MultiExportResult[]) => {
+      setMultiJob(null);
+      setMultiProgress(null);
+      const base = fileName.replace(/\.[^.]+$/, "");
+      const extension = multiType === "jpeg" ? "jpg" : "png";
+      // Tarayici arka arkaya inen dosyalari tek tiklamada engelleyebiliyor;
+      // aralarinda kisa bir bosluk birakiliyor. Chrome ilk seferde "birden
+      // fazla dosya indirmeye izin ver" diye bir kez soruyor.
+      results.forEach((result, position) => {
+        window.setTimeout(
+          () => triggerDownload(result.dataUrl, `${base}-${OUTPUT_FORMATS[result.format].fileSlug}.${extension}`),
+          position * 350,
+        );
+      });
+      void onDownloaded?.();
+      // Her indirmeden sonra ayni tesekkur karti. Birden fazla boyutta
+      // "sablona ekle" sorulmuyor: katalog yalnizca tek bir gorsel aliyor.
+      setCatalogError(null);
+      setAfterDownload("home");
+    },
+    [fileName, multiType, onDownloaded],
+  );
+  const handleMultiError = useCallback((error: unknown) => {
+    console.error("[composer] coklu disa aktarma basarisiz:", error);
+    setMultiJob(null);
+    setMultiProgress(null);
+    setExportError(EXPORT_ERROR_MESSAGE);
+  }, []);
+
+  /**
+   * OTOMATIK KAYIT (Kaan, 21.09.2026: "elim carpti, calisma gitti"). Calisma
+   * kesimden hemen sonra "Yarım kalan"a yaziliyordu ama editordeki AYARLAR
+   * (zemin, yerlesim, gorunum, etiket) yalnizca "Kaydet"e basilinca
+   * gidiyordu; kazayla cikan kullanici bos bir taslak buluyordu. Artik her
+   * degisiklikten 1,5 sn sonra sessizce kaydediliyor; studyo kapanirken ve
+   * sekme kapanirken (`pagehide`) bekleyen degisiklik hemen gonderiliyor.
+   * Istek `keepalive` ile gittigi icin sayfa kapansa da tamamlaniyor
+   * (lib/work-history.ts).
+   */
+  const onSaveRef = useRef(onSave);
+  const canSave = Boolean(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+  const pendingDraftRef = useRef<EditorDraft | null>(null);
+  const lastSavedRef = useRef<string | null>(null);
+  const currentDraftRef = useRef<string | null>(null);
+  const flushDraft = useCallback(() => {
+    const draft = pendingDraftRef.current;
+    pendingDraftRef.current = null;
+    if (!draft || !onSaveRef.current) return;
+    const serialized = JSON.stringify(draft);
+    setSaveStatus("saving");
+    void onSaveRef.current(draft).then(
+      (saved) => {
+        if (saved) {
+          lastSavedRef.current = serialized;
+          if (currentDraftRef.current === serialized && !pendingDraftRef.current) setSaveStatus("saved");
+        } else if (currentDraftRef.current === serialized) {
+          // Başarısız isteği kaydedilmiş sayma. Daha yeni bir taslak varsa onu
+          // koru; yoksa bu taslak elle Kaydet veya çıkışta tekrar gönderilsin.
+          pendingDraftRef.current ??= draft;
+          setSaveStatus("error");
+        }
+      },
+      () => {
+        if (currentDraftRef.current === serialized) {
+          pendingDraftRef.current ??= draft;
+          setSaveStatus("error");
+        }
+      },
+    );
+  }, []);
   const saveDraft = useCallback(async () => {
     if (!onSave) return;
+    const draft: EditorDraft = { formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool };
+    const serialized = JSON.stringify(draft);
     setSaveStatus("saving");
-    setSaveStatus((await onSave({ formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool })) ? "saved" : "error");
+    let saved = false;
+    try {
+      saved = await onSave(draft);
+    } catch {
+      // Kaydet düğmesi de otomatik kayıtla aynı hata durumunu gösterir.
+    }
+    if (saved) {
+      lastSavedRef.current = serialized;
+      if (pendingDraftRef.current && JSON.stringify(pendingDraftRef.current) === serialized) {
+        pendingDraftRef.current = null;
+      }
+    } else if (currentDraftRef.current === serialized) {
+      pendingDraftRef.current ??= draft;
+    }
+    if (currentDraftRef.current === serialized) setSaveStatus(saved ? "saved" : "error");
   }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
+  useEffect(() => {
+    if (!canSave) return;
+    const draft: EditorDraft = { formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool };
+    const serialized = JSON.stringify(draft);
+    currentDraftRef.current = serialized;
+    // Ilk acilista (ya da elle kaydedilmis haliyle ayniysa) yazacak bir sey yok.
+    if (lastSavedRef.current === null) {
+      lastSavedRef.current = serialized;
+      return;
+    }
+    if (serialized === lastSavedRef.current) return;
+    pendingDraftRef.current = draft;
+    const timer = window.setTimeout(flushDraft, 1500);
+    return () => window.clearTimeout(timer);
+  }, [canSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool, flushDraft]);
+  useEffect(() => {
+    window.addEventListener("pagehide", flushDraft);
+    return () => {
+      window.removeEventListener("pagehide", flushDraft);
+      // Studyo kapaniyor (Geri, Esc, Ana menu): bekleyen degisikligi kaybetme.
+      flushDraft();
+    };
+  }, [flushDraft]);
 
   /**
    * WhatsApp'ta paylas (one alinan is, 13.09.2026).
@@ -1158,11 +1350,15 @@ export function CompositionEditor({
             <DockAction onClick={centerAndFit} disabled={!cutoutSize} icon={<Crosshair className="size-3.5" strokeWidth={1.75} aria-hidden />}>
               Ortala ve sığdır
             </DockAction>
-            <DockAction onClick={() => rotateBy(-15)} disabled={!cutoutSize}>−15°</DockAction>
+            <DockAction onClick={() => rotateBy(-15)} disabled={!cutoutSize} icon={<RotateCcw className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              −15°
+            </DockAction>
             <DockAction onClick={() => rotateBy(15)} disabled={!cutoutSize} icon={<RotateCw className="size-3.5" strokeWidth={1.75} aria-hidden />}>
               15°
             </DockAction>
-            <DockAction onClick={() => rotateBy(90)} disabled={!cutoutSize}>90°</DockAction>
+            <DockAction onClick={() => rotateBy(90)} disabled={!cutoutSize} icon={<RotateCwSquare className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+              90°
+            </DockAction>
           </DockStrip>
         ),
       };
@@ -1355,7 +1551,33 @@ export function CompositionEditor({
               }}
             />
             <DockStrip label="Marka öğeleri" centered>
-              {logoUrl ? (
+              {isDesktop && logoUrl ? (
+                // Masaustu: logo ve uc eylemi TEK satirda. Dort ayri satir,
+                // etiket acilinca paneli tasirip alanlari kaydirmaya itiyordu.
+                <div className={PANEL_ROW + " gap-2 py-2"}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoUrl}
+                    alt="Yüklenen logo"
+                    className="checkerboard size-8 shrink-0 rounded-lg object-contain ring-1 ring-white/15"
+                  />
+                  <span className="ml-auto flex gap-1">
+                    <CompactAction label="Logoyu değiştir" onClick={() => logoInputRef.current?.click()}>
+                      <ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />
+                      Değiştir
+                    </CompactAction>
+                    <CompactAction label="Renkleri çevir" onClick={() => void invertCurrentLogo()}>
+                      <Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />
+                      Çevir
+                    </CompactAction>
+                    <CompactAction label="Logoyu kaldır" onClick={removeLogo}>
+                      <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
+                      Kaldır
+                    </CompactAction>
+                  </span>
+                </div>
+              ) : null}
+              {logoUrl && !isDesktop ? (
                 <span className={isDesktop ? PANEL_ROW + " py-2" : "contents"}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -1366,13 +1588,15 @@ export function CompositionEditor({
                   {isDesktop ? <span className="on-dark-muted text-[0.75rem]">Logo yüklendi</span> : null}
                 </span>
               ) : null}
-              <DockAction
-                onClick={() => logoInputRef.current?.click()}
-                icon={<ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}
-              >
-                {logoUrl ? "Logoyu değiştir" : "Logo yükle"}
-              </DockAction>
-              {logoUrl ? (
+              {isDesktop && logoUrl ? null : (
+                <DockAction
+                  onClick={() => logoInputRef.current?.click()}
+                  icon={<ImagePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}
+                >
+                  {logoUrl ? "Logoyu değiştir" : "Logo yükle"}
+                </DockAction>
+              )}
+              {logoUrl && !isDesktop ? (
                 <>
                   <DockAction onClick={() => void invertCurrentLogo()} icon={<Contrast className="size-3.5" strokeWidth={1.75} aria-hidden />}>
                     Renkleri çevir
@@ -1408,16 +1632,14 @@ export function CompositionEditor({
               </div>
             ) : null}
             {label.enabled ? (
-              <div className={isDesktop ? PANEL_GROUP + " mt-3" : "mt-2 flex gap-2 sm:ml-auto sm:w-1/2 sm:pl-1"}>
-                <Toggle
-                  label="Koyu etiket"
-                  isOn={label.theme === "dark"}
-                  onChange={() => setLabel((current) => ({ ...current, theme: "dark" }))}
-                />
-                <Toggle
-                  label="Açık etiket"
-                  isOn={label.theme === "light"}
-                  onChange={() => setLabel((current) => ({ ...current, theme: "light" }))}
+              <div className={isDesktop ? "mt-3" : "mt-2 sm:ml-auto sm:w-1/2 sm:pl-1"}>
+                {/* Etiketin kutusu yok, secenek yazinin rengi
+                    (`theme: "dark"` koyu zemine uygun acik yazi demek). */}
+                <SegmentRow
+                  label="Yazı rengi"
+                  options={LABEL_THEMES}
+                  value={label.theme}
+                  onChange={(theme) => setLabel((current) => ({ ...current, theme }))}
                 />
               </div>
             ) : null}
@@ -1435,12 +1657,12 @@ export function CompositionEditor({
       ),
       body: (
         <>
-        <DockStrip label="Çıktı türleri">
-          <DockAction onClick={() => download("png")} disabled={isExporting} icon={<Download className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+        <DockStrip label="Çıktı türleri" wrap={isDesktop}>
+          <DockAction goldHover={isDesktop} onClick={() => download("png")} disabled={isExporting} icon={<Download className="size-3.5" strokeWidth={1.75} aria-hidden />}>
             PNG
           </DockAction>
-          <DockAction onClick={() => download("jpeg")} disabled={isExporting}>JPEG</DockAction>
-          <DockAction
+          <DockAction goldHover={isDesktop} onClick={() => download("jpeg")} disabled={isExporting}>JPEG</DockAction>
+          <DockAction goldHover={isDesktop}
             onClick={() => requestPrint("tiff")}
             disabled={printStatus === "preparing"}
             icon={
@@ -1453,24 +1675,111 @@ export function CompositionEditor({
           >
             CMYK TIFF
           </DockAction>
-          <DockAction onClick={() => requestPrint("jpeg")} disabled={printStatus === "preparing"}>
+          <DockAction goldHover={isDesktop} onClick={() => requestPrint("jpeg")} disabled={printStatus === "preparing"}>
             CMYK JPEG
           </DockAction>
-          <DockAction onClick={shareToWhatsApp} disabled={isExporting} icon={<MessageCircle className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+          <DockAction goldHover={isDesktop} onClick={shareToWhatsApp} disabled={isExporting} icon={<MessageCircle className="size-3.5" strokeWidth={1.75} aria-hidden />}>
             WhatsApp
           </DockAction>
           {onSave ? (
-            <DockAction onClick={() => void saveDraft()} disabled={saveStatus === "saving"} icon={<CheckCircle2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
+            <DockAction goldHover={isDesktop} onClick={() => void saveDraft()} disabled={saveStatus === "saving"} icon={<CheckCircle2 className="size-3.5" strokeWidth={1.75} aria-hidden />}>
               {saveStatus === "saving" ? "Kaydediliyor" : saveStatus === "saved" ? "Kaydedildi" : "Kaydet"}
             </DockAction>
           ) : null}
+          <DockAction
+            goldHover={isDesktop}
+            onClick={() => setIsMultiOpen((open) => !open)}
+            icon={<Layers className="size-3.5" strokeWidth={1.75} aria-hidden />}
+          >
+            Birden fazla boyut
+          </DockAction>
         </DockStrip>
-        {saveStatus === "error" ? <p className="fine-print mt-2 text-red-300">Çalışma kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.</p> : null}
+        {isMultiOpen ? (
+          <div role="group" aria-label="Birden fazla boyutta indir" className="soft-enter mt-3 rounded-2xl bg-white/[0.04] p-3 text-left">
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.entries(OUTPUT_FORMATS) as [OutputFormatName, (typeof OUTPUT_FORMATS)[OutputFormatName]][]).map(
+                ([name, item]) => {
+                  const isOn = multiFormats.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      aria-pressed={isOn}
+                      onClick={() =>
+                        setMultiFormats((current) =>
+                          isOn ? current.filter((entry) => entry !== name) : [...current, name],
+                        )
+                      }
+                      className={
+                        "press rounded-full px-3 py-1.5 text-[0.75rem] transition-colors " +
+                        (isOn ? "text-gold bg-white/12 ring-gold ring-1" : "on-dark-muted ring-1 ring-white/12 hover:text-[#f3f0eb]")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  );
+                },
+              )}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex rounded-full bg-black/20 p-0.5" role="group" aria-label="Dosya türü">
+                {(["jpeg", "png"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={multiType === type}
+                    onClick={() => setMultiType(type)}
+                    className={
+                      "press rounded-full px-3 py-1 text-[0.75rem] " +
+                      (multiType === type ? "text-gold bg-white/12 font-medium" : "on-dark-muted hover:text-[#f3f0eb]")
+                    }
+                  >
+                    {type === "jpeg" ? "JPEG" : "PNG"}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={startMultiExport}
+                disabled={multiFormats.length === 0 || multiJob !== null}
+                className="press bg-gold hover:bg-gold/90 ml-auto flex h-8 items-center gap-1.5 rounded-full px-4 text-[0.75rem] font-medium text-[#1a1917] disabled:opacity-40"
+              >
+                {multiProgress ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    Hazırlanıyor {multiProgress.done}/{multiProgress.total}
+                  </>
+                ) : (
+                  <>
+                    <Download className="size-3.5" strokeWidth={2} aria-hidden />
+                    {multiFormats.length} boyutu indir
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : null}
         </>
       ),
     };
   };
   const dock = dockFor(activeTool);
+
+  const printInfoToggle = (
+    <button
+      type="button"
+      onClick={() => setIsPrintInfoOpen((open) => !open)}
+      aria-expanded={isPrintInfoOpen}
+      className={
+        isDesktop
+          ? "press on-dark-muted flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] hover:bg-white/10 hover:text-[#f3f0eb]"
+          : "fine-print on-dark-muted underline underline-offset-2 hover:text-[#f3f0eb]"
+      }
+    >
+      {isDesktop ? <Info className="size-3.5" strokeWidth={1.75} aria-hidden /> : null}
+      CMYK ne demek?
+    </button>
+  );
 
   /** Denetcideki ince ayarlar — secili araca gore. */
   const inspectorFor = (tool: string) => {
@@ -1525,7 +1834,8 @@ export function CompositionEditor({
             <p className="mb-2 text-[0.75rem] font-medium text-[#f3f0eb]">Ürün etiketi</p>
             {label.enabled ? (
               <>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Uc alan TEK satirda: ikinci satir Marka panelini tasiriyordu. */}
+                <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1.3fr)] gap-2">
             <label className="block">
               <span className="fine-print on-dark-muted block">Ayar</span>
               <select
@@ -1533,11 +1843,14 @@ export function CompositionEditor({
                 onChange={(event) =>
                   setLabel((current) => ({ ...current, karat: event.target.value }))
                 }
-                className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
+                // Acilan liste isletim sisteminin kendi penceresi: koyu tema
+                // bildirilmezse Windows'ta BEYAZ zemin uzerine miras kalan
+                // beyaz yaziyla ciziliyor ve secenekler okunmuyordu.
+                className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12 [color-scheme:dark]"
               >
-                <option value="">Yok</option>
+                <option value="" className="bg-[#1a1917] text-[#f3f0eb]">Yok</option>
                 {KARAT_OPTIONS.map((karat) => (
-                  <option key={karat} value={karat}>
+                  <option key={karat} value={karat} className="bg-[#1a1917] text-[#f3f0eb]">
                     {karat}
                   </option>
                 ))}
@@ -1557,8 +1870,7 @@ export function CompositionEditor({
                 className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12 aria-invalid:ring-red-400"
               />
             </label>
-                </div>
-                <label className="mt-3 block">
+                <label className="block">
                   <span className="fine-print on-dark-muted block">Ürün kodu</span>
                   <input
                     type="text"
@@ -1571,6 +1883,7 @@ export function CompositionEditor({
                     className="mt-1 min-h-9 w-full rounded-lg bg-white/8 px-2 text-[0.8125rem] ring-1 ring-white/12"
                   />
                 </label>
+                </div>
                 {gramProblem(label.gram) ? (
                   <p role="alert" className="fine-print mt-2 text-red-300">
                     {gramProblem(label.gram)}
@@ -1579,7 +1892,7 @@ export function CompositionEditor({
               </>
             ) : (
               <p className="fine-print on-dark-muted">
-                Ayar, gram ve ürün kodunu görselin köşesine eklemek için dock’tan etkinleştirin.
+                Ayar, gram ve ürün kodunu görselin köşesine eklemek için yukarıdaki “Ürün etiketi” anahtarını açın.
               </p>
             )}
           </div>
@@ -1590,19 +1903,9 @@ export function CompositionEditor({
     if (tool === "indir") {
       return (
         <>
-          <button
-            type="button"
-            onClick={() => setIsPrintInfoOpen((open) => !open)}
-            aria-expanded={isPrintInfoOpen}
-            className={
-              isDesktop
-                ? "press on-dark-muted flex items-center gap-1.5 px-1 text-[0.75rem] hover:text-[#f3f0eb]"
-                : "fine-print on-dark-muted underline underline-offset-2 hover:text-[#f3f0eb]"
-            }
-          >
-            {isDesktop ? <Info className="size-3.5" strokeWidth={1.75} aria-hidden /> : null}
-            CMYK ne demek?
-          </button>
+          {/* Masaustunde bu dugme Tamamla dock'unun alt satirinda, SAGDA
+              (`printInfoToggle`); telefonda burada kaliyor. */}
+          {isDesktop ? null : printInfoToggle}
           {isPrintInfoOpen ? (
             <p className={"fine-print on-dark-muted leading-relaxed " + (isDesktop ? "rounded-xl bg-white/[0.04] px-3 py-2.5" : "")}>
               Matbaa, ekran için üretilen RGB dosyayı doğrudan basamaz. Bu seçenek
@@ -1671,10 +1974,10 @@ export function CompositionEditor({
               type="button"
               onClick={() => goToStage(3)}
               aria-label="Düzenlemeyi bitir, Tamamla aşamasına geç"
-              className="press bg-gold hover:bg-gold/90 ml-auto flex h-10 items-center gap-1.5 rounded-full px-5 text-[0.8125rem] font-medium text-[#1a1917] shadow-[0_6px_16px_-8px_rgb(209_162_91/0.8)]"
+              className="press bg-gold hover:bg-gold/90 ml-auto flex h-10 items-center gap-1 rounded-full pr-3 pl-5 text-[0.8125rem] font-medium text-[#1a1917] shadow-[0_6px_16px_-8px_rgb(209_162_91/0.8)]"
             >
-              <Check className="size-4" strokeWidth={2.5} aria-hidden />
               Tamamla
+              <ChevronRight className="size-4" strokeWidth={2.25} aria-hidden />
             </button>
           </div>
         ) : undefined
@@ -1711,6 +2014,9 @@ export function CompositionEditor({
             // yalnizca genislige gore buyutmek tuvali ekranin altina tasiyordu.
             style={{
               maxWidth: `min(var(--stage-cap), calc((100dvh - var(--studio-reserved)) * ${format.outputWidth / format.outputHeight}))`,
+              // Tuval, asama degisince kendi yerinden yeni yerine/boyutuna
+              // tarayicinin sahne gecisiyle tasiniyor (stage-transition.ts).
+              viewTransitionName: STAGE_VIEW_NAMES.canvas,
             }}
           >
             <div
@@ -1719,7 +2025,9 @@ export function CompositionEditor({
             >
               <EditorStage
                 cutoutUrl={cutoutUrl}
-                background={selectedBackground}
+                // Uzerine gelinen zemin gecici olarak gosteriliyor (Sahne);
+                // secim, kayit ve indirme her zaman `selectedBackground`.
+                background={previewBackground ?? selectedBackground}
                 displayWidth={displaySize}
                 stageWidth={stageSize.width}
                 stageHeight={stageSize.height}
@@ -1735,9 +2043,33 @@ export function CompositionEditor({
                 }}
                 onCutoutSize={setCutoutSize}
                 onStageReady={handleStageReady}
-                cleanView={isCleanView}
+                // Masaustu Asama 3 (Tamamla) her zaman temiz gorunum: orada
+                // duzenleme yok, kullanici son hali tutamaclarsiz gormeli.
+                cleanView={isCleanView || (isDesktop && stage === 3)}
               />
             </div>
+            {multiJob ? (
+              <MultiFormatExporter
+                job={multiJob}
+                cutoutUrl={cutoutUrl}
+                cutoutSize={cutoutSize}
+                // Onizleme DEGIL secili zemin: dosyaya kullanicinin sectigi girer.
+                backgroundFor={(name) =>
+                  name === "marketplace"
+                    ? (backgrounds.find((background) => background.id === MARKETPLACE_BACKGROUND_ID) ?? selectedBackground)
+                    : selectedBackground
+                }
+                transform={transform}
+                fromSize={stageSize}
+                appearance={appearance}
+                logoUrl={logoUrl}
+                logo={logo}
+                label={label}
+                onProgress={handleMultiProgress}
+                onDone={handleMultiDone}
+                onError={handleMultiError}
+              />
+            ) : null}
 
             <p className="fine-print text-muted-foreground mt-2 text-center lg:hidden">
               Sürükleyerek taşıyın · köşelerden boyutlandırın · üstteki tutamaçtan
@@ -1792,18 +2124,38 @@ export function CompositionEditor({
     items: shownGroup?.items ?? fittingBackgrounds,
     selectedId: selectedBackground.id,
     favoriteIds,
-    onSelect: selectBackground,
+    onSelect: (id: string) => {
+      selectBackground(id);
+      setHoveredBackgroundId(null);
+    },
+    onPreview: setHoveredBackgroundId,
     onShowCategory: showCategory,
     onToggleFavorite: toggleFavoriteBackground,
     gradientCss,
   };
+
+  /**
+   * Gecis adlari (bkz. stage-transition.ts): tuval, panel ve dik zemin bari
+   * tarayicinin sahne gecisinde ayri gruplar. Her ada AYNI ANDA yalnizca BIR
+   * oge sahip olabilir; Asama 2'de hem zemin bari hem sag panel ekranda oldugu
+   * icin adlari AYRI (ayni ad verildiginde gecis "snapshot capture failed" ile
+   * iptal oluyor — 20.09.2026'da olculdu).
+   */
+  const panelViewName = { viewTransitionName: STAGE_VIEW_NAMES.panel } as React.CSSProperties;
+  const railViewName = { viewTransitionName: STAGE_VIEW_NAMES.rail } as React.CSSProperties;
 
   const desktopLayout = (
     // Asamali masaustu (Kaan, 19.09.2026). Tuval sutunu HER asamada ayni
     // konumda (ikinci cocuk) — Konva sahnesi asama degisince yeniden kurulmuyor.
     <div
       className="relative flex h-[calc(100dvh-5.25rem)] w-full items-stretch justify-center gap-6 px-6 pt-7 pb-3"
-      style={{ "--studio-reserved-lg": stage === 3 ? "13rem" : "8.5rem" } as React.CSSProperties}
+      // Tuval payi: ust barin altinda ~1,5rem nefes (Serhan, 19.09.2026 —
+      // "Duzenle'de gorsel ust dock'a yapisik"; kunye + Onizle dugmesi payin
+      // icinde sayilmiyordu, tuval ortalaninca yukari tasiyordu). Asama 3'te
+      // iki satirlik cikti dock'u da payin icinde.
+      // Tamamla'da "Birden fazla boyut" acilinca panel ~7rem uzuyor; pay
+      // buyumezse tuval yukari kayip ust barin altina giriyordu (olculdu).
+      style={{ "--studio-reserved-lg": stage === 3 ? (isMultiOpen ? "25rem" : "18rem") : "12.5rem" } as React.CSSProperties}
     >
       {/* Sol yuva Asama 2'de SAG PANELLE AYNI GENISLIKTE: tuval boylece ust
           barla ayni eksende, ekranin tam ortasinda (Kaan, 19.09.2026). Dik
@@ -1821,7 +2173,7 @@ export function CompositionEditor({
           // Dik zemin bari (Kaan, 19.09.2026: "onceki gibi dik konum"). Yuva
           // sag panelle esit genislikte kaliyor ki tuval ortada dursun; bar
           // yuvanin tuvale bakan kenarinda.
-          <div className={"flex min-h-0 " + (isCollapsed ? "w-[4.75rem]" : "w-[7.25rem]")}>
+          <div style={railViewName} className={"flex min-h-0 " + (isCollapsed ? "w-[4.75rem]" : "w-[7.25rem]")}>
             <BackgroundRail {...shelfProps} selected={selectedBackground} compact={isCollapsed} />
           </div>
         ) : null}
@@ -1843,8 +2195,24 @@ export function CompositionEditor({
         </div>
         {stage === 3 ? (
           // Asama 3: yalnizca cikti — hazirlanan gorselin HEMEN ALTINDA.
-          <div role="group" aria-label="Çıktı" className="liquid-glass soft-enter mx-auto mt-3 w-full max-w-[44rem] shrink-0 rounded-[1.5rem] p-2">
-            <div className="flex items-center gap-1">
+          // Iki satir (Serhan, 19.09.2026): ustte TUM cikti dugmeleri kaydirmasiz,
+          // altta diger panellerle ayni kural — geri donus SOLDA, ek bilgi SAGDA.
+          // Dock tuval sutunundan GENIS olabilir (dikey A4'te sutun ~27rem,
+          // dugmeler sigmayip kayiyordu): ortalanip iki yana tasiyor.
+          <div
+            role="group"
+            aria-label="Çıktı"
+            // Genislik ICERIKTEN: ust satirdaki cikti dugmeleri belirliyor, alt
+            // satir (Duzenle / CMYK) onlarin kenarlarina hizali (Serhan, 19.09.2026).
+            // `w-max`: `w-fit` tuval sutununa (kare bicimde ~34rem) sikisip Kaydet'i
+            // alt satira atiyordu; genislik artik yalniz DUGMELERDEN geliyor.
+            className={"liquid-glass mt-3 w-max max-w-[calc(100vw-3rem)] shrink-0 self-center rounded-[1.5rem] p-2"}
+            style={panelViewName}>
+            {dockFor("indir").body}
+            {/* `w-0 min-w-full`: acilan CMYK aciklamasi dock'u GENISLETMIYOR,
+                dugmelerin genisligine sariliyor. */}
+            <div className="w-0 min-w-full space-y-1.5 px-3 pt-1 pb-1 text-center empty:hidden">{inspectorFor("indir")}</div>
+            <div className="mx-2 flex items-center gap-2 border-t border-white/10 pt-2">
               <button
                 type="button"
                 onClick={() => goToStage(2)}
@@ -1853,16 +2221,19 @@ export function CompositionEditor({
                 <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
                 Düzenle
               </button>
-              <span className="h-6 w-px shrink-0 bg-white/12" aria-hidden />
-              <div className="min-w-0 flex-1">{dockFor("indir").body}</div>
+              <span className="ml-auto" />
+              {printInfoToggle}
             </div>
-            <div className="space-y-1.5 px-3 pt-1 pb-1 text-center empty:hidden">{inspectorFor("indir")}</div>
           </div>
         ) : null}
       </div>
 
       {stage === 1 ? (
-        <aside aria-label="Sahne" className="relative z-10 flex h-full min-h-0 w-[26rem] shrink-0 flex-col py-1">
+        // `key`: iki aşamanın paneli de aynı yerde duran bir `<aside>`; key
+        // olmadan React AYNI düğümü kullanıyor ve panele verilen bir giriş
+        // animasyonu hiç yeniden başlamıyordu (kök CLAUDE.md ders 29). Geçiş
+        // şu an yok, ama yenisi eklenince bu gerekecek.
+        <aside key="stage-1" aria-label="Sahne" style={panelViewName} className="relative z-10 flex h-full min-h-0 w-[26rem] shrink-0 flex-col py-1">
           <BackgroundLibrary
             {...shelfProps}
             header={
@@ -1911,9 +2282,12 @@ export function CompositionEditor({
                   type="button"
                   onClick={() => goToStage(2)}
                   aria-label="Sahneyi onayla, Düzenle aşamasına geç"
-                  className="press bg-gold hover:bg-gold/90 flex size-11 shrink-0 items-center justify-center rounded-full text-[#1a1917] shadow-[0_8px_20px_-8px_rgb(209_162_91/0.9)]"
+                  // Dugme GIDILECEK adimin adini soyluyor (Serhan, 19.09.2026):
+                  // Sahne'de saga "Duzenle", Duzenle'de solda "Sahne" / sagda "Tamamla".
+                  className="press bg-gold hover:bg-gold/90 flex h-11 shrink-0 items-center gap-1 rounded-full pr-3.5 pl-5 text-[0.875rem] font-medium text-[#1a1917] shadow-[0_8px_20px_-8px_rgb(209_162_91/0.9)]"
                 >
-                  <Check className="size-5" strokeWidth={2.5} aria-hidden />
+                  Düzenle
+                  <ChevronRight className="size-4" strokeWidth={2.25} aria-hidden />
                 </button>
               </div>
             }
@@ -1921,7 +2295,9 @@ export function CompositionEditor({
         </aside>
       ) : stage === 2 ? (
         <aside
+          key="stage-2"
           aria-label="Araç paneli"
+          style={panelViewName}
           className={
             "relative z-10 flex min-h-0 flex-col justify-center " +
             (isCollapsed ? "w-[4.75rem] shrink-0 items-start" : "min-w-[17rem] max-w-[26rem] flex-1")
@@ -1931,15 +2307,7 @@ export function CompositionEditor({
         </aside>
       ) : null}
 
-      {curtain ? (
-        <StageCurtain
-          key={curtain.key}
-          stage={curtain.stage}
-          mode={curtain.mode}
-          onCovered={() => applyStage(curtain.stage)}
-          onDone={() => setCurtain(null)}
-        />
-      ) : null}
+      {showOpeningCurtain ? <StageCurtain stage={1} onDone={() => setShowOpeningCurtain(false)} /> : null}
     </div>
   );
 
@@ -1972,32 +2340,43 @@ export function CompositionEditor({
             onClick={() => setAfterDownload(null)}
             className="soft-fade fixed inset-0 bg-black/55 backdrop-blur-[2px]"
           />
+          {/* Tesekkur karti (Kaan, 21.09.2026): her indirmeden sonra (PNG,
+              JPEG, CMYK, coklu boyut) markali bir kart. Studyonun koyu yuzeyi
+              ve altin vurgu — arac yuzeyi kurali (CLAUDE.md). */}
           <div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="indirme-bitti-baslik"
-            className="soft-enter relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            aria-describedby="indirme-bitti-aciklama"
+            className="soft-enter relative w-full max-w-sm overflow-hidden rounded-[1.75rem] bg-[#1a1917] p-7 text-center text-[#f3f0eb] shadow-2xl ring-1 ring-white/10"
           >
-            <span className="flex size-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
-              <CheckCircle2 className="size-5" strokeWidth={1.75} aria-hidden />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -top-24 left-1/2 size-56 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgb(209_162_91/0.28),transparent_65%)]"
+            />
+            <span className="relative mx-auto flex size-16 items-center justify-center rounded-2xl bg-black/30 ring-1 ring-white/10">
+              <BrandMark className="text-gold h-7 w-auto" />
             </span>
-            <p className="text-muted-foreground mt-4 text-[0.875rem]">
-              İndirme işlemi başarıyla tamamlandı.
+            <p className="relative mt-5 text-[0.6875rem] font-medium tracking-[0.14em] text-[#d1a25b]">VİTRİN AI</p>
+            <p className="relative mt-1.5 text-[1.375rem] font-semibold tracking-[-0.02em]">Teşekkürler</p>
+            <p id="indirme-bitti-aciklama" className="relative mt-2 text-[0.875rem] leading-relaxed text-[#a8a29a]">
+              İndirme işlemi başarıyla tamamlandı. Vitrin AI&apos;ı tercih ettiğiniz için teşekkür ederiz.
             </p>
+            <div className="relative mx-auto my-5 h-px w-10 bg-white/15" aria-hidden />
             <h2
               id="indirme-bitti-baslik"
-              className="mt-1 text-[1.0625rem] font-semibold tracking-[-0.01em]"
+              className="relative text-[1rem] font-medium tracking-[-0.01em]"
             >
               {afterDownload === "catalog"
                 ? "Katalog görselinizi şablona eklemek ister misiniz?"
                 : "Ana menüye dönmek ister misiniz?"}
             </h2>
             {catalogError ? (
-              <p role="alert" className="fine-print mt-2 text-red-700">
+              <p role="alert" className="fine-print relative mt-2 text-red-300">
                 {catalogError}
               </p>
             ) : null}
-            <div className="mt-6 flex gap-2">
+            <div className="relative mt-6 flex gap-2">
               <button
                 type="button"
                 autoFocus
@@ -2006,7 +2385,7 @@ export function CompositionEditor({
                     afterDownload === "catalog" && onReturnToStart ? "home" : null,
                   )
                 }
-                className="min-h-11 flex-1 rounded-full text-[0.9375rem] ring-1 ring-black/15 transition-colors hover:bg-black/5"
+                className="min-h-11 flex-1 rounded-full text-[0.9375rem] ring-1 ring-white/15 transition-colors hover:bg-white/8"
               >
                 Hayır
               </button>
@@ -2020,7 +2399,7 @@ export function CompositionEditor({
                   setAfterDownload(null);
                   onReturnToStart?.();
                 }}
-                className="press bg-foreground text-background min-h-11 flex-1 rounded-full text-[0.9375rem] font-medium"
+                className="press bg-gold hover:bg-gold/90 min-h-11 flex-1 rounded-full text-[0.9375rem] font-medium text-[#1a1917]"
               >
                 Evet
               </button>
@@ -2090,6 +2469,14 @@ export function CompositionEditor({
   return (
     <>
       {isDesktop ? desktopLayout : mobileLayout}
+      {saveStatus === "error" ? (
+        <div role="alert" className="fixed top-20 left-1/2 z-[70] flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-xl bg-[#321e1e] px-4 py-3 text-sm text-red-100 shadow-xl ring-1 ring-red-300/30">
+          <span className="min-w-0 flex-1">Çalışma kaydedilemedi. Bağlantınızı kontrol edin.</span>
+          <button type="button" onClick={() => void saveDraft()} className="press shrink-0 rounded-full px-3 py-1.5 font-medium ring-1 ring-red-200/50 hover:bg-white/10">
+            Yeniden dene
+          </button>
+        </div>
+      ) : null}
       {dialogs}
     </>
   );
@@ -2230,34 +2617,60 @@ function CornerRow({
   value: Corner | null;
   onChange: (corner: Corner) => void;
 }) {
+  return <SegmentRow label={label} options={CORNERS} value={value} onChange={onChange} />;
+}
+
+/**
+ * Tek secimli segment satiri (konum, yazi rengi). Tek bir secim iki ayri
+ * anahtarla gosterilince iki bagimsiz ayar gibi okunuyordu.
+ */
+function SegmentRow<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { id: T; label: string }[];
+  value: T | null;
+  onChange: (value: T) => void;
+}) {
   const variant = useDockVariant();
   return (
     <div role="group" aria-label={label}>
       <span className="fine-print on-dark-muted mb-1.5 block px-1">{label}</span>
-      <div className={variant === "side" ? "grid grid-cols-4 gap-0.5 rounded-xl bg-black/20 p-0.5" : "flex gap-2"}>
-        {CORNERS.map((corner) => (
+      <div
+        className={variant === "side" ? "grid gap-0.5 rounded-xl bg-black/20 p-0.5" : "flex gap-2"}
+        style={variant === "side" ? { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` } : undefined}
+      >
+        {options.map((option) => (
           <button
-            key={corner.id}
+            key={option.id}
             type="button"
-            onClick={() => onChange(corner.id)}
-            aria-pressed={value === corner.id}
+            onClick={() => onChange(option.id)}
+            aria-pressed={value === option.id}
             className={
               variant === "side"
                 ? "press min-h-8 truncate rounded-[0.6rem] text-[0.6875rem] transition-colors " +
-                  (value === corner.id ? "text-gold bg-white/12 font-medium" : "on-dark-muted hover:text-[#f3f0eb]")
+                  (value === option.id ? "text-gold bg-white/12 font-medium" : "on-dark-muted hover:text-[#f3f0eb]")
                 : "press min-h-9 flex-1 rounded-lg text-[0.75rem] transition-shadow " +
-                  (value === corner.id
+                  (value === option.id
                     ? "ring-gold text-gold bg-white/10 ring-2"
                     : "on-dark-muted ring-1 ring-white/12 hover:bg-white/6 hover:text-[#f3f0eb]")
             }
           >
-            {corner.label}
+            {option.label}
           </button>
         ))}
       </div>
     </div>
   );
 }
+
+const LABEL_THEMES = [
+  { id: "dark", label: "Açık yazı" },
+  { id: "light", label: "Koyu yazı" },
+] as const;
 
 /**
  * Dock'taki hizli eylem dugmesi.
@@ -2271,11 +2684,14 @@ function DockAction({
   onClick,
   disabled,
   icon,
+  goldHover = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   icon?: React.ReactNode;
+  /** Uzerine gelince markanin altini (Tamamla'daki cikti dugmeleri — Serhan, 19.09.2026). */
+  goldHover?: boolean;
 }) {
   const variant = useDockVariant();
   if (variant === "side") {
@@ -2297,9 +2713,37 @@ function DockAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="press on-dark-muted flex min-h-9 shrink-0 snap-start items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] whitespace-nowrap ring-1 ring-white/12 transition-colors hover:bg-white/8 hover:text-[#f3f0eb] disabled:opacity-40"
+      className={
+        "press on-dark-muted flex min-h-9 shrink-0 snap-start items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] whitespace-nowrap ring-1 ring-white/12 transition-colors duration-200 disabled:opacity-40 " +
+        (goldHover
+          ? "hover:bg-gold hover:text-[#1a1917] hover:ring-transparent disabled:hover:bg-transparent disabled:hover:text-inherit"
+          : "hover:bg-white/8 hover:text-[#f3f0eb]")
+      }
     >
       {icon}
+      {children}
+    </button>
+  );
+}
+
+/** Masaustu Marka panelinde tek satira sigan kucuk eylem dugmesi. */
+function CompactAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="press on-dark-muted flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.75rem] ring-1 ring-white/12 transition-colors hover:bg-white/8 hover:text-[#f3f0eb]"
+    >
       {children}
     </button>
   );

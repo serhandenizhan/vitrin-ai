@@ -6,13 +6,18 @@ import {
   BACKGROUND_CATEGORIES,
   type BackgroundCategory,
   backgroundCategory,
+  compareBackgroundOrder,
   fitsOrientation,
 } from "@/lib/background-categories";
 import type { Background } from "@/lib/backgrounds";
+import { SUGGESTION_COUNT } from "@/lib/background-suggestions";
 import { type OutputFormat, formatOrientation } from "@/lib/composition";
 
-/** Raf: katalog kategorileri + kullanicinin "Favoriler"i (19.09.2026). */
-export type BackgroundShelf = BackgroundCategory | "favoriler";
+/**
+ * Raf: katalog kategorileri + kullanicinin "Favoriler"i (19.09.2026) + urune
+ * gore "Önerilen" (21.09.2026).
+ */
+export type BackgroundShelf = BackgroundCategory | "favoriler" | "oneriler";
 
 export type BackgroundGroup = {
   id: BackgroundShelf;
@@ -57,6 +62,8 @@ export function useBackgroundSelection(
   initialSelectedId: string | null = null,
   /** Begenilen zemin kimlikleri; bossa "Favoriler" rafi hic olusmaz. */
   favoriteIds: readonly string[] = [],
+  /** Urune gore en uygundan baslayan zemin kimlikleri; bossa raf olusmaz. */
+  suggestedIds: readonly string[] = [],
 ): BackgroundSelection {
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   /**
@@ -72,9 +79,23 @@ export function useBackgroundSelection(
     [backgrounds, orientation],
   );
 
+  /**
+   * Varsayilan secim listenin ILK zemini: ilk kategorinin duzden karmasiga
+   * sirasindaki ilki (Serhan, 19.09.2026). Eskiden sunucunun ilk zeminiydi
+   * (yukleme tarihine gore) ve izgara acilista ona kaydigi icin bastaki duz
+   * zeminler hic gorunmuyordu.
+   */
+  const firstInOrder = useMemo(() => {
+    const categoryIndex = (id: string) =>
+      BACKGROUND_CATEGORIES.findIndex((category) => category.id === backgroundCategory(id));
+    return [...fitting].sort(
+      (a, b) => categoryIndex(a.id) - categoryIndex(b.id) || compareBackgroundOrder(a.id, b.id),
+    )[0];
+  }, [fitting]);
+
   const selected: Background =
     fitting.find((background) => background.id === selectedId) ??
-    fitting[0] ??
+    firstInOrder ??
     backgrounds[0];
 
   /**
@@ -86,19 +107,27 @@ export function useBackgroundSelection(
     const categories: BackgroundGroup[] = BACKGROUND_CATEGORIES.map((category) => ({
       id: category.id,
       label: category.label,
-      items: fitting.filter(
-        (background) => backgroundCategory(background.id) === category.id,
-      ),
+      items: fitting
+        .filter((background) => backgroundCategory(background.id) === category.id)
+        // Duzden karmasiga (bkz. compareBackgroundOrder).
+        .sort((a, b) => compareBackgroundOrder(a.id, b.id)),
     })).filter((group) => group.items.length > 0);
     // Favoriler EN BASTA ve begenilme sirasiyla; bicime uymayan favori
     // gosterilmiyor (diger raflarla ayni kural).
     const favorites = favoriteIds
       .map((id) => fitting.find((background) => background.id === id))
       .filter((background): background is Background => Boolean(background));
-    return favorites.length > 0
-      ? [{ id: "favoriler" as const, label: "Favoriler", items: favorites }, ...categories]
-      : categories;
-  }, [fitting, favoriteIds]);
+    // Onerilenler: bicime uyanlardan en uygun ALTI, EN BASTA.
+    const suggested = suggestedIds
+      .map((id) => fitting.find((background) => background.id === id))
+      .filter((background): background is Background => Boolean(background))
+      .slice(0, SUGGESTION_COUNT);
+    return [
+      ...(suggested.length > 0 ? [{ id: "oneriler" as const, label: "Önerilen", items: suggested }] : []),
+      ...(favorites.length > 0 ? [{ id: "favoriler" as const, label: "Favoriler", items: favorites }] : []),
+      ...categories,
+    ];
+  }, [fitting, favoriteIds, suggestedIds]);
 
   const shownGroup =
     groups.find(
@@ -111,11 +140,15 @@ export function useBackgroundSelection(
       // Favoriler rafindan secilen zemin kullaniciyi kendi kategorisine
       // atlatmamali; raf acik kalir. Diger her durumda sekme secili zeminin
       // kategorisine doner (Pazaryeri -> Sade).
+      // "Önerilen" rafi da ayni: oradan secilen zemin rafi kapatmaz.
       setActiveCategory((current) =>
-        current === "favoriler" && favoriteIds.includes(id) ? current : null,
+        (current === "favoriler" && favoriteIds.includes(id)) ||
+        (current === "oneriler" && suggestedIds.includes(id))
+          ? current
+          : null,
       );
     },
-    [favoriteIds],
+    [favoriteIds, suggestedIds],
   );
 
   return {

@@ -223,6 +223,21 @@ describe("GET vekilleri", () => {
     expect(new URL(sent[0].url).searchParams.get("days")).toBe("30");
   });
 
+  it("günlükte bilinen eylemi geçiriyor, bilinmeyeni backend'e hiç göndermiyor", async () => {
+    const sent = captureBackend(200, { items: [], page: 1, per_page: 50, has_more: false });
+    const { GET } = await import("./audit/route");
+
+    await GET(new Request("http://localhost/api/admin/audit?action=credit_grant&page=2"));
+    await GET(new Request("http://localhost/api/admin/audit?action=drop_table&page=abc"));
+
+    const known = new URL(sent[0].url).searchParams;
+    expect(known.get("action")).toBe("credit_grant");
+    expect(known.get("page")).toBe("2");
+    const unknown = new URL(sent[1].url).searchParams;
+    expect(unknown.has("action")).toBe(false);
+    expect(unknown.get("page")).toBe("1");
+  });
+
   it("backend'in 403'ünü olduğu gibi iletiyor (yetki backend'de)", async () => {
     captureBackend(403, { detail: "Bu işlem için yönetici yetkisi gerekiyor." });
     const { GET } = await import("./stats/route");
