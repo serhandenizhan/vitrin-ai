@@ -287,7 +287,8 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   e-postaları `auth.users`'tan değil Supabase yönetici API'sinden gelir;
   destek formunda kullanıcı başına hız sınırı
 - **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
-  son kontrol ve yasal metinlerin hukukçu kontrolü — **launch öncesi son kapı**
+  son kontrol; yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
+  (Faz 7.5 — canlıya çıkış)
 
 ---
 
