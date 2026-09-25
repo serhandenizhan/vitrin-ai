@@ -10,8 +10,10 @@
 # İlk çalıştırmada backend sanal ortamı yoksa kurulur, bağımlılıklar
 # yüklenir, .env dosyaları örneklerden kopyalanır ve migration'lar
 # uygulanır — sonraki çalıştırmalar bu adımları atlar. Her açılışta gerçek
-# Supabase kullanıcıları yerel auth.users'a aktarılır (LOCAL_ADMIN_EMAILS'teki
-# adresler yerelde yönetici olur; bkz. backend/scripts/sync_local_auth.py). Ctrl+C ile
+# Supabase kullanıcıları yerel auth.users'a (LOCAL_ADMIN_EMAILS'teki adresler
+# yerelde yönetici olur; bkz. backend/scripts/sync_local_auth.py) ve production
+# zemin kütüphanesi yerel backgrounds tablosuna (scripts/sync_local_backgrounds.py,
+# backend/.env.supabase gerekir) aktarılır. Ctrl+C ile
 # durdurulur; her iki servis de birlikte kapanır.
 #
 # Ortam değişkenleriyle override edilebilir (CLAUDE.md ders 11: path'ler
@@ -142,6 +144,17 @@ if ! (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" scripts/sync_local_auth.py); t
 fi
 
 echo ""
+echo "== Yerel zemin kütüphanesi (Supabase'den) =="
+# Zemin görselleri R2'de (production'la ortak), ama hangi zeminlerin olduğu
+# backgrounds tablosunda — yerelde boşsa stüdyo yalnız sade zeminleri gösterir.
+# Betik production'daki satırları YALNIZCA OKUYUP yerele yazar (kaynak:
+# backend/.env.supabase). Ağ 5432'yi engelliyorsa kısa zaman aşımıyla düşer,
+# yerel tablo son eşitlemedeki hâliyle kalır ve sistem yine açılır.
+if ! (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" scripts/sync_local_backgrounds.py); then
+  echo "  UYARI: zemin eşitlemesi yapılamadı; zeminler son eşitlemedeki hâliyle." >&2
+fi
+
+echo ""
 echo "== Frontend bağımlılıkları =="
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
   echo "  node_modules yok, npm install çalıştırılıyor..."
@@ -187,7 +200,10 @@ trap cleanup EXIT INT TERM
 
 (
   cd "$BACKEND_DIR"
-  "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
+  # R2 bucket'ı production'la ortak ve yerel zemin satırları production'dan
+  # kopyalanıyor: yerelde zemin silmek canlıdaki dosyayı da silmesin
+  # (bkz. app/core/config.py → r2_shared_with_production).
+  R2_SHARED_WITH_PRODUCTION=true "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
 ) > "$LOG_DIR/backend.log" 2>&1 &
 
 (

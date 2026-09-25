@@ -169,8 +169,9 @@ npm run dev                   # http://localhost:3000
 
 Tek komutla ikisi birden: repo kökünde `./execute.sh` (macOS/Linux) ya da
 VS Code'da <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>. Bu, Postgres için
-yerel Docker kullanır ve her açılışta gerçek Supabase kullanıcılarını yerel
-tabloya aktarır (`backend/.env` → `LOCAL_ADMIN_EMAILS` yerelde yönetici yapar).
+yerel Docker kullanır ve her açılışta gerçek Supabase kullanıcılarını ve zemin
+kütüphanesini yerel tablolara aktarır (`backend/.env` → `LOCAL_ADMIN_EMAILS`
+yerelde yönetici yapar).
 Gerçek (production) veritabanına bağlanan `./execute-supabase.sh` de var
 (bkz. kök `CLAUDE.md` → "Sistemi çalıştırma").
 

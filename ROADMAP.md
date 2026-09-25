@@ -1188,6 +1188,10 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
 - **Bakım worker'ı periyodik çalıştırılır** (`python -m
   app.services.billing.maintenance`, cron/systemd timer; kök `CLAUDE.md` açık
   takip maddesi 4) ve gerçek bir test hesabı silme isteğiyle doğrulanır.
+- **Yalnız-yerel ayarların production'da kapalı olduğu doğrulanır:**
+  `R2_SHARED_WITH_PRODUCTION=false` (açık kalırsa silinen zeminlerin R2
+  dosyaları bucket'ta sahipsiz kalır), `LOCAL_ADMIN_EMAILS` boş,
+  `USE_MOCK_BACKEND=false`.
 - **Faz 6'dan taşınan CMYK işleri (26.09.2026):** fiziksel matbaa provası,
   matbaanın PSO Coated v3 istediğinin teyidi, TAC/preflight kontrolü, 2,2
   MB'lik gömülü profil kararı ve **canlı sunucu ölçümü** — 40 MP'lik bir
