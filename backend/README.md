@@ -179,6 +179,15 @@ insert into public.admin_users (user_id)
 select id from auth.users where email = '<e-posta>';
 ```
 
+**Yerelde çalıştırırken dikkat:** bu SQL, `auth.users`'ın gerçek verileri
+tuttuğu veritabanına karşı çalıştırılmalı. `./execute.sh` ile yerel Docker
+Postgres kullanılıyorsa `auth.users` boş bir uyumluluk şimidir (bkz. kök
+`CLAUDE.md` → "Sistemi çalıştırma" → "İkinci betik") — gerçek Supabase
+girişleriyle hiç ilişkili değildir ve admin/abonelik verisi orada oluşmaz.
+Ya `./execute-supabase.sh` ile gerçek Supabase veritabanına bağlanın, ya da
+kullanıcıyı önce yerel `auth.users`'a elle ekleyip (`billing_signup`
+trigger'ını tetikler) sonra bu SQL'i çalıştırın.
+
 ### Kullanıcı projeleri (geçmiş çalışmalar)
 
 `frontend/src/lib/work-history.ts`'in dört fonksiyonunun sunucu karşılığı:

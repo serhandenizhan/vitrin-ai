@@ -45,8 +45,8 @@ buna göre seçildi.
 ## Durum
 
 **Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
-bekliyor. Faz 6 (admin paneli) kodu tamamlandı; CMYK matbaa provası ve canlı
-ölçüm bekliyor.**
+bekliyor. Faz 6 (admin paneli) tamamlandı. Sıradaki Faz 7; alan adına ve canlı
+sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 
 | Faz | Kapsam | Durum |
 | --- | --- | --- |
@@ -56,8 +56,9 @@ bekliyor. Faz 6 (admin paneli) kodu tamamlandı; CMYK matbaa provası ve canlı
 | 3 | Zemin kütüphanesi ve kompozisyon stüdyosu | ✅ |
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
-| 6 | Admin paneli | ✅ kod tamamlandı — matbaa provası ve canlı ölçüm açık |
+| 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
 | 7 | Test, optimizasyon, sağlamlaştırma | ⏳ |
+| 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 
 Faz 5'in kodu hazır ve testleri yeşil; ücretli satın alma **varsayılan olarak
@@ -167,7 +168,10 @@ npm run dev                   # http://localhost:3000
 ```
 
 Tek komutla ikisi birden: repo kökünde `./execute.sh` (macOS/Linux) ya da
-VS Code'da <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.
+VS Code'da <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>. Bu, Postgres için
+yerel Docker kullanır — admin yetkisi ve abonelik gibi Supabase Auth'a bağlı
+veriler için gerçek Supabase veritabanına bağlanan `./execute-supabase.sh`
+alternatifi de var (bkz. kök `CLAUDE.md` → "Sistemi çalıştırma").
 
 **Ortam değişkenleri.** Giriş yapabilmek için `frontend/.env.local` içine
 Supabase proje adresi ve publishable anahtarı, `backend/.env` içine Supabase

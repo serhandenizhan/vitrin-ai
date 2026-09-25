@@ -242,6 +242,12 @@ VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.
 
 **İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
 
+**İkinci betik: `./execute-supabase.sh` (22.09.2026, kullanıcı kararı).** `execute.sh` Postgres için **yerel Docker** kullanıyor; bu, Faz 4'ün yerel Supabase Auth uyumluluk katmanına (`0002_local_supabase_auth_shim.py`) dayanıyor — gerçek Supabase Auth ile giriş yapılabiliyor ama `auth.users`, `admin_users`, `subscriptions` YEREL ve BOŞ bir tablo, gerçek Supabase projesindeki verilerle hiç ilişkili değil. Sonuç: yerel `execute.sh` ile giriş yapan gerçek bir hesap admin panelini hiç göremiyor ve `/api/subscriptions/me` "Hesap bulunamadı" (401 `auth_required`) döndürüyor — çünkü `billing_signup` trigger'ı yalnızca YEREL `auth.users`'a satır eklenince tetikleniyor, gerçek Supabase girişi bu tabloya hiç yazmıyor. Admin yetkisini/aboneliği yerelde test etmenin iki yolu var:
+1. **`execute.sh` + elle satır ekleme:** Supabase yönetici API'siyle (`SUPABASE_SECRET_KEY`) gerçek kullanıcı ID'si bulunup yerel `auth.users`'a eklenir (`INSERT INTO auth.users (id, email) VALUES (...)` — bu otomatik olarak `billing_signup`'ı tetikleyip abonelik satırını oluşturur) ve gerekiyorsa `admin_users`'a da eklenir. Testlerin zaten kullandığı desen (`backend/tests/conftest.py`).
+2. **`./execute-supabase.sh`:** backend'i yerel Docker Postgres yerine DOĞRUDAN gerçek Supabase veritabanına bağlar (Redis hâlâ yerel Docker'da — Supabase'in parçası değil). `backend/.env.supabase` (gitignored, `.env.*` deseninde) içindeki `DATABASE_URL`'i gerçek bir ortam değişkeni olarak dışarı verip `backend/.env`'deki aynı anahtarı geçersiz kılıyor (pydantic-settings'te ortam değişkeni `.env` dosyasından önce gelir — doğrulandı). `.env`'deki diğer her değer (`SUPABASE_URL`, R2, vb.) aynen kullanılıyor. Önkoşul: `./execute.sh` en az bir kez çalıştırılmış olmalı (venv + `node_modules` kurulumu için) — bu betik onları kurmuyor.
+   - **Bu veritabanı production'dır (gerçek kullanıcı verisi).** Betik bu yüzden `alembic upgrade head`'i varsayılan olarak ÇALIŞTIRMAZ: bir feature dalındaki birleşmemiş bir migration production'a sessizce girerse o dosya bir daha düzenlenemez. Bilinçli olarak uygulamak için `VITRIN_SUPABASE_MIGRATE=1 ./execute-supabase.sh` (betiğin ilk incelemesinde bulundu, 26.09.2026).
+   - **Ölçülen ağ kısıtı (22.09.2026):** bu makineden Supabase pooler'ına (`aws-0-eu-central-1.pooler.supabase.com`) giden TCP bağlantısı port **443**'te (HTTPS) sorunsuz açılıyor ama port **5432** ve **6543**'te (Postgres) sessizce düşüyor — bir kod/config hatası değil, bu ağın (VPN/güvenlik duvarı/ISP) Postgres portlarını engellemesi. `execute-supabase.sh` bu yüzden ayrı tutuldu: `execute.sh`'ı Supabase'e bağlamak, bu ağda migration adımını (ve her isteği) hiçbir hata vermeden süresiz asılı bırakırdı. Bu ağdan çalışmıyorsa (VPN kapatma, başka bir ağ) tekrar denenmeli; hâlâ engelliyse yol 1 kullanılır.
+
 ## Frontend çalıştırma (Faz 2'de kuruldu)
 
 ```bash
@@ -567,4 +573,4 @@ ulaşır mı ulaşmaz mı — denenip sonucu buraya not düşülmeli.
    doğrulanıp gönderen adres oraya çevrilebilir. Bu olmadan gerçek
    müşterilere e-posta gitmez — R2 CORS ve production domain maddesiyle
    (açık takip maddesi 2) aynı dış girdiye bağlı, o yüzden bu ikinci aşama
-   de facto Faz 7'nin "launch öncesi son kapı" listesine düşüyor.
+   de facto Faz 7.5'in (canlıya çıkış) "launch öncesi son kapı" listesine düşüyor.
