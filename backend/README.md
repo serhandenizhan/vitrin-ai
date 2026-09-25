@@ -184,9 +184,11 @@ tuttuğu veritabanına karşı çalıştırılmalı. `./execute.sh` ile yerel Do
 Postgres kullanılıyorsa `auth.users` boş bir uyumluluk şimidir (bkz. kök
 `CLAUDE.md` → "Sistemi çalıştırma" → "İkinci betik") — gerçek Supabase
 girişleriyle hiç ilişkili değildir ve admin/abonelik verisi orada oluşmaz.
-Ya `./execute-supabase.sh` ile gerçek Supabase veritabanına bağlanın, ya da
-kullanıcıyı önce yerel `auth.users`'a elle ekleyip (`billing_signup`
-trigger'ını tetikler) sonra bu SQL'i çalıştırın.
+Yerelde bu SQL'e gerek yok: `./execute.sh` her açılışta gerçek kullanıcıları
+yerel `auth.users`'a aktarır (`scripts/sync_local_auth.py`, `billing_signup`
+abonelik satırını açar) ve `backend/.env`'deki `LOCAL_ADMIN_EMAILS` adreslerini
+yerelde yönetici yapar. Betik yalnız yerel şime yazar; gerçek Supabase'e karşı
+çalıştırılırsa hiçbir şeye dokunmadan çıkar.
 
 ### Kullanıcı projeleri (geçmiş çalışmalar)
 
@@ -396,6 +398,7 @@ sunucu/instance seçin.
 | `SUPABASE_JWT_AUDIENCE` | `authenticated` | Beklenen `aud` değeri |
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
 | `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Settings → API Keys → Secret keys). Hesap silme **ve** Faz 6 admin panelinin kullanıcı listesi/detayı için gerekli; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` ve `GET /api/admin/users` hiçbir şeye dokunmadan `503` döner |
+| `LOCAL_ADMIN_EMAILS` | boş | **Yalnız yerel geliştirme.** `./execute.sh`'ın kullanıcı eşitlemesi (`scripts/sync_local_auth.py`) bu virgüllü e-postaları yerel `admin_users`'a ekler. Uygulama okumaz, production'da anlamı yoktur |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |

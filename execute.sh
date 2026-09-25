@@ -9,7 +9,9 @@
 #
 # İlk çalıştırmada backend sanal ortamı yoksa kurulur, bağımlılıklar
 # yüklenir, .env dosyaları örneklerden kopyalanır ve migration'lar
-# uygulanır — sonraki çalıştırmalar bu adımları atlar. Ctrl+C ile
+# uygulanır — sonraki çalıştırmalar bu adımları atlar. Her açılışta gerçek
+# Supabase kullanıcıları yerel auth.users'a aktarılır (LOCAL_ADMIN_EMAILS'teki
+# adresler yerelde yönetici olur; bkz. backend/scripts/sync_local_auth.py). Ctrl+C ile
 # durdurulur; her iki servis de birlikte kapanır.
 #
 # Ortam değişkenleriyle override edilebilir (CLAUDE.md ders 11: path'ler
@@ -126,6 +128,18 @@ fi
 echo ""
 echo "== Backend migration'ları =="
 (cd "$BACKEND_DIR" && "$VENV_DIR/bin/alembic" upgrade head)
+
+echo ""
+echo "== Yerel auth kullanıcıları (Supabase'den) =="
+# Yerel auth.users 0002'nin boş şimi: gerçek bir hesapla giriş yapılsa da
+# abonelik ve admin yetkisi görünmez. Betik kullanıcıları Supabase yönetici
+# API'sinden (HTTPS) okuyup yerel tabloya yazar; LOCAL_ADMIN_EMAILS'teki
+# adresleri yerelde yönetici yapar. Yalnız yerel şime yazar. Başarısız olursa
+# sistem yine açılır — yalnızca gerçek hesaplar yerelde abonelik/admin görmez.
+if ! (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" scripts/sync_local_auth.py); then
+  echo "  UYARI: eşitleme yapılamadı (SUPABASE_SECRET_KEY boş ya da Supabase'e ulaşılamadı)." >&2
+  echo "         Sistem açılıyor; gerçek hesaplar yerelde abonelik/admin görmeyecek." >&2
+fi
 
 echo ""
 echo "== Frontend bağımlılıkları =="
