@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.services.billing.entitlements import background_tier
 from app.services.billing.limits import limit_admin, limit_scoped
 from app.services.billing.provider import get_provider
+import logging
 import uuid
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -29,6 +30,7 @@ from app.services.storage import (
 )
 from app.validation.upload import UploadValidationError, validate_upload
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CONTENT_TYPE_TO_EXTENSION = {
@@ -286,6 +288,15 @@ async def delete_background(
         db, admin.id, "background_delete", "background", str(background_id), {"r2_key": r2_key}
     )
     await db.commit()
+
+    # Yerel geliştirmede bucket production ile ortak: nesneyi silmek canlıdaki
+    # zemini de kırardı. Yalnız yerel satır gider (bir sonraki eşitleme geri
+    # getirir); bkz. `settings.r2_shared_with_production`.
+    if settings.r2_shared_with_production:
+        logger.warning(
+            "R2_SHARED_WITH_PRODUCTION acik: %s zemininin R2 nesneleri silinmedi", background_id
+        )
+        return {"id": str(background_id)}
 
     # Satır gitti; nesneler artık kimsenin ulaşamadığı yer tutuculardır.
     # `delete_objects_quietly` hatayı yutup log'luyor — bir depolama arızası,

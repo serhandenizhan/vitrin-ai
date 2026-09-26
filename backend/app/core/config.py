@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
     r2_bucket_name: str = ""
+    # YALNIZ YEREL GELİŞTİRME: yerel veritabanı production'ın zemin satırlarını
+    # kopyaladığında (execute.sh → scripts/sync_local_backgrounds.py) R2 bucket'ı
+    # production ile ORTAK kalır. Bu açıkken zemin silme yalnız veritabanı
+    # satırını siler, R2 nesnesine dokunmaz — yoksa yerelde silinen bir zemin
+    # canlıdaki zeminin dosyasını da götürürdü. Production'da kapalı kalmalı.
+    r2_shared_with_production: bool = False
     # GET /api/backgrounds içindeki presigned URL'lerin geçerlilik süresi.
     background_url_expiry_seconds: int = 3600
     # Proje (geçmiş çalışma) görsellerinin imzalı URL geçerlilik süresi.

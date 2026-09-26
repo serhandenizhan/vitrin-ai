@@ -9,7 +9,11 @@
 #
 # İlk çalıştırmada backend sanal ortamı yoksa kurulur, bağımlılıklar
 # yüklenir, .env dosyaları örneklerden kopyalanır ve migration'lar
-# uygulanır — sonraki çalıştırmalar bu adımları atlar. Ctrl+C ile
+# uygulanır — sonraki çalıştırmalar bu adımları atlar. Her açılışta gerçek
+# Supabase kullanıcıları yerel auth.users'a (LOCAL_ADMIN_EMAILS'teki adresler
+# yerelde yönetici olur; bkz. backend/scripts/sync_local_auth.py) ve production
+# zemin kütüphanesi yerel backgrounds tablosuna (scripts/sync_local_backgrounds.py,
+# backend/.env.supabase gerekir) aktarılır. Ctrl+C ile
 # durdurulur; her iki servis de birlikte kapanır.
 #
 # Ortam değişkenleriyle override edilebilir (CLAUDE.md ders 11: path'ler
@@ -128,6 +132,29 @@ echo "== Backend migration'ları =="
 (cd "$BACKEND_DIR" && "$VENV_DIR/bin/alembic" upgrade head)
 
 echo ""
+echo "== Yerel auth kullanıcıları (Supabase'den) =="
+# Yerel auth.users 0002'nin boş şimi: gerçek bir hesapla giriş yapılsa da
+# abonelik ve admin yetkisi görünmez. Betik kullanıcıları Supabase yönetici
+# API'sinden (HTTPS) okuyup yerel tabloya yazar; LOCAL_ADMIN_EMAILS'teki
+# adresleri yerelde yönetici yapar. Yalnız yerel şime yazar. Başarısız olursa
+# sistem yine açılır — yalnızca gerçek hesaplar yerelde abonelik/admin görmez.
+if ! (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" scripts/sync_local_auth.py); then
+  echo "  UYARI: eşitleme yapılamadı (SUPABASE_SECRET_KEY boş ya da Supabase'e ulaşılamadı)." >&2
+  echo "         Sistem açılıyor; gerçek hesaplar yerelde abonelik/admin görmeyecek." >&2
+fi
+
+echo ""
+echo "== Yerel zemin kütüphanesi (Supabase'den) =="
+# Zemin görselleri R2'de (production'la ortak), ama hangi zeminlerin olduğu
+# backgrounds tablosunda — yerelde boşsa stüdyo yalnız sade zeminleri gösterir.
+# Betik production'daki satırları YALNIZCA OKUYUP yerele yazar (kaynak:
+# backend/.env.supabase). Ağ 5432'yi engelliyorsa kısa zaman aşımıyla düşer,
+# yerel tablo son eşitlemedeki hâliyle kalır ve sistem yine açılır.
+if ! (cd "$BACKEND_DIR" && "$VENV_DIR/bin/python" scripts/sync_local_backgrounds.py); then
+  echo "  UYARI: zemin eşitlemesi yapılamadı; zeminler son eşitlemedeki hâliyle." >&2
+fi
+
+echo ""
 echo "== Frontend bağımlılıkları =="
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
   echo "  node_modules yok, npm install çalıştırılıyor..."
@@ -173,7 +200,10 @@ trap cleanup EXIT INT TERM
 
 (
   cd "$BACKEND_DIR"
-  "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
+  # R2 bucket'ı production'la ortak ve yerel zemin satırları production'dan
+  # kopyalanıyor: yerelde zemin silmek canlıdaki dosyayı da silmesin
+  # (bkz. app/core/config.py → r2_shared_with_production).
+  R2_SHARED_WITH_PRODUCTION=true "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
 ) > "$LOG_DIR/backend.log" 2>&1 &
 
 (

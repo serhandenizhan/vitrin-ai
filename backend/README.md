@@ -61,6 +61,17 @@ POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
 DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
 ```
 
+**`./execute.sh` açıkken dikkat:** varsayılan `DATABASE_URL`, `execute.sh`'ın
+kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
+zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
+backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
+veritabanı yeterli (26.09.2026'da 390 test bu yolla geçti):
+
+```bash
+docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
+DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai_test .venv/bin/pytest
+```
+
 Ayrıca gerçek bir **Redis** ister (`docker compose up -d redis`) — yükleme hız
 sınırlayıcısı testleri gerçek Redis'e karşı çalışır, mock'lanmaz. Postgres gibi
 paralel worktree'lerde ayrı bir porta yönlendirilebilir:
@@ -178,6 +189,22 @@ editöründen eklenir:
 insert into public.admin_users (user_id)
 select id from auth.users where email = '<e-posta>';
 ```
+
+**Yerelde çalıştırırken dikkat:** bu SQL, `auth.users`'ın gerçek verileri
+tuttuğu veritabanına karşı çalıştırılmalı. `./execute.sh` ile yerel Docker
+Postgres kullanılıyorsa `auth.users` boş bir uyumluluk şimidir (bkz. kök
+`CLAUDE.md` → "Sistemi çalıştırma" → "İkinci betik") — gerçek Supabase
+girişleriyle hiç ilişkili değildir ve admin/abonelik verisi orada oluşmaz.
+Yerelde bu SQL'e gerek yok: `./execute.sh` her açılışta gerçek kullanıcıları
+yerel `auth.users`'a aktarır (`scripts/sync_local_auth.py`, `billing_signup`
+abonelik satırını açar) ve `backend/.env`'deki `LOCAL_ADMIN_EMAILS` adreslerini
+yerelde yönetici yapar. Production'daki zemin satırlarını da yerel
+`backgrounds`'a kopyalar (`scripts/sync_local_backgrounds.py`, kaynak
+`backend/.env.supabase`, yalnız okunur); görseller zaten ortak R2'de. İki betik
+de yalnız yerel şime yazar; gerçek Supabase'e karşı çalıştırılırsa hiçbir şeye
+dokunmadan çıkar. R2 ortak olduğu için `execute.sh` backend'i
+`R2_SHARED_WITH_PRODUCTION=true` ile açar: yerelde zemin silmek yalnız yerel
+satırı siler, canlıdaki dosyaya dokunmaz.
 
 ### Kullanıcı projeleri (geçmiş çalışmalar)
 
@@ -387,6 +414,8 @@ sunucu/instance seçin.
 | `SUPABASE_JWT_AUDIENCE` | `authenticated` | Beklenen `aud` değeri |
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
 | `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Settings → API Keys → Secret keys). Hesap silme **ve** Faz 6 admin panelinin kullanıcı listesi/detayı için gerekli; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` ve `GET /api/admin/users` hiçbir şeye dokunmadan `503` döner |
+| `LOCAL_ADMIN_EMAILS` | boş | **Yalnız yerel geliştirme.** `./execute.sh`'ın kullanıcı eşitlemesi (`scripts/sync_local_auth.py`) bu virgüllü e-postaları yerel `admin_users`'a ekler. Uygulama okumaz, production'da anlamı yoktur |
+| `R2_SHARED_WITH_PRODUCTION` | `false` | **Yalnız yerel geliştirme.** `true` iken `DELETE /api/admin/backgrounds/{id}` yalnız veritabanı satırını siler, R2 nesnelerine dokunmaz — yerel zemin satırları production'dan kopyalandığı ve bucket ortak olduğu için. `execute.sh` kendisi `true` verir, `.env.example`'da da `true`. **Production'da `false` olmalı**, yoksa silinen zeminlerin dosyaları bucket'ta sahipsiz kalır |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |

@@ -544,11 +544,11 @@ canlı ayar aslında "...and symbols (recommended)" idi. İstemci kontrolüne
 sembol kuralı eklendi, ilgili tüm dokümanlar ve testler (203 → **210**)
 güncellendi. Bkz. kök `CLAUDE.md` ders 19.
 
-**Bekleyenler (launch anına bağlı, Faz 7'ye taşındı — kullanıcı kararı
+**Bekleyenler (launch anına bağlı, Faz 7'ye, 26.09.2026'da Faz 7.5'e taşındı — kullanıcı kararı
 14.09.2026):** R2 CORS'a production alan adı eklenmesi ve production veri
 sorumlusu/hukukçu onayı, ikisi de henüz gerçekleşmemiş dış girdilere
-(alan adı, hukukçu) bağlı olduğu için Faz 7 "launch öncesi son kapı"
-kontrol listesine taşındı — bkz. aşağıda Faz 7 ve kök `CLAUDE.md` açık
+(alan adı, hukukçu) bağlı olduğu için Faz 7.5 "launch öncesi son kapı"
+kontrol listesine taşındı — bkz. aşağıda Faz 7.5 ve kök `CLAUDE.md` açık
 takip maddeleri 2-3.
 
 **Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
@@ -565,7 +565,7 @@ adı olduğu için Kaan'ın gerçek kayıt/parola sıfırlama denemesinde Resend
 `CLAUDE.md` açık takip maddesi 5'te.
 
 **Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
-bağlı — bu kısım Faz 7'nin launch listesine ekleniyor (bkz. kök
+bağlı — bu kısım Faz 7.5'in launch listesine ekleniyor (bkz. kök
 `CLAUDE.md` açık takip maddesi 5).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
@@ -830,7 +830,7 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
   ücretsiz ve izinsiz kullanılabilen resmi kaynak yok (TCMB ticari kullanım için yazılı izin,
   Harem ve Borsa İstanbul sözleşme istiyor). Kaan kuralı: lisans/ücret/izin isteyen kaynak eklenmez.
 
-### Faz 6 — Admin paneli — ✅ Kod tamamlandı (19.09.2026); matbaa provası ve canlı ölçüm bekliyor
+### Faz 6 — Admin paneli — ✅ Tamamlandı (19.09.2026; matbaa provası ve canlı sunucu ölçümü 26.09.2026'da Faz 7.5'e taşındı)
 
 - Serhan: admin API endpoint'leri (kullanıcılar, krediler, kullanım istatistikleri)
 
@@ -1035,12 +1035,14 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     canlı sunucudaki süre/bellek yükünün ölçülmesi. **18-19.09.2026: Kaan
     çıktıyı Photoshop'ta iki kez kontrol etti, CMYK olarak açılıyor —
     "matbaada bir sorun çıkmaz" (Kaan, 19.09.2026).** Kod tarafında iş
-    kalmadı; fiziksel matbaa provası ve canlı sunucu ölçümü açık.
+    kalmadı; fiziksel matbaa provası ve canlı sunucu ölçümü **Faz 7.5'e
+    (canlıya çıkış) taşındı** (kullanıcı kararı, 26.09.2026) — ikisi de
+    canlı sunucuya bağlı.
   - **Zaten doğrulanmış olan (PR #18, 17.09.2026):** profil ayarlı değilken
     `POST /api/cmyk` doğru mesajla 503 dönüyor
     (`"Baskı profili yapılandırılmamış. Sunucuda CMYK_ICC_PATH ayarlanmalı."`).
     Route'un ikinci 503 dalı (yol geçersiz) da mevcut.
-  - Faz 7'deki "launch öncesi son kapı" maddesi bu işin **üretime çıkmasını**
+  - Faz 7.5'teki "launch öncesi son kapı" maddesi bu işin **üretime çıkmasını**
     bekletiyor; buradaki madde ise doğrulamaların Faz 6'da yapılacağını
     söylüyor. İkisi aynı işin iki aşaması, çelişki değil.
 - **Güvenlik gereksinimi:** `is_admin` rol kontrolü backend'de yapılır, frontend'de değil
@@ -1166,8 +1168,38 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   O noktada doğru soru "ada göre arama ekleyelim mi" değil, **"profil verisi
   nerede yaşamalı"**dır (Supabase `user_metadata` mı, kendi veritabanımız mı);
   cevap ikincisiyse ada göre arama ikinci bir kopya gerektirmeden zaten gelir.
-- **Launch öncesi son kapı, dış girdiye bağlı olduğu için buraya taşındı
-  (kullanıcı kararı 14.09.2026):**
+### Faz 7.5 — Canlıya çıkış (deploy) — ⏳ Planlanan (26.09.2026'da ayrıldı)
+
+**Neden ayrı bir faz (kullanıcı kararı, 26.09.2026):** production alan adı
+son ana kadar kararlaştırılmayacak. Alan adına ve canlı sunucuya bağlı işler
+Faz 7'nin içinde durduğu sürece Faz 7 hiç kapanamazdı; oysa Faz 7'nin kendi
+işi (test, optimizasyon, sağlamlaştırma) alan adı olmadan yapılabiliyor. Bu
+yüzden canlıya çıkışa bağlı her şey buraya toplandı. **Faz 7 bitmeden bu faza
+geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddelerin
+çoğu ona bağlı.
+
+- **Alan adı ve dağıtım hedefi kararı** (backend sunucusu ≥12–14 GB RAM,
+  frontend Vercel mi sunucu mu). Diğer maddelerin kilidi.
+- **Faz 5'in canlı açılışı:** iyzico merchant sandbox doğrulaması ve
+  `docs/billing-runbook.md` "Kurulum sırası" (yerel test başarısı sandbox
+  doğrulaması sayılmaz). `RESEND_API_KEY` / `BILLING_EMAIL_FROM` ve
+  `TRUSTED_PROXY_IPS` production'da verilir (kök `CLAUDE.md` açık takip
+  maddesi 3).
+- **Bakım worker'ı periyodik çalıştırılır** (`python -m
+  app.services.billing.maintenance`, cron/systemd timer; kök `CLAUDE.md` açık
+  takip maddesi 4) ve gerçek bir test hesabı silme isteğiyle doğrulanır.
+- **Yalnız-yerel ayarların production'da kapalı olduğu doğrulanır:**
+  `R2_SHARED_WITH_PRODUCTION=false` (açık kalırsa silinen zeminlerin R2
+  dosyaları bucket'ta sahipsiz kalır), `LOCAL_ADMIN_EMAILS` boş,
+  `USE_MOCK_BACKEND=false`.
+- **Faz 6'dan taşınan CMYK işleri (26.09.2026):** fiziksel matbaa provası,
+  matbaanın PSO Coated v3 istediğinin teyidi, TAC/preflight kontrolü, 2,2
+  MB'lik gömülü profil kararı ve **canlı sunucu ölçümü** — 40 MP'lik bir
+  görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
+  kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
+  ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **Launch öncesi son kapı — dış girdiye bağlı (kullanıcı kararı
+  14.09.2026; Faz 7'den buraya taşındı 26.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
     takip maddesi 2) — production alan adı belirlenince.
   - Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son

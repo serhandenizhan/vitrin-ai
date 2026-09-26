@@ -589,7 +589,9 @@ async def test_update_background_rejects_unknown_field(db_session, admin_headers
     assert bg.r2_key == "backgrounds/a.jpg"
 
 
-async def test_delete_background_removes_row_and_both_objects(db_session, admin_headers):
+async def test_delete_background_removes_row_and_both_objects(db_session, admin_headers, monkeypatch):
+    # Yerel .env bu bayrağı açık tutabilir; production davranışı açıkça sınanıyor.
+    monkeypatch.setattr(settings, "r2_shared_with_production", False)
     bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
     db_session.add(bg)
     await db_session.commit()
@@ -605,6 +607,25 @@ async def test_delete_background_removes_row_and_both_objects(db_session, admin_
         "backgrounds/a.jpg",
         "backgrounds/thumbs/a.jpg",
     }
+
+
+async def test_delete_background_keeps_shared_r2_objects_in_local_dev(
+    db_session, admin_headers, monkeypatch
+):
+    # Yerelde bucket production ile ortak: silme yalnız yerel satırı götürmeli,
+    # canlıdaki zeminin dosyasına dokunmamalı.
+    monkeypatch.setattr(settings, "r2_shared_with_production", True)
+    bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    db_session.add(bg)
+    await db_session.commit()
+    storage_mock = AsyncMock()
+    client = _client(db_session, storage_mock)
+
+    response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert (await db_session.execute(select(Background))).scalars().all() == []
+    storage_mock.delete.assert_not_awaited()
 
 
 async def test_delete_background_succeeds_even_if_storage_fails(db_session, admin_headers):
