@@ -166,6 +166,12 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
   korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
   ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Model süreç başına yüklenir (yük testi, 26.09.2026):** `uvicorn --workers N`
+  N ayrı BiRefNet kopyası (N × ~12 GB) demektir. API'yi süreç sayısıyla
+  ölçeklemeden önce inference ayrı bir işçiye (Celery/RQ) taşınır; `Dockerfile`
+  bilinçli olarak tek süreç. Yük testi aracı `backend/scripts/load_test.py`
+  (R2'ye yazmaz, yalnız yerel test veritabanında koşar); sonuçlar
+  `backend/README.md` → "Yük testi".
 - **Hata izleme (Faz 7):** backend `backend/app/core/monitoring.py`, frontend
   `frontend/src/lib/error-tracking.ts` (tarayıcı + Next sunucusu, DSN yokken SDK
   hiç yüklenmez; tıklama kırıntıları ve adres sorguları gitmez — ayrıntı

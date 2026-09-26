@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 481 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 485 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -139,6 +139,60 @@ sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya 
 süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
 bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
 beklenen yetki davranışını gösteriyor.
+
+### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
+
+Yerelde, gerçek model + Postgres + Redis + gerçek JWT doğrulamasıyla. Depolama
+bellekte sahte (R2 production ile ortak — yük testi oraya yazmaz); kullanıcılar
+ayrı bir TEST veritabanına eklenir, betik uzak veritabanını ve `execute.sh`'ın
+`vitrin_ai`'sini reddeder (`tests/test_load_test_script.py`). Kullanım betiğin
+başındaki açıklamada. **Ölçüm sınırı:** tek makine (Apple M4, 16 GB), yük
+üreticisi sunucuyla aynı CPU'yu paylaşıyor; macOS belleği sıkıştırdığı için
+RSS değerleri Linux'taki 12 GB'lık ölçümün yerine GEÇMEZ. Canlı sunucu
+ölçümü Faz 7.5'te.
+
+**Arka plan kaldırma** (tek uvicorn süreci, `MAX_CONCURRENT_INFERENCES=1`):
+
+| Senaryo | Sonuç |
+| --- | --- |
+| 4 istemci × 2 deneme, 832×1248 foto | 2 × 200 (~13 sn), 6 × 429 (**6 ms**, gövde okunmadan) |
+| 2 istemci × 3 deneme, 12 MP iPhone foto (3,9 MB) | 3 × 200 (11–16 sn), 3 × 429 (8–10 ms) |
+| Inference SÜRERKEN `/api/health` ve `/api/projects` | p95 7–20 ms, hata yok — model iş parçacığında, olay döngüsü tıkanmıyor |
+| Sunucu RSS (macOS) | tepe 4,5–5,0 GB (Linux referansı: 12 GB, ROADMAP bölüm 2) |
+
+**Bulgu 1 — kapasite:** bir kesim ~13 sn sürdüğü ve süreç başına aynı anda
+yalnız bir inference çalıştığı için, bir kullanıcının işi sürerken gelen
+İKİNCİ kullanıcı anında 429 alır ("Şu anda çok fazla istek işleniyor…"); ön
+yüz otomatik yeniden denemiyor, kullanıcı tekrar basmak zorunda. Süreç başına
+tavan ~4–5 kesim/dakika. Bu bir hata değil, bilinçli koruma (bellek), ama
+eşzamanlı ikinci kullanıcı geldiği anda UX sorunu olur. Seçenekler (karar
+bekliyor): kısa süreli bekleme kuyruğu, ön yüzde `Retry-After` ile otomatik
+yeniden deneme, ya da ROADMAP'teki Celery/RQ kuyruğu. **Yan not:** vekildeki
+yoğunluk mesajı 503 için yazılmış; backend yoğunlukta 429 döndüğü için o dal
+kullanılmıyor, kullanıcı backend'in kendi Türkçe mesajını görüyor (doğru ama
+tutarsız).
+
+**Bulgu 2 — ölçekleme:** model süreç başına bir kez yükleniyor
+(`background_removal._get_session`, `lru_cache`). `uvicorn --workers N`, N
+ayrı model = N × ~12 GB demektir. API'yi süreç sayısıyla ölçeklemeden ÖNCE
+inference ayrı bir işçiye (Celery/RQ) taşınmalı; `Dockerfile` bugün bilinçli
+olarak tek süreç çalıştırıyor.
+
+**Okuma uçları** (eşzamanlılık / istek·sn / p95, 10 sn'lik pencereler, hata 0):
+
+| Uç | 10 | 25 | 50 |
+| --- | --- | --- | --- |
+| `GET /api/projects` | 685 / 50 ms | 459 / 165 ms | 242 / 640 ms |
+| `GET /api/backgrounds` | 401 / 62 ms | 368 / 211 ms | 196 / 708 ms |
+| `GET /api/subscriptions/me` | 384 / 60 ms | 407 / 195 ms | 207 / 690 ms |
+| `GET /api/health` | 1427 / 9 ms | 740 / 101 ms | 730 / 199 ms |
+
+Hiçbir seviyede hata yok. 50'de sunucu CPU'su yalnız %18–34 (tepe) iken
+gecikme artıyor: sunucu bir şey BEKLİYOR. Teşhis için havuz 40 bağlantıya
+çıkarıldı (`--pool-size`, yalnız yük testinde): proje ve zemin listesi 1,7–2,3
+kat hızlandı, abonelik ucu değişmedi — havuz (varsayılan 5 + 10 taşma)
+darboğazın BİR parçası. Üretim havuzu DEĞİŞTİRİLMEDİ: doğru boyut Supabase
+pooler'ının bağlantı sınırına bağlı, karar Faz 7.5'te canlı ölçümle.
 
 ### Hata izleme (`app/core/monitoring.py`, Faz 7)
 

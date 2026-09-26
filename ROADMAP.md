@@ -1133,6 +1133,18 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Yük testi (yerel) — ✅ (26.09.2026).** `backend/scripts/load_test.py`
+  (gerçek model/Postgres/Redis/JWT, depolama bellekte). Sonuçlar ve tablolar:
+  `backend/README.md` → "Yük testi". Özet: kabul sınırlayıcısı fazla
+  inference'ı 6–10 ms'de 429'la reddediyor, inference sürerken diğer uçlar
+  p95 ≤20 ms; okuma uçları eşzamanlılık 50'de hatasız, p95 ~0,7 sn. **Karar
+  bekleyen iki bulgu (Serhan):** (1) aynı anda ikinci kullanıcı 429 alıyor ve
+  ön yüz yeniden denemiyor — bekleme kuyruğu / otomatik yeniden deneme /
+  Celery-RQ arasında seçim; (2) model süreç başına yüklendiği için
+  `--workers N` = N × 12 GB — API süreç sayısıyla ölçeklenmeden önce
+  inference ayrı işçiye taşınmalı. **Faz 7.5'e:** veritabanı havuz boyutu
+  (varsayılan 5+10 darboğazın bir parçası çıktı; Supabase sınırıyla birlikte
+  canlıda ölçülecek) ve Linux'ta bellek ölçümü.
 - **Hata izleme (backend) — ✅ (26.09.2026).** `app/core/monitoring.py`:
   Sentry SDK kuruldu, `SENTRY_DSN` boşken hiç başlatılmıyor; doluyken yalnız
   5xx hataları maskelenmiş olarak gidiyor (gövde, yerel değişken, kimlik
