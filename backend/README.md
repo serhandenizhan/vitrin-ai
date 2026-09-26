@@ -225,6 +225,17 @@ kesimler sırayla ~11,7 sn'de bir, sıra dahil ortalama 38,5 sn; kesim sürerken
 ÖLÇÜLMEDİ:** 16 GB'lık Mac'te iki model kopyası belleği tüketip sistemi
 kilitledi (kök `CLAUDE.md` ders 31); ölçüm canlı sunucuda (açık takip maddesi 7).
 
+**Bellek sıkışınca boştaki işçi yavaş uyanır (27.09.2026, Serhan'ın tarayıcı
+denemesi):** iki fotoğraf aynı anda gönderilince ilki 43 sn, ikincisi 55 sn
+sürdü; aynı büyük fotoğraf birkaç dakika önce tek başına 12 sn'de kesilmişti.
+Sebep kod değil ortamdı: Mac'te takas 15,5/16 GB doluydu, macOS boşta bekleyen
+işçinin model ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Gerçek işçiyle
+ölçüldü: boşta kalıştan sonraki ilk kesim **30,1 sn**, hemen ardından gelenler
+**9,3 / 9,1 sn** (RSS 5,14 GB'a döndü). **Canlıya etkisi:** sunucu modeli
+bellekte tutacak kadar RAM'e sahip olmalı (takas tercihen kapalı); yoksa her
+boşta kalıştan sonraki ilk müşteri ~20 sn fazladan bekler. Canlı ölçüm
+listesinde (açık takip maddesi 7).
+
 ### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
 
 Yerelde, gerçek model + Postgres + Redis + gerçek JWT doğrulamasıyla. Depolama

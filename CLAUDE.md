@@ -586,6 +586,10 @@ liste):
      makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
      seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
      başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
+  8. **Boşta kalıştan sonraki ilk kesim:** işçi bir süre boşta kaldıktan sonra
+     ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
+     diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
+     bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 

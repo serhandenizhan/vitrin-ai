@@ -1354,6 +1354,10 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
      seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
      başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
+  8. **Boşta kalıştan sonraki ilk kesim:** işçi bir süre boşta kaldıktan sonra
+     ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
+     diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
+     bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
