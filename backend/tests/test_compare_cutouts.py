@@ -89,6 +89,36 @@ def test_rejects_size_mismatch(tmp_path):
         compare_cutouts.compare(base, cand, tmp_path / "out")
 
 
+def test_size_mismatch_leaves_no_partial_artifacts(tmp_path):
+    """Geçersizliği geç bulunan bir örnek, önceki heatmap'i de bırakmaz."""
+    base, cand, out = tmp_path / "base", tmp_path / "cand", tmp_path / "out"
+    base.mkdir(), cand.mkdir()
+    _write_cutout(base / "a.jpg.png", _ring(64))
+    _write_cutout(cand / "a.jpg.png", _ring(64))
+    _write_cutout(base / "z.jpg.png", _ring(64))
+    _write_cutout(cand / "z.jpg.png", _ring(32))
+
+    with pytest.raises(compare_cutouts.ComparisonError, match="z.jpg.png"):
+        compare_cutouts.compare(base, cand, out)
+
+    assert not out.exists()
+
+
+def test_compare_refuses_non_empty_output_dir_without_overwriting_it(tmp_path):
+    base, cand, out = tmp_path / "base", tmp_path / "cand", tmp_path / "out"
+    base.mkdir(), cand.mkdir(), out.mkdir()
+    _write_cutout(base / "a.jpg.png", _ring())
+    _write_cutout(cand / "a.jpg.png", _ring())
+    stale_report = out / "report.json"
+    stale_report.write_text('[{"image": "old.jpg.png"}]')
+
+    with pytest.raises(compare_cutouts.ComparisonError, match="boş değil"):
+        compare_cutouts.compare(base, cand, out)
+
+    assert stale_report.read_text() == '[{"image": "old.jpg.png"}]'
+    assert {p.name for p in out.iterdir()} == {"report.json"}
+
+
 def test_command_line_exits_non_zero_on_invalid_comparison(tmp_path, monkeypatch):
     base, cand = tmp_path / "base", tmp_path / "cand"
     base.mkdir(), cand.mkdir()

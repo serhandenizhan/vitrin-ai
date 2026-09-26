@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 402 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 404 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -158,12 +158,14 @@ Yön önemli: "kopan" ve "sızan" hep TABANA göre ölçülür.
 
 **Fail-closed (PR #29 Codex incelemesi):** taban ile adayın dosya kümesi
 birebir aynı değilse, hiç kesim yoksa ya da bir çiftin boyutu farklıysa araç
-rapor yazmadan sıfırdan farklı kodla çıkar. Önceden eksik örneği "atlandı"
-deyip geçiyor, sıfır eşleşmede bile boş raporla başarı dönüyordu; en kötü
-örnek eksikken "kalite değişmedi" denebilirdi. `render` dolu bir çıktı
-klasörünü reddeder (bayat kesim karışmasın) ve çıktıyı tam dosya adıyla
-yazar (`ring.jpg.png`, `ring.heic.png`). Tek fotoğrafta ısınmış ortalama
-`null`'dır. Testleri `tests/test_compare_cutouts.py`.
+rapor yazmadan sıfırdan farklı kodla çıkar. Bütün çiftler hiçbir artefakt
+yazılmadan önce doğrulanır; `compare` ve `render` dolu çıktı klasörlerini
+reddeder, böylece eski rapor/kesim/fark haritası yeni sonuca karışmaz. Önceden
+eksik örnek "atlandı" denip boş raporla başarı dönülebiliyor, yeniden
+kullanılan rapor klasöründe de bayat fark haritaları kalabiliyordu. `render`
+çıktıyı tam dosya adıyla yazar (`ring.jpg.png`, `ring.heic.png`). Tek
+fotoğrafta ısınmış ortalama `null`'dır. Testleri
+`tests/test_compare_cutouts.py`.
 
 Fotoğraflar kişisel veri olabileceği için depoda tutulmaz. **Aracın kendisi
 sınandı:** kenarı yalnız 2 px aşındırılmış bir kesimde IoU 0,80'e düştü ve

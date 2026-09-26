@@ -24,9 +24,10 @@ FAIL-CLOSED (PR #29 Codex incelemesi): iki klasörün dosya kümesi birebir
 aynı değilse, hiç eşleşme yoksa ya da bir çiftin boyutu farklıysa betik
 sıfırdan farklı kodla çıkar. Önceden eksik örneği "atlandı" deyip geçiyor,
 sıfır eşleşmede bile boş raporla başarı dönüyordu — en kötü örnek eksikken
-"kalite değişmedi" sonucuna dayanak olabilirdi. `render` de dolu bir çıktı
-klasörünü reddeder (bayat PNG rapora karışmasın) ve çıktıyı dosyanın TAM
-adıyla yazar (`ring.jpg` ile `ring.heic` aynı `ring.png`'ye düşmesin).
+"kalite değişmedi" sonucuna dayanak olabilirdi. `render` ve `compare` dolu
+çıktı klasörlerini reddeder (bayat PNG/rapor karışmasın); `compare` bütün
+çiftleri hiçbir artefakt yazmadan önce doğrular. `render` çıktıyı dosyanın
+TAM adıyla yazar (`ring.jpg` ile `ring.heic` aynı `ring.png`'ye düşmesin).
 
 Kullanım (backend klasöründen):
   <venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <taban>
@@ -140,6 +141,14 @@ class ComparisonError(Exception):
 
 
 def compare(baseline_dir: Path, candidate_dir: Path, out_dir: Path) -> list[dict]:
+    if out_dir.exists():
+        if not out_dir.is_dir():
+            raise ComparisonError(f"{out_dir} bir klasör değil")
+        if any(out_dir.iterdir()):
+            raise ComparisonError(
+                f"{out_dir} boş değil; bayat rapor veya fark haritası karışmasın diye boş bir klasör verin"
+            )
+
     baseline_names = {p.name for p in baseline_dir.glob("*.png")}
     candidate_names = {p.name for p in candidate_dir.glob("*.png")}
     missing = sorted(baseline_names - candidate_names)
@@ -151,13 +160,18 @@ def compare(baseline_dir: Path, candidate_dir: Path, out_dir: Path) -> list[dict
     if not baseline_names:
         raise ComparisonError(f"{baseline_dir} içinde karşılaştırılacak kesim yok")
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    rows = []
+    # Hiçbir artefakt yazmadan önce bütün çiftleri decode edip boyutlarını
+    # doğrula. Aksi hâlde alfabetik olarak sonraki bir bozuk/uyumsuz dosya,
+    # kendisinden önceki heatmap'leri klasörde bırakabilir.
     for name in sorted(baseline_names):
         base, cand = _alpha(baseline_dir / name), _alpha(candidate_dir / name)
         if base.shape != cand.shape:
             raise ComparisonError(f"{name}: boyut farklı {base.shape} / {cand.shape}")
 
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for name in sorted(baseline_names):
+        base, cand = _alpha(baseline_dir / name), _alpha(candidate_dir / name)
         diff = np.abs(base - cand)
         product_base = base >= OPAQUE
         # Kenar bandı: iki çıktıdan birinde yarı saydam olan pikseller —
