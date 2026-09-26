@@ -538,6 +538,32 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
 
+### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
+
+Faz 7'deki yük testi, bellek ve süre ölçümleri yerelde, tek makinede yapıldı
+(ayrıntı `backend/README.md` → "Yük testi"). Canlı sunucu belli olunca
+şunlar ölçülmeden production'a hazır denmez (`ROADMAP.md` Faz 7.5'te aynı
+liste):
+
+  1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
+     serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
+     çıktı ama bellek sıkıştırması yüzünden karşılaştırılamaz). Sunucu boyutu
+     bu ölçüme göre seçilir.
+  2. **Kesim süresi:** production CPU'sunda fotoğraf başına süre (yerelde
+     Apple M4'te ~13 sn). Süre kapasiteyi doğrudan belirler: tek süreçte
+     dakikada 60 / süre kesim.
+  3. **Yük testi:** `backend/scripts/load_test.py` production'a benzer bir
+     sunucuda, yük üreticisi AYRI bir makineden koşulur (yerelde ikisi aynı
+     CPU'yu paylaşıyordu). R2'ye yazmaz; ayrı bir test veritabanı gerekir.
+  4. **Veritabanı bağlantı havuzu:** varsayılan (5 + 10 taşma) yerel yük
+     testinde darboğazın bir parçası çıktı (havuz 40'ta iki uç 1,7–2,3 kat
+     hızlandı). Doğru boyut Supabase pooler'ının bağlantı sınırıyla birlikte
+     canlıda ölçülerek seçilir; sınırı aşan havuz bağlantı hatası üretir.
+  5. **CMYK dönüşümü:** 40 MP'lik görselin production'da süresi ve belleği
+     (Faz 6'dan taşınan madde, açık takip maddesi 1).
+  6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
+     maskelemenin orada da doğru göründüğü kontrol edilir.
+
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 
 Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği

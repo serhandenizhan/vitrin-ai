@@ -1266,6 +1266,27 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
   ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **Canlı sunucuda yapılacak ölçümler (Faz 7'den, 26.09.2026 — unutulmasın,
+  kök `CLAUDE.md` açık takip maddesi 7):** yerel ölçümler tek makinede
+  yapıldı ve aşağıdakilerin yerine geçmez.
+  1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
+     serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
+     çıktı ama bellek sıkıştırması yüzünden karşılaştırılamaz). Sunucu boyutu
+     bu ölçüme göre seçilir.
+  2. **Kesim süresi:** production CPU'sunda fotoğraf başına süre (yerelde
+     Apple M4'te ~13 sn). Süre kapasiteyi doğrudan belirler: tek süreçte
+     dakikada 60 / süre kesim.
+  3. **Yük testi:** `backend/scripts/load_test.py` production'a benzer bir
+     sunucuda, yük üreticisi AYRI bir makineden koşulur (yerelde ikisi aynı
+     CPU'yu paylaşıyordu). R2'ye yazmaz; ayrı bir test veritabanı gerekir.
+  4. **Veritabanı bağlantı havuzu:** varsayılan (5 + 10 taşma) yerel yük
+     testinde darboğazın bir parçası çıktı (havuz 40'ta iki uç 1,7–2,3 kat
+     hızlandı). Doğru boyut Supabase pooler'ının bağlantı sınırıyla birlikte
+     canlıda ölçülerek seçilir; sınırı aşan havuz bağlantı hatası üretir.
+  5. **CMYK dönüşümü:** 40 MP'lik görselin production'da süresi ve belleği
+     (Faz 6'dan taşınan madde, açık takip maddesi 1).
+  6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
+     maskelemenin orada da doğru göründüğü kontrol edilir.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
