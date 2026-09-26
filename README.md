@@ -94,9 +94,9 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Arayüz ilk yükleme | **386 KB** (JS 176 · font 131 · görsel 56 · CSS 12 · HTML 11) |
 | Editör (Konva) | **312 KB, ayrı parça** — stüdyo açılınca yükleniyor |
 | Yükleme sınırı | 20 MB, 40 megapiksel |
-| Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
+| Eşzamanlılık | Kesimler kuyrukta sıraya girer, ayrı işçide işlenir (tek işçide 4 eşzamanlı istemci: 8/8 başarılı, 0 red) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **485** (pytest + gerçek PostgreSQL/Redis) · frontend **425** (Vitest) |
+| Testler | backend **525** (pytest + gerçek PostgreSQL/Redis) · frontend **443** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -186,8 +186,8 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 485 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 425 test
+cd backend && pytest             # 525 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 443 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

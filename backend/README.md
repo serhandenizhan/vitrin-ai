@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 485 test bu yolla geçti):
+veritabanı yeterli (27.09.2026'da 525 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -139,6 +139,46 @@ sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya 
 süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
 bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
 beklenen yetki davranışını gösteriyor.
+
+### Kesim kuyruğu (Faz 7, 27.09.2026)
+
+Yük testinde süreç başına tek eşzamanlı kesim ve fazlasına anında 429 çıktı;
+Serhan'ın kararıyla istekler artık reddedilmez, **sıraya girer ve müşteriye
+hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
+
+| Parça | Görev |
+| --- | --- |
+| `POST /api/remove-background` | doğrular, kredi AYIRIR, fotoğrafı Redis'e koyar → `202 {job_id, status}` (aynı anahtarın sonucu hazırsa doğrudan PNG) |
+| `GET /api/remove-background/jobs/{id}` | sürüyorsa `202 {status}` (sıra numarası YOK), bittiyse PNG, başarısızsa `code` + `retry_safe` |
+| `app/services/cutout_queue.py` | Redis kuyruğu; iş kimliği `(kullanıcı, Idempotency-Key)` |
+| `app/workers/cutout.py` (`python -m app.workers.cutout`) | modeli bir kez yükler, `MAX_CONCURRENT_INFERENCES` kadar kesimi aynı anda işler; sonuç ÖNCE R2, kredi SONRA; her hata yolunda kredi iade + `retry_safe` |
+
+- **Fotoğraf:** Redis'te en fazla 15 dk, iş bitince silinir, diske/R2'ye
+  yazılmaz (KVKK metninde yazılı). İşçi alırken değil bitirince silinir ki
+  çöken işçinin işi başka işçiye fotoğrafıyla verilebilsin.
+- **Çöken işçi:** nabzı kesilen işçinin işleri sırasını kaybetmeden kuyruğun
+  önüne döner; iki denemede bitmeyen ya da fotoğrafı düşen işin kredisi
+  iade edilir.
+- **Kredi ayırma zaman aşımı 5 → 30 dk:** sırada bekleyen işin kredisi bakım
+  işince iade edilip sonucu çöpe gitmesin (eski değerde kırmızı yanan test var).
+- **Neden Celery/RQ değil:** ihtiyaç tek bir model kopyasını paylaşan N
+  eşzamanlı kesim, kısa ömürlü fotoğraf ve kullanıcıya bağlı iş kimliği;
+  RQ işleri varsayılan olarak ayrı süreçte (fork) çalıştırır, her işte modeli
+  yeniden yüklemek demekti. ~200 satırlık Redis kuyruğu bu ihtiyacı tam
+  karşılıyor ve Redis zaten kurulu.
+- **Dürüst sınır:** aynı CPU makinesinde aynı anda N kesim throughput'u
+  artırmaz (model bütün çekirdekleri kullanıyor), belleği katlar. Kapasite
+  işçi MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar.
+- **Başlatma:** `./execute.sh`, `./execute-supabase.sh` ve VS Code görevi
+  işçiyi de açar (`VITRIN_START_WORKER=0` ile kapatılır). İşçi çalışmıyorsa
+  kesimler sırada bekler.
+
+**Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
+başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);
+kesimler sırayla ~11,7 sn'de bir, sıra dahil ortalama 38,5 sn; kesim sürerken
+`/api/health` p95 13 ms, `/api/projects` p95 29 ms. **2 işçi bu makinede
+ÖLÇÜLMEDİ:** 16 GB'lık Mac'te iki model kopyası belleği tüketip sistemi
+kilitledi (kök `CLAUDE.md` ders 31); ölçüm canlı sunucuda (açık takip maddesi 7).
 
 ### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
 
@@ -566,7 +606,10 @@ sunucu/instance seçin.
 | Değişken | Varsayılan | Açıklama |
 | --- | --- | --- |
 | `MAX_FILE_SIZE_MB` | `20` | Yükleme boyutu sınırı (dosya içeriği) |
-| `MAX_CONCURRENT_INFERENCES` | `1` | Aynı anda çalışabilecek BiRefNet inference sayısı (sürece/worker'a özgü) |
+| `MAX_CONCURRENT_INFERENCES` | `1` | Faz 7'den beri: bir kesim İŞÇİSİNİN aynı anda işlediği kesim sayısı (tek model kopyasını paylaşır). Aynı CPU'da >1 hızlandırmaz, belleği artırır |
+| `MAX_CONCURRENT_UPLOADS` | `4` | API'nin aynı anda ayrıştırdığı yükleme sayısı (bellek koruması); fazlası 429 — kesim sırası değil |
+| `CUTOUT_QUEUE_MAX_JOBS` | `50` | Kuyruk üst sınırı (bekleyen fotoğraflar Redis belleğinde, 50 × ≤20 MB). Aşılırsa `503 queue_busy` + `Retry-After: 30`; ön yüz sessizce bekleyip yeniden dener |
+| `CUTOUT_QUEUE_PREFIX` | `cutout` | Redis anahtar öneki; API ve işçi AYNI olmalı. Yük testi kendi önekini kullanır |
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |

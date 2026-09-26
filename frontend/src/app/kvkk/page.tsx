@@ -22,7 +22,7 @@ const missing = "Canlı yayın öncesi yapılandırılacaktır";
 export default function KvkkPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 26 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
       title="KVKK aydınlatma metni"
       summary="Bu metin; Vitrin AI hesabı, fotoğraf işleme, çalışma geçmişi, ödeme ve destek süreçlerinde kişisel verilerin nasıl işlendiğini açıklar."
     >
@@ -84,7 +84,7 @@ export default function KvkkPage() {
         <LegalTable
           headers={["Kayıt", "Saklama yaklaşımı"]}
           rows={[
-            ["Özgün fotoğraf", "Arka plan kaldırma sırasında bellekte işlenir; çalışma geçmişine kaydedilmez."],
+            ["Özgün fotoğraf", "İşlem sırası beklenirken en fazla 15 dakika sunucu belleğinde (Redis) geçici olarak tutulur; diske veya depolamaya yazılmaz, arka plan kaldırma tamamlanınca silinir ve çalışma geçmişine kaydedilmez."],
             ["Geçici kesim sonucu", "Yanıt kaybında aynı kredinin yeniden harcanmasını önlemek amacıyla özel R2 alanında en fazla 24 saat tutulur ve bakım işiyle silinir."],
             ["Çalışma geçmişi", "Geçmiş açıksa sonuç ve küçük önizleme kullanıcı silene veya hesap kapanana kadar saklanır. Ücretsiz planda en yeni 10 çalışma korunur; eski kayıtlar silme kuyruğuna alınır."],
             ["Hesap ve profil", "Hesap devam ettiği sürece; hesap silme talebinin tamamlanmasıyla birlikte operasyonel kayıtlar kaldırılır."],

@@ -215,7 +215,7 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   sunucusunda uygular; ayrıca tıklama kırıntılarını ve adreslerdeki sorgu
   dizesini hiç göndermez, DSN yokken SDK tarayıcıya yüklenmez. KVKK aydınlatma
   metni ve gizlilik politikasına "hata izleme hizmet sağlayıcısı" alıcı grubu
-  eklendi (yasal sürüm `2026-09-26`). **Açık:** sağlayıcı seçilince adı
+  eklendi (yasal sürüm `2026-09-27`). **Açık:** sağlayıcı seçilince adı
   gizlilik tablosuna yazılır; metin hukukçu kontrolünden geçer (bölüm 9).
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
 
@@ -310,7 +310,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] HTTPS zorunlu, HSTS aktif
 - [ ] Rate limiting tüm public endpoint'lerde aktif
 - [ ] CORS sadece bilinen origin'lere izin veriyor
-- [ ] DB ve Redis dışarıya kapalı
+- [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
 - [ ] Backup + restore test edildi
 - [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar

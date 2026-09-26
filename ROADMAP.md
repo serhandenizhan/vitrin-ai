@@ -1133,7 +1133,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
-- **Kesim kuyruğu — ⏳ Faz 7'ye EKLENDİ (Serhan'ın kararı, 26.09.2026).**
+- **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
   Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
   "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek
   yerine SIRAYA alınmalı ve **bu müşteriye hissettirilmemeli** (hata yok,
@@ -1162,7 +1162,15 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   - **Dürüst sınır:** aynı CPU makinesinde aynı anda N kesim throughput'u
     artırmaz (model zaten bütün çekirdekleri kullanıyor); kapasite işçi
     MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar. Kuyruğun değeri: hata
-    yerine bekleme ve API'ye dokunmadan işçi ekleyebilmek. **Faz 7.5'e:** GPU'ya
+    yerine bekleme ve API'ye dokunmadan işçi ekleyebilmek.
+  **Sonuç (27.09.2026):** tek işçi, 4 eşzamanlı istemci × 2 istek → 8/8
+  başarılı, 0 × 429 (önce 6/8 reddediliyordu); sıra dahil ortalama 38,5 sn,
+  kesim sürerken diğer uçlar p95 ≤29 ms. Ayrıntı `backend/README.md` →
+  "Kesim kuyruğu". Yol boyunca: fotoğrafın işçi ALIRKEN değil BİTİRİNCE
+  silinmesi (çöken işçinin işi kurtarılabilsin), kullanıcı ekrandan ayrılınca
+  yoklamanın DURMAMASI (kredi harcanıyor, sonuç geçmişe yazılmalı), Windows'ta
+  işçinin sinyal işleyicisi yüzünden çökmemesi. **2 işçi yerelde ölçülemedi:**
+  16 GB'lık makineyi kilitledi (kök `CLAUDE.md` ders 31) — canlıda ölçülecek. **Faz 7.5'e:** GPU'ya
   (sunucusuz GPU) geçiş kararı ve sağlayıcı/maliyet karşılaştırması.
 - **Yük testi (yerel) — ✅ (26.09.2026).** `backend/scripts/load_test.py`
   (gerçek model/Postgres/Redis/JWT, depolama bellekte). Sonuçlar ve tablolar:
@@ -1188,7 +1196,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   ölçüldü); DSN'li derleme gerçek tarayıcıda sahte Sentry'ye bağlanıp
   maskelemenin çalıştığı görüldü. **KVKK aydınlatma metni ve gizlilik
   politikası güncellendi:** "hata izleme hizmet sağlayıcısı" alıcı grubu
-  olarak eklendi, yasal sürüm `2026-09-26` (yeni kayıtlar bu sürümü kabul
+  olarak eklendi, yasal sürüm `2026-09-27` (yeni kayıtlar bu sürümü kabul
   eder; eski kabul kayıtları tarihçede kalır).
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
@@ -1324,6 +1332,11 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      (Faz 6'dan taşınan madde, açık takip maddesi 1).
   6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
      maskelemenin orada da doğru göründüğü kontrol edilir.
+  7. **Kesim kuyruğu kapasitesi:** aynı makinede 2 işçi ya da
+     `MAX_CONCURRENT_INFERENCES=2` throughput'u artırıyor mu (yerelde 16 GB'lık
+     makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
+     seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
+     başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK

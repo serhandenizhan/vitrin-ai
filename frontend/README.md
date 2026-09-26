@@ -122,12 +122,27 @@ Vekil ayrıca iki iş daha yapıyor:
 | Backend 413 | "Dosya çok büyük. En fazla 20 MB olabilir." |
 | Backend 503 (kapasite dolu) | "Sistem şu anda meşgul — aynı anda yalnızca bir fotoğraf işlenebiliyor." |
 | Backend'e ulaşılamıyor | "Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir." |
-| Zaman aşımı (180 sn) | "İşlem zaman aşımına uğradı." |
+| Zaman aşımı (yükleme, 120 sn) | "İşlem zaman aşımına uğradı." |
 
-503 ayrı bir mesaj hak ediyor çünkü bir hata değil, geçici bir durum: backend
-aynı anda tek inference'a izin veriyor (`MAX_CONCURRENT_INFERENCES=1`, BiRefNet'in
-12–14 GB RAM ayak izi yüzünden). Kullanıcının yapması gereken tek şey biraz
-beklemek.
+503 ayrı bir mesaj hak ediyor çünkü bir hata değil, geçici bir durum. Faz 7'den
+beri kesimler kuyruğa girdiği için "aynı anda tek fotoğraf" diye bir red yok;
+503 yalnız kuyruk üst sınırda (`queue_busy`) ya da altyapı geçici olarak
+kullanılamıyorken gelir ve `lib/cutout-job.ts` bunları kullanıcıya göstermeden
+`Retry-After` kadar bekleyip yeniden dener.
+
+## Kesim kuyruğu ve yoklama (Faz 7, 27.09.2026)
+
+`POST /api/remove-background` artık `202 {job_id}` döner; `lib/cutout-job.ts`
+işi `/api/remove-background/jobs/[id]` üzerinden 1,5 sn'de bir yoklar ve PNG
+gelince bileşene verir. Karar (Serhan): yoğunluk **müşteriye hissettirilmez** —
+sıra numarası yok; 30 sn'den sonra bekleme ekranında (`processing-state.tsx`)
+yalnız nötr bir cümle çıkar. Kredisi iade edilmiş GEÇİCİ hatalar (`worker_lost`,
+`job_expired`, `queue_busy`…) yeni anahtarla sessizce en fazla iki kez yeniden
+denenir; kalıcı hata (`processing_failed`) gösterilir. Anahtar kuralı
+değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. **Kullanıcı ekrandan
+ayrılsa da yoklama sürer:** kredi harcanıyor ve sonuç geçmişe yazılmalı (ekran
+güncellemesi oturum sayacıyla atlanır). Testler sahte zamanlayıcıyla
+(`cutout-job.test.ts`, 11 test; beş bozma denendi).
 
 ## Yükleme kısıtları backend ile senkron tutulur
 
@@ -498,7 +513,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**425 test** (26.09.2026'da sayıldı; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**443 test** (27.09.2026'da sayıldı; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -845,9 +860,10 @@ bırakırdı.
 
 ## Bilinen kısıt
 
-İlk istek modeli belleğe yüklediği için ~30-35 saniye sürebilir; sonrakiler
-~15 saniye (bkz. kök `CLAUDE.md` "Bilinen kısıt"). Bekleme ekranı geçen süreyi
-sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
+Bir kesim CPU'da ~12–15 saniye sürer (bkz. kök `CLAUDE.md` "Bilinen kısıt");
+Faz 7'den beri işçi modeli iş almadan önce yüklediği için "ilk istek" gecikmesi
+yok, ama yoğunlukta sırada beklenebilir. Bekleme ekranı geçen süreyi sayıyor ve
+30 saniyeden sonra nötr bir "biraz daha uzun sürebilir" cümlesi gösteriyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
 
 ## Katalog (`/katalog`)
