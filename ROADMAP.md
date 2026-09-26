@@ -1133,6 +1133,16 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Kesim kuyruğu — ⏳ Faz 7'ye EKLENDİ (Serhan'ın kararı, 26.09.2026).**
+  Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
+  "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek
+  yerine SIRAYA alınmalı ve **bu müşteriye hissettirilmemeli** (hata yok,
+  yalnız normal işleme görünümü). Kapsam: kesim API'den ayrı işçi
+  süreç(ler)ine taşınır, istekler Redis tabanlı kuyruğa girer, aynı anda
+  işlenen kesim sayısı yapılandırılabilir (>1). Bu aynı zamanda "model süreç
+  başına yüklenir" bulgusunu çözer (API süreçleri modeli yüklemez). Tasarım
+  kararları ve uygulama bu maddenin altına yazılacak. **Faz 7.5'e:** GPU'ya
+  (sunucusuz GPU) geçiş kararı ve sağlayıcı/maliyet karşılaştırması.
 - **Yük testi (yerel) — ✅ (26.09.2026).** `backend/scripts/load_test.py`
   (gerçek model/Postgres/Redis/JWT, depolama bellekte). Sonuçlar ve tablolar:
   `backend/README.md` → "Yük testi". Özet: kabul sınırlayıcısı fazla
@@ -1266,6 +1276,12 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
   ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **GPU'ya geçiş kararı (Faz 7'den, Serhan'ın kararı 26.09.2026):**
+  kesim kapasitesini asıl artıran adım. Sunucusuz GPU sağlayıcıları (Modal,
+  RunPod, Replicate vb.) fiyat, soğuk başlangıç süresi, veri konumu (KVKK) ve
+  BiRefNet MIT ağırlıklarının çalıştırılabilirliği açısından karşılaştırılır.
+  Faz 7'deki kuyruk, işçiyi GPU'ya taşımayı API'ye dokunmadan mümkün kılacak
+  biçimde kurulur.
 - **Canlı sunucuda yapılacak ölçümler (Faz 7'den, 26.09.2026 — unutulmasın,
   kök `CLAUDE.md` açık takip maddesi 7):** yerel ölçümler tek makinede
   yapıldı ve aşağıdakilerin yerine geçmez.
