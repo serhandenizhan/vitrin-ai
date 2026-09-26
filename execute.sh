@@ -84,6 +84,17 @@ echo "  hazır."
 
 echo ""
 echo "== Backend sanal ortamı =="
+# Requirements değiştiyse (ör. Faz 7'deki güvenlik yükseltmesi) mevcut ortam da
+# güncellenir. Önceden .venv bir kez kurulunca hiç dokunulmuyordu: yeni pin'ler
+# git'e girse de geliştirici sessizce eski, açıklı sürümlerle çalışıyordu.
+# Özet, kurulan requirements'ı kaydeder; yeni kurulan ortam da damgalanır ki
+# hemen ardından aynı kurulum ikinci kez çalışmasın (PR #29 Codex incelemesi).
+REQ_STAMP="$VENV_DIR/.requirements.sha256"
+if command -v shasum >/dev/null 2>&1; then
+  REQ_HASH="$(cat "$BACKEND_DIR"/requirements*.txt | shasum -a 256 | cut -d' ' -f1)"
+else
+  REQ_HASH="$(cat "$BACKEND_DIR"/requirements*.txt | sha256sum | cut -d' ' -f1)"
+fi
 if [ ! -x "$VENV_DIR/bin/python" ]; then
   if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
     echo "hata: $PYTHON_BIN bulunamadı. VITRIN_PYTHON=<yol> ile başka bir Python 3.11 belirtin." >&2
@@ -93,8 +104,15 @@ if [ ! -x "$VENV_DIR/bin/python" ]; then
   "$PYTHON_BIN" -m venv "$VENV_DIR"
   echo "  bağımlılıklar yükleniyor..."
   "$VENV_DIR/bin/pip" install -q -r "$BACKEND_DIR/requirements-dev.txt"
+  echo "$REQ_HASH" > "$REQ_STAMP"
 else
   echo "  mevcut ($VENV_DIR)."
+fi
+
+if [ "$(cat "$REQ_STAMP" 2>/dev/null)" != "$REQ_HASH" ]; then
+  echo "  requirements değişmiş, bağımlılıklar güncelleniyor..."
+  "$VENV_DIR/bin/pip" install -q -r "$BACKEND_DIR/requirements-dev.txt"
+  echo "$REQ_HASH" > "$REQ_STAMP"
 fi
 
 if [ ! -f "$BACKEND_DIR/.env" ]; then

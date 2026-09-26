@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 390 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 404 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -113,6 +113,65 @@ Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
 `set local role` ile taklit ediyor (`tests/test_rls.py`).
+
+### CI ve bağımlılık taraması (Faz 7)
+
+`.github/workflows/ci.yml` her PR'da ve `main`'e her push'ta testleri
+`.env` OLMADAN, servis olarak açılan Postgres 16 + Redis 7'ye karşı koşar.
+`.env`'siz koşmak bilinçli: CI kurulurken `test_admin_me_requires_a_session`
+yerel `.env`'deki `SUPABASE_URL`'e gizlice bağlı çıktı (yerelde yeşil, `.env`'siz
+503). Yeni bir test yazarken Supabase'e ihtiyaç varsa `tokens` fixture'ı istenir.
+
+Aynı iş akışında ayrı bir iş olarak `pip-audit -r requirements-dev.txt` ve
+`npm audit` koşar (haftada bir de kendiliğinden). **26.09.2026 taraması:**
+6 pakette 34 bilinen açık vardı (Pillow 17, Starlette 7, python-multipart 6,
+rembg 2, pillow-heif 1, pytest 1); hepsi sürüm yükseltmesiyle kapatıldı
+(FastAPI 0.141.1 + Starlette 1.7.0 açıkça pinli, Pillow 12.3.0, pillow-heif
+1.8.0, python-multipart 0.0.32, rembg 2.0.85, onnxruntime 1.30.0, pytest 9.1.1,
+pytest-asyncio 1.4.0). Davranış değişikliği: python-multipart artık bir
+parçanın başlığını ~4 KB ile sınırlıyor, daha uzun dosya adı `400` alır
+(`test_rejects_oversized_part_header_with_400_without_calling_service`;
+eski sürümde kırmızı yandığı görüldü).
+
+Yerel ortam: `./execute.sh` requirements dosyalarının özetini
+`.venv/.requirements.sha256`'da tutar ve dosyalar değişince bağımlılıkları
+yeniden kurar. Önceden `.venv` bir kez kurulunca hiç güncellenmiyordu — yeni
+pin'ler git'e girse de geliştirici sessizce eski sürümlerle çalışıyordu.
+
+### Kesim kalitesi karşılaştırması (`scripts/compare_cutouts.py`)
+
+Model çıktısını değiştirebilecek her iş (bağımlılık yükseltmesi, model
+optimizasyonu) bununla ölçülür. Önce her ortam için ayrı `render`, sonra
+`compare`:
+
+```bash
+<eski-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <taban>
+<yeni-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <aday>
+.venv/bin/python scripts/compare_cutouts.py compare <taban> <aday> --out <rapor>
+```
+
+Rapor yalnız ortalama farkı değil kaybın NEREDE olduğunu da verir: kenar
+bandındaki fark (ince zincir/yansıtıcı kenar), üründen kopan ve zeminden
+sızan piksel sayısı ile en büyük bağlı parçası (dağınık gürültü mü, tek yerde
+bir kopma mı), IoU; ayrıca fark haritası (kırmızı kayıp, mavi sızıntı).
+Yön önemli: "kopan" ve "sızan" hep TABANA göre ölçülür.
+
+**Fail-closed (PR #29 Codex incelemesi):** taban ile adayın dosya kümesi
+birebir aynı değilse, hiç kesim yoksa ya da bir çiftin boyutu farklıysa araç
+rapor yazmadan sıfırdan farklı kodla çıkar. Bütün çiftler hiçbir artefakt
+yazılmadan önce doğrulanır; `compare` ve `render` dolu çıktı klasörlerini
+reddeder, böylece eski rapor/kesim/fark haritası yeni sonuca karışmaz. Önceden
+eksik örnek "atlandı" denip boş raporla başarı dönülebiliyor, yeniden
+kullanılan rapor klasöründe de bayat fark haritaları kalabiliyordu. `render`
+çıktıyı tam dosya adıyla yazar (`ring.jpg.png`, `ring.heic.png`). Tek
+fotoğrafta ısınmış ortalama `null`'dır. Testleri
+`tests/test_compare_cutouts.py`.
+
+Fotoğraflar kişisel veri olabileceği için depoda tutulmaz. **Aracın kendisi
+sınandı:** kenarı yalnız 2 px aşındırılmış bir kesimde IoU 0,80'e düştü ve
+zincirin çevresi kırmızı işaretlendi. **26.09.2026 yükseltmesi:** 6 gerçek ürün
+fotoğrafında eski (rembg 2.0.61) ve yeni (2.0.85) maskeler arasında en büyük
+alfa farkı 1/255, kopan/sızan piksel 0 — kalite değişmedi.
 
 ## R2 CORS
 

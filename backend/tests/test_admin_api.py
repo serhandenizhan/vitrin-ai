@@ -119,7 +119,10 @@ async def test_admin_me_answers_both_roles_without_an_error(client, people, toke
     assert regular.status_code == 200 and regular.json() == {"is_admin": False}
 
 
-async def test_admin_me_requires_a_session(client):
+async def test_admin_me_requires_a_session(client, tokens):
+    # `tokens` sahte Supabase projesini kurar; olmadan test, yerel `.env`'deki
+    # SUPABASE_URL'e gizlice bağlıydı ve `.env`'siz CI'da 401 yerine 503
+    # alıyordu (Faz 7, CI kurulumunda bulundu).
     assert (await client.get("/api/admin/me")).status_code == 401
 
 

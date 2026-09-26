@@ -286,7 +286,8 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   okunan kayıt düzenlenemez, eylem türü sabit listeyle sınırlıdır ve kullanıcı
   e-postaları `auth.users`'tan değil Supabase yönetici API'sinden gelir;
   destek formunda kullanıcı başına hız sınırı
-- **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit, HTTPS/HSTS
+- **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit (**yapıldı,
+  26.09.2026** — `pip-audit` + `npm audit` CI'da her PR'da ve haftada bir), HTTPS/HSTS
   son kontrol; yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
   (Faz 7.5 — canlıya çıkış)
 
@@ -302,7 +303,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] DB ve Redis dışarıya kapalı
 - [ ] Backup + restore test edildi
 - [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
-- [ ] `npm audit` / `pip-audit` temiz (kritik açık yok)
+- [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
 - [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)

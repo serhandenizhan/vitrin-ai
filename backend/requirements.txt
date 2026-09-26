@@ -1,13 +1,16 @@
-fastapi==0.115.6
+fastapi==0.141.1
+# Faz 7 (pip-audit): FastAPI Starlette'i alt sınırla (>=0.46) getiriyor; açıkları
+# kapatan sürüm açıkça pinleniyor ki kurulum eski bir Starlette'e düşmesin.
+starlette==1.7.0
 uvicorn[standard]==0.34.0
 anyio==4.15.1
-python-multipart==0.0.20
+python-multipart==0.0.32
 pydantic-settings==2.7.1
-Pillow==11.1.0
-pillow-heif==0.21.0
+Pillow==12.3.0
+pillow-heif==1.8.0
 filetype==1.2.0
-rembg[cpu]==2.0.61
-onnxruntime==1.20.1
+rembg[cpu]==2.0.85
+onnxruntime==1.30.0
 sqlalchemy==2.0.36
 # SQLAlchemy'nin async ORM köprüsü (AsyncSession.close() vb.) bu paketi
 # gerektiriyor ama bu sürümde otomatik bağımlılık olarak gelmiyor — pip

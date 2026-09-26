@@ -45,7 +45,7 @@ buna göre seçildi.
 ## Durum
 
 **Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
-bekliyor. Faz 6 (admin paneli) tamamlandı. Sıradaki Faz 7; alan adına ve canlı
+bekliyor. Faz 6 (admin paneli) tamamlandı. Faz 7 sürüyor; alan adına ve canlı
 sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 
 | Faz | Kapsam | Durum |
@@ -57,7 +57,7 @@ sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
 | 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
-| 7 | Test, optimizasyon, sağlamlaştırma | ⏳ |
+| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 sürüyor — CI ve bağımlılık taraması kuruldu |
 | 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 
@@ -96,7 +96,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Aynı anda tek inference (`MAX_CONCURRENT_INFERENCES=1`) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **389** (pytest + gerçek PostgreSQL/Redis) · frontend **400** (Vitest) |
+| Testler | backend **404** (pytest + gerçek PostgreSQL/Redis) · frontend **417** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -186,14 +186,19 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 389 test — yerel PostgreSQL ve Redis ister
-cd frontend && npm test          # 412 test
+cd backend && pytest             # 404 test — yerel PostgreSQL ve Redis ister
+cd frontend && npm test          # 417 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 
 Backend testleri gerçek bir PostgreSQL'e karşı çalışır ve **bağlandıkları
 veritabanını sıfırlar**. `tests/db_safety.py` adresi ve şemayı kontrol eder;
 hedef yerel bir test veritabanı değilse oturum hiçbir şeye dokunmadan durur.
+
+**CI (Faz 7):** her PR'da ve `main`'e her push'ta GitHub Actions backend
+testlerini (servis olarak Postgres + Redis), frontend lint/test/build'i ve
+bağımlılık güvenlik taramasını (`pip-audit`, `npm audit`) koşar; tarama
+ayrıca haftada bir kendiliğinden çalışır. Tanım: `.github/workflows/ci.yml`.
 
 ## Depo yapısı
 
