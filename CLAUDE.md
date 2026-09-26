@@ -561,6 +561,32 @@ geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
 3. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
    süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
 
+### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
+
+Kesim kuyruğu denemesinde iki fotoğraftan ilki 43 sn sürdü (normali ~12 sn).
+Ölçümle bulunan sebep kod değil makine: 16 GB'lık Mac'te **takas (swap)
+15,5 / 16 GB doluydu** ve macOS, boşta bekleyen kesim işçisinin model
+ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Boşta kalıştan sonraki ilk
+kesim 30,1 sn, hemen ardından gelenler 9,3 / 9,1 sn ölçüldü (ayrıntı
+`backend/README.md` → "Kesim kuyruğu"). `./execute.sh` artık açılışta işçiyi
+başlattığı için model (~5 GB) sürekli bellekte duruyor; makine sıkışınca
+hem kesimler hem bilgisayar yavaşlıyor (dün gece iki model aynı anda
+çalışınca makine kilitlenmişti — ders 31).
+
+**Bakılacaklar:**
+1. **Docker Desktop → Settings → Resources → Memory:** Docker'ın Linux sanal
+   makinesine ayrılan bellek. Postgres + Redis için 2–4 GB yeter; fazlası Mac'ten
+   sürekli eksilir. Değer düşürülüp Docker yeniden başlatılır.
+2. `sysctl vm.swapusage` ve Etkinlik Monitörü → Bellek: `execute.sh` açıkken en
+   çok bellek kullananlar (Chrome sekmeleri, VS Code eklentileri, Docker).
+3. Kesim denenmeyecek günlerde `VITRIN_START_WORKER=0 ./execute.sh` (işçi ve
+   model hiç açılmaz; kesimler sırada bekler).
+4. Düzeltmeden sonra ölçüm: işçi birkaç dakika boşta kaldıktan sonra bir
+   kesim yapılır; ~12 sn civarındaysa sorun kapanmıştır ve bu madde silinir.
+
+Bu, yerel geliştirme ortamının sorunu; canlı sunucudaki karşılığı açık takip
+maddesi 7'nin 8. alt maddesi (modelin bellekte kalması).
+
 ### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
 
 Faz 7'deki yük testi, bellek ve süre ölçümleri yerelde, tek makinede yapıldı
