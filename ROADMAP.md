@@ -1140,8 +1140,29 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   yalnız normal işleme görünümü). Kapsam: kesim API'den ayrı işçi
   süreç(ler)ine taşınır, istekler Redis tabanlı kuyruğa girer, aynı anda
   işlenen kesim sayısı yapılandırılabilir (>1). Bu aynı zamanda "model süreç
-  başına yüklenir" bulgusunu çözer (API süreçleri modeli yüklemez). Tasarım
-  kararları ve uygulama bu maddenin altına yazılacak. **Faz 7.5'e:** GPU'ya
+  başına yüklenir" bulgusunu çözer (API süreçleri modeli yüklemez).
+  **Tasarım (26.09.2026, Serhan'ın onayladığı kararlar):**
+  - Özgün fotoğraf işçiye ulaşana kadar **Redis'te en fazla 15 dk** bekler,
+    işçi alınca silinir; diske/R2'ye yazılmaz. KVKK metni buna göre
+    güncellenir.
+  - Uzun beklemede müşteriye **sıra bilgisi gösterilmez**; ~30 sn'den sonra
+    yalnız nötr bir cümle çıkar. Hata gösterilmez.
+  - Ön yüz değişikliğini Serhan yapar, **Kaan PR'da ayrıca inceler**.
+  - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
+    `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
+  - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,
+    `202`. `GET /api/remove-background/jobs/{id}` → durum ya da PNG ya da hata.
+  - İşçi: `python -m app.workers.cutout`; modeli bir kez yükler,
+    `MAX_CONCURRENT_INFERENCES` kadar kesimi aynı anda işler (tek model
+    kopyası). Çöken işçinin işleri başka işçiye geri verilir.
+  - Kredi ayırma zaman aşımı 5 dk → 30 dk (kuyrukta bekleyen işin kredisi
+    bakım işince iade edilmesin); 15 dk içinde başlamayan iş kendisi iade eder.
+  - Kuyruk üst sınırı ayarlanabilir (fotoğraflar Redis belleğinde); aşılırsa
+    nazik bir yoğunluk mesajı — yalnız aşırı durumda.
+  - **Dürüst sınır:** aynı CPU makinesinde aynı anda N kesim throughput'u
+    artırmaz (model zaten bütün çekirdekleri kullanıyor); kapasite işçi
+    MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar. Kuyruğun değeri: hata
+    yerine bekleme ve API'ye dokunmadan işçi ekleyebilmek. **Faz 7.5'e:** GPU'ya
   (sunucusuz GPU) geçiş kararı ve sağlayıcı/maliyet karşılaştırması.
 - **Yük testi (yerel) — ✅ (26.09.2026).** `backend/scripts/load_test.py`
   (gerçek model/Postgres/Redis/JWT, depolama bellekte). Sonuçlar ve tablolar:
