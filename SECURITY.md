@@ -142,7 +142,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 3.5 Yedekleme
 - Otomatik günlük DB backup + R2'ye ayrı bir bucket'ta saklama.
 - Backup restore süreci en az bir kez test edilmeli (çoğu ekip bunu atlar ve felaket anında
-  backup'ın çalışmadığını öğrenir).
+  backup'ın çalışmadığını öğrenir). **Uygulandı (Faz 7, 27.09.2026):**
+  `backend/scripts/backup_database.py` — şifreli (Fernet) döküm, depo dışında;
+  geri yükleme testi satır sayılarının yanında RLS/tetikleyici/politika
+  sayılarını da karşılaştırır. Otomatik günlük çalıştırma ve ayrı bucket Faz 7.5.
 
 ---
 
@@ -311,7 +314,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Rate limiting tüm public endpoint'lerde aktif
 - [ ] CORS sadece bilinen origin'lere izin veriyor
 - [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
-- [ ] Backup + restore test edildi
+- [x] Backup + restore test edildi — 27.09.2026, production'dan şifreli döküm alınıp atılabilir Postgres 17'ye geri yüklendi: 48 tablo/346 satır ve şema parmak izi (RLS, politika, tetikleyici, fonksiyon, indeks, kısıt) birebir, 2,8 sn (`backend/README.md` → "Veritabanı yedeği"). **Açık:** Supabase ücretsiz pakette otomatik yedek YOK; günlük otomatik yedek + ayrı R2 bucket Faz 7.5'te (`CLAUDE.md` açık takip maddesi 8)
 - [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında

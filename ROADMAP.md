@@ -1133,6 +1133,15 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Veritabanı yedeği ve geri yükleme testi — ✅ (27.09.2026).**
+  Supabase ücretsiz pakette otomatik yedek almıyor (Serhan: paket Free) —
+  kendi yedeğimiz tek yedek. `backend/scripts/backup_database.py`: `pg_dump`
+  17 (Docker) ile `public` + `auth`, bellekte şifrelenir (Fernet), depo
+  dışına yazılır. Production'dan alınan yedek atılabilir bir Postgres'e geri
+  yüklendi: 48 tablo/346 satır ve RLS/politika/tetikleyici/fonksiyon/indeks/
+  kısıt sayıları birebir, 2,8 sn; kontrol dört bozmayla sınandı. Ayrıntı
+  `backend/README.md` → "Veritabanı yedeği". **Faz 7.5'e:** günlük otomatik
+  çalıştırma, ayrı özel R2 bucket, saklama süresi.
 - **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
   Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
   "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek
@@ -1305,6 +1314,14 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
   ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **Otomatik veritabanı yedeği (Faz 7'den, 27.09.2026):** Supabase
+  ücretsiz pakette otomatik yedek YOK. `backup_database.py backup` günlük
+  çalışacak şekilde zamanlanır (sunucuda cron/systemd timer), çıktı AYRI ve
+  özel bir R2 bucket'ına yüklenir (yalnız o bucket'a yetkili ayrı anahtar),
+  saklama süresi belirlenir ve ayda bir `restore-test` koşulur. Alternatif:
+  Supabase Pro'ya geçmek (7 gün otomatik yedek) — o durumda bizimki ek,
+  başka yerde duran kopya olur. `BACKUP_ENCRYPTION_KEY` parola
+  yöneticisinde saklanmış olmalı.
 - **GPU'ya geçiş kararı (Faz 7'den, Serhan'ın kararı 26.09.2026):**
   kesim kapasitesini asıl artıran adım. Sunucusuz GPU sağlayıcıları (Modal,
   RunPod, Replicate vb.) fiyat, soğuk başlangıç süresi, veri konumu (KVKK) ve

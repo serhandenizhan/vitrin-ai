@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (27.09.2026'da 525 test bu yolla geçti):
+veritabanı yeterli (27.09.2026'da 533 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -139,6 +139,51 @@ sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya 
 süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
 bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
 beklenen yetki davranışını gösteriyor.
+
+### Veritabanı yedeği ve geri yükleme testi (`scripts/backup_database.py`, Faz 7, 27.09.2026)
+
+**Neden bizim işimiz:** Supabase otomatik günlük yedeği yalnız Pro ve üstü
+paketlerde alıyor; proje **ücretsiz pakette** — bu betiğin ürettiği yedek
+**tek yedek**. (Supabase belgesi, `docs/guides/platform/backups`: ücretsiz
+projeler verilerini düzenli dışa aktarıp başka yerde saklamalı.)
+
+```bash
+.venv/bin/python scripts/backup_database.py keygen            # bir kez; anahtar .env'e + parola yöneticisine
+.venv/bin/python scripts/backup_database.py backup --out-dir ~/vitrin-ai-backups
+.venv/bin/python scripts/backup_database.py restore-test ~/vitrin-ai-backups/<dosya>.dump.fernet
+```
+
+- **Kapsam:** `public` (21 tablomuz) + `auth` (kullanıcı hesapları).
+  Supabase'in yönettiği diğer şemalar yeni projede zaten oluşur.
+- **Şifre:** `cryptography` Fernet (AES + HMAC; yanlış anahtar ya da bozuk
+  dosya sessizce geçmez). Şifresiz döküm diske HİÇ yazılmaz. Anahtar
+  `BACKUP_ENCRYPTION_KEY` (`backend/.env`); **kaybolursa bütün yedekler
+  açılamaz — parola yöneticisinde de saklanır.**
+- **pg_dump sürümü sunucuyla aynı ana sürüm olmalı** (production Postgres
+  17.6 → Docker `postgres:17-alpine`, `BACKUP_PG_IMAGE` ile değişir).
+- **Parola `ps`'te görünmez:** bağlantı adresi yalnız sahibinin okuyabildiği
+  geçici bir env dosyasıyla Docker'a verilir ve hemen silinir.
+- **Yedek depo DIŞINDA** saklanır (betik depo içini reddeder); dosyalar 600,
+  klasör 700.
+
+**Geri yükleme testi ne kanıtlıyor:** yedek bellekte açılıp veri tmpfs'te
+duran atılabilir bir Postgres 17'ye yüklenir, sonra iki şey kayıtla
+(manifest) karşılaştırılır: her tablonun **satır sayısı** ve **şema parmak
+izi** — RLS açık tablo, politika, tetikleyici, fonksiyon, indeks, kısıt
+sayıları. Parmak izi şart: bu projede güvenlik ve iş kuralları veritabanında
+(RLS, `period_snapshot` ve `admin_audit_log` değişmezlik tetikleyicileri);
+satırlar tutup bunlar kaybolsa geri yüklenen sistem sessizce korumasız kalırdı.
+
+**Sonuç (27.09.2026, production):** döküm 11,8 sn (190 KB, şifreli 254 KB);
+geri yükleme 2,8 sn; 48 tablo, 346 satır birebir; 37 RLS tablo, 2 politika,
+10 tetikleyici, 10 fonksiyon, 168 indeks, 222 kısıt birebir; `pg_restore`
+hatası yok (boş Postgres'teki "public zaten var" zararsız uyarısı ayrı
+tutuluyor). Kontrolün kendisi dört bozmayla sınandı — yanlış anahtar,
+değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış kodu 1.
+Şifreli dosyada döküm imzası, e-posta ya da tablo adı izi yok.
+
+**Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
+çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
 
 ### Kesim kuyruğu (Faz 7, 27.09.2026)
 

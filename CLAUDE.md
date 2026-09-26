@@ -541,6 +541,21 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
 
+### 8. Veritabanı yedeği henüz OTOMATİK değil — sahibi: Serhan
+
+Supabase projesi **ücretsiz pakette** ve bu pakette Supabase otomatik yedek
+almıyor; tek yedek `backend/scripts/backup_database.py`'nin ürettiği şifreli
+döküm (27.09.2026'da production'dan alındı, geri yükleme testi birebir
+geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
+
+1. **Şimdi, Serhan:** `backend/.env`'deki `BACKUP_ENCRYPTION_KEY` bir parola
+   yöneticisine kopyalanmalı. Anahtar yalnız bu makinede durursa, makine
+   kaybolduğunda bütün yedekler açılamaz.
+2. **Faz 7.5'e kadar:** yedek elle alınır (önemli bir değişiklikten ya da
+   migration'dan önce `backup` çalıştırılır).
+3. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
+   süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
+
 ### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
 
 Faz 7'deki yük testi, bellek ve süre ölçümleri yerelde, tek makinede yapıldı
