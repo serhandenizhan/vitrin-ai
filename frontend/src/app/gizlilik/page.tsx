@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 18 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 26 Eylül 2026`}
       title="Gizlilik politikası"
       summary="Verinin cihazınızdan başlayıp arka plan kaldırma, çalışma geçmişi ve ödeme süreçlerinde nasıl hareket ettiğini sade ve doğrulanabilir biçimde açıklıyoruz."
     >
@@ -51,6 +51,7 @@ export default function PrivacyPage() {
             ["Cloudflare R2", "Özel nesne depolama", "24 saatlik geçici kesim sonucu; geçmiş açıksa sonuç ve küçük önizleme."],
             ["iyzico", "Ödeme ve abonelik altyapısı", "Ödeme formu, kart verisi, kimlik/fatura bilgileri ve ödeme referansları."],
             ["Barındırma ve e-posta sağlayıcıları", "Uygulamanın sunulması ve işlemsel bildirimler", "Teknik istek kayıtları ve gönderim için gerekli e-posta bilgisi."],
+            ["Hata izleme hizmeti", "Uygulama hatalarının tespiti ve giderilmesi", "Maskelenmiş teknik hata kaydı: hata türü ve konumu, istek yolu, tarayıcı/cihaz bilgisi. Fotoğraf, form içeriği, oturum belirteci, çerez ve e-posta adresi gönderilmez."],
           ]}
         />
         <p>

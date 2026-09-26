@@ -22,7 +22,7 @@ const missing = "Canlı yayın öncesi yapılandırılacaktır";
 export default function KvkkPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 18 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 26 Eylül 2026`}
       title="KVKK aydınlatma metni"
       summary="Bu metin; Vitrin AI hesabı, fotoğraf işleme, çalışma geçmişi, ödeme ve destek süreçlerinde kişisel verilerin nasıl işlendiğini açıklar."
     >
@@ -62,7 +62,7 @@ export default function KvkkPage() {
           headers={["Veri kategorisi", "Örnekler ve amaç", "KVKK işleme şartı"]}
           rows={[
             ["Kimlik ve profil", "Ad, soyad, e-posta, şehir, isteğe bağlı telefon, hesap/işletme türü ve şirket adı; üyelik, hesap yönetimi, destek ve kişiselleştirme.", "Sözleşmenin kurulması veya ifası için gerekli olma (md. 5/2-c)."],
-            ["Oturum ve güvenlik", "Oturum belirteçleri, IP ve teknik istek kayıtları, cihaz/tarayıcı bilgisi; oturumun sürdürülmesi, kötüye kullanımın önlenmesi ve hizmet güvenliği.", "Sözleşmenin ifası (md. 5/2-c), hakkın tesisi/korunması (md. 5/2-e) ve ölçülü meşru menfaat (md. 5/2-f)."],
+            ["Oturum ve güvenlik", "Oturum belirteçleri, IP ve teknik istek kayıtları, cihaz/tarayıcı bilgisi, uygulama hata kayıtları; oturumun sürdürülmesi, kötüye kullanımın önlenmesi, hataların tespiti ve giderilmesi ve hizmet güvenliği.", "Sözleşmenin ifası (md. 5/2-c), hakkın tesisi/korunması (md. 5/2-e) ve ölçülü meşru menfaat (md. 5/2-f)."],
             ["Görsel ve çalışma", "Yüklenen özgün ürün fotoğrafı, üretilen kesim, küçük önizleme, dosya adı, zemin seçimi ve işlem süresi; arka plan kaldırma, tekrar güvenliği ve isteğe bağlı çalışma geçmişi.", "Sözleşmenin kurulması veya ifası için gerekli olma (md. 5/2-c)."],
             ["Ödeme ve faturalama", "Ad, soyad, GSM, T.C. kimlik numarası, fatura adresi, plan, tutar, ödeme/abonelik referansları ve işlem durumu; ödeme, abonelik, fatura ve muhasebe süreçleri.", "Sözleşmenin ifası (md. 5/2-c), hukuki yükümlülük (md. 5/2-ç) ve hakkın tesisi/korunması (md. 5/2-e)."],
             ["Tercih ve onay kayıtları", "Görülen yasal belge sürümü, kabul/bildirim zamanı, pazarlama tercihi; hukuki bildirimlerin ispatı ve tercihlerinizin uygulanması.", "Hukuki yükümlülük (md. 5/2-ç), hakkın tesisi/korunması (md. 5/2-e); pazarlamada ayrıca geri alınabilir izin/açık rıza."],
@@ -100,6 +100,12 @@ export default function KvkkPage() {
           <li>Geçici sonuçlar, çalışmalar ve önizlemeler için Cloudflare R2.</li>
           <li>Ödeme ve abonelik işlemleri için iyzico; kart bilgileri iyzico tarafından işlenir.</li>
           <li>Teknik işletim için barındırma, e-posta ve destek sağlayıcıları.</li>
+          <li>
+            Uygulama hatalarının tespiti ve giderilmesi için hata izleme hizmet sağlayıcısı.
+            Yalnız maskelenmiş teknik hata kaydı aktarılır (hata türü ve konumu, istek
+            yolu, tarayıcı/cihaz bilgisi, hesabın takma adlı kimliği); fotoğraf, form ve
+            mesaj içeriği, parola, oturum belirteci, çerez ve e-posta adresi aktarılmaz.
+          </li>
           <li>Hukuki yükümlülük hâlinde yetkili kamu kurumları, mahkemeler ve danışmanlar.</li>
         </ul>
         <p>
