@@ -374,7 +374,10 @@ async def resolve_reservation(db, reservation_id, success, result_key=None):
 async def expire_reservations(db):
     rows = await many(
         db,
-        "SELECT id FROM usage_reservations WHERE status='pending' AND created_at<now()-interval '5 minutes'",
+        # 30 dk (Faz 7 kuyruğu): iş kuyrukta en fazla 15 dk bekler (fotoğraf
+        # süresi) ve sonra kesilir; daha kısa bir süre, sırada bekleyen işin
+        # kredisini iade edip işçinin ürettiği sonucu çöpe attırırdı.
+        "SELECT id FROM usage_reservations WHERE status='pending' AND created_at<now()-interval '30 minutes'",
     )
     await db.commit()
     for row in rows:

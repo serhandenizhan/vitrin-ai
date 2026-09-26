@@ -62,7 +62,9 @@ async def r2_configuration_error_handler(_, exc: R2ConfigurationError) -> JSONRe
 # enjekte edilir (Starlette middleware örneğini gecikmeli/gizli oluşturduğu
 # için bu, testlerin üretimde çalışan gerçek limiter'a doğrudan erişebilmesinin
 # tek yoludur — bkz. tests/test_remove_background_endpoint.py).
-admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_inferences)
+# Faz 7: kesim artık ayrı işçide; bu sınır API'nin aynı anda ayrıştırdığı
+# YÜKLEME sayısını tutar (bellek koruması), kesim sayısını değil.
+admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_uploads)
 # Redis tabanli, dagitik hiz sinirlayicilar — birden fazla worker/instance
 # ayni Redis'e baglaninca ayni sayaci paylasir (bkz. app/services/rate_limit.py;
 # baglanti nesnesi calisan event loop basina tembel olusturulur).

@@ -32,13 +32,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.api.routes.remove_background import get_background_removal_service
+from app.api.routes.remove_background import get_cutout_queue
 from app.core.db import get_db_session
+from app.core.config import settings
 from app.main import app
 from app.models.project import Project
 from app.services.billing.db import one
 from app.services.billing.entitlements import reserve, resolve_reservation
 from app.services.billing.provider import Iyzico, get_provider
+from app.services.cutout_queue import CutoutQueue
 from app.services.storage import R2StorageService, get_storage_service
 from app.services.supabase_admin import SupabaseAdminService, get_supabase_admin
 
@@ -83,6 +85,8 @@ OWNED = {
     ("DELETE", "/api/projects/{project_id}"),
     ("GET", "/api/subscriptions/checkout/{session_id}"),
     ("POST", "/api/subscriptions/checkout/{session_id}/cancel"),
+    # Faz 7 kuyruğu: kimlik istemcinin anahtarı, kayıt `(kullanıcı, anahtar)`.
+    ("GET", "/api/remove-background/jobs/{request_id}"),
 }
 
 #: Yalnız yöneticiye açık uçlar (`/api/admin/me` hariç: o, rolü gösterir).
@@ -187,11 +191,22 @@ async def client(db_session):
     app.dependency_overrides[get_provider] = lambda: provider
     app.dependency_overrides[get_supabase_admin] = lambda: supabase
     app.dependency_overrides[get_storage_service] = lambda: storage
+    # Test öneki: geliştirme ortamında çalışan bir işçi (execute.sh) testin
+    # işlerini ALMASIN diye gerçek `cutout` önekinden ayrı.
+    prefix = f"test-idor-{uuid.uuid4()}"
+    queue = CutoutQueue(settings.redis_url, prefix=prefix)
+    app.dependency_overrides[get_cutout_queue] = lambda: queue
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         http.storage = storage
         http.provider = provider
+        http.queue = queue
         yield http
     app.dependency_overrides.clear()
+    redis = queue._redis()
+    keys = [key async for key in redis.scan_iter(match=f"{prefix}:*")]
+    if keys:
+        await redis.delete(*keys)
+    await queue.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -389,21 +404,26 @@ async def test_idempotency_key_is_scoped_to_its_user(db_session, create_user):
     assert second.result_key is None
 
 
-async def test_remove_background_result_path_is_bound_to_the_signed_in_user(
+async def test_cutout_job_and_result_are_bound_to_the_signed_in_user(
     client, db_session, tokens, create_user
 ):
-    """HTTP üzerinden aynı sözleşme: B, A'nın anahtarıyla A'nın kesimini alamaz."""
+    """HTTP + gerçek kuyruk + gerçek işçi: B, A'nın anahtarıyla A'nın kesimini alamaz.
+
+    Faz 7'de iş kimliği istemcinin `Idempotency-Key`'i; Redis anahtarı
+    `(kullanıcı, anahtar)`. A'nın işi bitip sonucu hazırken B aynı anahtarla
+    hem yoklar hem de yükler: yoklamada 404, yüklemede KENDİ yeni işini alır.
+    """
     import io
 
     from PIL import Image
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.workers.cutout import CutoutWorker
 
     class FakeRemoval:
-        def __init__(self):
-            self.calls = 0
-
         def remove(self, image_bytes):
-            self.calls += 1
-            return b"kesim-" + str(self.calls).encode()
+            return b"sahibin-kesimi"
 
     stored: dict[str, bytes] = {}
 
@@ -415,28 +435,41 @@ async def test_remove_background_result_path_is_bound_to_the_signed_in_user(
 
     client.storage.upload.side_effect = upload
     client.storage.download.side_effect = download
-    removal = FakeRemoval()
-    app.dependency_overrides[get_background_removal_service] = lambda: removal
 
     buf = io.BytesIO()
     Image.new("RGB", (10, 10), "green").save(buf, format="JPEG")
-    photo = buf.getvalue()
     owner, stranger = await create_user(), await create_user()
     key = str(uuid.uuid4())
 
-    def send(user):
+    def post(user):
         return client.post(
             "/api/remove-background",
-            files={"file": ("a.jpg", photo, "image/jpeg")},
+            files={"file": ("a.jpg", buf.getvalue(), "image/jpeg")},
             headers={**tokens.headers(user), "Idempotency-Key": key},
         )
 
-    first = await send(owner)
-    assert first.status_code == 200 and first.content == b"kesim-1"
-    again = await send(owner)
-    assert again.content == b"kesim-1" and removal.calls == 1  # kabul: kendi sonucu
+    def poll(user):
+        return client.get(f"/api/remove-background/jobs/{key}", headers=tokens.headers(user))
 
-    other = await send(stranger)
-    assert other.status_code == 200
-    assert other.content == b"kesim-2"  # A'nın kesimi DEĞİL, kendi yeni işi
-    assert set(stored) == {f"results/{owner}/{key}.png", f"results/{stranger}/{key}.png"}
+    assert (await post(owner)).status_code == 202
+    worker = CutoutWorker(
+        queue=client.queue,
+        service=FakeRemoval(),
+        storage=client.storage,
+        session_factory=async_sessionmaker(
+            create_async_engine(settings.database_url, poolclass=NullPool), expire_on_commit=False
+        ),
+        worker_id="idor-isci",
+    )
+    await worker.process(await client.queue.claim(worker.worker_id))
+
+    # Kabul: sahibi kendi sonucunu alır.
+    mine = await poll(owner)
+    assert mine.status_code == 200 and mine.content == b"sahibin-kesimi"
+    # Red: yabancı aynı anahtarla yoklar — kayıt yok.
+    assert (await poll(stranger)).status_code == 404
+    # Yabancı aynı anahtarla yükler — KENDİ işi sıraya girer, A'nınki değil.
+    theirs = await post(stranger)
+    assert theirs.status_code == 202 and theirs.json()["status"] == "queued"
+    assert (await poll(stranger)).json()["status"] == "queued"
+    assert set(stored) == {f"results/{owner}/{key}.png"}

@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     # tek bir süreçte aynı anda birden fazla inference'ı güvenle kaldırmıyor;
     # varsayılan olarak tek seferde bir inference'a izin verilir.
     max_concurrent_inferences: int = 1
+    # Faz 7 kesim kuyruğu: yukarıdaki değer artık İŞÇİ sürecinin aynı anda
+    # işlediği kesim sayısıdır (app/workers/cutout.py); API modeli yüklemez.
+    # Aynı CPU makinesinde >1 throughput'u artırmaz (model bütün çekirdekleri
+    # kullanıyor), belleği artırır; GPU'da ya da çok çekirdekli sunucuda açılır.
+    #
+    # API'nin aynı anda ayrıştırdığı yükleme sayısı (her biri ≤20 MB gövde +
+    # doğrulama için decode): bellek koruması, eski kabul sınırlayıcısının
+    # yeni görevi. Fazlası 429 — kesim sırası DEĞİL, çok kısa bir an.
+    max_concurrent_uploads: int = Field(default=4, ge=1)
+    # Kuyruk üst sınırı. Bekleyen her işin özgün fotoğrafı Redis belleğinde
+    # (en fazla 20 MB); 50 iş en kötü durumda ~1 GB. Aşılırsa yeni istek nazik
+    # bir yoğunluk mesajı alır — yalnız aşırı durumda.
+    cutout_queue_max_jobs: int = Field(default=50, ge=1)
     # 40 megapiksel: yaygın telefon kameralarının (ör. 48MP ana sensör, sıkıştırma
     # sonrası tipik olarak daha düşük efektif çözünürlük) üstünde, ama decompression-
     # bomb tarzı (küçük byte, devasa piksel sayımı) bir görüntüyü reddetmeye yetecek
