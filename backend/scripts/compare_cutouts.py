@@ -14,13 +14,23 @@ kaybın NEREDE olduğu (ince zincir kopuyor mu, zemin sızıyor mu) ayrıca
            ölçümünü çıktı klasörüne yazar. Karşılaştırılacak her ortam
            (eski/yeni sanal ortam, optimize model) için ayrı çalıştırılır —
            iki model aynı süreçte açılmaz, 16 GB'lık makinede ikisi sığmaz.
-  compare  İki render klasörünün alfa maskelerini karşılaştırır, sayısal
-           rapor ve fark haritaları üretir (kırmızı = kaybolan ürün pikseli,
-           mavi = eklenen zemin pikseli).
+  compare  TABAN (baseline, mevcut hâl) ile ADAY (candidate, denenen
+           değişiklik) render klasörlerinin alfa maskelerini karşılaştırır,
+           sayısal rapor ve fark haritaları üretir (kırmızı = adayda kaybolan
+           ürün pikseli, mavi = adayda sızan zemin pikseli). Yön önemlidir:
+           "kopan" ve "sızan" hep tabana göre ölçülür.
+
+FAIL-CLOSED (PR #29 Codex incelemesi): iki klasörün dosya kümesi birebir
+aynı değilse, hiç eşleşme yoksa ya da bir çiftin boyutu farklıysa betik
+sıfırdan farklı kodla çıkar. Önceden eksik örneği "atlandı" deyip geçiyor,
+sıfır eşleşmede bile boş raporla başarı dönüyordu — en kötü örnek eksikken
+"kalite değişmedi" sonucuna dayanak olabilirdi. `render` de dolu bir çıktı
+klasörünü reddeder (bayat PNG rapora karışmasın) ve çıktıyı dosyanın TAM
+adıyla yazar (`ring.jpg` ile `ring.heic` aynı `ring.png`'ye düşmesin).
 
 Kullanım (backend klasöründen):
-  <venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <klasör-a>
-  <venv>/bin/python scripts/compare_cutouts.py compare <klasör-a> <klasör-b> --out <rapor-klasörü>
+  <venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <taban>
+  <venv>/bin/python scripts/compare_cutouts.py compare <taban> <aday> --out <rapor-klasörü>
 
 Yollar koda yazılmaz (kök CLAUDE.md ders 11); fotoğraflar kişisel veri
 olabileceği için depoya konmaz, klasör argümanla verilir.
@@ -60,31 +70,41 @@ def render(input_dir: Path, out_dir: Path, model_name: str) -> None:
     from app.services.background_removal import BackgroundRemovalService
     import app.validation.upload  # noqa: F401  — pillow-heif kaydını tetikler
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    service = BackgroundRemovalService(model_name=model_name)
+    if out_dir.exists() and any(out_dir.iterdir()):
+        sys.exit(f"{out_dir} boş değil; bayat kesimler rapora karışmasın diye boş bir klasör verin")
     photos = sorted(p for p in input_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
     if not photos:
         sys.exit(f"{input_dir} içinde fotoğraf yok")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    service = BackgroundRemovalService(model_name=model_name)
 
     timings = {}
     for photo in photos:
         start = time.monotonic()
         result = service.remove(photo.read_bytes())
         timings[photo.name] = round(time.monotonic() - start, 2)
-        (out_dir / f"{photo.stem}.png").write_bytes(result)
+        (out_dir / _cutout_name(photo)).write_bytes(result)
         print(f"{photo.name}: {timings[photo.name]} sn")
 
+    warm = list(timings.values())[1:]
     meta = {
         "model": model_name,
         "python": sys.version.split()[0],
         "packages": _package_versions(),
         "seconds": timings,
-        # İlk fotoğraf model yüklemesini de içerir; ortalamaya katılmaz.
-        "mean_seconds_warm": round(sum(list(timings.values())[1:]) / max(len(timings) - 1, 1), 2),
+        # İlk fotoğraf model yüklemesini de içerir; ortalamaya katılmaz. Tek
+        # fotoğrafta ısınmış ölçüm yoktur: 0.0 değil, "ölçülemedi" (null).
+        "mean_seconds_warm": round(sum(warm) / len(warm), 2) if warm else None,
         "peak_rss_mb": round(_peak_rss_mb()),
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     print(json.dumps(meta, indent=2, ensure_ascii=False))
+
+
+def _cutout_name(photo: Path) -> str:
+    # Uzantı adda kalır: aynı gövdeli iki girdi (`ring.jpg`, `ring.heic`)
+    # birbirinin üzerine yazılmasın.
+    return f"{photo.name}.png"
 
 
 def _package_versions() -> dict:
@@ -115,55 +135,66 @@ def _largest_blob(mask: np.ndarray) -> int:
     return int(np.bincount(labels.ravel())[1:].max())
 
 
-def compare(dir_a: Path, dir_b: Path, out_dir: Path) -> None:
+class ComparisonError(Exception):
+    """Karşılaştırma güvenilir bir sonuç veremiyor (eksik/fazla örnek, boyut farkı)."""
+
+
+def compare(baseline_dir: Path, candidate_dir: Path, out_dir: Path) -> list[dict]:
+    baseline_names = {p.name for p in baseline_dir.glob("*.png")}
+    candidate_names = {p.name for p in candidate_dir.glob("*.png")}
+    missing = sorted(baseline_names - candidate_names)
+    extra = sorted(candidate_names - baseline_names)
+    if missing or extra:
+        raise ComparisonError(
+            f"örnek kümeleri aynı değil — adayda eksik: {missing or '-'}; yalnız adayda: {extra or '-'}"
+        )
+    if not baseline_names:
+        raise ComparisonError(f"{baseline_dir} içinde karşılaştırılacak kesim yok")
+
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
-    for path_a in sorted(dir_a.glob("*.png")):
-        path_b = dir_b / path_a.name
-        if not path_b.exists():
-            print(f"{path_a.name}: {dir_b} içinde yok, atlandı")
-            continue
-        a, b = _alpha(path_a), _alpha(path_b)
-        if a.shape != b.shape:
-            rows.append({"image": path_a.name, "error": f"boyut farklı {a.shape} / {b.shape}"})
-            continue
+    for name in sorted(baseline_names):
+        base, cand = _alpha(baseline_dir / name), _alpha(candidate_dir / name)
+        if base.shape != cand.shape:
+            raise ComparisonError(f"{name}: boyut farklı {base.shape} / {cand.shape}")
 
-        diff = np.abs(a - b)
-        product_a = a >= OPAQUE
+        diff = np.abs(base - cand)
+        product_base = base >= OPAQUE
         # Kenar bandı: iki çıktıdan birinde yarı saydam olan pikseller —
         # ince zincir ve yansıtıcı kenar tam burada yaşıyor.
-        edge = ((a > TRANSPARENT) & (a < OPAQUE)) | ((b > TRANSPARENT) & (b < OPAQUE))
-        lost = (a >= OPAQUE) & (b <= TRANSPARENT)  # üründen kopan
-        gained = (a <= TRANSPARENT) & (b >= OPAQUE)  # zeminden sızan
-        bin_a, bin_b = a >= 128, b >= 128
-        union = (bin_a | bin_b).sum()
+        edge = ((base > TRANSPARENT) & (base < OPAQUE)) | ((cand > TRANSPARENT) & (cand < OPAQUE))
+        lost = (base >= OPAQUE) & (cand <= TRANSPARENT)  # üründen kopan
+        gained = (base <= TRANSPARENT) & (cand >= OPAQUE)  # zeminden sızan
+        bin_base, bin_cand = base >= 128, cand >= 128
+        union = (bin_base | bin_cand).sum()
 
         rows.append({
-            "image": path_a.name,
+            "image": name,
             "mean_abs_diff": round(float(diff.mean()), 3),
             "max_abs_diff": int(diff.max()),
             "changed_pct": round(float((diff >= CHANGED).mean() * 100), 3),
             "edge_mean_abs_diff": round(float(diff[edge].mean()), 3) if edge.any() else 0.0,
-            "iou": round(float((bin_a & bin_b).sum() / union), 5) if union else 1.0,
+            "iou": round(float((bin_base & bin_cand).sum() / union), 5) if union else 1.0,
             "lost_px": int(lost.sum()),
-            "lost_pct_of_product": round(float(lost.sum() / max(product_a.sum(), 1) * 100), 4),
+            "lost_pct_of_product": round(float(lost.sum() / max(product_base.sum(), 1) * 100), 4),
             "gained_px": int(gained.sum()),
             "largest_lost_blob_px": _largest_blob(lost),
             "largest_gained_blob_px": _largest_blob(gained),
         })
 
         # Fark haritası: gri ürün silueti üzerinde kırmızı kayıp, mavi kazanç.
-        base = (a.clip(0, 255) * 0.35).astype(np.uint8)
-        heat = np.stack([base, base, base], axis=-1)
-        heat[lost | ((a - b) >= 64)] = [255, 40, 40]
-        heat[gained | ((b - a) >= 64)] = [40, 120, 255]
-        Image.fromarray(heat).save(out_dir / f"{path_a.stem}-fark.png")
+        shade = (base.clip(0, 255) * 0.35).astype(np.uint8)
+        heat = np.stack([shade, shade, shade], axis=-1)
+        heat[lost | ((base - cand) >= 64)] = [255, 40, 40]
+        heat[gained | ((cand - base) >= 64)] = [40, 120, 255]
+        Image.fromarray(heat).save(out_dir / f"{Path(name).stem}-fark.png")
 
     report = out_dir / "report.json"
     report.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))
     print(f"Rapor: {report}")
+    return rows
 
 
 def main() -> None:
@@ -176,15 +207,18 @@ def main() -> None:
     render_parser.add_argument("--model", default=os.environ.get("MODEL_NAME", "birefnet-general"))
 
     compare_parser = sub.add_parser("compare")
-    compare_parser.add_argument("dir_a", type=Path)
-    compare_parser.add_argument("dir_b", type=Path)
+    compare_parser.add_argument("baseline", type=Path, help="taban: mevcut hâlin render klasörü")
+    compare_parser.add_argument("candidate", type=Path, help="aday: denenen değişikliğin render klasörü")
     compare_parser.add_argument("--out", type=Path, required=True)
 
     args = parser.parse_args()
     if args.command == "render":
         render(args.input, args.out, args.model)
     else:
-        compare(args.dir_a, args.dir_b, args.out)
+        try:
+            compare(args.baseline, args.candidate, args.out)
+        except ComparisonError as error:
+            sys.exit(f"KARŞILAŞTIRMA GEÇERSİZ: {error}")
 
 
 if __name__ == "__main__":

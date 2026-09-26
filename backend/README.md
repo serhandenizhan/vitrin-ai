@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 391 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 402 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -145,15 +145,26 @@ optimizasyonu) bununla ölçülür. Önce her ortam için ayrı `render`, sonra
 `compare`:
 
 ```bash
-<eski-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <a>
-<yeni-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <b>
-.venv/bin/python scripts/compare_cutouts.py compare <a> <b> --out <rapor>
+<eski-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <taban>
+<yeni-venv>/bin/python scripts/compare_cutouts.py render --input <foto-klasörü> --out <aday>
+.venv/bin/python scripts/compare_cutouts.py compare <taban> <aday> --out <rapor>
 ```
 
 Rapor yalnız ortalama farkı değil kaybın NEREDE olduğunu da verir: kenar
 bandındaki fark (ince zincir/yansıtıcı kenar), üründen kopan ve zeminden
 sızan piksel sayısı ile en büyük bağlı parçası (dağınık gürültü mü, tek yerde
 bir kopma mı), IoU; ayrıca fark haritası (kırmızı kayıp, mavi sızıntı).
+Yön önemli: "kopan" ve "sızan" hep TABANA göre ölçülür.
+
+**Fail-closed (PR #29 Codex incelemesi):** taban ile adayın dosya kümesi
+birebir aynı değilse, hiç kesim yoksa ya da bir çiftin boyutu farklıysa araç
+rapor yazmadan sıfırdan farklı kodla çıkar. Önceden eksik örneği "atlandı"
+deyip geçiyor, sıfır eşleşmede bile boş raporla başarı dönüyordu; en kötü
+örnek eksikken "kalite değişmedi" denebilirdi. `render` dolu bir çıktı
+klasörünü reddeder (bayat kesim karışmasın) ve çıktıyı tam dosya adıyla
+yazar (`ring.jpg.png`, `ring.heic.png`). Tek fotoğrafta ısınmış ortalama
+`null`'dır. Testleri `tests/test_compare_cutouts.py`.
+
 Fotoğraflar kişisel veri olabileceği için depoda tutulmaz. **Aracın kendisi
 sınandı:** kenarı yalnız 2 px aşındırılmış bir kesimde IoU 0,80'e düştü ve
 zincirin çevresi kırmızı işaretlendi. **26.09.2026 yükseltmesi:** 6 gerçek ürün
