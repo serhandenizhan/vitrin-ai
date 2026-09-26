@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 475 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 481 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -139,6 +139,32 @@ sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya 
 süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
 bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
 beklenen yetki davranışını gösteriyor.
+
+### Hata izleme (`app/core/monitoring.py`, Faz 7)
+
+`SENTRY_DSN` boşken SDK hiç başlatılmaz. Doluyken yalnız 5xx hataları gider
+(4xx `HTTPException`'lar gitmez) ve şunlar gitmez: istek gövdesi (yüklenen
+fotoğraf, formlar), yerel değişkenler (yığın çerçevesindeki fotoğraf baytları,
+token), SDK'nın kullanıcı/IP eklemesi, performans izi. `before_send` ikinci
+bir ağ: kimlik bilgisi taşıyan başlıklar (`Authorization`, `Cookie`,
+`X-Expected-User-Id`, `Idempotency-Key`, iyzico imzası, `X-Forwarded-For`…),
+çerezler, sorgu dizesi ve gövde silinir; kalan her metinde e-posta, JWT,
+`Bearer` token'ı ve SQLAlchemy hata mesajındaki `[parameters: …]` maskelenir.
+Dış çağrı kırıntılarının URL'sinden sorgu dizesi atılır (Supabase yönetici
+aramasında e-posta orada). Kalan tek kimlik: yol ya da R2 anahtarındaki
+kullanıcı UUID'si (takma ad, ama kişisel veri — aydınlatma metni şartı bu
+yüzden).
+
+**Doğrulama (26.09.2026):** gerçek backend sahte bir Sentry sunucusuna
+bağlanıp veritabanı kapalıyken `GET /api/backgrounds` çağrıldı: gerçek 500 tek
+olay olarak ulaştı (tür, ortam, yol okunur), çerez/sorgu dizesi silinmiş,
+e-posta ve çerez değeri hiçbir yerde yok. `tests/test_monitoring.py`
+aynı yolu gerçek SDK ve sahte taşıyıcıyla sınıyor; yerel değişkenlerin
+açılması, `before_send`'in kaldırılması, gövde temizliğinin kaldırılması, SQL
+parametre maskesinin kaldırılması ve DSN'siz başlatma ayrı ayrı denendi, her
+biri testi kırmızı yaktı. **Testler hiçbir zaman gerçek servise yazmaz:**
+`tests/conftest.py` `SENTRY_DSN`'i boşaltır (`.env`'de gerçek bir DSN olsa
+bile — korumasız hâlde testin kırmızı yandığı görüldü).
 
 ### CI ve bağımlılık taraması (Faz 7)
 
@@ -506,6 +532,7 @@ sunucu/instance seçin.
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |
 | `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi. Aynı değer yanıtta `expires_in` alanı olarak da dönüyor — istemci yenileme zamanını buradan öğrenir, kendi tarafına sabitlemez |
 | `TRUSTED_PROXY_IPS` | boş | Virgülle ayrılmış, GÜVENİLEN ters proxy adresleri. `X-Forwarded-For` yalnızca bağlantı bu listedeki bir adresten geliyorsa okunur; boşken başlık hiç okunmaz (sahte başlıkla hız sınırı kovası değiştirilemez). Uvicorn'un `--forwarded-allow-ips` değeriyle aynı liste olmalı |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_TRACES_SAMPLE_RATE` | boş / `local` / `0` | Hata izleme (Faz 7, `app/core/monitoring.py`). **DSN boşken izleme tamamen kapalı.** Sentry protokolü: sentry.io (AB bölgesi) ya da kendi barındırılan GlitchTip. Production'da açmadan önce sağlayıcı KVKK aydınlatma metnine alıcı olarak eklenmeli. Testler bu değeri her zaman boşaltır |
 | `RESEND_API_KEY` / `RESEND_BASE_URL` / `BILLING_EMAIL_FROM` | boş / `https://api.resend.com` / boş | "Ödemeniz alınamadı, kartınızı güncelleyin" e-postası. **Ücretli checkout'un açılış koşuludur**: eksikse `BILLING_CHECKOUT_ENABLED=true` olsa bile satın alma 503 döner — kullanıcıya vaat edilen 3 günlük grace penceresinin tek uyarısı bu e-posta. Gönderim yine de yapılamazsa `billing_alerts`'e `dunning_email_not_sent` yazılır; action başarılı sayılmaz, sınırlı retry/manual inceleme için açık kalır. Gönderim isteği `provider_actions.id`'yi Resend'e `Idempotency-Key` başlığıyla taşır: timeout sonrası tekrar deneme çift e-posta göndermez |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu

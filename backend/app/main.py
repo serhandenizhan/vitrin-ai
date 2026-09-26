@@ -15,6 +15,7 @@ from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
 from app.core.db import engine
+from app.core.monitoring import init_error_tracking
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
 from app.middleware.early_auth import EarlyAuthenticationMiddleware
@@ -43,6 +44,11 @@ async def lifespan(app: FastAPI):
     await admin_limiter.aclose()
     await support_limiter.aclose()
 
+
+# Hata izleme uygulama kurulmadan ÖNCE başlatılır: SDK'nın FastAPI/Starlette
+# entegrasyonu sınıfları başlatma anında yamalıyor. `SENTRY_DSN` boşsa hiçbir
+# şey yapmaz (bkz. app/core/monitoring.py).
+init_error_tracking()
 
 app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)
 

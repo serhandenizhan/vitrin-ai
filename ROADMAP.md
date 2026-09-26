@@ -1133,6 +1133,13 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Hata izleme (backend) — ✅ (26.09.2026).** `app/core/monitoring.py`:
+  Sentry SDK kuruldu, `SENTRY_DSN` boşken hiç başlatılmıyor; doluyken yalnız
+  5xx hataları maskelenmiş olarak gidiyor (gövde, yerel değişken, kimlik
+  bilgisi, çerez, sorgu dizesi yok; e-posta/JWT/SQL parametresi maskeli).
+  Gerçek backend sahte bir Sentry sunucusuna bağlanarak uçtan uca doğrulandı.
+  **Sağlayıcı seçimi ve DSN Faz 7.5'te** (kod ikisiyle de çalışıyor).
+  Frontend hata izlemesi bu işin DIŞINDA (Kaan'ın alanı, istenirse ayrı iş).
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
@@ -1240,6 +1247,11 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
   ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
+  bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
+  `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
+  aydınlatma metninin alıcılar bölümüne (ve yurt dışıysa aktarım bilgisine)
+  eklenir — metin değişince sürüm/onay akışı işler (`SECURITY.md` bölüm 9).
 - **Launch öncesi son kapı — dış girdiye bağlı (kullanıcı kararı
   14.09.2026; Faz 7'den buraya taşındı 26.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık

@@ -166,6 +166,13 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
   korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
   ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Hata izleme (Faz 7):** `backend/app/core/monitoring.py`, Sentry protokolü.
+  `SENTRY_DSN` boşken kapalı; doluyken yalnız 5xx gider ve gövde, yerel
+  değişken, kimlik bilgisi başlıkları, çerez, sorgu dizesi hiç gitmez, e-posta/
+  JWT/SQL parametresi maskelenir. **Production'da DSN, sağlayıcı KVKK
+  aydınlatma metnine eklenmeden verilmez.** Testler `SENTRY_DSN`'i her zaman
+  boşaltır (`tests/conftest.py`). Yeni bir kimlik bilgisi başlığı eklenirse
+  `SENSITIVE_HEADERS`'a da eklenir.
 - **Hız sınırı Redis arızasında her uç noktada aynı davranmaz.** Karar, uç
   noktanın NE KORUDUĞUNA göre veriliyor: para/sağlayıcı geri dönüşü/webhook
   yüzeyleri **fail-closed** (`limit_checkout`, `limit_public`), zemin

@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import time
@@ -6,6 +7,13 @@ import uuid
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from urllib.parse import urlsplit
+
+# Test oturumu hiçbir koşulda gerçek bir hata izleme servisine yazmaz:
+# geliştiricinin `backend/.env`'sinde SENTRY_DSN olsa bile. Testler bilerek
+# yüzlerce hata üretiyor; `app.main` yüklenirken izleme başlasaydı hepsi
+# gerçek projeye gönderilirdi. Ortam değişkeni `.env`'den önce gelir ve
+# ayarlar bu satırdan SONRA ilk kez okunur (aşağıdaki `app.*` içe aktarmaları).
+os.environ["SENTRY_DSN"] = ""
 
 import jwt
 import pytest

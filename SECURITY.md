@@ -206,7 +206,12 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   açıkça `metadata_backfill` olarak taşır. Production gerçek veri sorumlusu
   unvanı/e-postası olmadan build durur; hukukçu son kontrolü hâlâ launch kapısıdır.
 - Üçüncü taraf servislere (Sentry, analytics) gönderilen veri minimize edilmeli — hata
-  loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı.
+  loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı. **Uygulandı (Faz 7,
+  26.09.2026, backend):** `app/core/monitoring.py` gövdeyi, yerel değişkenleri,
+  kimlik bilgisi başlıklarını, çerezleri ve sorgu dizesini hiç göndermez;
+  e-posta/JWT/SQL parametrelerini maskeler; DSN yokken kapalıdır. Ayrıntı
+  `backend/README.md` → "Hata izleme". **Açık:** sağlayıcı aydınlatma
+  metnine eklenmeden production'da DSN verilmez (bölüm 9).
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
 
 ---
@@ -306,6 +311,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
+- [ ] Hata izleme açılacaksa (`SENTRY_DSN`) sağlayıcı ve aktarım (yurt dışıysa) KVKK aydınlatma metnine eklendi; açılmayacaksa `SENTRY_DSN` boş
 - [x] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi) — 26.09.2026, Faz 7: `backend/tests/test_idor.py` her ucu sınıflandırır, sahipli kaynaklarda başkası 404 alır ve kaynak değişmez, sahibi başarılı olur; `Idempotency-Key` kullanıcıya göre ayrılır. Paketin gerçekten yakaladığı yedi ayrı bozmayla doğrulandı
 - [x] Admin panel erişimi role-based ve backend'de doğrulanıyor — 26.09.2026: 22 admin ucunun HER biri oturumsuz 401, sıradan kullanıcı 403, yönetici kabul yollarıyla otomatik sınanıyor (`backend/tests/test_idor.py`); yeni bir admin ucu sınıflandırılmadan birleşemez
 - [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. kök `CLAUDE.md` açık takip maddesi 5

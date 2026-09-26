@@ -105,6 +105,17 @@ class Settings(BaseSettings):
     # Virgülle ayrılmış tarayıcı origin'leri (SECURITY.md 2.2). `*` ve yol
     # içeren değerler başlangıçta reddedilir (bkz. `_validate_cors_origins`).
     cors_allowed_origins: str = "http://localhost:3000"
+    # Faz 7 hata izleme (bkz. app/core/monitoring.py). DSN boşsa izleme
+    # TAMAMEN kapalı, hiçbir şey dışarı gitmez. Sentry protokolünü konuşan
+    # herhangi bir sunucuya (sentry.io AB bölgesi ya da kendi barındırılan
+    # GlitchTip) aynı DSN biçimiyle bağlanır; sağlayıcı seçimi Faz 7.5'te.
+    # PRODUCTION'DA AÇMADAN ÖNCE: sağlayıcı KVKK aydınlatma metnindeki
+    # alıcılar listesine eklenmeli (`frontend/src/app/kvkk`, bölüm 5).
+    sentry_dsn: str = ""
+    sentry_environment: str = "local"
+    # Performans izi (trace) varsayılan kapalı: hata kaydı yeterli, iz her
+    # isteğin yolunu ve süresini üçüncü tarafa taşır (veri minimizasyonu).
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
