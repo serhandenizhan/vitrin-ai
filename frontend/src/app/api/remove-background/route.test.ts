@@ -278,6 +278,47 @@ describe("basarili yanit", () => {
   });
 });
 
+describe("kuyruk (Faz 7)", () => {
+  it("backend isi siraya aldiginda 202 JSON'u PNG'e cevirmeden gecirir", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ job_id: "is-1", status: "queued" }, { status: 202 }),
+    );
+
+    const { POST } = await loadRoute();
+    const response = await POST(formRequest(pngFile()));
+
+    // Eskiden her basarili yanit PNG sayiliyordu; 202 govdesi resim diye
+    // aktarilsaydi istemci bozuk bir "kesim" gosterirdi.
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ job_id: "is-1", status: "queued" });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("kuyruk doluyken backend'in mesajini, retry_safe'i ve Retry-After'i tasir", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json(
+        {
+          detail: {
+            code: "queue_busy",
+            message: "Şu anda çok yoğunuz; birkaç dakika sonra tekrar deneyin.",
+            retry_safe: true,
+          },
+        },
+        { status: 503, headers: { "Retry-After": "30" } },
+      ),
+    );
+
+    const { POST } = await loadRoute();
+    const response = await POST(formRequest(pngFile()));
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.code).toBe("queue_busy");
+    expect(body.retry_safe).toBe(true);
+    expect(response.headers.get("Retry-After")).toBe("30");
+  });
+});
+
 describe("demo modu", () => {
   it("USE_MOCK_BACKEND=true iken backend HIC cagrilmaz", async () => {
     process.env.USE_MOCK_BACKEND = "true";
