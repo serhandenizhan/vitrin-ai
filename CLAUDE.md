@@ -215,7 +215,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   yerel `.env`'ye gizlice dayanan test yerelde yeşil, CI'da kırmızı yanar.
   Model çıktısını değiştirebilecek her iş (bağımlılık yükseltmesi, model
   optimizasyonu) `backend/scripts/compare_cutouts.py` ile gerçek fotoğraflarda
-  önce/sonra ölçülür. `./execute.sh` requirements değişince `.venv`'yi günceller.
+  önce/sonra ölçülür. `./execute.sh` requirements değişince `.venv`'yi günceller. **npm tuzağı (PR #30):** Mac'teki eski npm (11.6) ile yapılan `npm install`, kilit dosyasına Linux'ta gereken isteğe bağlı paketleri (`@emnapi/*`) yazmadı ve CI'daki `npm ci` "lock file out of sync" ile düştü. Kilit dosyası CI ile aynı npm'le güncellenir: `docker run --rm -v "$PWD:/app" -w /app node:24-alpine npm install --package-lock-only --ignore-scripts` (frontend klasöründe).
 - **Mobil (sonra):** React Native + Expo
 
 ## Git iş akışı
