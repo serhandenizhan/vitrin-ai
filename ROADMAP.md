@@ -1139,7 +1139,14 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   bilgisi, çerez, sorgu dizesi yok; e-posta/JWT/SQL parametresi maskeli).
   Gerçek backend sahte bir Sentry sunucusuna bağlanarak uçtan uca doğrulandı.
   **Sağlayıcı seçimi ve DSN Faz 7.5'te** (kod ikisiyle de çalışıyor).
-  Frontend hata izlemesi bu işin DIŞINDA (Kaan'ın alanı, istenirse ayrı iş).
+  **Frontend de aynı gün eklendi (Serhan'ın isteği, Kaan PR'da ayrıca
+  inceleyecek):** `frontend/src/lib/error-tracking.ts`, DSN yokken SDK
+  tarayıcıya hiç yüklenmiyor (üretim derlemesinde ve gerçek tarayıcıda
+  ölçüldü); DSN'li derleme gerçek tarayıcıda sahte Sentry'ye bağlanıp
+  maskelemenin çalıştığı görüldü. **KVKK aydınlatma metni ve gizlilik
+  politikası güncellendi:** "hata izleme hizmet sağlayıcısı" alıcı grubu
+  olarak eklendi, yasal sürüm `2026-09-26` (yeni kayıtlar bu sürümü kabul
+  eder; eski kabul kayıtları tarihçede kalır).
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
@@ -1252,6 +1259,10 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
   aydınlatma metninin alıcılar bölümüne (ve yurt dışıysa aktarım bilgisine)
   eklenir — metin değişince sürüm/onay akışı işler (`SECURITY.md` bölüm 9).
+  **26.09.2026 güncellemesi:** alıcı GRUBU metne eklendi; kalan iş seçilen
+  sağlayıcının adını gizlilik tablosuna yazmak, `NEXT_PUBLIC_SENTRY_DSN`'i
+  vermek ve kaynak haritası yüklemesine (`withSentryConfig` + auth token)
+  karar vermek. Yeni metin hukukçu son kontrolüne dahildir.
 - **Launch öncesi son kapı — dış girdiye bağlı (kullanıcı kararı
   14.09.2026; Faz 7'den buraya taşındı 26.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
