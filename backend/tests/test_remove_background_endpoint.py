@@ -329,9 +329,13 @@ def test_accepts_exact_file_size_with_metadata_within_default_budget():
     base = _jpeg_bytes()
     exact_size_content = base + b"\x00" * (settings.max_file_size_bytes - len(base))
 
-    filename_padding = DEFAULT_METADATA_BUDGET_BYTES - 1000
-    long_filename = "urun-" + ("x" * filename_padding) + ".jpg"
-    extra_field_value = "y" * 500
+    # Bütçenin büyük kısmı dosya ADINA değil form alanı DEĞERİNE konuyor:
+    # python-multipart 0.0.27'den beri bir parçanın başlığı ~4 KB ile sınırlı
+    # (başlık DoS düzeltmesi, PYSEC-2026-3039) ve daha uzun bir dosya adı
+    # 400 alır. Gerçek dosya adları 255 karakteri geçmediği için bu sınır
+    # ürünü etkilemiyor; testin ölçtüğü şey toplam metadata bütçesi.
+    long_filename = "urun-" + ("x" * 200) + ".jpg"
+    extra_field_value = "y" * (DEFAULT_METADATA_BUDGET_BYTES - 1000)
     assert len(long_filename) + len(extra_field_value) < DEFAULT_METADATA_BUDGET_BYTES
 
     response = client.post(
@@ -342,6 +346,23 @@ def test_accepts_exact_file_size_with_metadata_within_default_budget():
 
     assert response.status_code == 200
     assert fake_service.received_content == exact_size_content
+
+
+def test_rejects_oversized_part_header_with_400_without_calling_service():
+    # python-multipart'ın parça başlığı sınırı (~4 KB, PYSEC-2026-3039
+    # düzeltmesi) aşıldığında istek 500'e değil 400'e düşmeli ve model hiç
+    # çalışmamalı. Sınırı kaldıran bir sürüm düşüşü bu testi kırmızı yakar.
+    fake_service = FakeBackgroundRemovalService()
+    client = _client_with_fake_service(fake_service)
+
+    oversized_filename = "urun-" + ("x" * 8000) + ".jpg"
+    response = client.post(
+        "/api/remove-background",
+        files={"file": (oversized_filename, _jpeg_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert fake_service.received_content is None
 
 
 def test_rejects_exact_file_size_with_metadata_beyond_default_allowance():
