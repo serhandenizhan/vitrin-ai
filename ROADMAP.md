@@ -1107,12 +1107,34 @@ yerel Postgres ile çalıştırıldı: 350 geçti; kalan 2 kırmızı
 (`test_billing.py` mutabakat testleri) `main`'de de aynı şekilde kırmızı,
 yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan).
 
-### Faz 7 — Test, optimizasyon ve sağlamlaştırma — ⏳ Planlanan
+### Faz 7 — Test, optimizasyon ve sağlamlaştırma — 🔄 Sürüyor (26.09.2026'da başladı)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
+- **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
+  taraması + CI, (2) sistematik IDOR test paketi, (3) hata izleme, (4) yük
+  testi, (5) model optimizasyonu; yedekleme/geri yükleme testi arada.
+- **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
+  eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
+  olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
+  `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
+  `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Bağımlılık taraması — ✅ (26.09.2026).** Backend'de 6 pakette 34 bilinen
+  açık sürüm yükseltmesiyle kapatıldı (ayrıntı `backend/README.md` → "CI ve
+  bağımlılık taraması"); frontend `npm audit` temizdi. rembg 2.0.61 → 2.0.85
+  atlaması modelin çıktısını değiştirebileceği için 6 gerçek ürün
+  fotoğrafında ölçüldü: maskeler arasında en büyük alfa farkı 1/255, kopan ya
+  da sızan piksel yok (`backend/scripts/compare_cutouts.py`; aynı araç model
+  optimizasyonunda da kullanılacak). **Model optimizasyonu için kabul ölçütü
+  (Serhan):** gözle fark edilmeyen kayıp kabul, ama kaybın SEVİYESİ ve başka
+  bir yerde (ince zincir, yansıtıcı kenar, zemin sızıntısı) açık oluşturup
+  oluşturmadığı ayrıca ölçülür. **Yük testine not:** aynı ölçümde tek süreçte
+  6 fotoğraf için tepe RSS macOS'ta 4,8–6,6 GB göründü; bu, servisin kendisinde
+  ölçülen 12 GB'lık değeri DEĞİŞTİRMEZ (macOS belleği sıkıştırıyor, ölçüm
+  uvicorn sürecinde ve farklı koşullardaydı) — Linux'ta, servis üzerinde yük
+  testiyle yeniden ölçülecek.
 - **Kullanıcı etkinliği ekranı — FİKİR, kullanıcılar gelmeye başlayınca
   değerlendirilecek (Serhan, 19.09.2026).** Admin panelindeki "Günlük" yalnız
   YÖNETİCİ eylemlerini gösteriyor (`admin_audit_log`). Kullanıcıların kendi
