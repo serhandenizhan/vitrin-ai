@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     # (en fazla 20 MB); 50 iş en kötü durumda ~1 GB. Aşılırsa yeni istek nazik
     # bir yoğunluk mesajı alır — yalnız aşırı durumda.
     cutout_queue_max_jobs: int = Field(default=50, ge=1)
+    # Redis anahtar öneki. Yalnız ayrık kuyruk gerektiğinde değişir: yük testi
+    # (`scripts/load_test.py`) kendi önekini kullanır ki geliştirme ortamında
+    # açık olan işçi (execute.sh) onun işlerini almasın. API ve işçi AYNI
+    # öneki kullanmalı, yoksa işler hiç işlenmez.
+    cutout_queue_prefix: str = "cutout"
     # 40 megapiksel: yaygın telefon kameralarının (ör. 48MP ana sensör, sıkıştırma
     # sonrası tipik olarak daha düşük efektif çözünürlük) üstünde, ama decompression-
     # bomb tarzı (küçük byte, devasa piksel sayımı) bir görüntüyü reddetmeye yetecek

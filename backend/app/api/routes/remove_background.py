@@ -37,7 +37,11 @@ router = APIRouter()
 
 # Süreç başına tek kuyruk nesnesi; Redis bağlantısını olay döngüsü başına
 # kendisi açar. Testler `app.dependency_overrides` ile değiştirir.
-_queue = CutoutQueue(settings.redis_url, max_jobs=settings.cutout_queue_max_jobs)
+_queue = CutoutQueue(
+    settings.redis_url,
+    prefix=settings.cutout_queue_prefix,
+    max_jobs=settings.cutout_queue_max_jobs,
+)
 
 
 def get_cutout_queue() -> CutoutQueue:

@@ -152,7 +152,11 @@ async def main() -> None:
     from app.core.monitoring import init_error_tracking
 
     init_error_tracking()
-    queue = CutoutQueue(settings.redis_url, max_jobs=settings.cutout_queue_max_jobs)
+    queue = CutoutQueue(
+        settings.redis_url,
+        prefix=settings.cutout_queue_prefix,
+        max_jobs=settings.cutout_queue_max_jobs,
+    )
     worker = CutoutWorker(
         queue=queue,
         service=BackgroundRemovalService(model_name=settings.rembg_model_name),
@@ -167,7 +171,14 @@ async def main() -> None:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            # Windows'ta (Kaan'ın ortamı, .vscode/tasks.json) olay döngüsü
+            # sinyal işleyicisini desteklemiyor; Ctrl+C orada KeyboardInterrupt
+            # olarak gelir ve süreci kapatır. Yarım kalan iş, nabız kesildiği
+            # için başka bir işçi tarafından kurtarılır.
+            pass
     try:
         await worker.run(concurrency, stop)
     finally:

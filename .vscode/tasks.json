@@ -35,6 +35,22 @@
       }
     },
     {
+      // Faz 7: arka plan kaldırmayı bu işçi yapar. Çalışmıyorsa istekler
+      // sırada bekler ve arayüz "işleniyor"da kalır. Modeli açılışta yükler.
+      "label": "Kesim işçisi (kuyruk)",
+      "type": "shell",
+      "command": ".venv\\Scripts\\python.exe",
+      "args": ["-m", "app.workers.cutout"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "vitrin",
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
       "label": "Frontend (Next.js, :3000)",
       "type": "shell",
       "command": "npm",
@@ -50,7 +66,7 @@
     },
     {
       "label": "Vitrin AI: her şeyi başlat",
-      "dependsOn": ["Backend (FastAPI, :8000)", "Frontend (Next.js, :3000)"],
+      "dependsOn": ["Backend (FastAPI, :8000)", "Kesim işçisi (kuyruk)", "Frontend (Next.js, :3000)"],
       // Sıra önemli değil: frontend, backend'e yalnızca ilk gerçek istekte
       // bağlanıyor. Backend geç açılsa bile sayfa açılır.
       "dependsOrder": "parallel",
