@@ -201,6 +201,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - Bir birleştirmeden sonra, yeni işe başlamadan önce yerel olarak `main`'i çekin (pull)
 - **Stacked PR'lar üstten alta birleştirilir.** Bir PR'ın base'i `main` değil başka bir feature dalıysa, önce üstteki PR alt dala, sonra alt dal `main`'e birleştirilir. Ters sırada birleştirilirse üstteki PR'ın işi `main`'e hiç ulaşmaz ve GitHub'da her iki PR da "Merged" göründüğü için bu fark edilmez (bkz. ders 17 — Faz 2'de yaşandı, 8 commit kayboldu)
 - **Bir merge'den sonra işin gerçekten `main`'de olduğu doğrulanır:** `git merge-base --is-ancestor <commit> origin/main`
+- **`main`, CI yeşil olmadan birleştirilemez (26.09.2026, Serhan'ın kararı).** GitHub'daki "protect main" kural setine zorunlu durum kontrolü eklendi: `Backend testleri`, `Frontend lint, test, build`, `Bağımlılık güvenlik taraması` (`.github/workflows/ci.yml`'deki iş adları). Sebep: PR #29, son commit'in CI'ı sürerken birleştirildi — sonuç yeşil çıktı ama kırmızı olsaydı bozuk kod `main`'e girerdi. Kural setinde kimse için istisna (bypass) yok. **Tuzak:** CI'daki bir işin `name:`'i değiştirilirse zorunlu kontrol o adı bir daha görmez ve her PR sonsuza dek "bekliyor"da kalır — iş adı değişirse kural seti aynı anda güncellenir. **Yan etki:** haftalık tarama yeni bir açık bulduğunda, açık kapatılana kadar hiçbir PR birleştirilemez; bu bilinçli (açık bilinerek birleştirme yapılmasın).
 
 ## Depo yapısı (hedef)
 

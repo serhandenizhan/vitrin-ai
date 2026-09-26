@@ -1116,6 +1116,12 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
   taraması + CI, (2) sistematik IDOR test paketi, (3) hata izleme, (4) yük
   testi, (5) model optimizasyonu; yedekleme/geri yükleme testi arada.
+- **Süreç notu — PR #29, Kaan'ın incelemesi beklenmeden birleştirildi
+  (Serhan'ın kararı, 26.09.2026).** Codex incelemesi ve düzeltmelerinden sonra
+  birleştirildi ki güvenlik yükseltmesi beklemesin; bu, kök `CLAUDE.md`'deki
+  "PR'lar diğer ekip üyesi tarafından incelenir" kuralının bilinçli bir
+  istisnasıdır. **Kaan'ın incelemesi geriye dönük yapılır:** Faz 7'nin
+  Serhan kısmını kapatan sonraki PR'ın açıklaması PR #29'un özetiyle başlar.
 - **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
   eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
