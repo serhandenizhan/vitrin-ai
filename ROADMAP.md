@@ -1122,6 +1122,12 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   "PR'lar diğer ekip üyesi tarafından incelenir" kuralının bilinçli bir
   istisnasıdır. **Kaan'ın incelemesi geriye dönük yapılır:** Faz 7'nin
   Serhan kısmını kapatan sonraki PR'ın açıklaması PR #29'un özetiyle başlar.
+  Aynı açıklamada Kaan için ayrıca şu yazılır: `main` artık üç CI işi yeşil
+  olmadan birleştirilemiyor (kural seti "protect main"), CI iş adı değişirse
+  kural seti de güncellenmeli, yeni bir güvenlik açığı bulunduğunda kapatılana
+  kadar hiçbir PR birleşmez, ve `./execute.sh` bir sonraki açılışta backend
+  bağımlılıklarını kendiliğinden günceller (ayrıntı kök `CLAUDE.md` → "Git iş
+  akışı").
 - **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
   eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
