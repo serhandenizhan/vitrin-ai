@@ -168,6 +168,11 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
   korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
   ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Model optimizasyonunda kalite bozulmaz (Serhan, 27.09.2026):** FP16/INT8
+  niceleme, 1024'ün altında giriş çözünürlüğü, lite model KULLANILMAZ.
+  Ölçüm: sürenin %93–99'u model hesabı (`backend/scripts/profile_cutout.py`);
+  CPU'da kayıpsız kazanç %5'in altında olduğu için yapılmadı. Hız GPU'yla
+  (FP32) gelir — Faz 7.5.
 - **Model süreç başına yüklenir (yük testi, 26.09.2026):** her kesim İŞÇİSİ
   BiRefNet'in ayrı bir kopyasını tutar (N işçi × ~12 GB; ders 31). Faz 7'den
   beri API modeli hiç yüklemez, bu yüzden API süreç sayısıyla serbestçe
@@ -590,6 +595,11 @@ liste):
      ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
      diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
      bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
+  9. **GPU seçilirse:** `backend/scripts/profile_cutout.py` GPU sunucusunda
+     koşulup kesim süresi tahmini (~0,3–1,5 sn) gerçek ölçüme çevrilir; FP32
+     GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
+     fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
+     kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 

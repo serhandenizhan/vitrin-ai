@@ -140,6 +140,35 @@ süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandır�
 bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
 beklenen yetki davranışını gösteriyor.
 
+### Model optimizasyonu: ölçüm ve karar (Faz 7, 27.09.2026)
+
+**Kural (Serhan):** kaliteye dokunabilecek HİÇBİR optimizasyon yapılmaz —
+FP16/INT8 niceleme, 1024'ün altında giriş çözünürlüğü, lite model kapsam dışı
+("kuyumcu işi, kalite asla bozulmamalı").
+
+`scripts/profile_cutout.py` bir kesimi adım adım ölçer ve ürettiği PNG'nin
+rembg'nin kendi çıktısıyla **bit düzeyinde aynı** olduğunu doğrular (değilse
+ölçüm geçersiz sayılıp durur). Apple M4, 3 tekrarın ortancası:
+
+| Adım | 832×1248 (1 MP) | 4032×3024 (12 MP) |
+| --- | --- | --- |
+| Açma + EXIF döndürme | 0,00 sn | 0,04 sn |
+| 1024'e küçültme | 0,03 sn | 0,05 sn |
+| **Model (BiRefNet, FP32)** | **10,91 sn (%99)** | **9,33 sn (%93)** |
+| Maskeyi tam boyuta büyütme | 0,00 sn | 0,04 sn |
+| Kesimi oluşturma | 0,00 sn | 0,07 sn |
+| PNG kaydetme | 0,01 sn | 0,47 sn |
+
+**Karar:** kaliteye dokunmadan CPU'da kazanılabilecek pay %5'in altında —
+CPU optimizasyonu YAPILMADI. PNG sıkıştırma seviyesini düşürmek (kayıpsız,
+12 MP'de ~0,3 sn) dosyaları büyütüp R2 alanı/indirme süresi harcadığı için,
+iş parçacığı ayarı da kazancı önemsiz olduğu için reddedildi. Asıl hız GPU'da:
+yazarların FP32 ölçümüyle model ~0,1–0,4 sn, kesim başına tahmini ~0,3–1,5 sn
+(bugün ~10–12 sn). GPU kararı ve fiyatlar Faz 7.5'te —
+`docs/research/sunucu-fiyatlari-2026-09-27.md`. GPU'ya geçmeden önce aynı
+betik GPU sunucusunda koşulur ve FP32 GPU çıktısı `compare_cutouts.py` ile
+CPU çıktısına karşı karşılaştırılır.
+
 ### Veritabanı yedeği ve geri yükleme testi (`scripts/backup_database.py`, Faz 7, 27.09.2026)
 
 **Neden bizim işimiz:** Supabase otomatik günlük yedeği yalnız Pro ve üstü

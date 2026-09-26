@@ -1133,6 +1133,14 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Model optimizasyonu — ✅ ölçüldü, CPU'da optimizasyon YAPILMADI (27.09.2026).**
+  Serhan'ın kuralı: kaliteye dokunabilecek hiçbir seçenek (FP16/INT8,
+  düşük çözünürlük, lite model) kullanılmaz. `backend/scripts/profile_cutout.py`
+  (çıktısı rembg ile bit düzeyinde aynı) sürenin %93–99'unun model hesabında
+  olduğunu gösterdi; model dışı adımlar en fazla ~0,6 sn. Kalan kayıpsız
+  seçenekler (PNG sıkıştırma seviyesi, iş parçacığı) kazancı değmediği için
+  reddedildi. Asıl hız GPU'da (FP32, kesim başına tahmini ~0,3–1,5 sn) —
+  karar Faz 7.5. Ayrıntı `backend/README.md` → "Model optimizasyonu".
 - **Veritabanı yedeği ve geri yükleme testi — ✅ (27.09.2026).**
   Supabase ücretsiz pakette otomatik yedek almıyor (Serhan: paket Free) —
   kendi yedeğimiz tek yedek. `backend/scripts/backup_database.py`: `pg_dump`
@@ -1328,6 +1336,12 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   BiRefNet MIT ağırlıklarının çalıştırılabilirliği açısından karşılaştırılır.
   Faz 7'deki kuyruk, işçiyi GPU'ya taşımayı API'ye dokunmadan mümkün kılacak
   biçimde kurulur.
+  **27.09.2026 güncellemesi:** kuyruk kuruldu (işçi API'den ayrı). Örnek
+  fiyat araştırması: `docs/research/sunucu-fiyatlari-2026-09-27.md` (yalnız
+  CPU / aylık GPU sunucusu / saatlik GPU / sunucusuz GPU; aylık hacme göre
+  kaba karşılaştırma; KVKK veri konumu notu). **Yalnız FP32** (Serhan: kalite
+  bozan optimizasyon yok). Geçişten önce `profile_cutout.py` GPU'da koşulur
+  ve GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı ölçülür.
 - **Canlı sunucuda yapılacak ölçümler (Faz 7'den, 26.09.2026 — unutulmasın,
   kök `CLAUDE.md` açık takip maddesi 7):** yerel ölçümler tek makinede
   yapıldı ve aşağıdakilerin yerine geçmez.
@@ -1358,6 +1372,11 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
      diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
      bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
+  9. **GPU seçilirse:** `backend/scripts/profile_cutout.py` GPU sunucusunda
+     koşulup kesim süresi tahmini (~0,3–1,5 sn) gerçek ölçüme çevrilir; FP32
+     GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
+     fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
+     kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
