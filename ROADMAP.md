@@ -1133,6 +1133,14 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
+  45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
+  yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
+  sahipli kaynaklar hem red hem kabul yoluyla, `Idempotency-Key`'in
+  kullanıcıya göre ayrılması hem veritabanı hem HTTP düzeyinde sınanıyor
+  (71 test). Mevcut kodda açık BULUNMADI. Paketin işe yaradığı yedi ayrı
+  bozmayla kanıtlandı (ayrıntı `backend/README.md` → "Yetkilendirme ve IDOR
+  paketi").
 - **Bağımlılık taraması — ✅ (26.09.2026).** Backend'de 6 pakette 34 bilinen
   açık sürüm yükseltmesiyle kapatıldı (ayrıntı `backend/README.md` → "CI ve
   bağımlılık taraması"); frontend `npm audit` temizdi. rembg 2.0.61 → 2.0.85

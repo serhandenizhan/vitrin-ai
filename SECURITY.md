@@ -306,8 +306,8 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
-- [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
-- [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor
+- [x] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi) — 26.09.2026, Faz 7: `backend/tests/test_idor.py` her ucu sınıflandırır, sahipli kaynaklarda başkası 404 alır ve kaynak değişmez, sahibi başarılı olur; `Idempotency-Key` kullanıcıya göre ayrılır. Paketin gerçekten yakaladığı yedi ayrı bozmayla doğrulandı
+- [x] Admin panel erişimi role-based ve backend'de doğrulanıyor — 26.09.2026: 22 admin ucunun HER biri oturumsuz 401, sıradan kullanıcı 403, yönetici kabul yollarıyla otomatik sınanıyor (`backend/tests/test_idor.py`); yeni bir admin ucu sınıflandırılmadan birleşemez
 - [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. kök `CLAUDE.md` açık takip maddesi 5
 
 ## Faz 5 uygulama sınırları

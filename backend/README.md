@@ -65,7 +65,7 @@ DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vit
 kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
 zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
 backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 404 test bu yolla geçti):
+veritabanı yeterli (26.09.2026'da 475 test bu yolla geçti):
 
 ```bash
 docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
@@ -113,6 +113,32 @@ Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
 `set local role` ile taklit ediyor (`tests/test_rls.py`).
+
+### Yetkilendirme ve IDOR paketi (`tests/test_idor.py`, Faz 7)
+
+Her uç dört sınıftan TAM OLARAK birine atanır: `PUBLIC`, `SESSION` (yalnız
+oturum sahibinin hesabında çalışır), `OWNED` (kaynağın kimliği yoldan gelir)
+ve `ADMIN`. Rotalar uygulamanın OpenAPI şemasından okunur; **sınıflandırılmamış
+yeni bir uç testi kırmızı yakar** — yeni uç eklerken önce sınıfını seçin.
+Sınıfa göre otomatik sınananlar:
+
+- `SESSION`/`OWNED`/`ADMIN`: oturumsuz istek 401.
+- `ADMIN`: sıradan kullanıcı 403, yönetici yetki kapısını GEÇER (ders 15:
+  iki yol birlikte). Uç gerçekten çağrılır; yetkinin decorator'da mı
+  imzada mı yazıldığına bakılmaz.
+- `OWNED`: başka kullanıcı 404 alır ve kaynak DEĞİŞMEZ, sahibi aynı istekle
+  başarılı olur (projeler GET/PATCH/DELETE, checkout görüntüleme/iptal).
+- Liste ve toplu silme başka kullanıcıya ulaşmaz; `Idempotency-Key`
+  kullanıcıya göre ayrılır (B, A'nın anahtarıyla A'nın saklanan kesimini
+  alamaz — hem `reserve()` hem HTTP düzeyinde).
+
+**Paketin kendisi sınandı (26.09.2026):** yedi ayrı bozma denendi ve her biri
+yalnız ilgili testi kırmızı yaktı — bir admin ucundan `require_admin`'in
+kaldırılması, proje sahiplik filtresinin, checkout görüntüleme ve iptal
+sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya göre
+süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
+bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
+beklenen yetki davranışını gösteriyor.
 
 ### CI ve bağımlılık taraması (Faz 7)
 
