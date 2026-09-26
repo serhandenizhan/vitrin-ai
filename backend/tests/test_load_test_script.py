@@ -36,3 +36,18 @@ def test_refuses_the_daily_development_database():
 
 def test_accepts_a_local_test_database():
     load_test._check_database_url("postgresql+asyncpg://u:p@localhost:5432/vitrin_ai_test")
+
+
+def test_refuses_more_workers_than_the_machine_can_hold(monkeypatch):
+    # 27.09.2026: 16 GB'lık makinede 2 işçi (2 × ~12 GB) makineyi kilitledi.
+    monkeypatch.setattr(load_test, "_physical_ram_gb", lambda: 16.0)
+    with pytest.raises(SystemExit, match="kilitlenebilir"):
+        load_test._check_memory_budget(workers=2, concurrency=1, force=False)
+    with pytest.raises(SystemExit, match="kilitlenebilir"):
+        load_test._check_memory_budget(workers=1, concurrency=2, force=False)
+
+
+def test_allows_a_single_worker_on_a_sixteen_gb_machine(monkeypatch):
+    monkeypatch.setattr(load_test, "_physical_ram_gb", lambda: 16.0)
+    load_test._check_memory_budget(workers=1, concurrency=1, force=False)
+    load_test._check_memory_budget(workers=2, concurrency=1, force=True)  # bilerek

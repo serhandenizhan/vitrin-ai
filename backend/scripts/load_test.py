@@ -2,11 +2,10 @@
 
 NEYİ CEVAPLAR:
   inference  Aynı anda birden fazla arka plan kaldırma isteği gelince ne olur?
-             Kabul sınırlayıcısı (MAX_CONCURRENT_INFERENCES) fazlasını gövdeyi
-             okumadan 429'la geri çeviriyor mu, bellek sınırlı kalıyor mu, ve
-             inference sürerken DİĞER uçlar (sağlık, proje listesi) yanıt
-             vermeye devam ediyor mu (model iş parçacığında çalışıyor; olay
-             döngüsü tıkanıyor mu)?
+             Faz 7'den beri istekler kuyruğa girer (202) ve ayrı işçi(ler)
+             keser; betik ön yüz gibi yoklar ve YÜKLEMEDEN SONUCA uçtan uca
+             süreyi ölçer. Ayrıca kesim sürerken DİĞER uçların (sağlık, proje
+             listesi) yanıt verip vermediği ölçülür.
   read       Veritabanına giden okuma uçlarının eşzamanlılık 10/25/50'de
              gecikmesi ve hata oranı nedir (bağlantı havuzu varsayılanı 5+10)?
 
@@ -110,14 +109,46 @@ async def _create_users(count: int, admins: int) -> tuple[list[str], list[str]]:
     return users, admin_ids
 
 
+#: Bir işçinin (model + eşzamanlı kesim) tepe belleği için temkinli tahmin:
+#: Linux'ta çalışan serviste 12 GB ölçüldü (kök CLAUDE.md "Bilinen kısıt").
+#: `LOAD_TEST_WORKER_RAM_GB` ile değiştirilebilir.
+WORKER_RAM_GB = float(os.environ.get("LOAD_TEST_WORKER_RAM_GB", "12"))
+
+
+def _physical_ram_gb() -> float:
+    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1024**3
+
+
+def _check_memory_budget(workers: int, concurrency: int, force: bool) -> None:
+    """Makineyi kilitleyecek bir işçi sayısını baştan reddeder.
+
+    NEDEN (27.09.2026): 16 GB'lık makinede 2 işçiyle koşulan bir yük testi,
+    iki model aynı anda kesim yaparken belleği tüketti; macOS ~70 GB'lık
+    sayfayı diske yazdı ve bilgisayar kilitlendi. Her işçi modelin AYRI bir
+    kopyasını yükler; eşzamanlı kesim de etkinlik belleğini katlar.
+    """
+    needed = workers * concurrency * WORKER_RAM_GB
+    available = _physical_ram_gb()
+    if needed > available * 0.75 and not force:
+        sys.exit(
+            f"{workers} işçi × {concurrency} eşzamanlı kesim ≈ {needed:.0f} GB bellek ister; "
+            f"bu makinede {available:.0f} GB var. Makine kilitlenebilir — işçi sayısını düşürün "
+            "(ya da bilerek --force)."
+        )
+
+
 def serve(args) -> None:
     _check_database_url(args.database_url)
+    _check_memory_budget(args.workers, args.worker_concurrency, args.force)
     os.environ["DATABASE_URL"] = args.database_url
     # Yükleme hız sınırları yük testini değil kendini ölçerdi; yüksek tutulur.
     # Hız sınırının KENDİSİ ayrı testlerde (tests/test_upload_rate_limit_*) sınanıyor.
     os.environ.setdefault("UPLOAD_IP_RATE_LIMIT_REQUESTS", "100000")
     os.environ.setdefault("UPLOAD_USER_RATE_LIMIT_REQUESTS", "100000")
     os.environ["SENTRY_DSN"] = ""
+    # Faz 7 kuyruğu: yük testinin kendi öneki — geliştirme ortamında açık bir
+    # işçi (execute.sh) bu işleri almasın, yük testi işçisi de onunkileri.
+    os.environ["CUTOUT_QUEUE_PREFIX"] = f"yuk-testi-{uuid.uuid4().hex[:8]}"
 
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -159,6 +190,40 @@ def serve(args) -> None:
         )
 
     users, admins = asyncio.run(_create_users(args.users, args.admins))
+
+    # Kesim işçileri ayrı süreç (üretimdeki gibi). R2 ayarları BOŞALTILIR:
+    # yük testi yalnız yönetici kullanıcılarla kesim yapar (kredi/R2 yok), bu
+    # yalnız ikinci bir emniyet — ortak bucket'a hiçbir koşulda yazılamaz.
+    worker_env = {
+        **os.environ,
+        "R2_ACCOUNT_ID": "",
+        "R2_ACCESS_KEY_ID": "",
+        "R2_SECRET_ACCESS_KEY": "",
+        "R2_BUCKET_NAME": "",
+        "MAX_CONCURRENT_INFERENCES": str(args.worker_concurrency),
+    }
+    workers = [
+        subprocess.Popen([sys.executable, "-m", "app.workers.cutout"], cwd=BACKEND_DIR, env=worker_env)
+        for _ in range(args.workers)
+    ]
+    import atexit
+    import signal
+
+    def stop_workers() -> None:
+        for worker in workers:
+            if worker.poll() is None:
+                worker.terminate()
+        for worker in workers:
+            try:
+                worker.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                worker.kill()
+
+    # `atexit` SIGTERM'de ÇALIŞMAZ: süreç `kill` ile durdurulunca işçiler
+    # yetim kalıp modeli bellekte tutmaya devam ediyordu. Sinyal normal
+    # çıkışa çevrilir ki temizlik her durumda koşsun.
+    atexit.register(stop_workers)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     state = {
         "base_url": f"http://127.0.0.1:{args.port}",
         "pid": os.getpid(),
@@ -169,7 +234,8 @@ def serve(args) -> None:
             serialization.PrivateFormat.PKCS8,
             serialization.NoEncryption(),
         ).decode(),
-        "max_concurrent_inferences": settings.max_concurrent_inferences,
+        "worker_pids": [w.pid for w in workers],
+        "worker_concurrency": args.worker_concurrency,
         "pool_size": args.pool_size or "varsayılan (5 + 10 taşma)",
     }
     Path(args.state).write_text(json.dumps(state))
@@ -236,11 +302,10 @@ def _summary(samples: list[float]) -> dict:
     }
 
 
-async def _poll_rss(pid: int, stop: asyncio.Event, peak: list[float]):
+async def _poll_rss(pids: list[int], stop: asyncio.Event, peak: list[float]):
+    # API + işçi süreçlerinin TOPLAM belleği.
     while not stop.is_set():
-        value = _rss_mb(pid)
-        if value:
-            peak.append(value)
+        peak.append(sum(_rss_mb(pid) or 0 for pid in pids))
         await asyncio.sleep(0.5)
 
 
@@ -261,14 +326,21 @@ async def run_inference(state: dict, args) -> dict:
         async def worker(user_id: str):
             for _ in range(args.requests):
                 start = time.perf_counter()
+                key = str(uuid.uuid4())
+                headers = _headers(state, user_id)
                 response = await client.post(
                     "/api/remove-background",
                     files={"file": (Path(args.photo).name, photo, "image/jpeg")},
-                    headers={**_headers(state, user_id), "Idempotency-Key": str(uuid.uuid4())},
+                    headers={**headers, "Idempotency-Key": key},
                 )
-                results.append((response.status_code, time.perf_counter() - start))
-                if response.status_code == 429:
-                    # Gerçek istemci gibi: kısa bekleyip yeniden dener.
+                code = response.status_code
+                # Faz 7: 202 → iş sırada; ön yüz gibi yokla, uçtan uca süreyi ölç.
+                while code == 202:
+                    await asyncio.sleep(args.poll_interval)
+                    polled = await client.get(f"/api/remove-background/jobs/{key}", headers=headers)
+                    code = polled.status_code
+                results.append((code, time.perf_counter() - start))
+                if code in (429, 503):
                     await asyncio.sleep(args.retry_wait)
 
         async def prober():
@@ -285,8 +357,9 @@ async def run_inference(state: dict, args) -> dict:
                     probe[path].append(time.perf_counter() - start)
                 await asyncio.sleep(0.25)
 
-        baseline_rss = _rss_mb(state["pid"])
-        tasks = [asyncio.create_task(prober()), asyncio.create_task(_poll_rss(state["pid"], stop, rss))]
+        pids = [state["pid"], *state.get("worker_pids", [])]
+        baseline_rss = sum(_rss_mb(pid) or 0 for pid in pids)
+        tasks = [asyncio.create_task(prober()), asyncio.create_task(_poll_rss(pids, stop, rss))]
         started = time.perf_counter()
         await asyncio.gather(*(worker(admins[i]) for i in range(args.clients)))
         elapsed = time.perf_counter() - started
@@ -305,6 +378,8 @@ async def run_inference(state: dict, args) -> dict:
         "wall_seconds": round(elapsed, 1),
         "status_counts": {str(k): len(v) for k, v in sorted(by_status.items())},
         "latency_by_status": {str(k): _summary(v) for k, v in sorted(by_status.items())},
+        "workers": len(state.get("worker_pids", [])),
+        "worker_concurrency": state.get("worker_concurrency"),
         "server_rss_mb": {
             "before": round(baseline_rss or 0),
             "peak": round(max(rss)) if rss else None,
@@ -381,6 +456,9 @@ def main() -> None:
     serve_parser.add_argument("--users", type=int, default=50)
     serve_parser.add_argument("--admins", type=int, default=8)
     serve_parser.add_argument("--pool-size", type=int, help="yalnız teşhis: veritabanı havuzu boyutu")
+    serve_parser.add_argument("--workers", type=int, default=1, help="kesim işçisi süreç sayısı")
+    serve_parser.add_argument("--worker-concurrency", type=int, default=1, help="işçi başına eşzamanlı kesim")
+    serve_parser.add_argument("--force", action="store_true", help="bellek kontrolünü atla (bilerek)")
 
     run_parser = sub.add_parser("run")
     run_parser.add_argument("scenario", choices=["inference", "read"])
@@ -390,6 +468,7 @@ def main() -> None:
     run_parser.add_argument("--clients", type=int, default=4)
     run_parser.add_argument("--requests", type=int, default=2)
     run_parser.add_argument("--retry-wait", type=float, default=2.0)
+    run_parser.add_argument("--poll-interval", type=float, default=1.5)
     run_parser.add_argument("--duration", type=float, default=10)
     run_parser.add_argument("--levels", type=int, nargs="+", default=[10, 25, 50])
 
