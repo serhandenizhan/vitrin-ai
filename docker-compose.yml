@@ -20,12 +20,23 @@ services:
   # process içi bellekten buraya taşındı — dağıtık/çoklu worker'da doğru
   # çalışması için. Kalıcı bir volume bilinçli olarak YOK: rate-limit anahtarları
   # kısa TTL'li (birkaç saniye-dakika) ve zaten geçici; container yeniden
-  # başlarsa sayaçların sıfırlanması zararsız. Celery/RQ (ROADMAP'te planlı,
-  # henüz kurulmadı) bu Redis'i broker olarak kullanmaya başladığında kalıcılık
-  # yeniden değerlendirilmeli.
+  # başlarsa sayaçların sıfırlanması zararsız.
+  #
+  # Faz 7'den beri kesim kuyruğu da burada ve özgün fotoğrafı en fazla 15 dk
+  # BELLEKTE tutuyor; KVKK metni "diske yazılmaz" diyor. Redis'in varsayılanı
+  # belleği `dump.rdb`'ye yazar (RDB), bu yüzden RDB ve AOF açıkça kapalı.
+  # API bunu her kuyruğa koymadan önce doğrular; açıksa fotoğrafı almaz.
+  # Canlıdaki Redis de AYNI ayarla çalışmalı (backend/README.md "Kesim kuyruğu").
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # İmaj /data'yı anonim volume olarak tanımlıyor ve compose onu kapsayıcı
+    # yeniden oluşturulsa bile KORUYOR: eski bir dump.rdb orada kalıp açılışta
+    # belleğe geri yükleniyordu (ölçüldü). /data bellekte: elle bir BGSAVE
+    # bile diske ulaşmaz.
+    tmpfs:
+      - /data
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:

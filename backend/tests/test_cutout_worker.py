@@ -20,7 +20,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.services.billing.db import one
-from app.services.billing.entitlements import reserve
+from app.services.billing.entitlements import reserve, resolve_reservation
 from app.services.billing.provider import Iyzico
 from app.services.cutout_queue import DONE, FAILED, CutoutQueue
 from app.workers.cutout import CutoutWorker
@@ -51,14 +51,19 @@ class FakeRemoval:
 
 
 class FakeStorage:
-    def __init__(self, fail_upload=False):
+    def __init__(self, fail_upload=False, on_upload=None):
         self.objects = {}
         self.fail_upload = fail_upload
+        # Yükleme ile kredi tüketimi ARASINA başka bir sürecin girmesini
+        # (bakım işi, kurtarılan ikinci deneme) taklit etmek için.
+        self.on_upload = on_upload
 
     async def upload(self, key, content, content_type):
         if self.fail_upload:
             raise BotoCoreError()
         self.objects[key] = content
+        if self.on_upload:
+            await self.on_upload(key)
 
     async def delete(self, key):
         self.objects.pop(key, None)
@@ -162,18 +167,130 @@ async def test_reservation_released_meanwhile_discards_the_orphan_result(
     db_session, create_user, provider, queue, session_factory
 ):
     user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
-    # Bakım işi ayırmayı bu arada iade etmiş olsun.
-    from app.services.billing.entitlements import resolve_reservation
 
-    await resolve_reservation(db_session, reservation_id, False)
-    storage = FakeStorage()
+    async def maintenance_releases(_key):
+        # Bakım işi ayırmayı sonuç saklandıktan SONRA, tüketimden ÖNCE iade etsin.
+        async with session_factory() as db:
+            await resolve_reservation(db, reservation_id, False)
+
+    storage = FakeStorage(on_upload=maintenance_releases)
     worker = _worker(queue, session_factory, storage=storage)
 
     await worker.process(await queue.claim(worker.worker_id))
 
     record = await queue.get_job(user, request)
     assert record["status"] == FAILED and record["error_code"] == "reservation_released"
+    assert record["retry_safe"] == "1"
     assert storage.objects == {}  # sahipsiz sonuç silindi
+    assert await _reservation_status(db_session, reservation_id) == "released"
+
+
+async def test_reservation_released_before_claim_skips_inference(
+    db_session, create_user, provider, queue, session_factory
+):
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    async with session_factory() as db:
+        await resolve_reservation(db, reservation_id, False)
+    removal, storage = FakeRemoval(), FakeStorage()
+    worker = _worker(queue, session_factory, removal=removal, storage=storage)
+
+    await worker.process(await queue.claim(worker.worker_id))
+
+    record = await queue.get_job(user, request)
+    assert record["status"] == FAILED and record["error_code"] == "reservation_released"
+    assert record["retry_safe"] == "1"
+    assert removal.calls == 0 and storage.objects == {}
+
+
+# --- Tüketilmiş kredi ASLA "iade edildi, yeniden dene" diye bildirilmez ------
+# (Codex incelemesi, 27.09.2026.) İşçi krediyi tükettikten sonra, işi Redis'te
+# bitmiş işaretleyemeden ölürse iş kurtarılıp yeniden işleniyor. Eski kod bu
+# ikinci denemede `resolve_reservation`'ın False dönüşünü "iade edilmiş" sanıp
+# saklanan sonucu siliyor ve `retry_safe` yazıyordu: ön yüz de sessizce yeni
+# bir anahtarla İKİNCİ bir kredi harcıyordu.
+
+
+async def _consume_then_die(queue, session_factory, storage, worker_id="olu-isci"):
+    """İlk işçi sonucu saklar, krediyi tüketir ve `complete` öncesi ölür."""
+    dead = _worker(queue, session_factory, storage=storage, worker_id=worker_id)
+    job = await queue.claim(dead.worker_id)
+
+    async def redis_dies(*_args, **_kwargs):
+        raise ConnectionError("işçi burada öldü")
+
+    queue.complete, original = redis_dies, queue.complete
+    try:
+        with pytest.raises(ConnectionError):
+            await dead.process(job)
+    finally:
+        queue.complete = original
+    return job
+
+
+async def test_retry_after_consumed_crash_delivers_the_stored_result(
+    db_session, create_user, provider, queue, session_factory
+):
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    storage = FakeStorage()
+    await _consume_then_die(queue, session_factory, storage)
+    key = f"results/{user}/{request}.png"
+    assert await _reservation_status(db_session, reservation_id) == "consumed"
+
+    removal = FakeRemoval(result=b"ikinci-kesim")
+    survivor = _worker(queue, session_factory, removal=removal, storage=storage, worker_id="canli-isci")
+    await queue.heartbeat(survivor.worker_id)
+    assert await survivor.recover_once() == 0  # fotoğraf duruyor: kuyruğa geri konur
+    job = await queue.claim(survivor.worker_id)
+    assert job.attempts == 2
+    await survivor.process(job)
+
+    record = await queue.get_job(user, request)
+    assert record["status"] == DONE and record["result_key"] == key
+    assert storage.objects[key] == b"kesim-png"  # ilk denemenin sonucu yerinde
+    assert removal.calls == 0  # inference ikinci kez çalışmadı
+    assert await _reservation_status(db_session, reservation_id) == "consumed"
+
+
+async def test_consumed_job_out_of_attempts_is_done_not_refunded(
+    db_session, create_user, provider, queue, session_factory
+):
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    storage = FakeStorage()
+    job = await _consume_then_die(queue, session_factory, storage)
+    # Deneme hakkı bitmiş olsun: kurtarma işi onu "kaybedildi" diye iade etmeye çalışır.
+    await queue._redis().hset(queue._key("job", job.job_id), "attempts", 2)
+
+    survivor = _worker(queue, session_factory, storage=storage, worker_id="canli-isci")
+    await queue.heartbeat(survivor.worker_id)
+    assert await survivor.recover_once() == 1
+
+    record = await queue.get_job(user, request)
+    assert record["status"] == DONE and record["result_key"] == f"results/{user}/{request}.png"
+    assert record.get("retry_safe") in (None, "")
+    assert await _reservation_status(db_session, reservation_id) == "consumed"
+
+
+async def test_concurrent_attempt_that_consumed_first_keeps_the_result(
+    db_session, create_user, provider, queue, session_factory
+):
+    # Nabzı gecikip kurtarılan bir işçi aynı işi paralel yürütüyor ve krediyi
+    # bu işçinin yüklemesi ile tüketimi arasında tüketiyor.
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+
+    async def other_attempt_consumes(key):
+        async with session_factory() as db:
+            await resolve_reservation(db, reservation_id, True, key)
+
+    storage = FakeStorage(on_upload=other_attempt_consumes)
+    worker = _worker(queue, session_factory, storage=storage)
+
+    await worker.process(await queue.claim(worker.worker_id))
+
+    key = f"results/{user}/{request}.png"
+    record = await queue.get_job(user, request)
+    assert record["status"] == DONE and record["result_key"] == key
+    assert storage.objects[key] == b"kesim-png"
+    assert await queue.result(user, request) == b"kesim-png"
 
 
 async def test_admin_job_needs_no_credit_and_no_storage(

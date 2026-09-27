@@ -98,6 +98,27 @@ async def _apply_migrations():
 LOCAL_REDIS_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "redis"})
 
 
+@pytest.fixture(scope="session", autouse=True)
+def redis_without_persistence():
+    """Kesim kuyruğu, Redis diske yazıyorsa özgün fotoğrafı kabul etmez
+    (`CutoutQueue.ensure_ephemeral`, KVKK). Test Redis'i de production'ın
+    olması gerektiği gibi yapılandırılır: CI'daki servis kapsayıcısına komut
+    satırı argümanı verilemiyor, yerel Redis ise `docker compose` ile yeniden
+    oluşturulana kadar eski (diske yazan) ayarla çalışıyor olabilir."""
+    import redis as sync_redis
+
+    if (urlsplit(settings.redis_url).hostname or "").lower() not in LOCAL_REDIS_HOSTS:
+        return  # `redis_client` fixture'ı bu durumda okunur bir mesajla durdurur
+    client = sync_redis.Redis.from_url(settings.redis_url)
+    try:
+        client.config_set("save", "")
+        client.config_set("appendonly", "no")
+    except sync_redis.RedisError:
+        pass  # Redis'e ulaşılamıyorsa asıl hata onu kullanan testte okunur
+    finally:
+        client.close()
+
+
 @pytest_asyncio.fixture(scope="session")
 async def redis_client() -> AsyncGenerator[Redis, None]:
     host = (urlsplit(settings.redis_url).hostname or "").lower()

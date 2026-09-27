@@ -371,6 +371,26 @@ async def resolve_reservation(db, reservation_id, success, result_key=None):
     return bool(row)
 
 
+async def reservation_outcome(db, reservation_id):
+    """Ayırmanın durumu ve saklanan sonucun anahtarı: `(status, result_r2_key)`.
+
+    `resolve_reservation` False döndüğünde bunun İKİ anlamı olabilir: ayırma
+    iade edilmiş (bakım işi) YA DA aynı işin önceki bir denemesi krediyi zaten
+    tüketmiş. İkisini ayırmadan davranmak tüketilmiş krediye ait sonucu siler
+    ve istemciyi yeni bir krediye yönlendirir; çağıran önce burayı okur.
+    Kayıt yoksa `(None, None)`.
+    """
+    row = await one(
+        db,
+        "SELECT status, result_r2_key FROM usage_reservations WHERE id=:id",
+        id=reservation_id,
+    )
+    await db.commit()
+    if not row:
+        return None, None
+    return row["status"], row["result_r2_key"]
+
+
 async def expire_reservations(db):
     rows = await many(
         db,

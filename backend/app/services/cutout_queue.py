@@ -20,14 +20,26 @@ KVKK: özgün fotoğraf diske/R2'ye yazılmaz; Redis belleğinde iş bitene kada
 en geç PHOTO_TTL (15 dk) tutulur ve iş bitince silinir. İşçi alırken değil
 bitirince silinir: kesimin ortasında çöken bir işçinin işi başka bir işçiye
 fotoğrafıyla birlikte verilebilsin.
+
+"Diske yazılmaz" sözü Redis'in YAPILANDIRMASINA bağlı: varsayılan Redis
+belleği `dump.rdb`'ye (RDB) yazar. Bu yüzden `enqueue` fotoğrafı koymadan önce
+Redis'te RDB ve AOF'un kapalı olduğunu doğrular; açıksa fotoğrafı hiç almaz
+(Codex incelemesi, 27.09.2026 — yerel Redis'te `save 3600 1 300 100 60 10000`
+ve dolu bir `dump.rdb` bulundu). `CONFIG` komutu yasaklıysa (bazı yönetilen
+Redis hizmetleri) doğrulanamaz: uyarı yazılır ve sağlayıcının ayarı elle
+doğrulanır (`backend/README.md` → "Kesim kuyruğu").
 """
 
 import asyncio
+import logging
 import time
 import weakref
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError, ResponseError
+
+logger = logging.getLogger("vitrin.cutout-queue")
 
 #: Özgün fotoğrafın Redis'te kalabileceği en uzun süre (KVKK metninde yazılı).
 PHOTO_TTL_SECONDS = 15 * 60
@@ -36,6 +48,9 @@ JOB_TTL_SECONDS = 30 * 60
 #: Biten sonucun kuyruktan teslim edilebileceği süre; sonrasında R2'deki
 #: 24 saatlik idempotency kopyası kullanılır.
 RESULT_TTL_SECONDS = 10 * 60
+#: Redis'in diske yazmadığı doğrulandıktan sonra ne kadar süre yeniden
+#: sorulmayacağı (her istekte `CONFIG GET` atılmasın).
+PERSISTENCE_CHECK_SECONDS = 60
 
 QUEUED = "queued"
 PROCESSING = "processing"
@@ -43,8 +58,45 @@ DONE = "done"
 FAILED = "failed"
 
 
+#: KEYS: kuyruk, fotoğraf, iş kaydı. ARGV: üst sınır, fotoğraf, fotoğraf
+#: TTL'i, kayıt TTL'i, iş kimliği, kullanıcı, anahtar, ayırma, eklenme anı.
+#: Kuyruk doluysa hiçbir şey yazmadan 0 döner.
+_ENQUEUE_SCRIPT = """
+if redis.call('LLEN', KEYS[1]) >= tonumber(ARGV[1]) then
+  return 0
+end
+redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
+redis.call('HSET', KEYS[3], 'status', 'queued', 'user_id', ARGV[6], 'request_id', ARGV[7],
+  'reservation_id', ARGV[8], 'enqueued_at', ARGV[9], 'attempts', 0)
+redis.call('EXPIRE', KEYS[3], ARGV[4])
+redis.call('LPUSH', KEYS[1], ARGV[5])
+return 1
+"""
+
+
 class QueueFull(Exception):
     """Kuyruk üst sınırda — fotoğraflar Redis belleğinde beklediği için sınırsız olamaz."""
+
+
+class RedisPersistenceEnabled(RedisError):
+    """Redis belleği diske yazıyor: özgün fotoğraf kuyruğa konamaz.
+
+    `RedisError` alt sınıfı: API bunu Redis'e ulaşılamaması gibi ele alır
+    (kredi iade edilir, `503 queue_unavailable`).
+    """
+
+
+async def redis_persistence(redis) -> bool | None:
+    """Redis diske yazıyor mu? True: RDB ya da AOF açık; False: ikisi de
+    kapalı; None: doğrulanamadı (`CONFIG` komutu yasak)."""
+    try:
+        save = await redis.config_get("save")
+        appendonly = await redis.config_get("appendonly")
+    except ResponseError:
+        return None
+    save = {_text(k): _text(v) for k, v in save.items()}
+    appendonly = {_text(k): _text(v) for k, v in appendonly.items()}
+    return bool((save.get("save") or "").strip()) or appendonly.get("appendonly") == "yes"
 
 
 @dataclass
@@ -78,6 +130,7 @@ class CutoutQueue:
         self._clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Redis]" = (
             weakref.WeakKeyDictionary()
         )
+        self._ephemeral_verified_at: float | None = None
 
     # -- yardımcılar ------------------------------------------------------
 
@@ -91,6 +144,25 @@ class CutoutQueue:
 
     def _key(self, *parts: str) -> str:
         return ":".join((self._prefix, *parts))
+
+    async def ensure_ephemeral(self) -> None:
+        """Redis diske yazıyorsa `RedisPersistenceEnabled` fırlatır."""
+        now = time.monotonic()
+        if self._ephemeral_verified_at is not None and now - self._ephemeral_verified_at < PERSISTENCE_CHECK_SECONDS:
+            return
+        state = await redis_persistence(self._redis())
+        if state:
+            logger.error(
+                "Redis diske yazıyor (RDB/AOF açık); özgün fotoğraflar kuyruğa "
+                "konmuyor. Redis'i `--save \"\" --appendonly no` ile başlatın."
+            )
+            raise RedisPersistenceEnabled()
+        if state is None:
+            logger.warning(
+                "Redis kalıcılık ayarı doğrulanamadı (CONFIG yasak); sağlayıcıda "
+                "RDB/AOF'un kapalı olduğu elle doğrulanmalı."
+            )
+        self._ephemeral_verified_at = now
 
     async def aclose(self) -> None:
         client = self._clients.pop(asyncio.get_running_loop(), None)
@@ -109,26 +181,30 @@ class CutoutQueue:
         return int(await self._redis().llen(self._key("queue")))
 
     async def enqueue(self, user_id, request_id, reservation_id, photo: bytes) -> None:
-        if await self.queued_count() >= self.max_jobs:
-            raise QueueFull()
+        # Sınır kontrolü ile ekleme TEK bir Lua betiğinde (Redis'te atomik):
+        # ayrı bir `LLEN` + ekleme, eşzamanlı isteklerin hepsinin boş kuyruk
+        # görüp sınırı aşmasına izin veriyordu (Codex incelemesi, 27.09.2026 —
+        # `max_jobs=1` ile 5 eşzamanlı istekten 5'i de kabul edilmişti).
+        await self.ensure_ephemeral()
         job_id = job_id_for(user_id, request_id)
-        job_key = self._key("job", job_id)
-        pipe = self._redis().pipeline(transaction=True)
-        pipe.set(self._key("photo", job_id), photo, ex=PHOTO_TTL_SECONDS)
-        pipe.hset(
-            job_key,
-            mapping={
-                "status": QUEUED,
-                "user_id": str(user_id),
-                "request_id": str(request_id),
-                "reservation_id": str(reservation_id) if reservation_id else "",
-                "enqueued_at": repr(time.time()),
-                "attempts": 0,
-            },
+        accepted = await self._redis().eval(
+            _ENQUEUE_SCRIPT,
+            3,
+            self._key("queue"),
+            self._key("photo", job_id),
+            self._key("job", job_id),
+            self.max_jobs,
+            photo,
+            PHOTO_TTL_SECONDS,
+            JOB_TTL_SECONDS,
+            job_id,
+            str(user_id),
+            str(request_id),
+            str(reservation_id) if reservation_id else "",
+            repr(time.time()),
         )
-        pipe.expire(job_key, JOB_TTL_SECONDS)
-        pipe.lpush(self._key("queue"), job_id)
-        await pipe.execute()
+        if not accepted:
+            raise QueueFull()
 
     async def result(self, user_id, request_id) -> bytes | None:
         return await self._redis().get(self._key("result", job_id_for(user_id, request_id)))
@@ -178,14 +254,22 @@ class CutoutQueue:
             photo=photo,
         )
 
-    async def complete(self, worker_id: str, job: ClaimedJob, result: bytes, result_key: str | None) -> None:
-        job_key = self._key("job", job.job_id)
+    async def complete(
+        self, worker_id: str | None, job_id: str, result: bytes | None, result_key: str | None
+    ) -> None:
+        """İşi bitmiş işaretler. `result` None olabilir: önceki bir deneme
+        sonucu R2'ye saklayıp krediyi tüketmiş ama işi işaretleyemeden ölmüşse
+        teslim `result_key`'deki saklanan kopyadan yapılır (inference tekrar
+        çalışmaz, ikinci kredi harcanmaz)."""
+        job_key = self._key("job", job_id)
         pipe = self._redis().pipeline(transaction=True)
-        pipe.set(self._key("result", job.job_id), result, ex=RESULT_TTL_SECONDS)
+        if result is not None:
+            pipe.set(self._key("result", job_id), result, ex=RESULT_TTL_SECONDS)
         pipe.hset(job_key, mapping={"status": DONE, "result_key": result_key or ""})
         pipe.expire(job_key, RESULT_TTL_SECONDS)
-        pipe.delete(self._key("photo", job.job_id))
-        pipe.lrem(self._key("processing", worker_id), 0, job.job_id)
+        pipe.delete(self._key("photo", job_id))
+        if worker_id:
+            pipe.lrem(self._key("processing", worker_id), 0, job_id)
         await pipe.execute()
 
     async def fail(self, worker_id: str | None, job_id: str, code: str, *, retry_safe: bool) -> None:

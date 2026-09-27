@@ -10,6 +10,14 @@ Kredi sözleşmesi API'deki eski akışla AYNI (kök CLAUDE.md "Ödemeler"):
 sonuç ÖNCE R2'ye saklanır, kredi SONRA tüketilir; herhangi bir hata yolunda
 kredi iade edilir ve iş `retry_safe` olarak işaretlenir — istemci ancak o
 zaman yeni bir idempotency anahtarına geçer.
+
+Bir iş BİRDEN FAZLA kez işlenebilir: işçi krediyi tükettikten sonra, işi
+Redis'te bitmiş işaretleyemeden ölürse kurtarma işi onu kuyruğa geri koyar.
+Bu yüzden `retry_safe` YALNIZCA kredinin gerçekten iade edildiği durumda
+yazılır; ayırma zaten tüketilmişse iş başarılı sayılır ve saklanan sonuç
+teslim edilir (Codex incelemesi, 27.09.2026: aksi hâlde ikinci deneme
+tüketilmiş krediye ait sonucu siliyor, ön yüz de sessizce yeni bir kredi
+harcıyordu).
 """
 
 import asyncio
@@ -26,7 +34,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from app.core.config import settings
 from app.core.db import _session_factory
 from app.services.background_removal import BackgroundRemovalService, _get_session
-from app.services.billing.entitlements import resolve_reservation
+from app.services.billing.entitlements import reservation_outcome, resolve_reservation
 from app.services.cutout_queue import PHOTO_TTL_SECONDS, ClaimedJob, CutoutQueue
 from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
 
@@ -64,13 +72,42 @@ class CutoutWorker:
         async with self.session_factory() as db:
             return await resolve_reservation(db, uuid.UUID(reservation_id), success, result_key)
 
+    async def _outcome(self, reservation_id) -> tuple[str | None, str | None]:
+        async with self.session_factory() as db:
+            return await reservation_outcome(db, uuid.UUID(reservation_id))
+
+    async def _finish_settled(self, job_id, reservation_id, code, worker_id) -> None:
+        """Ayırma bu işçiden önce sonuçlanmış. Tüketildiyse iş BAŞARILIDIR
+        (önceki deneme sonucu saklayıp krediyi harcamış): saklanan kopya
+        teslim edilir. İade edildiyse istemci yeni anahtarla deneyebilir."""
+        status, stored_key = await self._outcome(reservation_id)
+        if status == "consumed":
+            await self.queue.complete(worker_id, job_id, None, stored_key)
+        else:
+            await self.queue.fail(worker_id, job_id, code, retry_safe=True)
+
     async def _refund_and_fail(self, job_id, reservation_id, code, worker_id=None) -> None:
         # Kredi iadesi kesintiye uğramasın: süreç kapanırken bile tamamlanır.
         with anyio.CancelScope(shield=True):
-            await self._resolve(reservation_id, False)
-            await self.queue.fail(worker_id, job_id, code, retry_safe=True)
+            if await self._resolve(reservation_id, False):
+                await self.queue.fail(worker_id, job_id, code, retry_safe=True)
+            else:
+                # İade edilemedi: ayırma zaten sonuçlanmış. Tüketilmiş bir
+                # krediyi "iade edildi, yeniden dene" diye bildirmek, istemciyi
+                # ikinci bir krediye yönlendirirdi.
+                await self._finish_settled(job_id, reservation_id, code, worker_id)
 
     async def process(self, job: ClaimedJob) -> None:
+        if job.reservation_id:
+            status, _ = await self._outcome(job.reservation_id)
+            if status != "pending":
+                # Önceki bir deneme işi bitirmiş ya da bakım işi krediyi iade
+                # etmiş: inference tekrar çalışmaz, saklanan sonucun üzerine
+                # yazılmaz.
+                await self._finish_settled(
+                    job.job_id, job.reservation_id, "reservation_released", self.worker_id
+                )
+                return
         if job.photo is None or time.time() - job.enqueued_at > PHOTO_TTL_SECONDS:
             # Fotoğraf 15 dk içinde işlenemedi (KVKK süresi doldu).
             await self._refund_and_fail(job.job_id, job.reservation_id, "job_expired", self.worker_id)
@@ -97,6 +134,13 @@ class CutoutWorker:
                 )
                 return
         if not await self._resolve(job.reservation_id, True, result_key):
+            status, stored_key = await self._outcome(job.reservation_id)
+            if status == "consumed":
+                # Aynı işin başka bir denemesi (nabzı gecikip kurtarılan bir
+                # işçi) krediyi bu arada tüketmiş; sonuç AYNI anahtarda ve
+                # müşterinin parası ona ödendi — silinmez, teslim edilir.
+                await self.queue.complete(self.worker_id, job.job_id, result, stored_key)
+                return
             # Ayırma bu arada iade edilmiş (bakım işi): kredi zaten geri
             # verildi; saklanan nesne kimseye ait değil, silinir.
             if result_key:
@@ -106,7 +150,7 @@ class CutoutWorker:
                     logger.warning("Sahipsiz sonuç silinemedi: %s", result_key)
             await self.queue.fail(self.worker_id, job.job_id, "reservation_released", retry_safe=True)
             return
-        await self.queue.complete(self.worker_id, job, result, result_key)
+        await self.queue.complete(self.worker_id, job.job_id, result, result_key)
 
     async def recover_once(self) -> int:
         """Ölü işçilerin işlerini geri alır; kurtarılamayanların kredisini iade eder."""

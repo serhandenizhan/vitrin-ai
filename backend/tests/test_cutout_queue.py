@@ -4,12 +4,15 @@ Her test kendi önekini kullanır ve sonunda yalnız kendi anahtarlarını siler
 aynı Redis'i kullanan geliştirme ortamına dokunmaz.
 """
 
+import asyncio
 import uuid
 from urllib.parse import urlsplit
 
 import pytest
+from redis.exceptions import RedisError, ResponseError
 
 from app.core.config import settings
+from app.services import cutout_queue
 from app.services.cutout_queue import (
     DONE,
     FAILED,
@@ -18,7 +21,9 @@ from app.services.cutout_queue import (
     QUEUED,
     CutoutQueue,
     QueueFull,
+    RedisPersistenceEnabled,
     job_id_for,
+    redis_persistence,
 )
 
 
@@ -75,6 +80,71 @@ async def test_full_queue_refuses_new_jobs(queue):
         await queue.enqueue(user, uuid.uuid4(), None, b"x")
 
 
+async def test_concurrent_enqueues_never_exceed_the_limit(queue):
+    # Sınır kontrolü ile ekleme ayrı adımlarken eşzamanlı isteklerin hepsi
+    # boş kuyruk görüp kabul ediliyordu; fotoğraflar Redis belleğinde durduğu
+    # için bellek sınırı da aşılıyordu (Codex incelemesi, 27.09.2026).
+    user = uuid.uuid4()
+    requests = [uuid.uuid4() for _ in range(10)]
+    results = await asyncio.gather(
+        *(queue.enqueue(user, request, None, b"x") for request in requests),
+        return_exceptions=True,
+    )
+    accepted = [r for r, result in zip(requests, results) if result is None]
+    assert all(isinstance(result, QueueFull) for result in results if result is not None)
+    assert len(accepted) == queue.max_jobs == 3
+    assert await queue.queued_count() == 3
+    # Reddedilen isteğin fotoğrafı ve kaydı hiç yazılmaz.
+    for request in set(requests) - set(accepted):
+        assert await queue.get_job(user, request) is None
+        assert not await queue._redis().exists(queue._key("photo", job_id_for(user, request)))
+
+
+class _FakeConfigRedis:
+    def __init__(self, save="", appendonly="no", forbidden=False):
+        self.values = {"save": save, "appendonly": appendonly}
+        self.forbidden = forbidden
+
+    async def config_get(self, name):
+        if self.forbidden:
+            raise ResponseError("unknown command 'CONFIG'")
+        return {name.encode(): self.values[name].encode()}
+
+
+@pytest.mark.parametrize(
+    "fake,expected",
+    [
+        (_FakeConfigRedis(save="3600 1 300 100 60 10000"), True),  # Redis 7 varsayılanı
+        (_FakeConfigRedis(appendonly="yes"), True),
+        (_FakeConfigRedis(), False),
+        (_FakeConfigRedis(forbidden=True), None),
+    ],
+)
+async def test_redis_persistence_is_read_from_its_config(fake, expected):
+    assert await redis_persistence(fake) is expected
+
+
+async def test_photo_is_refused_while_redis_writes_to_disk(queue, monkeypatch):
+    # KVKK metni "özgün fotoğraf diske yazılmaz" diyor; Redis'in varsayılan
+    # ayarı belleği `dump.rdb`'ye yazıyor (Codex incelemesi, 27.09.2026).
+    async def writes_to_disk(_redis):
+        return True
+
+    monkeypatch.setattr(cutout_queue, "redis_persistence", writes_to_disk)
+    user, request = uuid.uuid4(), uuid.uuid4()
+    with pytest.raises(RedisPersistenceEnabled):
+        await queue.enqueue(user, request, None, b"foto")
+    assert isinstance(RedisPersistenceEnabled(), RedisError)  # API 503 + kredi iadesi yolu
+    assert not await queue._redis().exists(queue._key("photo", job_id_for(user, request)))
+    assert await queue.queued_count() == 0
+
+
+async def test_test_redis_is_configured_without_persistence(queue):
+    # conftest'teki `redis_without_persistence` gerçekten uygulanmış olmalı;
+    # aksi hâlde bu dosyadaki diğer testler yanlış sebeple kırmızı yanar.
+    assert await redis_persistence(queue._redis()) is False
+
+
 async def test_photo_lives_at_most_fifteen_minutes(queue):
     user, request = uuid.uuid4(), uuid.uuid4()
     await queue.enqueue(user, request, None, b"foto")
@@ -86,7 +156,7 @@ async def test_complete_delivers_result_and_deletes_photo(queue):
     user, request = uuid.uuid4(), uuid.uuid4()
     await queue.enqueue(user, request, None, b"foto")
     job = await queue.claim("isci-a")
-    await queue.complete("isci-a", job, b"png", "results/x.png")
+    await queue.complete("isci-a", job.job_id, b"png", "results/x.png")
 
     record = await queue.get_job(user, request)
     assert record["status"] == DONE and record["result_key"] == "results/x.png"
