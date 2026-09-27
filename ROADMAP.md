@@ -1150,6 +1150,15 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   kısıt sayıları birebir, 2,8 sn; kontrol dört bozmayla sınandı. Ayrıntı
   `backend/README.md` → "Veritabanı yedeği". **Faz 7.5'e:** günlük otomatik
   çalıştırma, ayrı özel R2 bucket, saklama süresi.
+  **Codex incelemesi düzeltmeleri (27.09.2026):** (1) yetkiler korunuyor —
+  eskiden `--no-privileges` bütün GRANT/REVOKE'ları atıyordu ve test bunu
+  görmüyordu; artık dökümde ve geri yüklemede duruyor, geri yükleme testi
+  yetkileri satır satır karşılaştırıyor (production: 416 yetki birebir);
+  (2) satır sayıları, parmak izi ve döküm AYNI anlık görüntüden
+  (`pg_export_snapshot` + `pg_dump --snapshot`), canlı yazmalar sağlam yedeği
+  "başarısız" göstermiyor; (3) dosya adı rastgele ek taşıyor ve dosya yalnız
+  yoksa oluşturuluyor. Üçü de Docker'da gerçek `pg_dump`/`pg_restore` ile
+  test edildi (eski betikte kırmızı). Önceki yedekler yetki içermiyor.
 - **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
   Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
   "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek
@@ -1180,6 +1189,15 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     artırmaz (model zaten bütün çekirdekleri kullanıyor); kapasite işçi
     MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar. Kuyruğun değeri: hata
     yerine bekleme ve API'ye dokunmadan işçi ekleyebilmek.
+  **Codex incelemesi düzeltmeleri (27.09.2026):** (1) işçi krediyi tükettikten
+  sonra ölürse kurtarılan ikinci deneme tüketilmiş krediye ait sonucu siliyor
+  ve ön yüz sessizce ikinci kredi harcıyordu — artık işçi ayırmanın gerçek
+  durumunu okuyor, tüketilmişse saklanan sonucu teslim ediyor (kök
+  `CLAUDE.md` ders 32); (2) kuyruk sınırı eşzamanlı isteklerde aşılıyordu —
+  kontrol ve ekleme tek bir Lua betiğinde; (3) Redis'in varsayılanı belleği
+  diske (`dump.rdb`) yazıyordu, KVKK metniyle çelişiyordu — compose'da
+  RDB/AOF kapalı + `/data` tmpfs, API her kuyruğa koymadan önce doğruluyor
+  (ders 33). Dördü de eski kodda kırmızı yanan testlerle.
   **Sonuç (27.09.2026):** tek işçi, 4 eşzamanlı istemci × 2 istek → 8/8
   başarılı, 0 × 429 (önce 6/8 reddediliyordu); sıra dahil ortalama 38,5 sn,
   kesim sürerken diğer uçlar p95 ≤29 ms. Ayrıntı `backend/README.md` →
@@ -1377,6 +1395,13 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
      fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
      kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
+  10. **Redis diske yazmıyor mu:** kesim kuyruğu özgün fotoğrafı Redis'te
+     tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
+     kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
+     koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
+     (kredi iade + 503). Yönetilen bir Redis `CONFIG`'i yasaklıyorsa kod
+     doğrulayamaz, yalnız uyarı yazar: o durumda sağlayıcının kalıcılık
+     ayarı elle doğrulanıp buraya not düşülür.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK

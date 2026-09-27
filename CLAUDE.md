@@ -58,6 +58,8 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 30. **Ders — react-konva'ya JSX içinde yazılan dizi/nesne her render'da "değişmiş" sayılır; filtreli bir düğümde bu, her render'da filtrelerin baştan hesaplanması demektir.** `editor-stage.tsx`'te `filters={[Brighten, Contrast, HSL]}` her render'da yeni diziydi; react-konva `!==` ile karşılaştırıp Konva'ya yeniden veriyor, Konva da ürünün filtreli önbelleğini baştan işliyordu (`getImageData` + piksel döngüsü). Stüdyodaki her yeniden çizim (aşama değişimi, panel, hover) Retina'da ~100 ms'lik bir kare üretiyordu; Serhan "geçişler kare kare, makinede mi sorun var" diye sordu. Teşhis: dpr 1 / dpr 2, geliştirme / üretim derlemesi, cam efektleri açık / kapalı karşılaştırıldı; tek fark dpr'deydi ve Long Animation Frame API'si süreyi Konva'nın `requestAnimationFrame` çizimine bağladı. Dizi modül düzeyinde sabit yapılınca dpr 2'de 35 fps → 60 fps, en kötü kare 100 → 18 ms. **Kural: react-konva bileşenine verilen dizi/nesne özellikleri (özellikle `filters`) modül sabiti ya da `useMemo` olur; "makinede mi sorun var" sorusu, aynı ölçüm farklı koşullarda (dpr, derleme modu, efektler) tekrarlanarak cevaplanır.**
 
 31. **Ders — aynı makinede birden fazla model süreci makineyi KİLİTLER; bellek bütçesi komuttan ÖNCE hesaplanır** (27.09.2026). Faz 7'nin kesim kuyruğu yük testinde, "aynı makinede 2 işçi kapasiteyi artırmaz" iddiasını ölçmek için 16 GB'lık Mac'te `load_test.py serve --workers 2` koşuldu. Her işçi BiRefNet'in AYRI bir kopyasını yüklüyor ve iki işçi aynı anda kesim yapınca bellek tükendi: macOS ~70 GB'lık sayfayı diske yazdı ve bilgisayar kilitlendi (süreçler Claude Code'un altında çalıştığı için Etkinlik Monitörü hepsini VS Code'a yazdı, 30 GB+). Model başına 12–14 GB zaten bu dosyada yazılıydı; hesap komuttan önce yapılmadı. Ayrıca betik `kill` ile durdurulunca `atexit` çalışmadığı için işçiler yetim kalıp modeli bellekte tutmaya devam edebiliyordu. **Düzeltme:** `load_test.py serve` artık işçi × eşzamanlılık × 12 GB fiziksel belleğin %75'ini aşarsa başlamayı reddeder (`--force` ile bilerek geçilir) ve SIGTERM'de işçileri kapatır — ikisi de gerçek süreçle doğrulandı. **Kural: model yükleyen süreç sayısını artıran her komuttan önce "süreç × 12 GB ≤ makinenin belleği" hesabı yapılır.** `./execute.sh` de artık açılışta bir işçi başlatıyor (modeli hemen yükler); kesim denenmeyecekse `VITRIN_START_WORKER=0`.
+32. **Ders — bir fonksiyonun `False` dönüşü iki ayrı durumu taşıyorsa, çağıran önce HANGİSİ olduğunu okumalı** (27.09.2026, Codex incelemesi, gerçek Redis + Postgres'te yeniden üretildi). `resolve_reservation(..., success)` "ayırma artık `pending` değil" durumunda `False` döndürüyor; işçi bunu her zaman "bakım işi krediyi iade etmiş" diye yorumlayıp saklanan sonucu siliyor ve işi `retry_safe` işaretliyordu. Ama aynı `False`, **aynı işin önceki denemesi krediyi zaten tüketmiş** anlamına da gelebiliyordu: işçi sonucu saklayıp krediyi tükettikten sonra, işi Redis'te bitmiş işaretleyemeden ölürse kurtarma işi onu kuyruğa geri koyuyor, ikinci deneme de tüketilmiş krediye ait sonucu siliyordu. Ön yüz `reservation_released`'i sessizce yeniden denediği için müşteri hiçbir hata görmeden **ikinci bir kredi** ödüyordu; ekrandaki mesaj ise "kredi iade edildi" diyordu. Düzeltme: `reservation_outcome` ayırmanın gerçek durumunu okur; işçi işe başlarken ve her `False`'ta ona bakar, tüketilmişse işi başarılı sayıp saklanan sonucu teslim eder (inference tekrar çalışmaz). **Kural: bir koşullu güncelleme (`UPDATE ... WHERE status='pending'`) "satır değişmedi" dediğinde, satırın NEDEN değişmediği ayrıca okunur; kullanıcıya "iade edildi" ya da "yeniden dene" demek, iadenin gerçekten bu çağrıda yapıldığı kanıtlanmadan yapılmaz.** Testler (`tests/test_cutout_worker.py`) eski kodda kırmızı yandı.
+33. **Ders — "diske yazılmaz" gibi yasal bir söz bir yapılandırmaya dayanıyorsa, o yapılandırma kodda DOĞRULANIR; Docker imajının `VOLUME`'u da kapsayıcı yeniden oluşturulunca silinmez** (27.09.2026, Codex incelemesi). KVKK metni özgün fotoğrafın diske yazılmadığını söylüyordu; fotoğraf Redis'te duruyordu ve Redis 7'nin varsayılanı (`save 3600 1 300 100 60 10000`) belleği `dump.rdb`'ye yazıyor — yerel Redis'te dolu bir `dump.rdb` bulundu. Düzeltme sırasında ikinci tuzak ölçüldü: `redis` imajı `/data`'yı anonim volume olarak tanımlıyor, compose onu `--force-recreate`'te bile KORUYOR ve Redis açılışta eski `dump.rdb`'yi belleğe geri yüklüyor. Çözüm üç katmanlı: compose'da `--save "" --appendonly no` + `/data` için `tmpfs`, API'de her kuyruğa koymadan önce `CONFIG GET` ile doğrulama (açıksa fotoğraf alınmaz, fail-closed), canlı Redis için Faz 7.5 kontrol maddesi. **Kural: bir gizlilik/saklama sözü metne yazılırken onu gerçekleştiren ayar da kodda doğrulanır; "varsayılan zaten öyledir" varsayımı yapılmaz.**
 
 ## Proje genel bakış
 
@@ -79,7 +81,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
-- **Backend:** Python, FastAPI, Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`). **Kesim kuyruğu (Faz 7, 27.09.2026):** arka plan kaldırma API'de değil ayrı bir işçide (`python -m app.workers.cutout`); API işi Redis kuyruğuna koyar (`app/services/cutout_queue.py`), istemci `GET /api/remove-background/jobs/{id}` ile yoklar. Celery/RQ yerine kendi küçük kuyruğumuz — gerekçe `backend/README.md` → "Kesim kuyruğu". **İşçi çalışmıyorsa kesimler sırada bekler**; `execute.sh` ve VS Code görevi işçiyi açar. Özgün fotoğraf Redis'te en fazla 15 dk durur (KVKK metninde yazılı).
+- **Backend:** Python, FastAPI, Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`). **Kesim kuyruğu (Faz 7, 27.09.2026):** arka plan kaldırma API'de değil ayrı bir işçide (`python -m app.workers.cutout`); API işi Redis kuyruğuna koyar (`app/services/cutout_queue.py`), istemci `GET /api/remove-background/jobs/{id}` ile yoklar. Celery/RQ yerine kendi küçük kuyruğumuz — gerekçe `backend/README.md` → "Kesim kuyruğu". **İşçi çalışmıyorsa kesimler sırada bekler**; `execute.sh` ve VS Code görevi işçiyi açar. Özgün fotoğraf Redis'te en fazla 15 dk durur (KVKK metninde yazılı). **Redis diske yazmamalı (RDB/AOF kapalı):** `docker-compose.yml` Redis'i `--save "" --appendonly no` ve bellekte `/data` (tmpfs) ile açar; API her kuyruğa koymadan önce bunu doğrular ve açıksa fotoğrafı almaz (`CutoutQueue.ensure_ephemeral`, ders 33). Kaan'ın Windows'taki `redis-windows`'u da aynı argümanlarla başlatılmalı, yoksa kesimler 503 `queue_unavailable` alır.
 - **AI modeli:** BiRefNet — sadece orijinal `ZhengPeng7/BiRefNet` MIT lisanslı ağırlıkları kullanın. BRIA'nın "RMBG" ağırlıklarını asla kullanmayın (aynı mimari, ancak bu ağırlıklar ticari değildir). Üretim modeli doğrudan `birefnet-general` — `-lite` ve `u2net` önceki iterasyonda elendi.
 - **Veritabanı:** PostgreSQL (production'da Supabase — aynı proje, DB ve Auth ayrılmıyor)
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
@@ -108,7 +110,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   artık R2 olmadan çalışmıyor**, yerelde de `R2_*` ayarları gerekiyor (yalnız
   arayüz için `USE_MOCK_BACKEND=true`). İstemci yeni bir anahtara YALNIZCA
   backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
-  sonuç artık saklanmıyor) anahtar korunur. **Faz 7'den beri** API krediyi yalnız AYIRIR ve işi kuyruğa koyar; sonucu R2'ye saklamak ve krediyi tüketmek/iade etmek işçinin işidir (`app/workers/cutout.py`). Ön yüz (`lib/cutout-job.ts`) kredisi iade edilmiş GEÇİCİ hataları kullanıcıya göstermeden yeni anahtarla sessizce bir kez daha dener.
+  sonuç artık saklanmıyor) anahtar korunur. **Faz 7'den beri** API krediyi yalnız AYIRIR ve işi kuyruğa koyar; sonucu R2'ye saklamak ve krediyi tüketmek/iade etmek işçinin işidir (`app/workers/cutout.py`). **Bir iş birden fazla kez işlenebilir** (işçi kredi tükettikten sonra ölürse iş kurtarılır): işçi her işe başlarken ayırmanın durumuna bakar; `retry_safe` YALNIZCA kredi gerçekten iade edildiyse yazılır, ayırma zaten tüketilmişse iş başarılı sayılır ve saklanan sonuç teslim edilir (ders 32). Ön yüz (`lib/cutout-job.ts`) kredisi iade edilmiş GEÇİCİ hataları kullanıcıya göstermeden yeni anahtarla sessizce bir kez daha dener.
 - **Admin paneli (Faz 6):** backend uçları `backend/app/api/routes/admin.py`,
   şema migration `0007`. **Beş kural:** (1) *admin'in verdiği kredi dönem
   kotasını BÜYÜTMEZ* — `quota_snapshot` değişmez bir kanıt kaydıdır; bonus
@@ -560,6 +562,12 @@ geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
    migration'dan önce `backup` çalıştırılır).
 3. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
    süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
+4. **27.09.2026'dan önce alınan yedekler yetki (GRANT/REVOKE) içermiyor**
+   (`--no-privileges` ile alınmışlardı; Codex incelemesi). `restore-test` onları
+   artık "bu yedek yetki içermiyor" diye başarısız sayıyor. Aynı gün yetkili
+   yeni bir yedek alındı ve birebir geri yüklendi (416 yetki). Eski iki dosya
+   (`~/vitrin-ai-backups/vitrin-db-20260926T21*`) silinip silinmeyeceği
+   Serhan'ın kararı.
 
 ### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
 
@@ -626,6 +634,13 @@ liste):
      GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
      fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
      kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
+  10. **Redis diske yazmıyor mu:** kesim kuyruğu özgün fotoğrafı Redis'te
+     tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
+     kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
+     koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
+     (kredi iade + 503). Yönetilen bir Redis `CONFIG`'i yasaklıyorsa kod
+     doğrulayamaz, yalnız uyarı yazar: o durumda sağlayıcının kalıcılık
+     ayarı elle doğrulanıp buraya not düşülür.
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 

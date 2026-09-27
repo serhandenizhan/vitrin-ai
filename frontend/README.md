@@ -139,7 +139,12 @@ sıra numarası yok; 30 sn'den sonra bekleme ekranında (`processing-state.tsx`)
 yalnız nötr bir cümle çıkar. Kredisi iade edilmiş GEÇİCİ hatalar (`worker_lost`,
 `job_expired`, `queue_busy`…) yeni anahtarla sessizce en fazla iki kez yeniden
 denenir; kalıcı hata (`processing_failed`) gösterilir. Anahtar kuralı
-değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. **Kullanıcı ekrandan
+değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. **Bu sessiz yeniden
+deneme, backend'in `retry_safe`'i yalnız kredi GERÇEKTEN iade edildiğinde
+yazmasına dayanır.** 27.09.2026'ya kadar bu garanti yoktu: kredisi tüketilmiş
+bir iş, işçi yeniden denediğinde `reservation_released` olarak dönebiliyordu
+ve buradaki yeniden deneme müşteriye ikinci bir kredi harcatıyordu (Codex
+incelemesi; düzeltme backend'de, `backend/README.md` → "Kesim kuyruğu"). **Kullanıcı ekrandan
 ayrılsa da yoklama sürer:** kredi harcanıyor ve sonuç geçmişe yazılmalı (ekran
 güncellemesi oturum sayacıyla atlanır). Testler sahte zamanlayıcıyla
 (`cutout-job.test.ts`, 11 test; beş bozma denendi).

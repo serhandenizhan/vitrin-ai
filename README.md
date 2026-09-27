@@ -186,7 +186,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 533 test — yerel PostgreSQL ve Redis ister
+cd backend && pytest             # 552 test — yerel PostgreSQL ve Redis ister (yedek testleri Docker da ister)
 cd frontend && npm test          # 443 test
 cd frontend && npm run kontrol   # lint + test + build
 ```

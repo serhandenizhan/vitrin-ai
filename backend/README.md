@@ -196,10 +196,12 @@ projeler verilerini düzenli dışa aktarıp başka yerde saklamalı.)
   klasör 700.
 
 **Geri yükleme testi ne kanıtlıyor:** yedek bellekte açılıp veri tmpfs'te
-duran atılabilir bir Postgres 17'ye yüklenir, sonra iki şey kayıtla
-(manifest) karşılaştırılır: her tablonun **satır sayısı** ve **şema parmak
+duran atılabilir bir Postgres 17'ye yüklenir, sonra üç şey kayıtla
+(manifest) karşılaştırılır: her tablonun **satır sayısı**, **şema parmak
 izi** — RLS açık tablo, politika, tetikleyici, fonksiyon, indeks, kısıt
-sayıları. Parmak izi şart: bu projede güvenlik ve iş kuralları veritabanında
+sayıları — ve **yetkiler** (tablo/dizi/fonksiyon/şema üzerindeki her
+GRANT, satır satır; sahibin kendi yetkileri ve `postgres` hariç, çünkü
+geri yükleme `--no-owner` ile yapılıyor). Parmak izi şart: bu projede güvenlik ve iş kuralları veritabanında
 (RLS, `period_snapshot` ve `admin_audit_log` değişmezlik tetikleyicileri);
 satırlar tutup bunlar kaybolsa geri yüklenen sistem sessizce korumasız kalırdı.
 
@@ -210,6 +212,40 @@ hatası yok (boş Postgres'teki "public zaten var" zararsız uyarısı ayrı
 tutuluyor). Kontrolün kendisi dört bozmayla sınandı — yanlış anahtar,
 değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış kodu 1.
 Şifreli dosyada döküm imzası, e-posta ya da tablo adı izi yok.
+
+**Codex incelemesi düzeltmeleri (27.09.2026):**
+
+- **Yetkiler korunuyor.** Eskiden `pg_dump`/`pg_restore` `--no-privileges`
+  ile koşuyordu: bütün GRANT/REVOKE'lar dökümden düşüyor (tetikleyici
+  fonksiyonlarındaki `REVOKE ... FROM PUBLIC`, `auth` şema izinleri) ve
+  test yetkilere bakmadığı için yine "birebir" diyordu. Boş Postgres'te
+  olmayan roller (Supabase'in `supabase_auth_admin` vb.) geri yükleme
+  sırasında `role "x" does not exist` görüldükçe giriş yetkisiz oluşturulur
+  ve geri yükleme temiz bir veritabanında yinelenir.
+- **Tek anlık görüntü.** Satır sayıları, parmak izi, yetkiler ve döküm aynı
+  `REPEATABLE READ` işleminden (`pg_export_snapshot` + `pg_dump --snapshot`).
+  Eskiden sayılar dökümden önce ayrı sorgularla alınıyordu; araya giren tek
+  bir yazma (her oturum yenilemesi `auth.sessions`'a yazar) sağlam yedeği
+  "başarısız" gösteriyordu. Supabase havuzunun **oturum kipi (5432)** bunu
+  destekler; işlem kipi (6543) desteklemez.
+- **Dosyalar ezilmez.** Ad rastgele bir ek taşır, dosya yalnız yoksa ve
+  baştan 600 izniyle oluşturulur (O_EXCL).
+- **Yerel veritabanı da yedeklenebilir:** `localhost` adresi Docker içinden
+  `host.docker.internal`'a çevrilir (testler bunu kullanıyor).
+- **Testler:** `tests/test_backup_script.py` gerçek `pg_dump`/`pg_restore`
+  ile (Docker; yoksa atlanır) dört senaryoyu sınar — sayım ile döküm
+  arasına yazma, yetkilerin dökümde ve geri yüklemede kalması, eksik yetkinin
+  yakalanması, aynı saniyede biten iki yedek. Dördü de eski betikte kırmızı.
+- **Sonuç (27.09.2026, production, yeni betik):** döküm 18,9 sn; geri
+  yükleme 2,3 sn; 48 tablo/350 satır, **416 yetki** ve şema parmak izi
+  birebir, `pg_restore` hatası yok. **Önceki yedekler yetki içermiyor:**
+  `restore-test` onları "bu yedek yetki içermiyor — yeni yedek alın" diye
+  başarısız sayar.
+- **Yan bulgu (düzeltilmedi, ayrı iş):** production'da
+  `public.record_signup_consents()` PUBLIC ve `anon` için EXECUTE açık
+  (diğer tetikleyici fonksiyonlarının yetkisi geri alınmış). Fonksiyon
+  `returns trigger` olduğu için doğrudan çağrılamaz; tutarlılık için yeni
+  bir migration'da `REVOKE` edilmeli.
 
 **Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
 çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
@@ -230,6 +266,31 @@ hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
 - **Fotoğraf:** Redis'te en fazla 15 dk, iş bitince silinir, diske/R2'ye
   yazılmaz (KVKK metninde yazılı). İşçi alırken değil bitirince silinir ki
   çöken işçinin işi başka işçiye fotoğrafıyla verilebilsin.
+- **Redis diske yazmamalı (Codex incelemesi, 27.09.2026).** Redis'in
+  varsayılanı belleği `dump.rdb`'ye yazar; yerel Redis'te dolu bir
+  `dump.rdb` bulundu. Artık üç katman var: `docker-compose.yml` Redis'i
+  `--save "" --appendonly no` ile açar ve `/data`'yı bellekte (tmpfs) tutar
+  — imajın `/data` volume'u compose'da yeniden oluşturmada bile korunuyor ve
+  eski `dump.rdb` açılışta geri yükleniyordu (ölçüldü); API her kuyruğa
+  koymadan önce `CONFIG GET save/appendonly` ile doğrular (60 sn önbellek),
+  açıksa fotoğrafı almaz (kredi iade, `503 queue_unavailable`); `CONFIG`
+  yasaksa (bazı yönetilen Redis'ler) uyarı yazar, sağlayıcının ayarı elle
+  doğrulanır (Faz 7.5 kontrol listesi). **Windows'ta** `redis-windows`
+  `redis-server --save "" --appendonly no` ile başlatılmalı. Testler
+  (`conftest.py`) yerel test Redis'ini aynı ayara çeker; CI'daki servis
+  kapsayıcısına komut satırı argümanı verilemediği için bu şart.
+- **Aynı iş iki kez işlenebilir (Codex incelemesi, 27.09.2026).** İşçi
+  sonucu saklayıp krediyi tükettikten sonra, işi Redis'te bitmiş
+  işaretleyemeden ölürse kurtarma işi onu yeniden kuyruğa koyar. Eskiden
+  ikinci deneme bunu "kredi iade edilmiş" sanıp saklanan sonucu siliyor ve
+  `retry_safe` yazıyordu; ön yüz de sessizce ikinci bir kredi harcıyordu.
+  Artık işçi işe başlarken ayırmanın durumunu okur (`reservation_outcome`):
+  tüketilmişse inference çalışmaz, iş saklanan kopyayla (`result_key`)
+  biter; iade edilmişse `reservation_released`. Aynı kontrol her iade
+  denemesinde ve tüketim `False` döndüğünde de yapılır.
+- **Kuyruk sınırı atomik:** uzunluk kontrolü ve ekleme tek bir Lua
+  betiğinde. Eskiden `max_jobs=1` ile 5 eşzamanlı isteğin 5'i de kabul
+  ediliyordu (ölçüldü).
 - **Çöken işçi:** nabzı kesilen işçinin işleri sırasını kaybetmeden kuyruğun
   önüne döner; iki denemede bitmeyen ya da fotoğrafı düşen işin kredisi
   iade edilir.
