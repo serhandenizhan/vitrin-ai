@@ -36,6 +36,9 @@ from tests.db_safety import (
     UnsafeTestDatabaseError,
     ensure_disposable_database,
     ensure_local_database_host,
+    ensure_not_dev_database,
+    SESSION_LOCK_KEY,
+    concurrent_session_message,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -61,6 +64,7 @@ async def _apply_migrations():
     # Adres kontrolü bağlanmadan ÖNCE: uzak bir sunucuya bağlantı bile açılmıyor.
     try:
         ensure_local_database_host(settings.database_url)
+        ensure_not_dev_database(settings.database_url)
     except UnsafeTestDatabaseError as exc:
         pytest.exit(str(exc), returncode=3)
 
@@ -74,6 +78,18 @@ async def _apply_migrations():
     except UnsafeTestDatabaseError as exc:
         pytest.exit(str(exc), returncode=3)
 
+    # Aynı veritabanında ikinci bir test oturumu birincinin tablolarını
+    # oturum sonunda düşürür (27.09.2026'da iki oturum çakıştı: 393 geçen,
+    # 393 kırmızı). Oturum boyunca açık tutulan bir bağlantıda kilit alınır;
+    # alınamıyorsa hiçbir şeye dokunmadan durulur. Kilit bağlantı kapanınca
+    # (süreç ölse bile) kendiliğinden bırakılır.
+    lock_connection = await _engine.connect()
+    locked = await lock_connection.scalar(text("select pg_try_advisory_lock(:key)"), {"key": SESSION_LOCK_KEY})
+    await lock_connection.commit()
+    if not locked:
+        await lock_connection.close()
+        pytest.exit(concurrent_session_message(), returncode=3)
+
     # Testler gerçek Alembic migration'larına karşı çalışır (Base.metadata.create_all
     # DEĞİL) — migration dosyasındaki bir hata bu sayede testlerde de yakalanır.
     # `check=True` migration başarısız olursa test session'ını hemen durdurur.
@@ -84,10 +100,13 @@ async def _apply_migrations():
         [sys.executable, "-m", "alembic", "upgrade", "head"], cwd=BACKEND_DIR, check=True
     )
     yield
-    subprocess.run(
-        [sys.executable, "-m", "alembic", "downgrade", "base"], cwd=BACKEND_DIR, check=True
-    )
-    await _engine.dispose()
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "downgrade", "base"], cwd=BACKEND_DIR, check=True
+        )
+    finally:
+        await lock_connection.close()  # kilit burada bırakılır
+        await _engine.dispose()
 
 
 #: Redis testleri Postgres'inki gibi bir "sıfırlama" korumasına ihtiyaç

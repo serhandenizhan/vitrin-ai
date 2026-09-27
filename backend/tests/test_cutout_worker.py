@@ -195,6 +195,88 @@ async def test_reservation_released_meanwhile_discards_the_orphan_result(
     assert await _reservation_status(db_session, reservation_id) == "released"
 
 
+async def test_crash_after_upload_leaves_a_durable_key_for_cleanup(
+    db_session, create_user, provider, queue, session_factory
+):
+    from app.services.billing.db import execute
+    from app.services.billing.maintenance import purge_expired_results
+
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    storage = FakeStorage()
+    worker = _worker(queue, session_factory, storage=storage)
+    original_resolve = worker._resolve
+
+    async def crash_before_credit_consumption(*_args):
+        raise RuntimeError("işçi R2 yüklemesinden sonra öldü")
+
+    worker._resolve = crash_before_credit_consumption
+    with pytest.raises(RuntimeError, match="öldü"):
+        await worker.process(await queue.claim(worker.worker_id))
+
+    key = next(iter(storage.objects))
+    row = await one(
+        db_session,
+        "SELECT key FROM cutout_result_attempts WHERE reservation_id=:id",
+        id=reservation_id,
+    )
+    assert row["key"] == key  # yükleme öncesinde commit edilmiş
+
+    worker._resolve = original_resolve
+    await worker._resolve(str(reservation_id), False)
+    await execute(
+        db_session,
+        "UPDATE cutout_result_attempts SET created_at=now()-interval '25 hours' WHERE key=:key",
+        key=key,
+    )
+    await db_session.commit()
+    await purge_expired_results(db_session, storage)
+    assert storage.objects == {}
+    assert await one(
+        db_session, "SELECT key FROM cutout_result_attempts WHERE key=:key", key=key
+    ) is None
+
+
+async def test_failed_orphan_delete_is_retried_by_maintenance(
+    db_session, create_user, provider, queue, session_factory
+):
+    from app.services.billing.db import execute
+    from app.services.billing.maintenance import purge_expired_results
+
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+
+    async def release_after_upload(_key):
+        async with session_factory() as db:
+            await resolve_reservation(db, reservation_id, False)
+
+    class FailingDeleteStorage(FakeStorage):
+        async def delete(self, key):
+            raise BotoCoreError()
+
+    storage = FailingDeleteStorage(on_upload=release_after_upload)
+    worker = _worker(queue, session_factory, storage=storage)
+    await worker.process(await queue.claim(worker.worker_id))
+    key = next(iter(storage.objects))
+    assert (await queue.get_job(user, request))["status"] == FAILED
+
+    await execute(
+        db_session,
+        "UPDATE cutout_result_attempts SET created_at=now()-interval '25 hours' WHERE key=:key",
+        key=key,
+    )
+    await db_session.commit()
+    await purge_expired_results(db_session, storage)
+    assert key in storage.objects
+    assert await one(db_session, "SELECT key FROM cutout_result_attempts WHERE key=:key", key=key)
+
+    storage.on_upload = None
+    storage.delete = FakeStorage.delete.__get__(storage, FailingDeleteStorage)
+    await purge_expired_results(db_session, storage)
+    assert storage.objects == {}
+    assert await one(
+        db_session, "SELECT key FROM cutout_result_attempts WHERE key=:key", key=key
+    ) is None
+
+
 async def test_reservation_released_before_claim_skips_inference(
     db_session, create_user, provider, queue, session_factory
 ):

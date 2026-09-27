@@ -34,7 +34,11 @@ from botocore.exceptions import BotoCoreError, ClientError
 from app.core.config import settings
 from app.core.db import _session_factory
 from app.services.background_removal import BackgroundRemovalService, _get_session
-from app.services.billing.entitlements import reservation_outcome, resolve_reservation
+from app.services.billing.entitlements import (
+    register_result_attempt,
+    reservation_outcome,
+    resolve_reservation,
+)
 from app.services.cutout_queue import PHOTO_TTL_SECONDS, ClaimedJob, CutoutQueue
 from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
 
@@ -51,7 +55,8 @@ def result_key_for(job: ClaimedJob) -> str:
     # aynı işi paralel yürütürse (nabzı gecikip kurtarılan işçi) sabit bir
     # anahtarda sonra yükleyen, kredisi ödenmiş sonucun ÜZERİNE yazıyordu.
     # Hangi anahtarın ödendiği `usage_reservations.result_r2_key`'de durur;
-    # sonucu okuyan her yer anahtarı oradan alır. `results/<kullanıcı>/`
+    # tüm denemeler yüklemeden önce `cutout_result_attempts`'a kaydedilir;
+    # sonucu okuyan her yer ödenen anahtarı DB'den alır. `results/<kullanıcı>/`
     # öneki korunur: hesap silme temizliği bu önekle çalışıyor.
     return f"results/{job.user_id}/{job.request_id}-{uuid.uuid4().hex[:12]}.png"
 
@@ -81,6 +86,10 @@ class CutoutWorker:
     async def _outcome(self, reservation_id) -> tuple[str | None, str | None]:
         async with self.session_factory() as db:
             return await reservation_outcome(db, uuid.UUID(reservation_id))
+
+    async def _register_attempt(self, reservation_id, result_key) -> bool:
+        async with self.session_factory() as db:
+            return await register_result_attempt(db, uuid.UUID(reservation_id), result_key)
 
     async def _finish_settled(self, job_id, reservation_id, code, worker_id) -> None:
         """Ayırma bu işçiden önce sonuçlanmış. Tüketildiyse iş BAŞARILIDIR
@@ -131,6 +140,11 @@ class CutoutWorker:
         result_key = None
         if job.reservation_id:
             result_key = result_key_for(job)
+            if not await self._register_attempt(job.reservation_id, result_key):
+                await self._finish_settled(
+                    job.job_id, job.reservation_id, "reservation_released", self.worker_id
+                )
+                return
             try:
                 await self.storage.upload(result_key, result, "image/png")
             except STORAGE_ERRORS:

@@ -96,7 +96,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Kesimler kuyrukta sıraya girer, ayrı işçide işlenir (tek işçide 4 eşzamanlı istemci: 8/8 başarılı, 0 red) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **533** (pytest + gerçek PostgreSQL/Redis) · frontend **443** (Vitest) |
+| Testler | backend **569** (pytest + gerçek PostgreSQL/Redis) · frontend **443** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -186,14 +186,17 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-cd backend && pytest             # 556 test — yerel PostgreSQL ve Redis ister (yedek testleri Docker da ister)
+backend/scripts/test.sh          # 569 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
 cd frontend && npm test          # 443 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 
 Backend testleri gerçek bir PostgreSQL'e karşı çalışır ve **bağlandıkları
-veritabanını sıfırlar**. `tests/db_safety.py` adresi ve şemayı kontrol eder;
-hedef yerel bir test veritabanı değilse oturum hiçbir şeye dokunmadan durur.
+veritabanını sıfırlar**. Bu yüzden tek doğru komut `backend/scripts/test.sh`:
+kendi veritabanını açar, `execute.sh`'ın geliştirme ortamına dokunmaz.
+`tests/db_safety.py` ayrıca adresi ve şemayı kontrol eder; düz `pytest`
+geliştirme veritabanını (yerel, 5432, `vitrin_ai`) gösteriyorsa ya da aynı
+veritabanında başka bir test oturumu koşuyorsa hiçbir şeye dokunmadan durur.
 
 **CI (Faz 7):** her PR'da ve `main`'e her push'ta GitHub Actions backend
 testlerini (servis olarak Postgres + Redis), frontend lint/test/build'i ve

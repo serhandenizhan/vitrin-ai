@@ -142,6 +142,26 @@ async def test_photo_is_refused_while_redis_writes_to_disk(queue, monkeypatch, s
     assert await queue.queued_count() == 0
 
 
+async def test_persistence_is_rechecked_before_every_photo(queue, monkeypatch):
+    state = False
+    checks = 0
+
+    async def current_persistence(_redis):
+        nonlocal checks
+        checks += 1
+        return state
+
+    monkeypatch.setattr(cutout_queue, "redis_persistence", current_persistence)
+    user = uuid.uuid4()
+    await queue.enqueue(user, uuid.uuid4(), None, b"ilk foto")
+    state = True  # Redis ilk kontrolden sonra yeniden başlatıldı/ayar değişti
+    rejected = uuid.uuid4()
+    with pytest.raises(RedisPersistenceEnabled):
+        await queue.enqueue(user, rejected, None, b"ikinci foto")
+    assert checks == 2
+    assert not await queue._redis().exists(queue._key("photo", job_id_for(user, rejected)))
+
+
 async def test_test_redis_is_configured_without_persistence(queue):
     # conftest'teki `redis_without_persistence` gerçekten uygulanmış olmalı;
     # aksi hâlde bu dosyadaki diğer testler yanlış sebeple kırmızı yanar.

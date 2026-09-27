@@ -42,44 +42,42 @@ cp .env.example .env
 
 ## Testler
 
+**Tek doğru komut (repo kökünden):**
+
 ```bash
-.venv/bin/pytest tests/ -v
+backend/scripts/test.sh                              # bütün backend testleri
+backend/scripts/test.sh tests/test_billing.py -k iade -x   # argümanlar pytest'e aynen geçer
 ```
+
+Betik ayrı bir compose projesinde (`vitrin-ai-test`) kendi Postgres'ini
+(**5434**) ve Redis'ini (**6380**) açar, hazır olmalarını bekler,
+`DATABASE_URL`/`REDIS_URL`'i onlara yöneltip `pytest`'i çalıştırır; çıkış
+kodu `pytest`'inkidir. `execute.sh`'ın geliştirme ortamına dokunmaz, açıkken
+de güvenle koşar. Değiştirmek için: `VITRIN_TEST_DB_PORT`,
+`VITRIN_TEST_REDIS_PORT`, `VITRIN_TEST_PROJECT`, `VITRIN_VENV_DIR` (ders 11).
+Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
+`VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
+Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
+Bash ya da WSL'den çalıştırılır.
 
 Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her
 test çalıştırmasında indirip inference yapmak pratik değil (ağır kaynak
 kullanımı). Gerçek modelle doğrulama ayrı ve manuel yapılır.
 
-Testler gerçek bir Postgres ister (`docker compose up -d postgres`) ve oturum
-başında `alembic upgrade head`, sonunda `alembic downgrade base` çalıştırır —
-yani bağlandıkları veritabanını **sıfırlar**. Başka bir işin veritabanına karşı
-çalıştırmayın; paralel worktree'lerde ayrı bir Postgres açıp `DATABASE_URL` ile
-yönlendirin:
+Testler gerçek bir Postgres ister ve oturum başında `alembic upgrade head`,
+sonunda `alembic downgrade base` çalıştırır — yani bağlandıkları veritabanını
+**sıfırlar**. **27.09.2026'da `DATABASE_URL` verilmeden koşturulan düz
+`pytest`, `execute.sh` açıkken onun geliştirme veritabanını sildi** (eşitlenmiş
+kullanıcılar, zeminler ve yerel çalışmalar gitti; çalışan backend boş
+veritabanına baktı). Bu yüzden düz `pytest` artık geliştirme veritabanında
+(yerel + port 5432 + ad `vitrin_ai`) **hiçbir şeye dokunmadan durur** ve
+`backend/scripts/test.sh`'ı söyler (aşağıdaki koruma, 3. aşama). CI'ın
+`vitrin_ai_test`'i ve `test.sh`'ın 5434'teki veritabanı bu kurala takılmaz.
+Geliştirme veritabanı BİLEREK sıfırlanacaksa `VITRIN_ALLOW_DEV_DB_RESET=1`.
 
-```bash
-POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
-DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
-```
-
-**`./execute.sh` açıkken dikkat:** varsayılan `DATABASE_URL`, `execute.sh`'ın
-kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
-zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
-backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (27.09.2026'da 533 test bu yolla geçti):
-
-```bash
-docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
-DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai_test .venv/bin/pytest
-```
-
-Ayrıca gerçek bir **Redis** ister (`docker compose up -d redis`) — yükleme hız
-sınırlayıcısı testleri gerçek Redis'e karşı çalışır, mock'lanmaz. Postgres gibi
-paralel worktree'lerde ayrı bir porta yönlendirilebilir:
-
-```bash
-REDIS_PORT=6380 docker compose -p <worktree-adi> up -d redis
-REDIS_URL=redis://localhost:6380/0 .venv/bin/pytest
-```
+Ayrıca gerçek bir **Redis** ister — yükleme hız sınırlayıcısı ve kesim
+kuyruğu testleri gerçek Redis'e karşı çalışır, mock'lanmaz (`test.sh`
+6380'de kendi Redis'ini açar).
 
 Redis testleri Postgres'inki gibi ağır bir "sıfırlama" koruması gerektirmiyor:
 her test kendi rastgele anahtarını kullanıyor (ör. `user:<uuid4>`) ve yazılan
@@ -102,6 +100,21 @@ olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 
 (`tests/db_safety.py`). `.env`'e Supabase `DATABASE_URL`'i yazıldıktan sonra
 yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
+3. **Bağlanmadan önce, geliştirme veritabanı mı (27.09.2026):** yerel sunucu +
+   port 5432 + ad `vitrin_ai` ise çıkış kodu 3, mesaj doğru komutu söyler.
+   `execute.sh`'ın veritabanı ilk iki kontrolden geçiyordu (yerel ve 0002
+   işaretli). Bilerek geçmek için `VITRIN_ALLOW_DEV_DB_RESET=1`. Uçtan uca
+   testi ayrı bir `pytest` süreci başlatır; sunucu adı olarak `postgres`
+   seçildi, ana makinede çözülmediği için koruma kaldırılsa bile hiçbir
+   veritabanına dokunulamaz.
+4. **Oturum kilidi (27.09.2026):** oturum boyunca açık bir bağlantıda
+   `pg_try_advisory_lock` tutulur. Aynı veritabanında ikinci bir test oturumu
+   kilidi alamaz ve hiçbir şeye dokunmadan durur — aynı gün iki oturum aynı
+   test veritabanında çakışıp birbirinin tablolarını düşürdü (393 kırmızı).
+   Kilit bağlantı kapanınca, süreç ölse bile, bırakılır.
+
+Dört kuralın da red ve kabul yolları `tests/test_db_safety.py`'de; 3. ve 4.
+kuralın testleri koruma geri alınınca kırmızı yandı.
 
 **Faz 4 ve Faz 5 incelemesindeki testlerin tamamı** izole yerel PostgreSQL
 (`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **285
@@ -847,7 +860,7 @@ HTTP sözleşmesi `app/api/routes/billing.py` içindedir. PostgreSQL kalıcı ku
 `POST /api/remove-background` UUID `Idempotency-Key` ister. **Anahtar isteği
 değil İŞİ tanımlar** ve kredi anahtar başına yalnızca bir kez tüketilir:
 
-- başarılı PNG, `results/<user_id>/<request_id>.png` altında **geçici bir R2
+- başarılı PNG, `results/<user_id>/<request_id>-<random>.png` altında **geçici bir R2
   nesnesi** olarak saklanır; `usage_reservations` satırı bu anahtarı ve son
   kullanma zamanını tutar (`RESULT_RETENTION`, **24 saat**);
 - aynı `Idempotency-Key` tekrar gelirse **inference hiç çalışmaz**, saklanan
@@ -871,10 +884,12 @@ inference'a bağlamak, aynı krediyi ikinci kez yakma riski demekti. **Yerel
 geliştirmede de R2 ayarları gerekiyor** (`R2_*`); yalnız arayüzü denemek için
 `frontend/.env.local` içindeki `USE_MOCK_BACKEND=true` kullanılabilir.
 
-Süresi dolan sonuçları bakım turu (`purge_expired_results`) R2'den siler; DB
-kaydı yalnız nesne gerçekten silindikten sonra temizlenir, silme başarısız
-olursa bir sonraki turda tekrar denenir. Hesap silmede `projects/<uid>/` ile
-birlikte `results/<uid>/` öneki de kaldırılır.
+Süresi dolan sonuçları bakım turu (`purge_expired_results`) R2'den siler. Her
+kesim denemesinin R2 anahtarı yüklemeden önce `cutout_result_attempts`'a
+kaydedilir; işçi yüklemeden sonra ölürse veya sahipsiz dosyayı silemezse bakım
+turu onu da temizler. DB kaydı yalnız nesne gerçekten silindikten sonra
+temizlenir, silme başarısız olursa bir sonraki turda tekrar denenir. Hesap
+silmede `projects/<uid>/` ile birlikte `results/<uid>/` öneki de kaldırılır.
 
 **Hata yanıtlarında `retry_safe`:** kredinin hiç tüketilmediğini ya da iade
 edildiğini backend AÇIKÇA bildirir. İstemci yeni bir idempotency anahtarına

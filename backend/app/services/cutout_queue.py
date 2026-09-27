@@ -50,9 +50,6 @@ JOB_TTL_SECONDS = 30 * 60
 #: Biten sonucun kuyruktan teslim edilebileceği süre; sonrasında R2'deki
 #: 24 saatlik idempotency kopyası kullanılır.
 RESULT_TTL_SECONDS = 10 * 60
-#: Redis'in diske yazmadığı doğrulandıktan sonra ne kadar süre yeniden
-#: sorulmayacağı (her istekte `CONFIG GET` atılmasın).
-PERSISTENCE_CHECK_SECONDS = 60
 
 QUEUED = "queued"
 PROCESSING = "processing"
@@ -133,7 +130,6 @@ class CutoutQueue:
         self._clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Redis]" = (
             weakref.WeakKeyDictionary()
         )
-        self._ephemeral_verified_at: float | None = None
 
     # -- yardımcılar ------------------------------------------------------
 
@@ -150,9 +146,6 @@ class CutoutQueue:
 
     async def ensure_ephemeral(self) -> None:
         """Redis diske yazıyorsa `RedisPersistenceEnabled` fırlatır."""
-        now = time.monotonic()
-        if self._ephemeral_verified_at is not None and now - self._ephemeral_verified_at < PERSISTENCE_CHECK_SECONDS:
-            return
         state = await redis_persistence(self._redis())
         if state:
             logger.error(
@@ -168,7 +161,6 @@ class CutoutQueue:
                 "fotoğraflar kuyruğa konmuyor. Redis'e CONFIG GET yetkisi verin."
             )
             raise RedisPersistenceEnabled()
-        self._ephemeral_verified_at = now
 
     async def aclose(self) -> None:
         client = self._clients.pop(asyncio.get_running_loop(), None)
