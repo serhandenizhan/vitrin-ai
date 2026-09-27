@@ -47,7 +47,13 @@ RECOVERY_SECONDS = 30
 
 
 def result_key_for(job: ClaimedJob) -> str:
-    return f"results/{job.user_id}/{job.request_id}.png"
+    # Her DENEME kendi anahtarına yazar (Codex incelemesi, 2. tur): iki işçi
+    # aynı işi paralel yürütürse (nabzı gecikip kurtarılan işçi) sabit bir
+    # anahtarda sonra yükleyen, kredisi ödenmiş sonucun ÜZERİNE yazıyordu.
+    # Hangi anahtarın ödendiği `usage_reservations.result_r2_key`'de durur;
+    # sonucu okuyan her yer anahtarı oradan alır. `results/<kullanıcı>/`
+    # öneki korunur: hesap silme temizliği bu önekle çalışıyor.
+    return f"results/{job.user_id}/{job.request_id}-{uuid.uuid4().hex[:12]}.png"
 
 
 class CutoutWorker:
@@ -134,20 +140,21 @@ class CutoutWorker:
                 )
                 return
         if not await self._resolve(job.reservation_id, True, result_key):
-            status, stored_key = await self._outcome(job.reservation_id)
-            if status == "consumed":
-                # Aynı işin başka bir denemesi (nabzı gecikip kurtarılan bir
-                # işçi) krediyi bu arada tüketmiş; sonuç AYNI anahtarda ve
-                # müşterinin parası ona ödendi — silinmez, teslim edilir.
-                await self.queue.complete(self.worker_id, job.job_id, result, stored_key)
-                return
-            # Ayırma bu arada iade edilmiş (bakım işi): kredi zaten geri
-            # verildi; saklanan nesne kimseye ait değil, silinir.
+            # Bu denemenin yüklediği nesne kimseye ait değil: ya bakım işi
+            # krediyi iade etti ya da aynı işin başka bir denemesi krediyi
+            # KENDİ sonucu için tüketti. İkisinde de bu nesne silinir; ödenen
+            # sonuç (başka anahtarda) hiç değişmez.
             if result_key:
                 try:
                     await self.storage.delete(result_key)
                 except STORAGE_ERRORS:
                     logger.warning("Sahipsiz sonuç silinemedi: %s", result_key)
+            status, stored_key = await self._outcome(job.reservation_id)
+            if status == "consumed":
+                # Müşterinin parası diğer denemenin sonucuna ödendi: teslim
+                # edilen de o (baytlar R2'den, `result_key` üzerinden).
+                await self.queue.complete(self.worker_id, job.job_id, None, stored_key)
+                return
             await self.queue.fail(self.worker_id, job.job_id, "reservation_released", retry_safe=True)
             return
         await self.queue.complete(self.worker_id, job.job_id, result, result_key)

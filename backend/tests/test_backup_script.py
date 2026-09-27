@@ -65,6 +65,7 @@ import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 
 import asyncpg  # noqa: E402
+from urllib.parse import urlsplit  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 
@@ -204,8 +205,13 @@ def test_backup_files_are_never_overwritten(tmp_path):
     [
         ("postgresql://u:p@localhost:5434/db", "postgresql://u:p@host.docker.internal:5434/db"),
         ("postgresql://u:p@127.0.0.1/db", "postgresql://u:p@host.docker.internal/db"),
+        ("postgresql://u:p@[::1]:5432/db", "postgresql://u:p@host.docker.internal:5432/db"),
+        ("postgresql://u@localhost/db", "postgresql://u@host.docker.internal/db"),
+        ("postgresql://u:p%40x@localhost:5432/db", "postgresql://u:p%40x@host.docker.internal:5432/db"),
         ("postgresql://u:p@db.example.com:5432/db", "postgresql://u:p@db.example.com:5432/db"),
     ],
 )
 def test_local_database_is_reached_from_inside_docker(dsn, expected):
-    assert backup_database._docker_dsn(dsn)[0] == expected
+    rewritten = backup_database._docker_dsn(dsn)[0]
+    assert rewritten == expected
+    urlsplit(rewritten).port  # geçerli bir adres: ayrıştırma ValueError vermez

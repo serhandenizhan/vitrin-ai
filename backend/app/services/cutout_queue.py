@@ -26,8 +26,10 @@ belleği `dump.rdb`'ye (RDB) yazar. Bu yüzden `enqueue` fotoğrafı koymadan ö
 Redis'te RDB ve AOF'un kapalı olduğunu doğrular; açıksa fotoğrafı hiç almaz
 (Codex incelemesi, 27.09.2026 — yerel Redis'te `save 3600 1 300 100 60 10000`
 ve dolu bir `dump.rdb` bulundu). `CONFIG` komutu yasaklıysa (bazı yönetilen
-Redis hizmetleri) doğrulanamaz: uyarı yazılır ve sağlayıcının ayarı elle
-doğrulanır (`backend/README.md` → "Kesim kuyruğu").
+Redis hizmetleri) kalıcılık doğrulanamaz ve fotoğraf YİNE alınmaz: doğrulanamayan
+bir söz, verilmiş bir söz değildir (Codex incelemesi, 2. tur). Böyle bir Redis
+seçilecekse karar Faz 7.5'te bilinçli olarak verilir (`backend/README.md` →
+"Kesim kuyruğu").
 """
 
 import asyncio
@@ -79,7 +81,8 @@ class QueueFull(Exception):
 
 
 class RedisPersistenceEnabled(RedisError):
-    """Redis belleği diske yazıyor: özgün fotoğraf kuyruğa konamaz.
+    """Redis belleği diske yazıyor YA DA yazmadığı doğrulanamıyor: özgün
+    fotoğraf kuyruğa konamaz.
 
     `RedisError` alt sınıfı: API bunu Redis'e ulaşılamaması gibi ele alır
     (kredi iade edilir, `503 queue_unavailable`).
@@ -158,10 +161,13 @@ class CutoutQueue:
             )
             raise RedisPersistenceEnabled()
         if state is None:
-            logger.warning(
-                "Redis kalıcılık ayarı doğrulanamadı (CONFIG yasak); sağlayıcıda "
-                "RDB/AOF'un kapalı olduğu elle doğrulanmalı."
+            # Fail-closed: KVKK metni "diske yazılmaz" diyor ve bunu burada
+            # kanıtlayamıyoruz. Uyarıp devam etmek sözü kanıtsız bırakırdı.
+            logger.error(
+                "Redis kalıcılık ayarı doğrulanamadı (CONFIG yasak); özgün "
+                "fotoğraflar kuyruğa konmuyor. Redis'e CONFIG GET yetkisi verin."
             )
+            raise RedisPersistenceEnabled()
         self._ephemeral_verified_at = now
 
     async def aclose(self) -> None:

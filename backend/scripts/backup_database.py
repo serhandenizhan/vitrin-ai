@@ -97,9 +97,12 @@ def _docker_dsn(dsn: str) -> tuple[str, list[str]]:
     parts = urlsplit(dsn)
     if (parts.hostname or "") not in LOCAL_HOSTS:
         return dsn, []
-    netloc = parts.netloc.rsplit("@", 1)
-    host_port = netloc[-1].replace(parts.hostname, "host.docker.internal", 1)
-    netloc = "@".join([*netloc[:-1], host_port])
+    # Ana makine kısmı baştan kurulur: `[::1]` gibi köşeli ayraçlı bir IPv6
+    # adresinde yalnız adı değiştirmek `[host.docker.internal]` gibi geçersiz
+    # bir adres üretiyordu (Codex incelemesi, 2. tur).
+    userinfo = parts.netloc.rsplit("@", 1)[0] + "@" if "@" in parts.netloc else ""
+    port = f":{parts.port}" if parts.port else ""
+    netloc = f"{userinfo}host.docker.internal{port}"
     return urlunsplit(parts._replace(netloc=netloc)), ["--add-host=host.docker.internal:host-gateway"]
 
 

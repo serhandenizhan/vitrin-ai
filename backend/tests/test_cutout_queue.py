@@ -124,11 +124,14 @@ async def test_redis_persistence_is_read_from_its_config(fake, expected):
     assert await redis_persistence(fake) is expected
 
 
-async def test_photo_is_refused_while_redis_writes_to_disk(queue, monkeypatch):
+@pytest.mark.parametrize("state", [True, None], ids=["diske-yaziyor", "dogrulanamiyor"])
+async def test_photo_is_refused_while_redis_writes_to_disk(queue, monkeypatch, state):
     # KVKK metni "özgün fotoğraf diske yazılmaz" diyor; Redis'in varsayılan
     # ayarı belleği `dump.rdb`'ye yazıyor (Codex incelemesi, 27.09.2026).
+    # `CONFIG` yasak olduğu için doğrulanamayan Redis de reddedilir (2. tur):
+    # kanıtlanamayan bir söz verilmiş sayılmaz.
     async def writes_to_disk(_redis):
-        return True
+        return state
 
     monkeypatch.setattr(cutout_queue, "redis_persistence", writes_to_disk)
     user, request = uuid.uuid4(), uuid.uuid4()

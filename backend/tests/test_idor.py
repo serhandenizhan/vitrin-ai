@@ -472,4 +472,7 @@ async def test_cutout_job_and_result_are_bound_to_the_signed_in_user(
     theirs = await post(stranger)
     assert theirs.status_code == 202 and theirs.json()["status"] == "queued"
     assert (await poll(stranger)).json()["status"] == "queued"
-    assert set(stored) == {f"results/{owner}/{key}.png"}
+    # Yalnız sahibin tek sonucu var (her deneme kendi anahtarına yazar,
+    # önek `results/<sahip>/<anahtar>-`); yabancıya ait hiçbir nesne yok.
+    [only] = stored
+    assert only.startswith(f"results/{owner}/{key}-") and only.endswith(".png")

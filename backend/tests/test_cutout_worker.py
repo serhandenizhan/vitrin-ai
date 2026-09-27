@@ -57,10 +57,12 @@ class FakeStorage:
         # Yükleme ile kredi tüketimi ARASINA başka bir sürecin girmesini
         # (bakım işi, kurtarılan ikinci deneme) taklit etmek için.
         self.on_upload = on_upload
+        self.uploads = []  # yüklenen her anahtar, sırasıyla (üzerine yazma tespiti)
 
     async def upload(self, key, content, content_type):
         if self.fail_upload:
             raise BotoCoreError()
+        self.uploads.append(key)
         self.objects[key] = content
         if self.on_upload:
             await self.on_upload(key)
@@ -103,6 +105,13 @@ async def _reservation_status(db, reservation_id):
     return row["status"]
 
 
+async def _paid_key(db, reservation_id):
+    """Kredinin ödendiği sonucun anahtarı (her deneme kendi anahtarına yazar)."""
+    row = await one(db, "SELECT result_r2_key FROM usage_reservations WHERE id=:id", id=reservation_id)
+    await db.commit()
+    return row["result_r2_key"]
+
+
 async def _queued_job(db, create_user, provider, queue, photo=b"foto"):
     user, request = await create_user(), uuid.uuid4()
     reservation = await reserve(db, user, request, provider)
@@ -131,7 +140,8 @@ async def test_success_stores_result_then_consumes_credit(
 
     record = await queue.get_job(user, request)
     assert record["status"] == DONE
-    key = f"results/{user}/{request}.png"
+    key = await _paid_key(db_session, reservation_id)
+    assert key.startswith(f"results/{user}/{request}-") and key.endswith(".png")
     assert record["result_key"] == key and storage.objects[key] == b"kesim-png"
     assert await queue.result(user, request) == b"kesim-png"
     assert await _reservation_status(db_session, reservation_id) == "consumed"
@@ -233,7 +243,7 @@ async def test_retry_after_consumed_crash_delivers_the_stored_result(
     user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
     storage = FakeStorage()
     await _consume_then_die(queue, session_factory, storage)
-    key = f"results/{user}/{request}.png"
+    key = await _paid_key(db_session, reservation_id)
     assert await _reservation_status(db_session, reservation_id) == "consumed"
 
     removal = FakeRemoval(result=b"ikinci-kesim")
@@ -265,32 +275,45 @@ async def test_consumed_job_out_of_attempts_is_done_not_refunded(
     assert await survivor.recover_once() == 1
 
     record = await queue.get_job(user, request)
-    assert record["status"] == DONE and record["result_key"] == f"results/{user}/{request}.png"
+    assert record["status"] == DONE
+    assert record["result_key"] == await _paid_key(db_session, reservation_id)
     assert record.get("retry_safe") in (None, "")
     assert await _reservation_status(db_session, reservation_id) == "consumed"
 
 
-async def test_concurrent_attempt_that_consumed_first_keeps_the_result(
+async def test_parallel_attempts_never_overwrite_the_paid_result(
     db_session, create_user, provider, queue, session_factory
 ):
-    # Nabzı gecikip kurtarılan bir işçi aynı işi paralel yürütüyor ve krediyi
-    # bu işçinin yüklemesi ile tüketimi arasında tüketiyor.
+    # Nabzı gecikip kurtarılan bir işçi aynı işi ikinci bir işçiyle PARALEL
+    # yürütüyor: ikisi de ayırmayı `pending` görür, ikisi de sonucunu yükler,
+    # sonra ikisi de krediyi tüketmeye çalışır. Sabit anahtarla sonra yükleyen,
+    # kredisi ödenmiş sonucun üzerine yazıyordu (Codex incelemesi, 2. tur).
     user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    both_uploaded = asyncio.Barrier(2)
 
-    async def other_attempt_consumes(key):
-        async with session_factory() as db:
-            await resolve_reservation(db, reservation_id, True, key)
+    async def wait_for_the_other(_key):
+        await both_uploaded.wait()  # iki yükleme de bitmeden kimse tüketmez
 
-    storage = FakeStorage(on_upload=other_attempt_consumes)
-    worker = _worker(queue, session_factory, storage=storage)
+    storage = FakeStorage(on_upload=wait_for_the_other)
+    first = _worker(queue, session_factory, removal=FakeRemoval(result=b"A"), storage=storage, worker_id="isci-a")
+    second = _worker(queue, session_factory, removal=FakeRemoval(result=b"B"), storage=storage, worker_id="isci-b")
+    job_a = await queue.claim(first.worker_id)
+    # isci-a'nın nabzı yok: kurtarma işi aynı işi kuyruğa geri koyar, isci-b alır.
+    await queue.heartbeat(second.worker_id)
+    assert await second.recover_once() == 0
+    job_b = await queue.claim(second.worker_id)
+    assert job_b.job_id == job_a.job_id
 
-    await worker.process(await queue.claim(worker.worker_id))
+    await asyncio.gather(first.process(job_a), second.process(job_b))
 
-    key = f"results/{user}/{request}.png"
+    paid = await _paid_key(db_session, reservation_id)
+    assert len(storage.uploads) == len(set(storage.uploads)) == 2  # hiçbir anahtar ezilmedi
+    assert list(storage.objects) == [paid]  # kaybedenin nesnesi silindi
     record = await queue.get_job(user, request)
-    assert record["status"] == DONE and record["result_key"] == key
-    assert storage.objects[key] == b"kesim-png"
-    assert await queue.result(user, request) == b"kesim-png"
+    assert record["status"] == DONE and record["result_key"] == paid
+    delivered = await queue.result(user, request)
+    assert delivered in (None, storage.objects[paid])  # teslim edilen = ödenen
+    assert await _reservation_status(db_session, reservation_id) == "consumed"
 
 
 async def test_admin_job_needs_no_credit_and_no_storage(
