@@ -58,7 +58,14 @@ de güvenle koşar. Değiştirmek için: `VITRIN_TEST_DB_PORT`,
 Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
 `VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
 Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
-Bash ya da WSL'den çalıştırılır.
+Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
+`.venv\Scripts\pytest.exe`'yi de bulur). Bash yoksa PowerShell'de aynısı elle
+(repo kökünden):
+
+```powershell
+$env:POSTGRES_PORT="5434"; $env:REDIS_PORT="6380"; docker compose -p vitrin-ai-test up -d postgres redis
+cd backend; $env:DATABASE_URL="postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai"; $env:REDIS_URL="redis://localhost:6380/0"; .venv\Scripts\pytest
+```
 
 Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her
 test çalıştırmasında indirip inference yapmak pratik değil (ağır kaynak

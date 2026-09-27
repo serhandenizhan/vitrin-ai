@@ -8,7 +8,7 @@
 # projesinde açar, testleri oraya yöneltir; geliştirme ortamına dokunmaz.
 # Düz `pytest` de artık geliştirme veritabanında durur (tests/db_safety.py).
 #
-# Kullanım (repo kökünden ya da herhangi bir yerden):
+# Kullanım (repo kökünden ya da herhangi bir yerden; Windows'ta Git Bash'ten):
 #   backend/scripts/test.sh                      # bütün testler
 #   backend/scripts/test.sh tests/test_billing.py -k iade -x   # argümanlar pytest'e aynen geçer
 #
@@ -38,9 +38,15 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "hata: docker bulunamadı. Test veritabanı Docker'da açılıyor." >&2
   exit 2
 fi
-if [ ! -x "$VENV_DIR/bin/pytest" ]; then
-  echo "hata: $VENV_DIR/bin/pytest yok. Önce ./execute.sh'ı bir kez çalıştırın (sanal ortamı kurar)" >&2
-  echo "      ya da VITRIN_VENV_DIR ile başka bir sanal ortam gösterin." >&2
+# macOS/Linux sanal ortamı `bin/`, Windows'unki (Git Bash'ten çalıştırıldığında,
+# Kaan'ın ortamı) `Scripts/` altında.
+if [ -x "$VENV_DIR/bin/pytest" ]; then
+  PYTEST="$VENV_DIR/bin/pytest"
+elif [ -x "$VENV_DIR/Scripts/pytest.exe" ]; then
+  PYTEST="$VENV_DIR/Scripts/pytest.exe"
+else
+  echo "hata: $VENV_DIR içinde pytest yok. Önce sanal ortamı kurun (./execute.sh ya da" >&2
+  echo "      Windows'ta VS Code görevi), ya da VITRIN_VENV_DIR ile başka bir sanal ortam gösterin." >&2
   exit 2
 fi
 
@@ -70,4 +76,4 @@ export DATABASE_URL="postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@localhost:${
 export REDIS_URL="redis://localhost:${TEST_REDIS_PORT}/0"
 
 cd "$BACKEND_DIR"
-exec "$VENV_DIR/bin/pytest" "$@"
+exec "$PYTEST" "$@"
