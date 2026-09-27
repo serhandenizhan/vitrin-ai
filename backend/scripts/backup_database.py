@@ -18,6 +18,19 @@ yerde saklayın" diyor (docs/guides/platform/backups).
                 (Docker, veri tmpfs'te — kapanınca iz kalmaz) geri yükler ve
                 satır sayılarını kayıtla karşılaştırır; süreyi ölçer.
 
+TUTARLILIK (Codex incelemesi, 27.09.2026):
+  - Satır sayıları, şema parmak izi ve `pg_dump` AYNI anlık görüntüden
+    (`pg_export_snapshot` + `pg_dump --snapshot`) alınır. Eskiden sayılar
+    dökümden önce ayrı sorgularla alınıyordu; araya giren tek bir yazma
+    (her oturum yenilemesi `auth.sessions`'a yazar) sağlam bir yedeği
+    "başarısız" gösteriyordu.
+  - Yetkiler (GRANT/REVOKE) dökümde VE geri yüklemede korunur, geri yükleme
+    testi de onları karşılaştırır. Eskiden `--no-privileges` bunları
+    tamamen atıyordu: tetikleyici fonksiyonlarındaki `REVOKE ... FROM PUBLIC`
+    ve `auth` şema izinleri geri gelmiyor, test yine "birebir" diyordu.
+  - Dosya adı rastgele bir ek taşır ve dosya yalnız YOKSA oluşturulur
+    (O_EXCL): aynı saniyede biten iki yedek birbirini ezmez.
+
 GÜVENLİK:
   - Şifresiz döküm diske HİÇ yazılmaz (bellekte şifrelenir; geri yüklemede
     stdin'den verilir). Şifre: `cryptography` Fernet (AES + HMAC, bütünlük
@@ -25,6 +38,8 @@ GÜVENLİK:
   - Bağlantı adresi (parola içerir) komut satırına değil, yalnız sahibinin
     okuyabildiği geçici bir env dosyasına yazılır; `ps`'te görünmez.
   - `--out-dir` depo içinde olamaz: yedek yanlışlıkla commit edilmesin.
+  - Dosyalar baştan 600 izniyle oluşturulur (önce açık yazıp sonra chmod
+    etmek, kısa bir an başkalarının okuyabileceği bir dosya bırakırdı).
   - Yalnız OKUMA yapılır; kaynak veritabanına hiçbir şey yazılmaz.
 Günlük otomatik çalıştırma ve ayrı R2 bucket'ına yükleme Faz 7.5'te
 (sunucu ve bucket belli olunca).
@@ -44,6 +59,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_DIR = BACKEND_DIR.parent
@@ -70,6 +86,34 @@ def _env_value(path: Path, name: str) -> str | None:
 
 def _libpq_dsn(url: str) -> str:
     return re.sub(r"^postgresql\+asyncpg://", "postgresql://", url)
+
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _docker_dsn(dsn: str) -> tuple[str, list[str]]:
+    """`pg_dump` Docker içinde koşar; oradan `localhost` kapsayıcının kendisidir.
+    Yerel bir veritabanı (testler, yerel deneme) ana makineye yönlendirilir."""
+    parts = urlsplit(dsn)
+    if (parts.hostname or "") not in LOCAL_HOSTS:
+        return dsn, []
+    netloc = parts.netloc.rsplit("@", 1)
+    host_port = netloc[-1].replace(parts.hostname, "host.docker.internal", 1)
+    netloc = "@".join([*netloc[:-1], host_port])
+    return urlunsplit(parts._replace(netloc=netloc)), ["--add-host=host.docker.internal:host-gateway"]
+
+
+def _write_private(path: Path, data: bytes) -> None:
+    """Dosyayı 600 izniyle ve YALNIZ YOKSA oluşturur; var olanın üzerine yazmaz."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as file:
+        file.write(data)
+
+
+def _backup_target(out_dir: Path, now: datetime) -> Path:
+    # Rastgele ek: aynı saniyede başlayan iki yedek aynı adı üretmesin.
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    return out_dir / f"vitrin-db-{stamp}-{secrets.token_hex(3)}.dump.fernet"
 
 
 def _fernet():
@@ -121,34 +165,105 @@ SCHEMA_FINGERPRINT = {
 BENIGN_RESTORE_ERRORS = ('schema "public" already exists',)
 
 
-async def _schema_fingerprint(dsn: str) -> dict[str, int]:
+#: Şemalardaki tablo/dizi/görünüm, fonksiyon ve şemanın kendisi üzerindeki
+#: yetkiler, satır satır. Sahibin kendi yetkileri ve `postgres` dışarıda
+#: bırakılır: geri yükleme `--no-owner` ile yapıldığı için orada her nesnenin
+#: sahibi `postgres` olur; bu fark yedeğin eksik olduğunu göstermez.
+#: `acldefault`: hiç GRANT/REVOKE almamış bir nesnenin gerçek (varsayılan)
+#: yetkisi — ör. fonksiyonlarda PUBLIC'e EXECUTE. Kaybolan bir
+#: `REVOKE ... FROM PUBLIC` tam olarak burada görünür.
+PRIVILEGES_SQL = """
+WITH objs AS (
+  SELECT 'table' AS kind, format('%I.%I', n.nspname, c.relname) AS name, c.relowner AS owner,
+         coalesce(c.relacl, acldefault(CASE WHEN c.relkind='S' THEN 's' ELSE 'r' END::"char", c.relowner)) AS acl
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE c.relkind IN ('r','p','v','m','S','f') AND n.nspname = ANY($1::text[])
+  UNION ALL
+  SELECT 'function', format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)),
+         p.proowner, coalesce(p.proacl, acldefault('f', p.proowner))
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname = ANY($1::text[])
+  UNION ALL
+  SELECT 'schema', format('%I', n.nspname), n.nspowner, coalesce(n.nspacl, acldefault('n', n.nspowner))
+  FROM pg_namespace n WHERE n.nspname = ANY($1::text[])
+)
+SELECT kind || ' ' || name || ' ' ||
+       CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END || ' ' ||
+       a.privilege_type AS entry
+FROM objs CROSS JOIN LATERAL aclexplode(objs.acl) a
+WHERE a.grantee <> objs.owner AND (a.grantee = 0 OR pg_get_userbyid(a.grantee) <> 'postgres')
+ORDER BY 1
+"""
+
+
+async def _schema_fingerprint_on(conn) -> dict[str, int]:
+    return {name: await conn.fetchval(sql, list(SCHEMAS)) for name, sql in SCHEMA_FINGERPRINT.items()}
+
+
+async def _privileges_on(conn) -> list[str]:
+    return [row["entry"] for row in await conn.fetch(PRIVILEGES_SQL, list(SCHEMAS))]
+
+
+async def _row_counts_on(conn) -> dict[str, int]:
+    tables = await conn.fetch(
+        """SELECT n.nspname AS s, c.relname AS t FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE c.relkind='r' AND n.nspname = ANY($1::text[]) ORDER BY 1,2""",
+        list(SCHEMAS),
+    )
+    counts = {}
+    for row in tables:
+        name = f'{row["s"]}.{row["t"]}'
+        counts[name] = await conn.fetchval(f'SELECT count(*) FROM "{row["s"]}"."{row["t"]}"')
+    return counts
+
+
+async def _describe(dsn: str) -> tuple[dict[str, int], dict[str, int], list[str]]:
+    """Geri yüklenen veritabanının satır sayıları, parmak izi ve yetkileri."""
     import asyncpg
 
     conn = await asyncpg.connect(dsn, statement_cache_size=0)
     try:
-        return {name: await conn.fetchval(sql, list(SCHEMAS)) for name, sql in SCHEMA_FINGERPRINT.items()}
+        return await _row_counts_on(conn), await _schema_fingerprint_on(conn), await _privileges_on(conn)
     finally:
         await conn.close()
 
 
-async def _row_counts(dsn: str) -> dict[str, int]:
-    import asyncpg
-
-    conn = await asyncpg.connect(dsn, statement_cache_size=0)
+def _run_pg_dump(dsn: str, snapshot: str) -> subprocess.CompletedProcess:
+    docker_dsn, docker_args = _docker_dsn(dsn)
+    env_file = _secret_env_file({"PG_DSN": docker_dsn})
     try:
-        tables = await conn.fetch(
-            """SELECT n.nspname AS s, c.relname AS t FROM pg_class c
-            JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE c.relkind='r' AND n.nspname = ANY($1::text[]) ORDER BY 1,2""",
-            list(SCHEMAS),
+        return subprocess.run(
+            ["docker", "run", "--rm", *docker_args, "--env-file", env_file, PG_IMAGE, "sh", "-c",
+             f"pg_dump --format=custom --no-owner --snapshot={snapshot} "
+             + " ".join(f"--schema={s}" for s in SCHEMAS) + ' "$PG_DSN"'],
+            capture_output=True, check=False,
         )
-        counts = {}
-        for row in tables:
-            name = f'{row["s"]}.{row["t"]}'
-            counts[name] = await conn.fetchval(f'SELECT count(*) FROM "{row["s"]}"."{row["t"]}"')
-        return counts
+    finally:
+        os.unlink(env_file)
+
+
+async def _dump_in_one_snapshot(dsn: str):
+    """Sayılar, parmak izi, yetkiler ve döküm AYNI anlık görüntüden alınır.
+
+    `pg_export_snapshot()` bu işlemin gördüğü anı dışa verir; `pg_dump
+    --snapshot` o anı içe alır. İşlem açık kaldığı sürece araya giren
+    yazmalar ne sayılara ne döküme girer. (Supabase'in havuzu oturum
+    kipinde, 5432, bunu destekler; işlem kipi, 6543, desteklemez.)
+    """
+    import asyncpg
+
+    conn = await asyncpg.connect(dsn, statement_cache_size=0)
+    try:
+        async with conn.transaction(isolation="repeatable_read", readonly=True):
+            snapshot = await conn.fetchval("SELECT pg_export_snapshot()")
+            counts = await _row_counts_on(conn)
+            fingerprint = await _schema_fingerprint_on(conn)
+            privileges = await _privileges_on(conn)
+            dump = await asyncio.to_thread(_run_pg_dump, dsn, snapshot)
     finally:
         await conn.close()
+    return counts, fingerprint, privileges, dump
 
 
 def keygen(_args) -> None:
@@ -173,31 +288,19 @@ def backup(args) -> None:
     dsn = _libpq_dsn(url)
     fernet = _fernet()
 
-    counts = asyncio.run(_row_counts(dsn))
-    fingerprint = asyncio.run(_schema_fingerprint(dsn))
-    env_file = _secret_env_file({"PG_DSN": dsn})
     started = time.monotonic()
-    try:
-        dump = subprocess.run(
-            ["docker", "run", "--rm", "--env-file", env_file, PG_IMAGE, "sh", "-c",
-             'pg_dump --format=custom --no-owner --no-privileges '
-             + " ".join(f"--schema={s}" for s in SCHEMAS) + ' "$PG_DSN"'],
-            capture_output=True, check=False,
-        )
-    finally:
-        os.unlink(env_file)
+    counts, fingerprint, privileges, dump = asyncio.run(_dump_in_one_snapshot(dsn))
     if dump.returncode != 0:
         sys.exit("pg_dump başarısız:\n" + dump.stderr.decode(errors="replace")[-2000:])
     token = fernet.encrypt(dump.stdout)
     elapsed = round(time.monotonic() - started, 1)
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    target = out_dir / f"vitrin-db-{stamp}.dump.fernet"
-    target.write_bytes(token)
-    target.chmod(0o600)
+    now = datetime.now(timezone.utc)
+    target = _backup_target(out_dir, now)
+    _write_private(target, token)
     manifest = {
         "file": target.name,
-        "created_at": stamp,
+        "created_at": now.strftime("%Y%m%dT%H%M%SZ"),
         "schemas": list(SCHEMAS),
         "pg_image": PG_IMAGE,
         "dump_bytes": len(dump.stdout),
@@ -206,12 +309,51 @@ def backup(args) -> None:
         "seconds": elapsed,
         "row_counts": counts,
         "schema_fingerprint": fingerprint,
+        "privileges": privileges,
     }
-    manifest_path = target.with_suffix(".manifest.json")
-    manifest_path.write_text(json.dumps(manifest, indent=2))
-    manifest_path.chmod(0o600)
-    print(json.dumps({k: v for k, v in manifest.items() if k != "row_counts"}, indent=2))
-    print(f"{len(counts)} tablo, {sum(counts.values())} satır kaydedildi → {target}")
+    _write_private(target.with_suffix(".manifest.json"), json.dumps(manifest, indent=2).encode())
+    print(json.dumps(
+        {k: v for k, v in manifest.items() if k not in ("row_counts", "privileges")}, indent=2
+    ))
+    print(f"{len(counts)} tablo, {sum(counts.values())} satır, {len(privileges)} yetki kaydedildi → {target}")
+
+
+RESTORE_DB = "restore_test"
+MISSING_ROLE = re.compile(r'role "([^"]+)" does not exist')
+
+
+def _psql(container: str, sql: str, database: str = "postgres") -> None:
+    subprocess.run(
+        ["docker", "exec", container, "psql", "-U", "postgres", "-d", database,
+         "-v", "ON_ERROR_STOP=1", "-c", sql],
+        capture_output=True, check=True,
+    )
+
+
+def _restore_with_roles(container: str, dump: bytes) -> subprocess.CompletedProcess:
+    """Yetkileri de geri yükler. Yetkiler, boş bir Postgres'te olmayan rollere
+    (Supabase'in `supabase_auth_admin`, `service_role`…) verilmiş olabilir; yok
+    olan rol `role "x" does not exist` ile o GRANT'i düşürür. Bilinen roller
+    baştan, dökümde karşılaşılan başka roller ise görüldükçe (giriş yetkisiz)
+    oluşturulur ve geri yükleme temiz bir veritabanında yinelenir."""
+    roles = set(SUPABASE_ROLES)
+    created: set[str] = set()
+    for _ in range(5):
+        for role in sorted(roles - created):
+            _psql(container, f'CREATE ROLE "{role}" NOLOGIN')
+        created |= roles
+        _psql(container, f'DROP DATABASE IF EXISTS "{RESTORE_DB}"')
+        _psql(container, f'CREATE DATABASE "{RESTORE_DB}"')
+        restore = subprocess.run(
+            ["docker", "exec", "-i", container, "pg_restore", "-U", "postgres",
+             "--no-owner", "-d", RESTORE_DB],
+            input=dump, capture_output=True, check=False,
+        )
+        missing = set(MISSING_ROLE.findall(restore.stderr.decode(errors="replace"))) - created
+        if not missing:
+            return restore
+        roles |= missing
+    return restore
 
 
 def restore_test(args) -> None:
@@ -244,16 +386,7 @@ def restore_test(args) -> None:
                 break
             time.sleep(0.5)
         time.sleep(1)  # ilk başlatma betiği sunucuyu bir kez yeniden başlatıyor
-        roles = "; ".join(f"CREATE ROLE {r} NOLOGIN" for r in SUPABASE_ROLES)
-        subprocess.run(
-            ["docker", "exec", container, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", roles],
-            capture_output=True, check=True,
-        )
-        restore = subprocess.run(
-            ["docker", "exec", "-i", container, "pg_restore", "-U", "postgres",
-             "--no-owner", "--no-privileges", "-d", "postgres"],
-            input=dump, capture_output=True, check=False,
-        )
+        restore = _restore_with_roles(container, dump)
         errors = [
             line for line in restore.stderr.decode(errors="replace").splitlines()
             if "error:" in line and not any(benign in line for benign in BENIGN_RESTORE_ERRORS)
@@ -261,9 +394,8 @@ def restore_test(args) -> None:
         port = subprocess.run(
             ["docker", "port", container, "5432/tcp"], capture_output=True, text=True, check=True
         ).stdout.strip().rsplit(":", 1)[-1]
-        restored_dsn = f"postgresql://postgres:{password}@127.0.0.1:{port}/postgres"
-        restored = asyncio.run(_row_counts(restored_dsn))
-        restored_fingerprint = asyncio.run(_schema_fingerprint(restored_dsn))
+        restored_dsn = f"postgresql://postgres:{password}@127.0.0.1:{port}/{RESTORE_DB}"
+        restored, restored_fingerprint, restored_privileges = asyncio.run(_describe(restored_dsn))
         elapsed = round(time.monotonic() - started, 1)
     finally:
         subprocess.run(["docker", "stop", container], capture_output=True)
@@ -280,6 +412,14 @@ def restore_test(args) -> None:
         for key in SCHEMA_FINGERPRINT
         if expected_fingerprint.get(key) != restored_fingerprint.get(key)
     }
+    expected_privileges = manifest.get("privileges")
+    if expected_privileges is None:
+        # 27.09.2026 öncesi yedekler yetkisiz (`--no-privileges`) alındı ve
+        # kayıtlarında yetki listesi yok: bu yedekler yetkileri GERİ GETİREMEZ.
+        missing_privileges, extra_privileges = ["(bu yedek yetki içermiyor — yeni yedek alın)"], []
+    else:
+        missing_privileges = sorted(set(expected_privileges) - set(restored_privileges))
+        extra_privileges = sorted(set(restored_privileges) - set(expected_privileges))
     report = {
         "backup": manifest["file"],
         "restore_seconds": elapsed,
@@ -290,16 +430,22 @@ def restore_test(args) -> None:
         "mismatched_tables": mismatched,
         "schema_fingerprint": restored_fingerprint,
         "schema_mismatches": fingerprint_diff,
+        "privileges_restored": len(restored_privileges),
+        "privileges_missing": missing_privileges[:20],
+        "privileges_extra": extra_privileges[:20],
         "pg_restore_errors": len(errors),
         "pg_restore_error_samples": errors[:10],
     }
     print(json.dumps(report, indent=2, ensure_ascii=False))
-    if mismatched or fingerprint_diff or errors:
+    if mismatched or fingerprint_diff or missing_privileges or extra_privileges or errors:
         sys.exit(
             "GERİ YÜKLEME TESTİ BAŞARISIZ: satır sayıları, şema parçaları (RLS/politika/"
-            "tetikleyici/fonksiyon/indeks/kısıt) ya da pg_restore hataları tutmuyor."
+            "tetikleyici/fonksiyon/indeks/kısıt), yetkiler ya da pg_restore hataları tutmuyor."
         )
-    print("Geri yükleme testi BAŞARILI: tablolar, satırlar, RLS, politikalar, tetikleyiciler birebir.")
+    print(
+        "Geri yükleme testi BAŞARILI: tablolar, satırlar, RLS, politikalar, tetikleyiciler "
+        "ve yetkiler birebir."
+    )
 
 
 def main() -> None:
