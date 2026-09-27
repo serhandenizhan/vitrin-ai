@@ -164,7 +164,14 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   düzeltmeleri `0006_billing_review_fixes`'te; `0005`'teki iki fonksiyon orada
   `CREATE OR REPLACE` ile güncelleniyor). Testin de yalnız boş DB'den
   `upgrade head` yolunu değil, **"önceki revizyon uygulanmış DB → yeni
-  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`).
+  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`,
+  `0011` için `test_migration_0011.py`). **Numara çakışması (27.09.2026):** iki dal
+  aynı anda `0011` açtı; Alembic bunu okurken yalnız uyarıyor, `upgrade head`
+  "Multiple head revisions" ile ancak test oturumu ya da deploy anında,
+  dosyaları söylemeden duruyor. `backend/tests/test_migration_chain.py`
+  (veritabanısız) numaraların benzersiz olduğunu, dosya adıyla uyuştuğunu ve
+  zincirin tek uçlu olduğunu doğrular. Yeni migration açan bir dal, birleştirmeden
+  önce güncel tabanın üstüne alınıp numarası bir sonrakine taşınır.
 - **Dönem snapshot'ı veritabanı seviyesinde değişmezdir** (`period_snapshot`
   trigger'ı): plan sürümü, provider referansları, tarihler ve kota sonradan
   güncellenemez; yalnız `status`, `closed_at`, `used_this_period` ve hesap

@@ -123,6 +123,13 @@ silerdi; sahte bir Supabase veritabanında birebir gösterildi.
 Dört kuralın da red ve kabul yolları `tests/test_db_safety.py`'de; 3. ve 4.
 kuralın testleri koruma geri alınınca kırmızı yandı.
 
+**Migration zinciri** (`tests/test_migration_chain.py`, veritabanısız): revizyon
+numaraları benzersiz, dosya adıyla uyumlu, zincir tek uçlu olmalı. 27.09.2026'da
+iki dal aynı anda `0011` açtı; Alembic bunu yalnız uyarıyla okuyor ve hata ancak
+`upgrade head`'de, hangi dosyaların çakıştığını söylemeden çıkıyor. Yeni
+migration'ın "önceki revizyon uygulanmış DB" yolu ayrıca sınanır
+(`test_migration_0006.py`, `test_migration_0007.py`, `test_migration_0011.py`).
+
 **Faz 4 ve Faz 5 incelemesindeki testlerin tamamı** izole yerel PostgreSQL
 (`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **285
 test geçti**. Buna hesap, oturum/gövde, DB adres güvenliği, cursor, erken

@@ -96,7 +96,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Kesimler kuyrukta sıraya girer, ayrı işçide işlenir (tek işçide 4 eşzamanlı istemci: 8/8 başarılı, 0 red) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **570** (pytest + gerçek PostgreSQL/Redis) · frontend **443** (Vitest) |
+| Testler | backend **575** (pytest + gerçek PostgreSQL/Redis) · frontend **443** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -186,7 +186,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 ## Testler
 
 ```bash
-backend/scripts/test.sh          # 570 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
+backend/scripts/test.sh          # 575 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
 cd frontend && npm test          # 443 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
