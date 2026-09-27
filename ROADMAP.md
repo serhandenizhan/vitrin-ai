@@ -1257,9 +1257,17 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   bulgu:** formlarda `method` yoktu, JS yüklenmeden gönderilen bir form alanları
   GET ile adres çubuğuna yazıyordu (destek formunda e-posta/mesaj; satın alma
   formunda aynı yol T.C. kimlik no, telefon, adres) — 12 forma `method="post"` ve
-  hepsini tarayan bir test eklendi. **Sınır:** API taraması oturumsuzdu (oturum
-  isteyen uçlar 401 döndü); oturumlu tarama yapılmadı. **Kalan:** Supabase panel
-  ayarlarının doğrulanması; güvenlik başlıkları Faz 7.5 (CSP/HSTS).
+  hepsini tarayan bir test eklendi. **Oturumlu tarama (aynı gün):** normal
+  kullanıcı ve yönetici kimliğiyle iki ayrı aktif API taraması. Gerçek Supabase'e
+  dokunmamak için tarama backend'i yerel sahte bir JWKS sunucusuna bağlandı
+  (token'lar yerelde üretildi); R2/iyzico/Resend/Supabase yönetici anahtarı boş
+  bırakıldı. Sonuç: 116 kontrol geçti, açık yok; normal kullanıcı yönetici uçlarında
+  42 kez 403 aldı; tek 5xx'ler kasıtlı olarak koparılan Supabase yönetici API'sinin
+  503'ü. **Sınır:** R2 ve Supabase yönetici API'sine dayanan uçların içi taranmadı
+  (kopuktular); ön yüz oturumlu taranmadı. Supabase panelinde "Require current
+  password when changing password", "Secure password change" ve "Secure email
+  change" Serhan tarafından 27.09.2026'da açıldı. **Kalan:** güvenlik başlıkları
+  Faz 7.5 (CSP/HSTS).
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),

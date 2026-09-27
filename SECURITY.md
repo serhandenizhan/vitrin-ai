@@ -125,8 +125,8 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
     when changing password"** ve **"Secure password change"**. Hesabım sayfası artık
     mevcut parolayı Supabase'e de gönderiyor (`current_password`,
     `frontend/src/lib/change-password.ts`), yani ayar açılınca kırılmaz; sıfırlama
-    bağlantısıyla gelen oturum Supabase'te bu kuraldan muaf. **Ayarların panelde açık
-    olduğu henüz doğrulanmadı** (ders 19). E-posta değişikliği için "Secure email change"
+    bağlantısıyla gelen oturum Supabase'te bu kuraldan muaf. **Serhan 27.09.2026'da
+    panelden açtı** (ders 19: ayar değişirse bu satır da güncellenir). E-posta değişikliği için "Secure email change"
     (iki adrese de onay) açık olmalı.
   - Oturum çerezde (`@supabase/ssr`). **DÜZELTME (27.09.2026):** eski metin "token
     tarayıcıya hiç açılmıyor" diyordu — yanlış. `@supabase/ssr` oturum çerezini
