@@ -273,9 +273,10 @@ hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
   — imajın `/data` volume'u compose'da yeniden oluşturmada bile korunuyor ve
   eski `dump.rdb` açılışta geri yükleniyordu (ölçüldü); API her kuyruğa
   koymadan önce `CONFIG GET save/appendonly` ile doğrular (60 sn önbellek),
-  açıksa fotoğrafı almaz (kredi iade, `503 queue_unavailable`); `CONFIG`
-  yasaksa (bazı yönetilen Redis'ler) uyarı yazar, sağlayıcının ayarı elle
-  doğrulanır (Faz 7.5 kontrol listesi). **Windows'ta** `redis-windows`
+  açıksa fotoğrafı almaz (kredi iade, `503 queue_unavailable`). `CONFIG`
+  yasaksa (bazı yönetilen Redis'ler) de almaz: doğrulanamayan bir söz
+  verilmiş sayılmaz (Codex, 2. tur; ilk sürüm uyarıp devam ediyordu). Böyle
+  bir sağlayıcı seçilecekse karar Faz 7.5'te bilinçli verilir. **Windows'ta** `redis-windows`
   `redis-server --save "" --appendonly no` ile başlatılmalı. Testler
   (`conftest.py`) yerel test Redis'ini aynı ayara çeker; CI'daki servis
   kapsayıcısına komut satırı argümanı verilemediği için bu şart.
@@ -288,6 +289,14 @@ hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
   tüketilmişse inference çalışmaz, iş saklanan kopyayla (`result_key`)
   biter; iade edilmişse `reservation_released`. Aynı kontrol her iade
   denemesinde ve tüketim `False` döndüğünde de yapılır.
+- **Her deneme kendi sonuç anahtarına yazar** (Codex, 2. tur):
+  `results/<kullanıcı>/<anahtar>-<rastgele>.png`. İki deneme paralel
+  yürürse (nabzı gecikip kurtarılan işçi) ikisi de `pending` görüp
+  yükleyebilir; sabit anahtarda sonra yükleyen, kredisi ödenmiş sonucun
+  üzerine yazıyordu. Ödenen anahtar `usage_reservations.result_r2_key`'de
+  durur (sonucu okuyan her yer oradan alır), tüketemeyen deneme kendi
+  nesnesini siler ve ödenen sonucu teslim eder. `results/<kullanıcı>/`
+  öneki hesap silme temizliği için korunur.
 - **Kuyruk sınırı atomik:** uzunluk kontrolü ve ekleme tek bir Lua
   betiğinde. Eskiden `max_jobs=1` ile 5 eşzamanlı isteğin 5'i de kabul
   ediliyordu (ölçüldü).

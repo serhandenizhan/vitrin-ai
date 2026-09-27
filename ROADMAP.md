@@ -1197,7 +1197,10 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   kontrol ve ekleme tek bir Lua betiğinde; (3) Redis'in varsayılanı belleği
   diske (`dump.rdb`) yazıyordu, KVKK metniyle çelişiyordu — compose'da
   RDB/AOF kapalı + `/data` tmpfs, API her kuyruğa koymadan önce doğruluyor
-  (ders 33). Dördü de eski kodda kırmızı yanan testlerle.
+  (ders 33). Dördü de eski kodda kırmızı yanan testlerle. **İkinci tur:**
+  paralel iki deneme ödenmiş sonucun üzerine yazabiliyordu (artık her deneme
+  kendi anahtarına yazar); `CONFIG` yasak Redis'te fotoğraf yine alınıyordu
+  (artık reddedilir); yedek betiği `[::1]` adresini bozuyordu.
   **Sonuç (27.09.2026):** tek işçi, 4 eşzamanlı istemci × 2 istek → 8/8
   başarılı, 0 × 429 (önce 6/8 reddediliyordu); sıra dahil ortalama 38,5 sn,
   kesim sürerken diğer uçlar p95 ≤29 ms. Ayrıntı `backend/README.md` →
@@ -1399,9 +1402,11 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
      kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
      koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
-     (kredi iade + 503). Yönetilen bir Redis `CONFIG`'i yasaklıyorsa kod
-     doğrulayamaz, yalnız uyarı yazar: o durumda sağlayıcının kalıcılık
-     ayarı elle doğrulanıp buraya not düşülür.
+     (kredi iade + 503). **`CONFIG` yasaksa da fotoğrafı almıyor**
+     (doğrulanamayan söz verilmiş sayılmaz — Codex incelemesi, 2. tur).
+     Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
+     sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
+     dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
