@@ -983,8 +983,11 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     fail-closed admin hız sınırından geçiyor ve `background_create` audit izi
     yazıyor. Kayıtlı taslağın kullandığı zemin kalıcı silinemiyor (`409`, pasife
     alma öneriliyor); yeni taslaklarda `editor_state.backgroundId` aynı zamanda
-    `projects.background_id` FK alanına yazılarak bu kural DB seviyesinde de
-    korunuyor. Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
+    `projects.background_id` alanına yazılıyor. **27.09.2026'da değişti:**
+    `/cso` incelemesi 409'un kötüye kullanılabildiğini gösterdi (herhangi bir
+    kullanıcı bir zemini taslağına bağlayıp silinmesini engelleyebiliyordu);
+    Serhan'ın kararıyla silme artık taslak bağlantısını temizleyip yapılıyor.
+    (`background_id` sütununda yabancı anahtar kısıtı yok.) Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
     dışlıyor; panelde mutasyondan önce başlamış liste cevabı yeni durumu artık
     geri alamıyor.
 - **Faz 6 kapanış turu (19.09.2026, Serhan) — dal
@@ -1439,6 +1442,36 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
      sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
      dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
+- **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
+  takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
+  1. **Güvenlik başlıkları** (ZAP'in iki taramasında da çıkan tek eksik):
+     ön yüzde CSP, tıklama tuzağı koruması (`frame-ancestors` /
+     `X-Frame-Options`), `X-Content-Type-Options: nosniff`,
+     `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, `X-Powered-By`
+     kapatma (`poweredByHeader: false`); backend'de `nosniff` ve CORP;
+     canlıda HSTS. **CSP ayrıca önemli:** oturum token'ı tarayıcıdan
+     okunabildiği için (`@supabase/ssr`, `SECURITY.md` 3.1) XSS'e karşı asıl
+     önlem CSP. Başlıklar eklendikten sonra CI'a ZAP pasif taraması
+     (`zaproxy/action-baseline`) eklenebilir.
+  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+     canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
+     ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
+     R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
+     sırasında bilerek koparılmıştı) ve ön yüzün oturumlu taraması.
+  3. **Canlı Redis:** özel ağda, parolalı, RDB/AOF kapalı ve `CONFIG GET`
+     izinli (ölçüm listesi madde 10).
+  4. **Canlı altyapı denetimi:** HTTPS/HSTS, ters vekil, `TRUSTED_PROXY_IPS`
+     (açık takip 3), R2 CORS ve bucket politikası (açık takip 2), Supabase
+     Auth panel ayarları — "Require current password when changing
+     password", "Secure password change", "Secure email change" (27.09.2026'da
+     açıldı; değişirse `SECURITY.md` 3.1 güncellenir).
+  5. **Profesyonel penetrasyon testi:** ücretsiz karşılığı yok; canlıya
+     çıkmadan önce bütçe olursa staging'de.
+  6. **CI'a eklenebilecekler (27.09.2026 değerlendirmesi):** kod kapsama
+     raporu (`pytest-cov`, önce yalnız bilgi amaçlı), ZAP pasif taraması
+     (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
+     Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
+     27.09.2026'da eklendi.
 - **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
   bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
   `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK

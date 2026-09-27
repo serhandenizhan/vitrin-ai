@@ -444,6 +444,8 @@ bile — korumasız hâlde testin kırmızı yandığı görüldü).
 
 ### CI ve bağımlılık taraması (Faz 7)
 
+**Kod kuralı kontrolü (27.09.2026):** CI'ın backend işi testlerden önce `ruff check app tests scripts alembic` koşar — yalnız pyflakes kuralları (`backend/ruff.toml`): tanımsız isim, kullanılmayan içe aktarma/değişken, yinelenen tanım. Biçim/stil kuralları bilinçli olarak yok. İlk koşuda 4 kullanılmayan içe aktarma çıktı; biri (`scripts/manual_model_check.py`) HEIC desteğini açan bilinçli bir yan etki olduğu için `# noqa: F401` ile işaretlendi, üçü silindi.
+
 `.github/workflows/ci.yml` her PR'da ve `main`'e her push'ta testleri
 `.env` OLMADAN, servis olarak açılan Postgres 16 + Redis 7'ye karşı koşar.
 `.env`'siz koşmak bilinçli: CI kurulurken `test_admin_me_requires_a_session`

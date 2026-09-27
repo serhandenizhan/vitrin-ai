@@ -229,6 +229,9 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   `.env`'SİZ, frontend lint/test/build'i ve ayrı bir işte `pip-audit` +
   `npm audit`'i koşar. Supabase isteyen bir test `tokens` fixture'ını ister —
   yerel `.env`'ye gizlice dayanan test yerelde yeşil, CI'da kırmızı yanar.
+  CI'ın backend işi testlerden önce `ruff check app tests scripts alembic`
+  koşar (yalnız pyflakes: tanımsız isim, kullanılmayan içe aktarma;
+  `backend/ruff.toml`, 27.09.2026). Yerelde aynısı: `cd backend && .venv/bin/ruff check app tests scripts alembic`.
   **Backend testleri tek komutla: `backend/scripts/test.sh`** (ayrı compose
   projesinde kendi Postgres'i 5434 + Redis'i 6380; argümanlar pytest'e geçer,
   çıkış kodu pytest'inki). Düz `pytest` `execute.sh`'ın geliştirme
@@ -588,6 +591,50 @@ geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
    yeni bir yedek alındı ve birebir geri yüklendi (416 yetki). Eski iki dosya
    (`~/vitrin-ai-backups/vitrin-db-20260926T21*`) silinip silinmeyeceği
    Serhan'ın kararı.
+
+### 10. Faz 7.5 güvenlik kapanış listesi — sahibi: Serhan (27.09.2026, PR #30 sonu)
+
+Faz 7'de kod güvenlik incelemesi (`/cso`) ve OWASP ZAP (oturumsuz + oturumlu,
+yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` Faz 7
+"Güvenlik incelemesi"). Aşağıdakiler bilinçli olarak canlıya çıkışa bırakıldı ve
+**Faz 7.5'e başlarken bu liste hatırlatılmalı** (ROADMAP Faz 7.5'te aynısı):
+
+  1. **Güvenlik başlıkları** (ZAP'in iki taramasında da çıkan tek eksik):
+     ön yüzde CSP, tıklama tuzağı koruması (`frame-ancestors` /
+     `X-Frame-Options`), `X-Content-Type-Options: nosniff`,
+     `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, `X-Powered-By`
+     kapatma (`poweredByHeader: false`); backend'de `nosniff` ve CORP;
+     canlıda HSTS. **CSP ayrıca önemli:** oturum token'ı tarayıcıdan
+     okunabildiği için (`@supabase/ssr`, `SECURITY.md` 3.1) XSS'e karşı asıl
+     önlem CSP. Başlıklar eklendikten sonra CI'a ZAP pasif taraması
+     (`zaproxy/action-baseline`) eklenebilir.
+  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+     canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
+     ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
+     R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
+     sırasında bilerek koparılmıştı) ve ön yüzün oturumlu taraması.
+  3. **Canlı Redis:** özel ağda, parolalı, RDB/AOF kapalı ve `CONFIG GET`
+     izinli (ölçüm listesi madde 10).
+  4. **Canlı altyapı denetimi:** HTTPS/HSTS, ters vekil, `TRUSTED_PROXY_IPS`
+     (açık takip 3), R2 CORS ve bucket politikası (açık takip 2), Supabase
+     Auth panel ayarları — "Require current password when changing
+     password", "Secure password change", "Secure email change" (27.09.2026'da
+     açıldı; değişirse `SECURITY.md` 3.1 güncellenir).
+  5. **Profesyonel penetrasyon testi:** ücretsiz karşılığı yok; canlıya
+     çıkmadan önce bütçe olursa staging'de.
+  6. **CI'a eklenebilecekler (27.09.2026 değerlendirmesi):** kod kapsama
+     raporu (`pytest-cov`, önce yalnız bilgi amaçlı), ZAP pasif taraması
+     (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
+     Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
+     27.09.2026'da eklendi.
+
+Faz 7.5 dışında, PR #30 birleşince yapılacaklar: PR #31'i (`0012`) güncel
+`main`'e alıp taslaktan çıkarmak; `0011` + `0012`'yi production'a **önce
+yedek alarak** uygulamak (`VITRIN_SUPABASE_MIGRATE=1 ./execute-supabase.sh`);
+eski iki yedeğin (yetkisiz, `~/vitrin-ai-backups/vitrin-db-20260926T21*`)
+silinip silinmeyeceği Serhan'ın kararı; geliştirme Redis'inin eski anonim
+volume'u (içinde eski `dump.rdb`) `docker volume ls -f dangling=true` ile
+bulunup silinebilir.
 
 ### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
 

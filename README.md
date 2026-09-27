@@ -57,7 +57,7 @@ sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
 | 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
-| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 backend (Serhan) tamam: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü — ön yüz E2E ve görsel optimizasyonu (Kaan) sürüyor |
+| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 backend (Serhan) tamam: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP) — ön yüz E2E ve görsel optimizasyonu (Kaan) sürüyor |
 | 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 

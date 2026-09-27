@@ -1,4 +1,3 @@
-from botocore.exceptions import ClientError
 
 from app.services.billing.entitlements import Reservation
 from app.services.billing.usage import get_usage_quota

@@ -39,7 +39,6 @@ from app.services.billing.actions import (
     prune_projects,
     run_storage_job,
     finish_refund,
-    delete_account_action,
 )
 from app.services.billing.maintenance import process_webhook, reconcile
 from app.api.routes.billing import CheckoutRequest
