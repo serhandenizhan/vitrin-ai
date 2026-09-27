@@ -518,7 +518,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**443 test** (27.09.2026'da sayıldı; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**453 test** (27.09.2026'da sayıldı; aynı gün /cso incelemesiyle CMYK oturum/hız sınırı ve `lib/change-password.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -538,7 +538,7 @@ Faz 2-3 dosyaları:
 | `app/api/backgrounds/route.test.ts` | Zemin vekili — hiç 5xx dönmemesi, bozuk kayıt eleme, `expires_in` yokluğu |
 | `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
 | `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
-| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
+| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları, profil yapılandırması, oturum/hız sınırı (gövde okunmadan), CSRF, biçim kontrolü |
 | `components/composer/use-backgrounds.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
 | `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması; Pazaryeri → beyaz zemin, WhatsApp paylaşımı (telefon ve masaüstü yolu), SVG logo reddi, geçersiz gram uyarısı |
 
@@ -1107,6 +1107,12 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   düğmesi önce onay penceresi açar: "Bu görsel baskıya önerilmiyor. Yine de onaylıyor
   musunuz?" — Vazgeç hiçbir şey indirmez, "Evet, indir" normal akışa devam eder. Kontrol
   arayüzde; `/api/cmyk` yalnızca çizilmiş sahneyi alır.
+- **`/api/cmyk` oturum ister ve hız sınırlıdır (27.09.2026, /cso incelemesi):** rota
+  isteğin gövdesini okumadan önce backend'e sorar (`POST /api/cmyk/permit`: oturum +
+  kullanıcı başına 10 dakikada 20 dönüşüm). Oturumsuz istek `401 auth_required`, sınırı
+  aşan `429` + `Retry-After` alır; başka bir siteden gelen istek (CSRF) 403. Sonuç:
+  girişsiz bir ziyaretçi Katalog'da CMYK indiremez, "Bu işlem için giriş yapın." görür.
+  Testler `app/api/cmyk/route.test.ts` (gövdenin hiç okunmadığı da ölçülüyor).
 - **Yerelde zeminler görünmüyorsa:** artık ilk şüpheli Redis DEĞİL. PR #18'e kadar
   Redis yokken `GET /api/backgrounds` 500 veriyor ve vekil
   `X-Backgrounds-Source: unavailable` ile boş liste döndürüyordu; zemin listelemenin

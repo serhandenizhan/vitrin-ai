@@ -76,6 +76,7 @@ SESSION = {
     ("POST", "/api/subscriptions/checkout"),
     ("GET", "/api/subscriptions/me"),
     ("POST", "/api/support-requests"),
+    ("POST", "/api/cmyk/permit"),
 }
 
 #: Kaynağın kimliği yoldan gelir; sahiplik veritabanı sorgusunda doğrulanır.

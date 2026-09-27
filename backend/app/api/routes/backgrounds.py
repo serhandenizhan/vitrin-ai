@@ -13,7 +13,7 @@ import uuid
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import or_, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, require_admin
@@ -21,7 +21,6 @@ from app.core.config import settings
 from app.core.db import get_db_session
 from app.services import admin_audit
 from app.models.background import Background
-from app.models.project import Project
 from app.services.background_images import make_thumbnail, thumbnail_key
 from app.services.storage import (
     R2StorageService,
@@ -253,9 +252,15 @@ async def delete_background(
     zemin gösterilir. Nesne silme patlarsa yalnızca yer tutan bir dosya kalır
     ve bu log'lanır.
 
-    Kayıtlı çalışma zemini sonuç PNG'sine gömülü değildir; stüdyo taslağında
-    kimlikle tutulur. Bu yüzden kullanımda olan zemin kalıcı silinmez, normal
-    kaldırma yolu olan pasife alma kullanılır.
+    TASLAKTA KULLANILAN ZEMİN DE SİLİNEBİLİR (Serhan'ın kararı, 27.09.2026).
+    Eskiden bir taslak zemini kullanıyorsa silme 409 ile reddediliyordu. /cso
+    incelemesi bunun kötüye kullanılabildiğini gösterdi: herhangi bir kullanıcı
+    `PATCH /api/projects/{id}` ile herhangi bir zemini taslağına bağlayıp
+    yöneticinin o zemini silmesini kalıcı olarak engelleyebiliyordu. Artık
+    zemini kullanan taslakların bağlantısı AYNI işlemde temizleniyor
+    (`background_id` ve `editor_state.backgroundId`). Taslağın kaydedilmiş
+    sonucu etkilenmez (sonuç PNG'sine zemin gömülü); stüdyo zemini bulunamayan
+    taslağı listenin uygun ilk zeminiyle açar (`use-background-selection.ts`).
     """
     result = await db.execute(
         select(Background)
@@ -266,26 +271,28 @@ async def delete_background(
     if background is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zemin bulunamadı.")
 
-    referenced_project = await db.scalar(
-        select(Project.id)
-        .where(
-            or_(
-                Project.background_id == background_id,
-                Project.editor_state["backgroundId"].as_string() == str(background_id),
-            )
-        )
-        .limit(1)
+    detached = await db.execute(
+        text(
+            """UPDATE projects SET
+                background_id = CASE WHEN background_id = :id THEN NULL ELSE background_id END,
+                editor_state = CASE WHEN editor_state->>'backgroundId' = :sid
+                                    THEN editor_state - 'backgroundId' ELSE editor_state END
+            WHERE background_id = :id OR editor_state->>'backgroundId' = :sid
+            RETURNING id"""
+        ),
+        {"id": background_id, "sid": str(background_id)},
     )
-    if referenced_project is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın.",
-        )
+    detached_drafts = len(detached.all())
 
     r2_key = background.r2_key
     await db.delete(background)
     await admin_audit.record(
-        db, admin.id, "background_delete", "background", str(background_id), {"r2_key": r2_key}
+        db,
+        admin.id,
+        "background_delete",
+        "background",
+        str(background_id),
+        {"r2_key": r2_key, "detached_drafts": detached_drafts},
     )
     await db.commit()
 

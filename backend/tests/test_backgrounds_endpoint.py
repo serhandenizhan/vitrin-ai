@@ -644,32 +644,57 @@ async def test_delete_background_succeeds_even_if_storage_fails(db_session, admi
     assert (await db_session.execute(select(Background))).scalars().all() == []
 
 
-async def test_delete_background_rejects_a_saved_draft_reference(
+async def test_delete_background_detaches_saved_drafts_instead_of_refusing(
     db_session, admin_headers, create_user
 ):
+    # Eskiden 409 dönüyordu; /cso incelemesi bunun kötüye kullanılabildiğini
+    # gösterdi (herhangi bir kullanıcı herhangi bir zemini taslağına bağlayıp
+    # silinmesini engelleyebiliyordu). Serhan'ın kararı (27.09.2026): silme
+    # yapılır, taslakların zemin bağlantısı aynı işlemde temizlenir.
+    from app.services.billing.db import many
+
     bg = Background(id=uuid.uuid4(), r2_key="backgrounds/a.jpg")
+    other_bg = Background(id=uuid.uuid4(), r2_key="backgrounds/b.jpg")
     owner = await create_user()
-    project = Project(
-        id=uuid.uuid4(),
-        user_id=owner,
-        file_name="yuzuk.jpg",
-        result_r2_key=f"projects/{owner}/result.png",
-        thumbnail_r2_key=f"projects/{owner}/thumb.png",
-        editor_state={"backgroundId": str(bg.id)},
-    )
-    db_session.add_all([bg, project])
+
+    def project(**fields):
+        return Project(
+            id=uuid.uuid4(),
+            user_id=owner,
+            file_name="yuzuk.jpg",
+            result_r2_key=f"projects/{owner}/{uuid.uuid4()}.png",
+            thumbnail_r2_key=f"projects/{owner}/{uuid.uuid4()}-thumb.png",
+            **fields,
+        )
+
+    by_json = project(editor_state={"backgroundId": str(bg.id), "formatName": "a4"})
+    by_column = project(background_id=bg.id)
+    untouched = project(background_id=other_bg.id, editor_state={"backgroundId": str(other_bg.id)})
+    db_session.add_all([bg, other_bg, by_json, by_column, untouched])
     await db_session.commit()
-    storage_mock = AsyncMock()
-    client = _client(db_session, storage_mock)
+    client = _client(db_session, AsyncMock())
 
     response = client.delete(f"/api/admin/backgrounds/{bg.id}", headers=admin_headers)
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == (
-        "Bu zemin kayıtlı çalışmalarda kullanılıyor; silmek yerine pasife alın."
+    assert response.status_code == 200
+    await db_session.rollback()
+    assert await db_session.scalar(select(Background).where(Background.id == bg.id)) is None
+    rows = {
+        row["id"]: row
+        for row in await many(db_session, "SELECT id, background_id, editor_state FROM projects")
+    }
+    # Taslakların geri kalanı yerinde, yalnız zemin bağlantısı gitti.
+    assert rows[by_json.id]["editor_state"] == {"formatName": "a4"}
+    assert rows[by_column.id]["background_id"] is None
+    # Başka bir zemini kullanan taslak etkilenmez.
+    assert rows[untouched.id]["background_id"] == other_bg.id
+    assert rows[untouched.id]["editor_state"] == {"backgroundId": str(other_bg.id)}
+    audit = await many(
+        db_session,
+        "SELECT detail FROM admin_audit_log WHERE action='background_delete' AND subject_id=:id",
+        id=str(bg.id),
     )
-    assert await db_session.scalar(select(Background).where(Background.id == bg.id))
-    storage_mock.delete.assert_not_called()
+    assert audit[0]["detail"]["detached_drafts"] == 2
 
 
 async def test_delete_background_requires_admin_and_writes_audit(db_session, tokens, create_user, admin_headers):

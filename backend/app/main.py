@@ -11,6 +11,7 @@ from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.support import router as support_router
+from app.api.routes.cmyk import router as cmyk_router
 from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
@@ -26,6 +27,7 @@ from app.services.storage import R2ConfigurationError
 from app.services.billing.limits import (
     admin_limiter,
     checkout_limiter,
+    cmyk_limiter,
     public_limiter,
     support_limiter,
 )
@@ -43,6 +45,7 @@ async def lifespan(app: FastAPI):
     await public_limiter.aclose()
     await admin_limiter.aclose()
     await support_limiter.aclose()
+    await cmyk_limiter.aclose()
 
 
 # Hata izleme uygulama kurulmadan ÖNCE başlatılır: SDK'nın FastAPI/Starlette
@@ -128,6 +131,7 @@ app.include_router(backgrounds_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(support_router)
+app.include_router(cmyk_router)
 app.include_router(account_router)
 app.include_router(billing_router)
 app.include_router(admin_router)

@@ -314,6 +314,7 @@ export function AdminBackgrounds() {
 
       <p className="on-dark-muted mt-2 text-xs">
         Pasife alınan zemin kullanıcıya gitmez ama silinmez; silme geri alınamaz.
+        Silinen zemini kullanan yarım kalmış çalışmalar, açılınca başka bir zeminle devam eder.
       </p>
       {rowError ? (
         <p role="alert" className="mt-2 text-xs text-red-300">

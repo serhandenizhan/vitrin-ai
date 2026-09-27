@@ -1237,6 +1237,19 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   politikası güncellendi:** "hata izleme hizmet sağlayıcısı" alıcı grubu
   olarak eklendi, yasal sürüm `2026-09-27` (yeni kayıtlar bu sürümü kabul
   eder; eski kabul kayıtları tarihçede kalır).
+- **Güvenlik incelemesi (kod) — ✅ (27.09.2026, `/cso`, ücretsiz).** Bütün kod
+  tabanı tarandı; kritik/yüksek bulgu yok. Bulunanlar ve yapılanlar: (1) yerel
+  Postgres/Redis bütün ağa açıktı, varsayılan parolayla ve production'dan kopyalanan
+  kullanıcı verisiyle — portlar `127.0.0.1`'e bağlandı; (2) `/api/cmyk` oturumsuz ve
+  sınırsızdı — backend izin ucu (`/api/cmyk/permit`, oturum + 10 dk'da 20,
+  fail-closed); (3) herhangi bir kullanıcı bir zemini taslağına bağlayıp yöneticinin
+  onu silmesini engelleyebiliyordu — Serhan'ın kararıyla silme artık taslak
+  bağlantısını temizleyip yapılıyor; (4) belgedeki "token tarayıcıya hiç açılmıyor"
+  ve "parola değiştirme her yolda kanıt istiyor" cümleleri yanlıştı — düzeltildi,
+  Hesabım sayfası mevcut parolayı Supabase'e de gönderiyor, sunucu tarafı koruma
+  Supabase panel ayarında (Serhan kontrol edecek); (5) `.env.supabase` izni 600.
+  **Kalan:** dinamik tarama (OWASP ZAP, yerel), Supabase panel ayarlarının
+  doğrulanması; güvenlik başlıkları (CSP/HSTS) Faz 7.5.
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),

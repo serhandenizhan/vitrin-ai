@@ -27,6 +27,7 @@ import {
 } from "@/components/auth-dialog";
 import { PasswordChecklist } from "@/components/password-checklist";
 import { useWorkspace, type AuthUser } from "@/components/workspace-provider";
+import { changePassword } from "@/lib/change-password";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { passwordProblem } from "@/lib/password-policy";
 import {
@@ -346,25 +347,11 @@ function ChangePasswordCard({ email }: { email: string }) {
     setBusy(true);
     setError(null);
     try {
-      const supabase = createClient();
-      // Mevcut parolanin dogrulugu yeniden giris yapilarak kontrol ediliyor;
-      // ayni hesap oldugu icin oturum degismiyor, yalnizca yenileniyor.
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email,
-        password: current,
-      });
-      if (verifyError) {
-        setError(
-          verifyError.code === "invalid_credentials"
-            ? "Mevcut parolanız hatalı."
-            : authErrorMessage(verifyError),
-        );
-        return;
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({ password: next });
-      if (updateError) {
-        setError(authErrorMessage(updateError));
+      // Mevcut parola hem burada hem Supabase sunucusunda dogrulaniyor
+      // (`current_password`); bkz. lib/change-password.ts.
+      const problemMessage = await changePassword(createClient().auth, email, current, next);
+      if (problemMessage) {
+        setError(problemMessage);
         return;
       }
       setCurrent("");

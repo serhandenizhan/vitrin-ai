@@ -611,6 +611,14 @@ satırı siler, canlıdaki dosyaya dokunmaz.
 yazar ve kullanıcı başına **saatte 5** istekle sınırlıdır (`support_limiter`,
 fail-open — Redis'in düştüğü an kullanıcının sorun bildirmek isteyeceği andır).
 
+`POST /api/cmyk/permit` (oturum zorunlu, `204`) Next.js'teki CMYK dönüşümünün
+izin kapısıdır: dönüşüm `sharp` ile Next sunucusunda yapılıyor ve orada ne JWT
+doğrulaması ne ortak bir sayaç var. Kullanıcı başına **10 dakikada 20**
+(`cmyk_limiter`), Redis arızasında **fail-closed** (`503 rate_limit_unavailable`):
+korunan şey sunucunun işlemcisi (40 MP'ye kadar görsel), kaybedilen yalnız CMYK
+dosyası. /cso incelemesinde (27.09.2026) `/api/cmyk`'nın oturumsuz ve sınırsız
+olduğu bulundu; testler `tests/test_cmyk_permit.py`.
+
 Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 `expires_in` = `PROJECT_URL_EXPIRY_SECONDS`).
 

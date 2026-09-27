@@ -79,6 +79,11 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 2.4 İç ağ segmentasyonu
 - PostgreSQL ve Redis sadece backend container'ının erişebileceği internal network'te;
   dışarıya port açılmaz (Docker Compose'da `expose` kullan, `ports` değil).
+  **Yerel geliştirme (27.09.2026, /cso incelemesi):** backend host'ta çalıştığı için
+  `docker-compose.yml` port açmak zorunda; portlar bu yüzden yalnız `127.0.0.1`'e
+  bağlı. Adres verilmeyince Docker bütün ağ arayüzlerinde açıyordu: aynı ağdaki biri
+  depodaki varsayılan parolayla girip `execute.sh`'ın production'dan kopyaladığı
+  kullanıcı verisini okuyabiliyordu, Redis'teki sıradaki fotoğraflara ulaşabiliyordu.
 
 ---
 
@@ -105,13 +110,27 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
     kayıtlı adresle kayıtta ve parola sıfırlamada da "e-postanızı kontrol edin" deniyor.
   - Açık yönlendirme kapalı: `/auth/callback`'teki `next` yalnızca site içi yolu kabul
     ediyor (`//`, `/\`, kontrol karakteri ve mutlak adres reddediliyor; `safe-redirect.ts`).
-  - Parola değiştirme her yolda kanıt istiyor: Hesabım sayfası mevcut parolayı soruyor;
-    mevcut parolasız `/auth/yeni-parola` formu yalnızca sıfırlama bağlantısından gelinince
-    açılıyor (`/auth/callback`'in yazdığı 10 dakikalık `httpOnly` çerez,
-    `frontend/src/lib/password-recovery.ts`). Yalnızca oturuma bakılsaydı açık kalmış bir
-    oturum parolayı ele geçirmeye yeterdi.
-  - Oturum çerezde (`@supabase/ssr`), token tarayıcıya ve backend adresine hiç açılmıyor;
-    vekiller iletiyor.
+  - Parola değiştirme: Hesabım sayfası mevcut parolayı soruyor; mevcut parolasız
+    `/auth/yeni-parola` formu yalnızca sıfırlama bağlantısından gelinince açılıyor
+    (`/auth/callback`'in yazdığı 10 dakikalık `httpOnly` çerez,
+    `frontend/src/lib/password-recovery.ts`). **DÜZELTME (27.09.2026, /cso
+    incelemesi):** bu kontroller yalnızca ARAYÜZDE. Oturumu ele geçiren biri (açık
+    bırakılmış bilgisayar) tarayıcı konsolundan Supabase'e doğrudan `updateUser`
+    çağırıp parolayı değiştirebilir; kod bunu engelleyemez. Sunucu tarafı koruma
+    Supabase panelinde: Authentication → Email ayarlarında **"Require current password
+    when changing password"** ve **"Secure password change"**. Hesabım sayfası artık
+    mevcut parolayı Supabase'e de gönderiyor (`current_password`,
+    `frontend/src/lib/change-password.ts`), yani ayar açılınca kırılmaz; sıfırlama
+    bağlantısıyla gelen oturum Supabase'te bu kuraldan muaf. **Ayarların panelde açık
+    olduğu henüz doğrulanmadı** (ders 19). E-posta değişikliği için "Secure email change"
+    (iki adrese de onay) açık olmalı.
+  - Oturum çerezde (`@supabase/ssr`). **DÜZELTME (27.09.2026):** eski metin "token
+    tarayıcıya hiç açılmıyor" diyordu — yanlış. `@supabase/ssr` oturum çerezini
+    tarayıcı istemcisi okuyabilsin diye `httpOnly` OLMADAN yazar (tarayıcıdaki giriş,
+    parola değiştirme ve çıkış buna dayanıyor). Doğru olan: token backend adresine
+    tarayıcıdan gitmiyor, backend çağrılarını Next vekilleri yapıyor. Sonuç: sitede bir
+    XSS açığı çıkarsa oturum token'ı okunabilir; bugün bilinen XSS yok. Asıl önlem CSP
+    başlığı (Faz 7.5 launch listesi).
   - Parola değiştirme mevcut parolayı istiyor; parola sıfırlanınca ve istenirse "tüm
     cihazlardan çıkış" ile diğer oturumlar kapatılıyor.
 
