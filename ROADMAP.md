@@ -1248,8 +1248,18 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   ve "parola değiştirme her yolda kanıt istiyor" cümleleri yanlıştı — düzeltildi,
   Hesabım sayfası mevcut parolayı Supabase'e de gönderiyor, sunucu tarafı koruma
   Supabase panel ayarında (Serhan kontrol edecek); (5) `.env.supabase` izni 600.
-  **Kalan:** dinamik tarama (OWASP ZAP, yerel), Supabase panel ayarlarının
-  doğrulanması; güvenlik başlıkları (CSP/HSTS) Faz 7.5.
+  **Dinamik tarama — ✅ (27.09.2026, OWASP ZAP, ücretsiz, yerel):** uygulama test
+  veritabanına bağlı ayrı bir kopya olarak açılıp tarandı. Backend API (OpenAPI'den,
+  aktif saldırı kalıpları): 116 kontrol geçti, açık yok; yalnız iki eksik başlık
+  (`X-Content-Type-Options`, `Cross-Origin-Resource-Policy`). Ön yüz (pasif): açık yok;
+  eksik güvenlik başlıkları (CSP, tıklama tuzağı koruması, `X-Content-Type-Options`,
+  `Permissions-Policy`, COOP/COEP/CORP, `X-Powered-By` sızıntısı) ve **bir gerçek
+  bulgu:** formlarda `method` yoktu, JS yüklenmeden gönderilen bir form alanları
+  GET ile adres çubuğuna yazıyordu (destek formunda e-posta/mesaj; satın alma
+  formunda aynı yol T.C. kimlik no, telefon, adres) — 12 forma `method="post"` ve
+  hepsini tarayan bir test eklendi. **Sınır:** API taraması oturumsuzdu (oturum
+  isteyen uçlar 401 döndü); oturumlu tarama yapılmadı. **Kalan:** Supabase panel
+  ayarlarının doğrulanması; güvenlik başlıkları Faz 7.5 (CSP/HSTS).
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),

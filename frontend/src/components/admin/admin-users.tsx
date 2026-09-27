@@ -62,7 +62,7 @@ export function AdminUsers({ onOpen }: { onOpen: (userId: string) => void }) {
 
   return (
     <div>
-      <form onSubmit={search} className="glass-panel flex items-center gap-2 rounded-full p-1.5 pl-4" role="search">
+      <form method="post" onSubmit={search} className="glass-panel flex items-center gap-2 rounded-full p-1.5 pl-4" role="search">
         <Search className="size-4 shrink-0 text-white/50" aria-hidden />
         <label htmlFor="admin-user-search" className="sr-only">
           E-posta ile ara

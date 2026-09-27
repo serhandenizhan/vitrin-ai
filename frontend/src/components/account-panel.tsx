@@ -231,7 +231,7 @@ function ProfileCard({ user }: { user: AuthUser }) {
 
   return (
     <Card title="Profil bilgileri">
-      <form onSubmit={handleSubmit} noValidate className="space-y-3">
+      <form method="post" onSubmit={handleSubmit} noValidate className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <TextInput
             id={ids.firstName}
@@ -367,7 +367,7 @@ function ChangePasswordCard({ email }: { email: string }) {
 
   return (
     <Card title="Parolayı değiştir">
-      <form onSubmit={handleSubmit} noValidate className="space-y-3">
+      <form method="post" onSubmit={handleSubmit} noValidate className="space-y-3">
         <input type="email" autoComplete="username" value={email} readOnly hidden />
         <Field id={ids.current} label="Mevcut parola">
           <input

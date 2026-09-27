@@ -79,6 +79,10 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 2.4 İç ağ segmentasyonu
 - PostgreSQL ve Redis sadece backend container'ının erişebileceği internal network'te;
   dışarıya port açılmaz (Docker Compose'da `expose` kullan, `ports` değil).
+  **Formlar `method="post"` (27.09.2026, OWASP ZAP):** JS yüklenmeden gönderilen bir
+  form varsayılan GET ile `name`'li alanları adres çubuğuna/kayıtlara yazıyordu (satın
+  alma formunda T.C. kimlik no dahil). Bütün formlar POST; `frontend/src/lib/forms-post-method.test.ts`
+  yenisinin unutulmasını yakalar.
   **Yerel geliştirme (27.09.2026, /cso incelemesi):** backend host'ta çalıştığı için
   `docker-compose.yml` port açmak zorunda; portlar bu yüzden yalnız `127.0.0.1`'e
   bağlı. Adres verilmeyince Docker bütün ağ arayüzlerinde açıyordu: aynı ağdaki biri
