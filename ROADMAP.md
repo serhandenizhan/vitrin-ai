@@ -1162,6 +1162,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   "başarısız" göstermiyor; (3) dosya adı rastgele ek taşıyor ve dosya yalnız
   yoksa oluşturuluyor. Üçü de Docker'da gerçek `pg_dump`/`pg_restore` ile
   test edildi (eski betikte kırmızı). Önceki yedekler yetki içermiyor.
+  **Yan bulgu kapatıldı (27.09.2026):** yedeğin yetki manifestinde
+  `record_signup_consents()` için PUBLIC ve `anon` EXECUTE görüldü (0004'te
+  REVOKE unutulmuştu). Migration `0012` geri alıyor; `test_rls.py`
+  `public`'teki her SECURITY DEFINER fonksiyonu için bunu genel olarak
+  doğruluyor. Production'a PR birleştikten sonra uygulanacak.
 - **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
   Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
   "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek

@@ -234,3 +234,63 @@ async def test_signup_metadata_creates_server_timestamped_immutable_consent_reco
         ("terms", "2026-09-14"),
     ]
     assert all(row.recorded_at is not None and row.source == "signup" for row in rows)
+
+
+async def _security_definer_functions_callable_by_clients(db_session) -> list[tuple[str, str]]:
+    # `proacl` NULL ise Postgres'in varsayılanı geçerlidir: PUBLIC'e EXECUTE.
+    # `acldefault` bu örtük yetkiyi de açık satıra çeviriyor; grantee 0 = PUBLIC.
+    result = await db_session.execute(
+        text(
+            """
+            select p.oid::regprocedure::text, coalesce(r.rolname, 'PUBLIC')
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+            left join pg_roles r on r.oid = a.grantee
+            where n.nspname = 'public'
+              and p.prosecdef
+              and a.privilege_type = 'EXECUTE'
+              and (a.grantee = 0 or r.rolname = any(:roles))
+            order by 1, 2
+            """
+        ),
+        {"roles": list(CLIENT_ROLES)},
+    )
+    return [tuple(row) for row in result.all()]
+
+
+async def test_no_security_definer_function_is_executable_by_clients(db_session):
+    # SECURITY DEFINER fonksiyonu sahibinin (tablo sahibi) yetkisiyle çalışır;
+    # PUBLIC/anon/authenticated'a EXECUTE açık kalırsa Data API'nin `rpc`
+    # kapısından RLS'i atlayan bir yol olur. Tetikleyici fonksiyonları doğrudan
+    # çağrılamasa da kural istisnasız: ileride eklenen bir fonksiyonun
+    # REVOKE'u unutulursa bu test kırmızı yanar (27.09.2026'da production
+    # yedeğinde `record_signup_consents` için bulundu, migration 0012).
+    functions = (
+        await db_session.execute(
+            text(
+                """
+                select p.proname from pg_proc p
+                join pg_namespace n on n.oid = p.pronamespace
+                where n.nspname = 'public' and p.prosecdef
+                """
+            )
+        )
+    ).scalars().all()
+    # Sorgunun boş kümeye bakıp sessizce yeşil geçmediğinin kanıtı.
+    assert {"record_signup_consents", "billing_signup", "billing_delete_guard"} <= set(
+        functions
+    )
+
+    assert await _security_definer_functions_callable_by_clients(db_session) == []
+
+    # Etkin yetki de kapalı olmalı (rol üyeliği yoluyla gelen yetki dahil).
+    for role in CLIENT_ROLES:
+        allowed = await db_session.scalar(
+            text(
+                "select has_function_privilege(:role, "
+                "'public.record_signup_consents()', 'EXECUTE')"
+            ),
+            {"role": role},
+        )
+        assert not allowed, f"{role} record_signup_consents için EXECUTE yetkisine sahip"

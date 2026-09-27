@@ -101,6 +101,14 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   değildir; tabloyu koruyan tek şey Row Level Security politikasıdır. **RLS'siz tablo
   oluşturulmaz** — tablo ve politikası aynı migration'da gider. Bu, aşağıdaki 3.2'deki IDOR
   korumasının Supabase tarafındaki karşılığıdır.
+- **SECURITY DEFINER fonksiyonları istemci rollerine kapalıdır.** Böyle bir fonksiyon sahibinin
+  (tablo sahibi) yetkisiyle çalışır ve RLS'i atlar; Postgres yeni fonksiyona varsayılan olarak
+  PUBLIC'e EXECUTE verir, Supabase de `anon`/`authenticated`'a ekler. Bu yüzden
+  `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated` fonksiyonla aynı migration'da
+  gider; `backend/tests/test_rls.py` bunu `public`'teki her SECURITY DEFINER fonksiyonu için
+  genel olarak doğrular. (27.09.2026: production yedeğinin yetki manifestinde
+  `record_signup_consents()` için PUBLIC ve `anon` EXECUTE bulundu — 0004'te REVOKE
+  unutulmuştu; tetikleyici fonksiyonu olduğu için doğrudan çağrılamıyordu. Migration `0012`.)
 - Session token'lar / JWT'ler kısa ömürlü (örn. 15dk access + refresh token deseni).
 - Parola sıfırlama linkleri tek kullanımlık ve süreli (15-60dk).
 - **Uygulandı (Faz 4):**
