@@ -218,6 +218,20 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
         />
       )}
 
+      {/* Cevirme ipucu yuzugun altinda: yuzukle ilgili, panelde yer kaplamasin. */}
+      {webgl && focus ? (
+        <p
+          aria-hidden={!panelOpen}
+          className={cn(
+            "fine-print pointer-events-none absolute -translate-x-1/2 rounded-full bg-black/35 px-3 py-1 text-[#f3f0eb]/80 backdrop-blur-md transition-opacity duration-500",
+            panelOpen ? "opacity-100" : "opacity-0",
+          )}
+          style={{ left: focus.x, top: focus.y + focus.height / 2 + focus.height * 0.08 }}
+        >
+          Sürükleyerek çevirin
+        </p>
+      ) : null}
+
       <aside
         aria-label={`${scene.name} yakından`}
         className={cn(
@@ -241,10 +255,11 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
             <li key={fact}>{fact}</li>
           ))}
         </ul>
-        {webgl ? <p className="fine-print mt-3 text-[#f3f0eb]/70">Sürükleyerek çevirin.</p> : null}
-
+        {/* Panel KAYDIRMASIZ sigmali (Serhan, 29.09.2026): "Surukleyerek
+            cevirin" yuzugun altina, zemin aciklamasi basliga, once/sonra'nin
+            aciklamasi yanina alindi. */}
         <fieldset className="mt-5">
-          <legend className="fine-print text-[#f3f0eb]/70">Bir zemine koyun</legend>
+          <legend className="fine-print text-[#f3f0eb]/70">Stüdyodaki bir zemine koyun</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
@@ -277,25 +292,24 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
               </button>
             ))}
           </div>
-          <p className="fine-print on-dark-muted mt-2 text-pretty">
-            {backdrop ? `${backdrop.name}: stüdyodaki zeminlerden biri.` : "Stüdyodaki zeminlerden birkaçı."}
-          </p>
         </fieldset>
 
-        <div className="mt-5 w-full max-w-[15rem]">
-          <HeroBeforeAfter
-            before={close.before}
-            after={close.after}
-            beforeAlt={scene.photoAlt}
-            afterAlt={scene.cutoutAlt}
-            width={scene.close.width}
-            height={scene.close.height}
-            sizes="15rem"
-          />
+        <div className="mt-5 flex items-start gap-4">
+          <div className="w-[10.5rem] shrink-0">
+            <HeroBeforeAfter
+              before={close.before}
+              after={close.after}
+              beforeAlt={scene.photoAlt}
+              afterAlt={scene.cutoutAlt}
+              width={scene.close.width}
+              height={scene.close.height}
+              sizes="10.5rem"
+            />
+          </div>
+          <p className="fine-print on-dark-muted pt-1 text-pretty">
+            Çizgiyi sürükleyin: sağda özgün fotoğraf, solda arka planı kaldırılmış hâli.
+          </p>
         </div>
-        <p className="fine-print on-dark-muted mt-2 text-pretty">
-          Çizgiyi sürükleyin: sağda özgün fotoğraf, solda arka planı kaldırılmış hâli.
-        </p>
 
         <a
           href="#dene"
@@ -524,6 +538,115 @@ function HandPlane({
   );
 }
 
+// --- Pirlanta isiltisi ------------------------------------------------------
+
+/**
+ * Tacin fasetlerinde, faset isigi TAM kameraya yansittigi anda parlayan
+ * kucuk yildizlar. Yuzuk dondukce fasetler sirayla yanip soner — gercek
+ * pirlantanin "isilti"si. Tum sahneye bloom uygulanmadi: tuval saydam
+ * (arkasinda zemin katmani var) ve bloom saydamligi bozuyordu.
+ */
+// Isiklar tepede bir cember uzerinde (mucevher cekimindeki halka isik).
+// Iki deneme olculdu: isiklar ondeyken isilti hic olusmuyordu (tacin yukari
+// egik fasetinden yansiyan bakis cizgisi yukari ve geriye gider); ustte uc
+// isikla yalnizca arada bir, cok zayif olusuyordu. Dik duran yuzugun taci
+// kameraya az goruntugu icin isiklar cevreye yayildi.
+const GLINT_LIGHT_COUNT = 8;
+const GLINT_LIGHTS = Array.from({ length: GLINT_LIGHT_COUNT }, (_, k) => {
+  const angle = (k / GLINT_LIGHT_COUNT) * Math.PI * 2;
+  return new THREE.Vector3(Math.cos(angle) * 0.75, 0.7, Math.sin(angle) * 0.75).normalize();
+});
+
+const GLINT_VERTEX = /* glsl */ `
+  attribute vec3 aNormal;
+  attribute float aHue;
+  uniform vec3 uLights[${GLINT_LIGHT_COUNT}];
+  uniform float uSize;
+  varying float vIntensity;
+  varying float vHue;
+  void main() {
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vec3 normal = normalize(mat3(modelMatrix) * aNormal);
+    vec3 view = normalize(cameraPosition - world.xyz);
+    vec3 mirror = reflect(-view, normal);
+    float glint = 0.0;
+    for (int i = 0; i < ${GLINT_LIGHT_COUNT}; i++) glint = max(glint, pow(max(dot(mirror, uLights[i]), 0.0), 40.0));
+    vIntensity = glint;
+    vHue = aHue;
+    gl_PointSize = uSize * smoothstep(0.02, 0.6, glint);
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const GLINT_FRAGMENT = /* glsl */ `
+  varying float vIntensity;
+  varying float vHue;
+  vec3 spectrum(float h) {
+    return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  }
+  void main() {
+    vec2 p = gl_PointCoord * 2.0 - 1.0;
+    float rays = max(1.0 - abs(p.x) * 10.0, 0.0) * max(1.0 - abs(p.y), 0.0)
+               + max(1.0 - abs(p.y) * 10.0, 0.0) * max(1.0 - abs(p.x), 0.0);
+    float core = exp(-dot(p, p) * 14.0);
+    // Cogu beyaz, bir kismi hafif renkli: kirilmanin ayristirdigi isik.
+    vec3 color = mix(vec3(1.0), spectrum(vHue), 0.35 * step(0.5, fract(vHue * 7.0)));
+    gl_FragColor = vec4(color, clamp(rays * 0.9 + core, 0.0, 1.0) * vIntensity);
+    #include <colorspace_fragment>
+  }
+`;
+
+function DiamondGlints({ geometry, matrix }: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }) {
+  const dpr = useThree((state) => state.viewport.dpr);
+  const points = useMemo(() => {
+    // Tacin (ust yuz) faset merkezleri ve normalleri.
+    const source = geometry.index ? geometry.toNonIndexed() : geometry;
+    const pos = source.getAttribute("position");
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const centers: number[] = [];
+    const normals: number[] = [];
+    const hues: number[] = [];
+    const normal = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 3) {
+      a.fromBufferAttribute(pos, i);
+      b.fromBufferAttribute(pos, i + 1);
+      c.fromBufferAttribute(pos, i + 2);
+      normal.subVectors(c, b).cross(new THREE.Vector3().subVectors(a, b)).normalize();
+      if (normal.y < 0.25) continue;
+      centers.push((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3);
+      normals.push(normal.x, normal.y, normal.z);
+      hues.push((centers.length / 3) * 0.618 % 1);
+    }
+    if (source !== geometry) source.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(centers, 3));
+    g.setAttribute("aNormal", new THREE.Float32BufferAttribute(normals, 3));
+    g.setAttribute("aHue", new THREE.Float32BufferAttribute(hues, 1));
+    return g;
+  }, [geometry]);
+
+  useEffect(() => () => points.dispose(), [points]);
+
+  const uniforms = useMemo(() => ({ uLights: { value: GLINT_LIGHTS }, uSize: { value: 44 * dpr } }), [dpr]);
+
+  return (
+    <points geometry={points} matrix={matrix} matrixAutoUpdate={false} renderOrder={4} frustumCulled={false}>
+      <shaderMaterial
+        uniforms={uniforms}
+        vertexShader={GLINT_VERTEX}
+        fragmentShader={GLINT_FRAGMENT}
+        transparent
+        depthWrite={false}
+        depthTest={false}
+        blending={THREE.AdditiveBlending}
+        toneMapped={false}
+      />
+    </points>
+  );
+}
+
 // --- 3D taki ---------------------------------------------------------------
 
 function Jewel({
@@ -558,17 +681,23 @@ function Jewel({
       <group position={center.clone().negate()}>
         {meshes.map((mesh) =>
           mesh.name.startsWith("diamond") ? (
-            <mesh key={mesh.uuid} geometry={mesh.geometry} matrix={mesh.matrixWorld} matrixAutoUpdate={false}>
-              <MeshRefractionMaterial
-                envMap={envMap}
-                bounces={3}
-                ior={2.42}
-                fresnel={0.9}
-                aberrationStrength={0.012}
-                fastChroma
-                toneMapped={false}
-              />
-            </mesh>
+            <group key={mesh.uuid}>
+              <mesh geometry={mesh.geometry} matrix={mesh.matrixWorld} matrixAutoUpdate={false}>
+                {/* Ates (renk dagilimi): her renk kanali AYRI izlenir
+                    (`fastChroma` kapali) ve kirilma farki buyutuldu; ic
+                    yansima sayisi da arttirildi. Tas ekranda kucuk, uc
+                    katli maliyet olculdu (bkz. frontend/README). */}
+                <MeshRefractionMaterial
+                  envMap={envMap}
+                  bounces={5}
+                  ior={2.42}
+                  fresnel={1}
+                  aberrationStrength={0.035}
+                  toneMapped={false}
+                />
+              </mesh>
+              <DiamondGlints geometry={mesh.geometry} matrix={mesh.matrixWorld} />
+            </group>
           ) : (
             <mesh
               key={mesh.uuid}
