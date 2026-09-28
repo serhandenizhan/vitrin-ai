@@ -156,9 +156,10 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
     for (;;) {
       checkCancelled();
       // Anahtar YUKLEMEDEN ONCE sabitlenir ve yoklama da ayni anahtarla
-      // yapilir. Yukleme surerken (20 MB birkac saniye) kullanici "vazgec"e
-      // basip yeni fotograf secerse ortak anahtar degisir; yoklama onu
-      // okursa eski is baska bir isin sonucunu alir ya da kendi sonucunu
+      // yapilir. Yukleme surerken (20 MB birkac saniye) kullanici ekrani
+      // sifirlayip ("Yeni calisma", sol panelden baska calisma) yeni fotograf
+      // secerse ortak anahtar degisir; yoklama onu okursa eski is baska bir
+      // isin sonucunu alir ya da kendi sonucunu
       // hic bulamazdi (kredi harcanir, sonuc gecmise yazilmazdi).
       const key = options.getKey();
       const body = new FormData();

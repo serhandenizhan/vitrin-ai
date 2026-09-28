@@ -188,7 +188,7 @@ describe("is anahtari ekranin ortak anahtarindan ayri", () => {
     const responses = [queued(), png()];
     const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(url), key: new Headers(init?.headers).get("Idempotency-Key") });
-      // Yukleme surerken kullanici "vazgec"e basip yeni fotograf secti.
+      // Yukleme surerken kullanici ekrani sifirlayip ("Yeni calisma") yeni fotograf secti.
       if (String(url) === "/api/remove-background") shared.current = "yeni-foto";
       return responses.shift()!;
     }) as unknown as typeof fetch;
