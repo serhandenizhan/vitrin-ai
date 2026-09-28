@@ -44,7 +44,7 @@ import {
   HERO_PHOTO_HEIGHT,
   HERO_PHOTO_WIDTH,
   HERO_SCENES,
-  photoSrc,
+  pageHandSrc,
   type HeroScene,
 } from "@/lib/hero-scenes";
 import { cn } from "@/lib/utils";
@@ -83,7 +83,7 @@ function lookStyle(look: SlideLook): CSSProperties {
   };
 }
 
-type Zoom = { scene: HeroScene; origin: ZoomOrigin; webgl: boolean; reduceMotion: boolean };
+type Zoom = { scene: HeroScene; origin: ZoomOrigin; handOffset: number; webgl: boolean; reduceMotion: boolean };
 
 type HeroShowcaseProps = {
   /** Baslik ve eylem dugmeleri (sunucu bileseni olarak cizilir). */
@@ -249,15 +249,20 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
   const openZoom = useCallback(
     (index: number, trigger: HTMLElement | null) => {
       const root = rootRef.current;
-      const photo = slideRefs.current[index]?.querySelector("img");
-      if (!root || !photo) return;
+      // Kadraj yuzuk katmanindan olculur (kaydirmayla oynamaz); el katmani
+      // kaydirilmissa kaymasi ayrica verilir, tuval eli oradan devralir.
+      const ring = slideRefs.current[index]?.querySelector<HTMLElement>(".hero-ring-lift");
+      const hand = slideRefs.current[index]?.querySelector<HTMLElement>(".hero-hand");
+      if (!root || !ring || !hand) return;
       const rootBox = root.getBoundingClientRect();
-      const box = photo.getBoundingClientRect();
+      const box = ring.getBoundingClientRect();
+      const handOffset = hand.getBoundingClientRect().top - box.top;
       zoomTriggerRef.current = trigger;
       setZoomReady(false);
       setZoom({
         scene: scenes[index],
         origin: { left: box.left - rootBox.left, top: box.top - rootBox.top, width: box.width, height: box.height },
+        handOffset,
         webgl: supportsWebGL(),
         reduceMotion: prefersReducedMotion(),
       });
@@ -349,6 +354,18 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
         }
       }}
     >
+      {/* Arka isik, etkin sahnenin FOTOGRAF ZEMINI tonuyla: uretilen
+          fotograflarin zemini sayfadan sicak ve acik (sahne 1: #1c150f /
+          #0c0b0a); kenar maskesi tek basina farki kapatmiyor, fotograf
+          koyu bir hale icinde duruyordu. Ton betikle olculur. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 transition-[background] duration-700"
+        style={{
+          background: `radial-gradient(38% 62% at 50% 58%, ${scene.tone} 0%, ${scene.tone} 38%, transparent 100%)`,
+        }}
+      />
+
       {/* Sahne: fotograflar alttan yukselir, basligin arkasina uzanabilir. */}
       <div
         ref={stageRef}
@@ -394,15 +411,18 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
                 {/* Duragan halde hafif suzulme; yakinlasma basladiginda durur
                     ki tuval fotografi tam bulundugu yerden devralsin. */}
                 <span className={cn("hero-float absolute inset-0", zoom && "hero-float-paused")}>
+                  {/* Iki katman: yuzugu silinmis el ve ustunde yuzuk. Duruyorken
+                      fotografin kendisi; kaydirinca yalniz el iner (globals.css
+                      `.hero-hand`), yuzuk yerinde kalir. */}
                   <Image
-                    src={photoSrc(item)}
+                    src={pageHandSrc(item)}
                     alt={item.photoAlt}
                     width={HERO_PHOTO_WIDTH}
                     height={HERO_PHOTO_HEIGHT}
                     priority={index === 0}
                     draggable={false}
                     sizes="(max-width: 768px) 200vw, 72rem"
-                    className="hero-photo h-full w-full object-cover"
+                    className="hero-photo hero-hand absolute inset-0 h-full w-full object-cover"
                   />
                   <RingLift scene={item} />
                   {isActive && !zoom ? <StoneGlints key={glintKey} scene={item} /> : null}
@@ -505,6 +525,7 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
           key={zoom.scene.id}
           scene={zoom.scene}
           origin={zoom.origin}
+          handOffset={zoom.handOffset}
           webgl={zoom.webgl}
           reduceMotion={zoom.reduceMotion}
           onReady={() => setZoomReady(true)}

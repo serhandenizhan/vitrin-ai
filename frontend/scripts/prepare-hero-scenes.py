@@ -26,13 +26,20 @@ Cozulme/isik maskesi ve el katmani ham kesimi kullanmaya devam eder.
 
 Uretilenler (sahne basina):
   public/hero/<sahne>.webp             fotograf, 1600x2000 (4:5)
-  public/hero/<sahne>-kesim.webp       ayni kadrajda kesim (bolge disi saydam);
-                                       yuzugu elden one cikaran parlak kopya
-  public/hero/<sahne>-el.webp          yuzugu SILINMIS fotograf (yakinlasmada el
-                                       yuzugu birakip inerken bu katman iner)
+  public/hero/<sahne>-kesim.webp       ayni kadrajda yalniz yuzuk (bolge disi saydam;
+                                       halka yuzukte ONARILMIS). Sayfada el katmaninin
+                                       ustunde durur: yuzugu parlatir ve kaydirinca el
+                                       inerken yuzuk yerinde kalir.
+  public/hero/<sahne>-el.webp          yuzugun BUTUN BOLGESI zeminle doldurulmus el
+                                       (yakinlasmada el yuzugu birakip inerken iner)
+  public/hero/<sahne>-el-sayfa.webp    yalniz METALI onarilmis el (sayfada, yuzuk
+                                       katmaninin altinda; halkanin ici ve cevresindeki
+                                       isik fotografin kendisi kalir)
   public/hero/<sahne>-yakin.webp       urun bolgesi, kaynak cozunurlugunde
   public/hero/<sahne>-yakin-kesim.webp ayni bolgenin kesimi (once/sonra cifti)
-  src/lib/hero-scene-geometry.json     takinin kutusu + bolgenin olculeri
+  src/lib/hero-scene-geometry.json     takinin kutusu, yakin plan olculeri ve
+                                       zeminin tonu (bolumun arkasindaki isik
+                                       bu tonla boyanir; fotograf sayfaya karisir)
 
 BELLEK: model ~12 GB RAM ister; calistirmadan once kesim iscisi kapali olmali
 ve baska model sureci olmamali (ders 31). Butun sahneler TEK surecte islenir.
@@ -205,6 +212,33 @@ def repair_ring_band(cut: Image.Image, head_bottom: float = 0.36, repair_from: f
     return Image.fromarray(out)
 
 
+def erase_metal(source: Image.Image, close_cut: Image.Image, crop_box: tuple[int, int, int, int]) -> Image.Image:
+    """Yalniz takinin metalini (biraz genisletilmis) cevresinden onarir (Telea)."""
+    metal = np.zeros((source.height, source.width), np.uint8)
+    alpha = np.asarray(close_cut.getchannel("A"))
+    x0, y0 = crop_box[:2]
+    metal[y0 : y0 + alpha.shape[0], x0 : x0 + alpha.shape[1]] = (alpha > 8) * 255
+    metal = cv2.dilate(metal, np.ones((3, 3), np.uint8), iterations=ERASE_GROW_PX)
+    bgr = cv2.cvtColor(np.asarray(source), cv2.COLOR_RGB2BGR)
+    return Image.fromarray(cv2.cvtColor(cv2.inpaint(bgr, metal, 8, cv2.INPAINT_TELEA), cv2.COLOR_BGR2RGB))
+
+
+def backdrop_tone(hand: Image.Image, bbox: tuple[int, int, int, int]) -> str:
+    """
+    Takinin cevresindeki zeminin tonu (#rrggbb): kutunun iki yanindan, ust
+    ceyrek hizasinda (parmaklar alt yarida). Uretilen fotograflarin zemini
+    sayfa zemininden (#0c0b0a) belirgin sicak ve acik (sahne 1: #1b130d).
+    """
+    x0, y0, x1, y1 = bbox
+    y = y0 + (y1 - y0) // 4
+    pad = (x1 - x0) // 3
+    pixels = np.asarray(hand).astype(np.float32)
+    samples = [pixels[y - 12 : y + 12, max(0, x0 - pad - 12) : max(1, x0 - pad + 12)],
+               pixels[y - 12 : y + 12, x1 + pad - 12 : x1 + pad + 12]]
+    r, g, b = np.concatenate([s.reshape(-1, 3) for s in samples]).mean(axis=0).round().astype(int)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def find_source(scene: str) -> Path | None:
     for ext in EXTENSIONS:
         path = SOURCE_DIR / f"{scene}{ext}"
@@ -250,11 +284,16 @@ def main(scenes: list[str]) -> None:
         if close_cut.size != close.size:
             raise SystemExit(f"{scene}: kesim olcusu farkli {close_cut.size} != {close.size}")
 
-        # Kadrajdaki kesim: bolge disi saydam, bolge kesimin kucultulmus hali.
+        # Yakin plan kesimi: halka yuzukte parmak izleri onarilir.
+        close_after = repair_ring_band(close_cut) if scene in RING_BAND_REPAIR else close_cut
+
+        # Kadrajdaki yuzuk katmani: bolge disi saydam. Onarilmis halka
+        # kullanilir: el katmani kaydirilinca ham kesimde parmaklarin ortugu
+        # yerler halkada centik olarak aciliyordu (olculdu).
         px0, py0 = round(rx0 * WIDTH), round(ry0 * HEIGHT)
         px1, py1 = round(rx1 * WIDTH), round(ry1 * HEIGHT)
         cutout = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-        cutout.paste(close_cut.resize((px1 - px0, py1 - py0), Image.LANCZOS), (px0, py0))
+        cutout.paste(close_after.resize((px1 - px0, py1 - py0), Image.LANCZOS), (px0, py0))
 
         mask = cutout.getchannel("A").point(lambda a: 255 if a > ALPHA_THRESHOLD else 0)
         bbox = mask.getbbox()
@@ -264,13 +303,17 @@ def main(scenes: list[str]) -> None:
 
         hand = erase_product(source, close_cut, crop_box)
         hand = hand.crop((fx0, fy0, fx1, fy1)).resize((WIDTH, HEIGHT), Image.LANCZOS)
-
-        # Yakin plan kesimi: halka yuzukte parmak izleri onarilir.
-        close_after = repair_ring_band(close_cut) if scene in RING_BAND_REPAIR else close_cut
+        # Sayfadaki el: BUTUN bolgeyi doldurmak yuzugun cevresindeki sicak
+        # isigi da siliyordu; ustune yuzuk katmani binince yuzugun etrafinda
+        # koyu bir hale kaliyordu (olculdu). Sayfada yalniz metal onarilir —
+        # onarilmis halka onu zaten tam ortuyor.
+        page_hand = erase_metal(source, close_cut, crop_box)
+        page_hand = page_hand.crop((fx0, fy0, fx1, fy1)).resize((WIDTH, HEIGHT), Image.LANCZOS)
 
         close_h = round(CLOSE_WIDTH * close.height / close.width)
         photo.save(OUTPUT_DIR / f"{scene}.webp", "WEBP", quality=QUALITY, method=6)
         hand.save(OUTPUT_DIR / f"{scene}-el.webp", "WEBP", quality=QUALITY, method=6)
+        page_hand.save(OUTPUT_DIR / f"{scene}-el-sayfa.webp", "WEBP", quality=QUALITY, method=6)
         cutout.save(OUTPUT_DIR / f"{scene}-kesim.webp", "WEBP", quality=QUALITY, method=6, exact=True)
         close.resize((CLOSE_WIDTH, close_h), Image.LANCZOS).save(
             OUTPUT_DIR / f"{scene}-yakin.webp", "WEBP", quality=QUALITY, method=6
@@ -286,6 +329,7 @@ def main(scenes: list[str]) -> None:
                 "h": round((bbox[3] - bbox[1]) / HEIGHT, 4),
             },
             "close": {"width": CLOSE_WIDTH, "height": close_h},
+            "tone": backdrop_tone(hand, bbox),
         }
         note = ", halka bandi onarildi" if scene in RING_BAND_REPAIR else ""
         print(f"- {scene}: bolge {crop_box} (kaynak), urun kutusu {bbox}{note}")

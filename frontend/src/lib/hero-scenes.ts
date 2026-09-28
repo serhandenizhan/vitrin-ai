@@ -37,14 +37,16 @@ export type HeroScene = {
   product: ProductBox;
   /** Yakın plandaki önce/sonra çiftinin ölçüsü (betikle üretilir). */
   close: { width: number; height: number };
-  /** Taşların yeri: durağan parıltı ve ışık bandı buralarda parlar. */
+  /** Taşların yeri: durağan parıltı burada parlar. */
   glints: GlintPoint[];
+  /** Fotoğraf zemininin ölçülen tonu: bölümün arkasındaki ışık bununla boyanır. */
+  tone: string;
 };
 
 export const HERO_PHOTO_WIDTH = 1600;
 export const HERO_PHOTO_HEIGHT = 2000;
 
-type Geometry = { product: ProductBox; close: { width: number; height: number } };
+type Geometry = { product: ProductBox; close: { width: number; height: number }; tone: string };
 const measured = geometry as Record<string, Geometry>;
 
 function measure(id: string): Geometry {
@@ -77,9 +79,14 @@ export function cutoutSrc(scene: HeroScene): string {
   return `/hero/${scene.id}-kesim.webp`;
 }
 
-/** Yüzüğü silinmiş fotoğraf: yakınlaşmada el yüzüğü bırakıp inerken bu katman iner. */
+/** Yüzüğün bütün bölgesi temizlenmiş el: yakınlaşmada yüzüğü bırakıp inen katman. */
 export function handSrc(scene: HeroScene): string {
   return `/hero/${scene.id}-el.webp`;
+}
+
+/** Yalnız metali onarılmış el: sayfada yüzük katmanının altında durur. */
+export function pageHandSrc(scene: HeroScene): string {
+  return `/hero/${scene.id}-el-sayfa.webp`;
 }
 
 /** Yakın plandaki önce/sonra: ürün bölgesi ve modelin o bölgeden kesimi. */

@@ -22,11 +22,7 @@ export function Hero() {
     // `overflow-clip`, `hidden` DEGIL: hidden bir kutu programla kaydirilabilir
     // ve Safari odaklanan (ekrandan buyuk) fotografi gostermek icin bolumun
     // icini kaydiriyordu. clip hic kaydirilamaz.
-    <section id="top" className="surface-black relative isolate overflow-clip">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[70%] bg-[radial-gradient(42%_60%_at_50%_100%,rgba(214,167,86,0.14),transparent_76%)]"
-      />
+    <section id="top" className="hero-scroll surface-black relative isolate overflow-clip">
       <HeroShowcase
         lede={
           <p className="fine-print text-pretty">

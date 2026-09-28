@@ -1287,6 +1287,28 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   }
 }
 
+/* Kaydirinca el hafifce iner, yuzuk yerinde kalir — yakinlasmadaki "el
+   yuzugu birakir" anin kucuk bir yankisi. Tamamen CSS (kaydirmaya bagli
+   animasyon): JavaScript yok, tekerlek yakalanmiyor. Desteklemeyen tarayici
+   (Firefox) eli yerinde birakir; bir sey bozulmaz. */
+@supports (animation-timeline: view()) {
+  .hero-scroll {
+    view-timeline: --hero-scroll block;
+  }
+
+  .hero-hand {
+    animation: hero-hand-drop linear both;
+    animation-timeline: --hero-scroll;
+    animation-range: exit 0% exit 100%;
+  }
+}
+
+@keyframes hero-hand-drop {
+  to {
+    translate: 0 6%;
+  }
+}
+
 @keyframes hero-float {
   0%,
   100% {
@@ -1333,7 +1355,8 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   .hero-glint {
     display: none;
   }
-  .hero-float {
+  .hero-float,
+  .hero-hand {
     animation: none;
   }
 }
@@ -1342,6 +1365,7 @@ html.reduce-motion .hero-glint {
   display: none;
 }
 
-html.reduce-motion .hero-float {
+html.reduce-motion .hero-float,
+html.reduce-motion .hero-hand {
   animation: none;
 }

@@ -24,6 +24,14 @@ import * as THREE from "three";
 import { ChevronLeft } from "lucide-react";
 
 import { HeroBeforeAfter } from "@/components/marketing/hero-before-after";
+import {
+  backdropRect,
+  backdropSrc,
+  backdropSwatchSrc,
+  HERO_BACKDROPS,
+  zoomFocus,
+  type HeroBackdrop,
+} from "@/lib/hero-backdrops";
 import { closeSrc, cutoutSrc, handSrc, type HeroScene } from "@/lib/hero-scenes";
 import { travelSpin, ZOOM_END, ZOOM_SPEED, zoomFrame } from "@/lib/hero-zoom-timeline";
 import { cn } from "@/lib/utils";
@@ -39,6 +47,8 @@ const ENV_URL = "/hero/studio.hdr";
 type HeroZoomProps = {
   scene: HeroScene;
   origin: ZoomOrigin;
+  /** El katmaninin kadraja gore dikey kaymasi (px; kaydirmaya bagli inis). */
+  handOffset: number;
   webgl: boolean;
   reduceMotion: boolean;
   /** Tuval fotografi devraldi; DOM'daki sahne gizlenebilir. */
@@ -47,13 +57,26 @@ type HeroZoomProps = {
   onClosed: () => void;
 };
 
-export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, onClosed }: HeroZoomProps) {
+export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotion, onReady, onClosed }: HeroZoomProps) {
   const timeline = useRef<Timeline>({ seconds: reduceMotion ? ZOOM_END : 0, direction: 1, playing: false });
   const spin = useRef<Spin>({ yaw: 0, pitch: 0, dragging: false, lastX: 0, lastY: 0 });
   const [panelOpen, setPanelOpen] = useState(reduceMotion || !webgl);
   const [closing, setClosing] = useState(false);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const closedRef = useRef(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const [backdrop, setBackdrop] = useState<HeroBackdrop | null>(null);
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setSize({ width: entry.contentRect.width, height: entry.contentRect.height }),
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const finish = useCallback(() => {
     if (closedRef.current) return;
@@ -65,6 +88,8 @@ export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, 
     if (closing) return;
     setClosing(true);
     setPanelOpen(false);
+    // Zemin once soner: el, karanlik sahneye geri gelsin.
+    setBackdrop(null);
     if (reduceMotion || !webgl) {
       finish();
       return;
@@ -104,8 +129,47 @@ export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, 
 
   const close = closeSrc(scene);
 
+  const focus = size ? zoomFocus(size.width, size.height) : null;
+
   return (
-    <div className="absolute inset-0 z-30">
+    <div ref={rootRef} className="absolute inset-0 z-30">
+      {/* Secilen zemin tuvalin ARKASINDA; oturma noktasi yuzugun alt ucunda. */}
+      {focus && size
+        ? HERO_BACKDROPS.map((item) => {
+            const rect = backdropRect(item, focus, size.width, size.height);
+            const active = backdrop?.id === item.id;
+            return (
+              // eslint-disable-next-line @next/next/no-img-element -- olculeri hesapla veriliyor; next/image kutusu gereksiz
+              <img
+                key={item.id}
+                // Panel acilinca hepsi arkada iner (~160 KB): secince hazir olsun.
+                src={panelOpen || active ? backdropSrc(item) : undefined}
+                alt=""
+                aria-hidden
+                className={cn(
+                  "pointer-events-none absolute max-w-none transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  active ? "opacity-100" : "opacity-0",
+                )}
+                style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+              />
+            );
+          })
+        : null}
+      {focus && backdrop ? (
+        // Temas golgesi: yuzuk zemine oturuyormus gibi dursun.
+        <span
+          aria-hidden
+          className="soft-fade pointer-events-none absolute rounded-[50%]"
+          style={{
+            left: focus.x - focus.height * 0.36,
+            top: focus.y + focus.height * 0.47,
+            width: focus.height * 0.72,
+            height: focus.height * 0.07,
+            background: "radial-gradient(closest-side, rgba(0,0,0,0.55), transparent)",
+            filter: "blur(4px)",
+          }}
+        />
+      ) : null}
       {webgl ? (
         <div
           className={cn("absolute inset-0 cursor-grab touch-none active:cursor-grabbing", reduceMotion && "soft-fade")}
@@ -134,6 +198,7 @@ export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, 
               <ZoomScene
                 scene={scene}
                 origin={origin}
+                handShift={handOffset / origin.height}
                 timelineRef={timeline}
                 spinRef={spin}
                 reduceMotion={reduceMotion}
@@ -178,6 +243,45 @@ export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, 
         </ul>
         {webgl ? <p className="fine-print mt-3 text-[#f3f0eb]/70">Sürükleyerek çevirin.</p> : null}
 
+        <fieldset className="mt-5">
+          <legend className="fine-print text-[#f3f0eb]/70">Bir zemine koyun</legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setBackdrop(null)}
+              aria-pressed={!backdrop}
+              aria-label="Zeminsiz"
+              title="Zeminsiz"
+              className={cn(
+                "flex size-10 items-center justify-center rounded-full bg-[#0c0b0a] ring-1 transition-[box-shadow]",
+                !backdrop ? "ring-2 ring-[#f0c779]" : "ring-white/15 hover:ring-white/40",
+              )}
+            >
+              <span aria-hidden className="h-px w-5 rotate-45 bg-white/40" />
+            </button>
+            {HERO_BACKDROPS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setBackdrop(item)}
+                aria-pressed={backdrop?.id === item.id}
+                aria-label={item.name}
+                title={item.name}
+                className={cn(
+                  "size-10 overflow-hidden rounded-full ring-1 transition-[box-shadow]",
+                  backdrop?.id === item.id ? "ring-2 ring-[#f0c779]" : "ring-white/15 hover:ring-white/40",
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- 2 KB'lik kucuk resim */}
+                <img src={backdropSwatchSrc(item)} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+          <p className="fine-print on-dark-muted mt-2 text-pretty">
+            {backdrop ? `${backdrop.name}: stüdyodaki zeminlerden biri.` : "Stüdyodaki zeminlerden birkaçı."}
+          </p>
+        </fieldset>
+
         <div className="mt-5 w-full max-w-[15rem]">
           <HeroBeforeAfter
             before={close.before}
@@ -209,6 +313,7 @@ export default function HeroZoom({ scene, origin, webgl, reduceMotion, onReady, 
 type ZoomSceneProps = {
   scene: HeroScene;
   origin: ZoomOrigin;
+  handShift: number;
   timelineRef: MutableRefObject<Timeline>;
   spinRef: MutableRefObject<Spin>;
   reduceMotion: boolean;
@@ -217,7 +322,7 @@ type ZoomSceneProps = {
   onClosed: () => void;
 };
 
-function ZoomScene({ scene, origin, timelineRef, spinRef, reduceMotion, onReady, onFrameState, onClosed }: ZoomSceneProps) {
+function ZoomScene({ scene, origin, handShift, timelineRef, spinRef, reduceMotion, onReady, onFrameState, onClosed }: ZoomSceneProps) {
   const gl = useThree((state) => state.gl);
   const hand = useTexture(handSrc(scene), (loaded) => {
     const texture = loaded as THREE.Texture;
@@ -257,13 +362,10 @@ function ZoomScene({ scene, origin, timelineRef, spinRef, reduceMotion, onReady,
     [origin, product, toWorld, unit],
   );
 
-  // Sahnenin odagi: genis ekranda sol-orta (sagda panel), telefonda ust yari.
+  // Sahnenin odagi — zemin katmaniyla AYNI hesap (`zoomFocus`), yuzuk kaideye otursun.
   const productEnd = useMemo(() => {
-    const wide = size.width >= 768;
-    const px = wide ? Math.min(size.width * 0.36, size.width - 26 * 16 - 180) : size.width / 2;
-    const py = wide ? size.height * 0.52 : size.height * 0.27;
-    const heightPx = wide ? Math.min(size.height * 0.56, size.width * 0.38) : Math.min(size.height * 0.3, size.width * 0.62);
-    return { center: toWorld(px, py), height: heightPx * unit };
+    const focus = zoomFocus(size.width, size.height);
+    return { center: toWorld(focus.x, focus.y), height: focus.height * unit };
   }, [size, toWorld, unit]);
 
   const planeMaterial = useRef<THREE.ShaderMaterial | null>(null);
@@ -347,7 +449,7 @@ function ZoomScene({ scene, origin, timelineRef, spinRef, reduceMotion, onReady,
     <>
       <Environment map={env} />
       <Jewel url={scene.model} envMap={env} groupRef={jewel} />
-      <HandPlane hand={hand} plane={plane} materialRef={planeMaterial} />
+      <HandPlane hand={hand} plane={plane} shift={handShift} materialRef={planeMaterial} />
     </>
   );
 }
@@ -365,6 +467,7 @@ const PLANE_VERTEX = /* glsl */ `
 const PLANE_FRAGMENT = /* glsl */ `
   uniform sampler2D uHand;
   uniform float uDrop;
+  uniform float uShift;
   varying vec2 vUv;
 
   // globals.css .hero-photo ile AYNI kenar maskesi (sabit cerceve; el
@@ -377,7 +480,8 @@ const PLANE_FRAGMENT = /* glsl */ `
 
   void main() {
     // Icerik asagi kayar: ayni ekran noktasi fotografin daha yukarisini okur.
-    vec2 uv = vUv + vec2(0.0, uDrop * 0.55);
+    // uShift: kaydirmayla zaten inmis elin baslangic kaymasi (kadrajin kesri).
+    vec2 uv = vUv + vec2(0.0, uDrop * 0.55 + uShift);
     vec4 hand = texture2D(uHand, uv);
     float inside = step(uv.y, 1.0);
     // Katmanin ust kenari yumusak: fotografin zemini sayfa zemininden biraz
@@ -392,13 +496,18 @@ const PLANE_FRAGMENT = /* glsl */ `
 function HandPlane({
   hand,
   plane,
+  shift,
   materialRef,
 }: {
   hand: THREE.Texture;
+  shift: number;
   plane: { center: THREE.Vector3; width: number; height: number };
   materialRef: MutableRefObject<THREE.ShaderMaterial | null>;
 }) {
-  const uniforms = useMemo(() => ({ uHand: { value: hand }, uDrop: { value: 0 } }), [hand]);
+  const uniforms = useMemo(
+    () => ({ uHand: { value: hand }, uDrop: { value: 0 }, uShift: { value: shift } }),
+    [hand, shift],
+  );
   return (
     <mesh position={plane.center} renderOrder={2}>
       <planeGeometry args={[plane.width, plane.height]} />
