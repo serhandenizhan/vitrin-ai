@@ -53,7 +53,7 @@ export function WorksPage() {
           {visible.map((work, index) => (
             <Reveal as="li" key={work.id} delay={Math.min(index, 5) * 60} className="glass-panel group overflow-hidden rounded-3xl transition-transform duration-300 hover:-translate-y-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={work.thumbnailUrl} alt="" className="aspect-[4/3] w-full bg-white/5 object-contain p-5 transition-transform duration-500 group-hover:scale-[1.035]" />
+              <img src={work.thumbnailUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full bg-white/5 object-contain p-5 transition-transform duration-500 group-hover:scale-[1.035]" />
               <div className="p-5">
                 <WorkTitle name={work.fileName} onRename={(name) => renameWork(work.id, name)} />
                 <p className="mt-1 text-xs text-white/45">{new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(work.createdAt)}</p>

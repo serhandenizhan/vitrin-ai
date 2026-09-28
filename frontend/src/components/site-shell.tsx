@@ -12,7 +12,7 @@
  */
 
 import { AuthDialog } from "@/components/auth-dialog";
-import { Studio } from "@/components/composer/studio";
+import { StudioHost } from "@/components/composer/studio-host";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -27,8 +27,8 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
       <WorkSidebar />
       <AuthDialog />
       <WelcomeToast />
-      {/* Tam ekran calisma alani; yalnizca acikken bir sey ciziyor. */}
-      <Studio />
+      {/* Tam ekran calisma alani; kodu yalnizca acilinca iniyor (studio-host.tsx). */}
+      <StudioHost />
       <SiteHeader />
 
       <main className="flex-1">{children}</main>
