@@ -1,51 +1,55 @@
 /**
  * Acilis bolumu.
  *
- * 11.09.2026'da iki sutuna alindi (kullanici: "ilk gorunum orantisiz, alttaki
- * gorseller kesiliyor"). Onceki surumde baslik, metin, dugmeler ve gorsel
- * UST USTE ortalanmisti; toplam yukseklik ~1400 px'e cikiyor ve 900 px'lik
- * bir dizustu ekranda gorsellerin yarisi ilk ekranin disinda kaliyordu.
+ * 28.09.2026'dan beri bir VITRIN (one alinan is, ROADMAP): ekranin altindan
+ * el + taki sahneleri yukseliyor, ziyaretci aralarinda kaydirabiliyor ve
+ * birine yakinlasinca el parilti tozuna donusup kayboluyor, taki 3D olarak
+ * kaliyor. Baslik bunun cumlesi: urun kalir, arka plan gider.
  *
- * Simdi genis ekranda metin solda, gorsel sagda ve bolum tam olarak bir ekran
- * yuksekliginde (`lg:min-h-svh`). Gorsel artik genisligini degil ekranin
- * YUKSEKLIGINI esas aliyor, dolayisiyla her dizustu olcusunde butun olarak
- * gorunuyor. Telefonda eski dikey akis korunuyor; orada kaydirma dogal.
+ * Bolum en fazla BIR ekran boyunda; altinda site oldugu gibi devam eder.
+ * Baslik, dugmeler ve aciklama sunucu bileseni olarak burada ciziliyor;
+ * istemciye yalnizca vitrin (`hero-showcase.tsx`) iniyor.
+ *
+ * Onceki surum (11.09.2026): solda metin, sagda once/sonra kaydiraci. O
+ * kaydirac artik yakinlasma gorunumunde, her sahnenin kendi fotografiyla.
  */
 
-import { HeroVisual } from "@/components/marketing/hero-visual";
+import { HeroShowcase } from "@/components/marketing/hero-showcase";
 import { Reveal } from "@/components/reveal";
 
 export function Hero() {
   return (
-    <section id="top" className="surface-black relative overflow-hidden">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[38rem] bg-[radial-gradient(48%_72%_at_50%_0%,rgba(214,167,86,0.12),transparent_76%)]" />
-      {/* Ust bosluk `--header-offset`den turuyor (bkz. globals.css) — yuzen
-          ust cubugun yuksekligi degisirse burasi da otomatik guncellenir,
-          elle senkron tutulan ayri bir sabit degil. */}
-      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pt-[calc(var(--header-offset)+3.25rem)] pb-16 lg:min-h-svh lg:grid-cols-[1fr_1.05fr] lg:gap-14 lg:pt-[calc(var(--header-offset)+2.25rem)] lg:pb-12">
-        <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
+    // `overflow-clip`, `hidden` DEGIL: hidden bir kutu programla kaydirilabilir
+    // ve Safari odaklanan (ekrandan buyuk) fotografi gostermek icin bolumun
+    // icini kaydiriyordu. clip hic kaydirilamaz.
+    <section id="top" className="surface-black relative isolate overflow-clip">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[70%] bg-[radial-gradient(42%_60%_at_50%_100%,rgba(214,167,86,0.14),transparent_76%)]"
+      />
+      <HeroShowcase
+        lede={
+          <p className="fine-print text-pretty">
+            Tezgâhta çektiğiniz fotoğrafı yükleyin, arka planı biz kaldıralım.
+            En ince zincir bile yerinde kalır.
+          </p>
+        }
+      >
+        <div className="flex flex-col items-center gap-6 text-center">
           <Reveal>
-            <p className="eyebrow text-gold">Vitrin AI</p>
-          </Reveal>
-
-          <Reveal delay={80}>
-            <h1 className="display-hero max-w-xl text-balance">
+            {/* Sitenin hero olcegi (64 px) burada bir kademe kucuk: sahne
+                taki one ciksin diye (Serhan, 28.09.2026). Satir ici stil:
+                ayni ozgullukteki iki font-size yardimcisinin kazanani siraya
+                kalirdi (ders 13). */}
+            <h1 className="display-hero text-balance" style={{ fontSize: "clamp(2.25rem, 4.1vw, 3.25rem)" }}>
               Ürününüz kalsın
               <br />
               Arka planı gitsin
             </h1>
           </Reveal>
 
-          <Reveal delay={160}>
-            <p className="lede on-dark-muted max-w-md text-pretty">
-              Tezgâhta çektiğiniz fotoğrafı yükleyin, arka planı biz kaldıralım.
-              En ince zincir bile yerinde kalır. Elinizde satışa hazır, şeffaf
-              zeminli bir görsel olur.
-            </p>
-          </Reveal>
-
-          <Reveal delay={240}>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 lg:justify-start">
+          <Reveal delay={120}>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3">
               <a
                 href="#dene"
                 className="press flex min-h-12 items-center rounded-full bg-[linear-gradient(135deg,#f0c779,#d6a756)] px-7 text-[0.9375rem] font-semibold text-[#171614] shadow-[0_14px_32px_-14px_rgba(214,167,86,0.85),inset_0_1px_0_rgba(255,255,255,0.55)] ring-1 ring-[#f4d79b]/40 transition-[transform,box-shadow,filter] duration-300 hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_18px_38px_-14px_rgba(214,167,86,0.95)]"
@@ -62,11 +66,7 @@ export function Hero() {
             </div>
           </Reveal>
         </div>
-
-        <Reveal delay={320} className="w-full">
-          <HeroVisual />
-        </Reveal>
-      </div>
+      </HeroShowcase>
     </section>
   );
 }

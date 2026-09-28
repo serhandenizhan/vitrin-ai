@@ -1,17 +1,15 @@
 "use client";
 
 /**
- * Acilistaki etkilesimli once/sonra (one alinan is, 13.09.2026 — ROADMAP
- * Faz 4 altindaki 9. madde onerisi 5).
+ * Etkilesimli once/sonra (one alinan is, 13.09.2026 — ROADMAP Faz 4 altindaki
+ * 9. madde onerisi 5). 28.09.2026'dan beri acilis vitrininin yakinlasma
+ * gorunumunde, her sahnenin kendi gorsel cifti ile (`hero-zoom.tsx`).
  *
  * Ziyaretci daha fotograf yuklemeden aracin sonucunu KENDI ELIYLE surukleyerek
- * goruyor. Iki gorsel GERCEK ve BIREBIR HIZALI:
- *  - `once.webp`: vitrin karesinin kendisi.
- *  - `sonra.webp`: ayni kareden BiRefNet'in urettigi kesim, ayni pencereden
- *    kirpilmis (bkz. scripts/prepare-before-after.py). Hizalama olculdu:
- *    kesimin opak piksellerinde ortalama renk farki ~2 (12 px kaydirildiginda
- *    ~25). Hizasiz bir cift kullanilsaydi kolye iki tarafta farkli yerde durur
- *    ve karsilastirma yaniltici olurdu.
+ * goruyor. Iki gorsel GERCEK ve BIREBIR HIZALI olmali: "sonra", "once"nin
+ * AYNI kadrajindan BiRefNet'in urettigi kesim (bkz.
+ * scripts/prepare-hero-scenes.py). Hizasiz bir cift kullanilsaydi urun iki
+ * tarafta farkli yerde durur ve karsilastirma yaniltici olurdu.
  *
  * Inceleme ekranindaki `OnceSonra` (comparison-view.tsx) ile ayni teknik:
  * ustteki gorsel `clip-path` ile kirpiliyor, olceklenmiyor — iki taraf ayni
@@ -24,7 +22,26 @@
 import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 
-export function HeroBeforeAfter() {
+type HeroBeforeAfterProps = {
+  before: string;
+  after: string;
+  beforeAlt: string;
+  afterAlt: string;
+  width: number;
+  height: number;
+  /** `next/image` icin; kaydiracin ekrandaki genisligi. */
+  sizes?: string;
+};
+
+export function HeroBeforeAfter({
+  before,
+  after,
+  beforeAlt,
+  afterAlt,
+  width,
+  height,
+  sizes = "(max-width: 1024px) 90vw, 420px",
+}: HeroBeforeAfterProps) {
   const [ratio, setRatio] = useState(0.5);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Surukleme durumu REF'te: `pointermove` icinde state okunsaydi kapanis eski
@@ -43,7 +60,8 @@ export function HeroBeforeAfter() {
     <div>
       <div
         ref={containerRef}
-        className="relative aspect-square w-full cursor-ew-resize touch-none overflow-hidden rounded-2xl border border-white/12 shadow-2xl select-none"
+        style={{ aspectRatio: `${width} / ${height}` }}
+        className="relative w-full cursor-ew-resize touch-none overflow-hidden rounded-2xl border border-white/12 shadow-2xl select-none"
         onPointerDown={(event) => {
           isDraggingRef.current = true;
           try {
@@ -65,25 +83,23 @@ export function HeroBeforeAfter() {
         }}
       >
         <Image
-          src="/showcase/once.webp"
-          alt="Vitrin standında duran pırlanta kolyenin özgün fotoğrafı"
-          width={900}
-          height={900}
-          priority
+          src={before}
+          alt={beforeAlt}
+          width={width}
+          height={height}
           draggable={false}
-          sizes="(max-width: 1024px) 90vw, 560px"
+          sizes={sizes}
           className="absolute inset-0 h-full w-full object-cover"
         />
         {/* Kesim saydam: dama deseni uzerinde, arka planin gercekten gittigi
             gorulsun. Kirpma soldan; cizginin solu kesim, sagi ozgun. */}
         <Image
-          src="/showcase/sonra.webp"
-          alt="Aynı fotoğraftan aracın ürettiği, arka planı kaldırılmış kesim"
-          width={900}
-          height={900}
-          priority
+          src={after}
+          alt={afterAlt}
+          width={width}
+          height={height}
           draggable={false}
-          sizes="(max-width: 1024px) 90vw, 560px"
+          sizes={sizes}
           style={{ clipPath: `inset(0 ${(1 - ratio) * 100}% 0 0)` }}
           className="checkerboard absolute inset-0 h-full w-full object-cover"
         />

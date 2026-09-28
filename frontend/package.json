@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "class-variance-authority": "^0.7.1",
@@ -26,7 +28,8 @@
     "react-dom": "19.2.8",
     "react-konva": "^19.2.7",
     "shadcn": "^4.21.0",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.4",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -34,6 +37,7 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "jsdom": "^29.1.1",
