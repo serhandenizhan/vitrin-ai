@@ -268,11 +268,17 @@ değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış
   birebir, `pg_restore` hatası yok. **Önceki yedekler yetki içermiyor:**
   `restore-test` onları "bu yedek yetki içermiyor — yeni yedek alın" diye
   başarısız sayar.
-- **Yan bulgu (düzeltilmedi, ayrı iş):** production'da
-  `public.record_signup_consents()` PUBLIC ve `anon` için EXECUTE açık
-  (diğer tetikleyici fonksiyonlarının yetkisi geri alınmış). Fonksiyon
-  `returns trigger` olduğu için doğrudan çağrılamaz; tutarlılık için yeni
-  bir migration'da `REVOKE` edilmeli.
+- **Yan bulgu (düzeltildi, migration `0012`):** bu yedeğin yetki
+  manifestinde `public.record_signup_consents()` için PUBLIC ve `anon`
+  EXECUTE görüldü; diğer SECURITY DEFINER fonksiyonlarının yetkisi
+  tanımlandıkları migration'da geri alınmıştı, 0004'te unutulmuştu.
+  Fonksiyon `returns trigger` olduğu için doğrudan çağrılamaz (pratik risk
+  düşük, derinlemesine savunma). `0012` yetkiyi `PUBLIC, anon,
+  authenticated`'dan geri alıyor; `tests/test_rls.py` artık `public`'teki
+  HER SECURITY DEFINER fonksiyonu için bunu genel olarak doğruluyor.
+  **Production'a uygulanınca** (`VITRIN_SUPABASE_MIGRATE=1
+  ./execute-supabase.sh`, PR birleştikten sonra) bir sonraki yedeğin
+  manifestinde bu iki satır olmamalı; yetki sayısı buna göre 2 azalır.
 
 **Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
 çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
@@ -702,7 +708,13 @@ tablolara ulaşabiliyor. Bu yüzden (migration 0003 ve 0004):
   taşınır; istemci rollerinin tablo üzerinde hiçbir yetkisi yoktur.
 - `tests/test_rls.py`, `public`'teki her tablonun RLS'li olduğunu ve istemci
   rollerinin hiçbir yetkisi olmadığını genel olarak doğruluyor: RLS'siz yeni
-  bir tablo eklenirse test kırmızı yanar.
+  bir tablo eklenirse test kırmızı yanar. Aynı dosya `public`'teki hiçbir
+  **SECURITY DEFINER** fonksiyonunda PUBLIC/`anon`/`authenticated` için
+  EXECUTE olmadığını da doğruluyor (Postgres yeni fonksiyona varsayılan
+  olarak PUBLIC'e EXECUTE verir; `REVOKE ALL ON FUNCTION ... FROM PUBLIC,
+  anon, authenticated` fonksiyonla aynı migration'da gider). Tetikleyicinin
+  kendisi bundan etkilenmez: Postgres EXECUTE'u yalnız `CREATE TRIGGER`
+  anında denetler.
 
 **Yerel uyumluluk katmanı (migration 0002):** düz Postgres'te Supabase'in
 `auth` şeması, `auth.uid()` ve `anon`/`authenticated` rolleri yok. 0002 bunları
