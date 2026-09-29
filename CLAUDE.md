@@ -580,19 +580,11 @@ almıyor; tek yedek `backend/scripts/backup_database.py`'nin ürettiği şifreli
 döküm (27.09.2026'da production'dan alındı, geri yükleme testi birebir
 geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
 
-1. **Şimdi, Serhan:** `backend/.env`'deki `BACKUP_ENCRYPTION_KEY` bir parola
-   yöneticisine kopyalanmalı. Anahtar yalnız bu makinede durursa, makine
-   kaybolduğunda bütün yedekler açılamaz.
-2. **Faz 7.5'e kadar:** yedek elle alınır (önemli bir değişiklikten ya da
-   migration'dan önce `backup` çalıştırılır).
-3. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
+1. **Faz 7.5'e kadar:** yedek elle alınır (önemli bir değişiklikten ya da
+   migration'dan önce `backup` çalıştırılır). Şifreleme anahtarı
+   (`BACKUP_ENCRYPTION_KEY`) parola yöneticisine kopyalandı (Serhan, 29.09.2026).
+2. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
    süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
-4. **27.09.2026'dan önce alınan yedekler yetki (GRANT/REVOKE) içermiyor**
-   (`--no-privileges` ile alınmışlardı; Codex incelemesi). `restore-test` onları
-   artık "bu yedek yetki içermiyor" diye başarısız sayıyor. Aynı gün yetkili
-   yeni bir yedek alındı ve birebir geri yüklendi (416 yetki). Eski iki dosya
-   (`~/vitrin-ai-backups/vitrin-db-20260926T21*`) silinip silinmeyeceği
-   Serhan'ın kararı.
 
 ### 10. Faz 7.5 güvenlik kapanış listesi — sahibi: Serhan (27.09.2026, PR #30 sonu)
 
@@ -629,14 +621,6 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
      Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
      27.09.2026'da eklendi.
-
-Faz 7.5 dışında, PR #30 birleşince yapılacaklar: PR #31'i (`0012`) güncel
-`main`'e alıp taslaktan çıkarmak; `0011` + `0012`'yi production'a **önce
-yedek alarak** uygulamak (`VITRIN_SUPABASE_MIGRATE=1 ./execute-supabase.sh`);
-eski iki yedeğin (yetkisiz, `~/vitrin-ai-backups/vitrin-db-20260926T21*`)
-silinip silinmeyeceği Serhan'ın kararı; geliştirme Redis'inin eski anonim
-volume'u (içinde eski `dump.rdb`) `docker volume ls -f dangling=true` ile
-bulunup silinebilir.
 
 ### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
 
