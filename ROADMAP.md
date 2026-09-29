@@ -1166,7 +1166,10 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   `record_signup_consents()` için PUBLIC ve `anon` EXECUTE görüldü (0004'te
   REVOKE unutulmuştu). Migration `0012` geri alıyor; `test_rls.py`
   `public`'teki her SECURITY DEFINER fonksiyonu için bunu genel olarak
-  doğruluyor. Production'a PR birleştikten sonra uygulanacak.
+  doğruluyor. **Production'a 29.09.2026'da uygulandı** (yedek alındı, sonra
+  `0012`; production `0012 (head)`); sonraki yedekte üç satır (PUBLIC, `anon`,
+  `authenticated`) kalktı, yalnız `service_role` kaldı, geri yükleme testi
+  birebir geçti.
 - **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
   Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
   "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek

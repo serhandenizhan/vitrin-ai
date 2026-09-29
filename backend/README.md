@@ -276,9 +276,10 @@ değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış
   düşük, derinlemesine savunma). `0012` yetkiyi `PUBLIC, anon,
   authenticated`'dan geri alıyor; `tests/test_rls.py` artık `public`'teki
   HER SECURITY DEFINER fonksiyonu için bunu genel olarak doğruluyor.
-  **Production'a uygulanınca** (`VITRIN_SUPABASE_MIGRATE=1
-  ./execute-supabase.sh`, PR birleştikten sonra) bir sonraki yedeğin
-  manifestinde bu iki satır olmamalı; yetki sayısı buna göre 2 azalır.
+  **Production'a 29.09.2026'da uygulandı:** sonraki yedeğin manifestinde
+  PUBLIC, `anon` ve `authenticated` satırları yok (yalnız `service_role`
+  kaldı); yetki sayısı 424'ten 421'e indi (ilk taslaktaki "iki satır"
+  beklentisi eksikti: `authenticated` da açıktı).
 
 **Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
 çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
