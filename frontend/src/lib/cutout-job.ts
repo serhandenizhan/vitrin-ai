@@ -103,6 +103,29 @@ async function asResult(response: Response): Promise<CutoutResult> {
   };
 }
 
+/**
+ * Bir kesim isinin anahtarini, ekranin ortak anahtarindan (`requestKeyRef`)
+ * AYIRIR. Is suresince kendi anahtarini tutar; sessiz tekrarda yeni anahtar
+ * uretince ortak anahtari YALNIZ ekran hala bu isi gosteriyorsa gunceller
+ * (`isCurrent`). Aksi halde ekrandan ayrilmis eski bir is, kullanicinin yeni
+ * fotografinin anahtarini ezer ve iki is ayni anahtari paylasirdi.
+ */
+export function bindJobKey(
+  shared: { current: string },
+  isCurrent: () => boolean,
+  newKey: () => string = () => crypto.randomUUID(),
+): Pick<CutoutOptions, "getKey" | "renewKey"> {
+  let key = shared.current;
+  return {
+    getKey: () => key,
+    renewKey: () => {
+      key = newKey();
+      // Ekran bu isteyse kullanicinin "tekrar dene"si ayni (yeni) anahtarla gitsin.
+      if (isCurrent()) shared.current = key;
+    },
+  };
+}
+
 export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
@@ -132,11 +155,18 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
   try {
     for (;;) {
       checkCancelled();
+      // Anahtar YUKLEMEDEN ONCE sabitlenir ve yoklama da ayni anahtarla
+      // yapilir. Yukleme surerken (20 MB birkac saniye) kullanici ekrani
+      // sifirlayip ("Yeni calisma", sol panelden baska calisma) yeni fotograf
+      // secerse ortak anahtar degisir; yoklama onu okursa eski is baska bir
+      // isin sonucunu alir ya da kendi sonucunu
+      // hic bulamazdi (kredi harcanir, sonuc gecmise yazilmazdi).
+      const key = options.getKey();
       const body = new FormData();
       body.append("file", options.file);
       const submitted = await fetchImpl("/api/remove-background", {
         method: "POST",
-        headers: { "Idempotency-Key": options.getKey() },
+        headers: { "Idempotency-Key": key },
         body,
       });
       if (!submitted.ok) {
@@ -145,7 +175,6 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
       }
       if (isPng(submitted)) return await asResult(submitted); // demo ya da hazir sonuc
 
-      const key = options.getKey();
       let consecutiveErrors = 0;
       let retryJob = false;
       while (!retryJob) {

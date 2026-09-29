@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CutoutCancelled, CutoutError, runCutout } from "@/lib/cutout-job";
+import { bindJobKey, CutoutCancelled, CutoutError, runCutout } from "@/lib/cutout-job";
 
 const png = (mocked = false) =>
   new Response(new Uint8Array([137, 80, 78, 71]), {
@@ -171,5 +171,61 @@ describe("runCutout", () => {
     const error = await settle(promise).catch((e) => e);
     expect(error).toBeInstanceOf(CutoutCancelled);
     expect(env.calls.length).toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * Kaan'in PR #30 incelemesi (28.09.2026): yukleme surerken ekran sifirlanip
+ * yeni fotograf secilirse ortak anahtar degisir. Eski is yoklamayi o YENI
+ * anahtarla yapiyordu — ya kendi sonucunu hic bulamiyordu (kredi harcanir,
+ * gecmise yazilmaz) ya da yeni fotografin sonucunu kendi adiyla gecmise
+ * yaziyordu. Iki test de duzeltme geri alininca kirmizi yandi.
+ */
+describe("is anahtari ekranin ortak anahtarindan ayri", () => {
+  it("yukleme surerken ortak anahtar degisse de yoklama yuklemenin anahtariyla yapilir", async () => {
+    const shared = { current: "eski-foto" };
+    const calls: Array<{ url: string; key: string | null }> = [];
+    const responses = [queued(), png()];
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), key: new Headers(init?.headers).get("Idempotency-Key") });
+      // Yukleme surerken kullanici ekrani sifirlayip ("Yeni calisma") yeni fotograf secti.
+      if (String(url) === "/api/remove-background") shared.current = "yeni-foto";
+      return responses.shift()!;
+    }) as unknown as typeof fetch;
+
+    await settle(
+      runCutout({ file, fetchImpl, getKey: () => shared.current, renewKey: () => {} }),
+    );
+
+    expect(calls).toEqual([
+      { url: "/api/remove-background", key: "eski-foto" },
+      { url: "/api/remove-background/jobs/eski-foto", key: null },
+    ]);
+  });
+
+  it("ekrandan ayrilmis is, sessiz tekrarda yeni oturumun anahtarini ezmez", async () => {
+    const shared = { current: "eski-foto" };
+    let screenOnThisJob = true;
+    let counter = 0;
+    const job = bindJobKey(shared, () => screenOnThisJob, () => `yeni-${++counter}`);
+
+    // Kullanici ekrani sifirladi ve yeni fotografa gecti.
+    screenOnThisJob = false;
+    shared.current = "yeni-oturum";
+
+    job.renewKey(); // eski is: worker_lost -> sessiz tekrar
+    expect(job.getKey()).toBe("yeni-1"); // eski is kendi yeni anahtarini kullanir
+    expect(shared.current).toBe("yeni-oturum"); // yeni oturumun anahtari yerinde
+  });
+
+  it("ekran hala bu isteyken yenilenen anahtar ortak anahtara da yazilir", () => {
+    const shared = { current: "ilk" };
+    const job = bindJobKey(shared, () => true, () => "ikinci");
+
+    job.renewKey();
+    // Kullanici "tekrar dene"ye basarsa iade edilmis eski anahtarla degil,
+    // yeni anahtarla gitmeli (kredi kurali degismedi).
+    expect(shared.current).toBe("ikinci");
+    expect(job.getKey()).toBe("ikinci");
   });
 });

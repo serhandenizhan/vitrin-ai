@@ -1177,6 +1177,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   - Uzun beklemede müşteriye **sıra bilgisi gösterilmez**; ~30 sn'den sonra
     yalnız nötr bir cümle çıkar. Hata gösterilmez.
   - Ön yüz değişikliğini Serhan yapar, **Kaan PR'da ayrıca inceler**.
+    **Kaan'ın incelemesi (28.09.2026):** bir bulgu çıktı ve düzeltildi —
+    yükleme sürerken ekran sıfırlanınca eski iş yeni fotoğrafın anahtarıyla
+    yokluyordu (kredi harcanıp sonuç kayboluyor ya da yanlış sonuç geçmişe
+    yazılıyordu). Artık iş anahtarını yüklemeden önce sabitliyor
+    (`bindJobKey`, kök `CLAUDE.md` ders 35).
   - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
     `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
   - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,

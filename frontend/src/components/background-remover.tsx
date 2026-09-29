@@ -27,7 +27,7 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
-import { CutoutError, runCutout } from "@/lib/cutout-job";
+import { bindJobKey, CutoutError, runCutout } from "@/lib/cutout-job";
 import { createPreviewUrl } from "@/lib/heic-preview";
 import {
   formatBytes,
@@ -200,10 +200,11 @@ export function BackgroundRemover() {
       // edilmis gecici hatalarin sessizce tekrar denenmesi `runCutout`ta.
       const { blob, mocked } = await runCutout({
         file,
-        getKey: () => requestKeyRef.current,
+        // Is kendi anahtarini tutar; ekran sifirlanip yeni fotograf secilse
+        // de ortak anahtari okumaz, ezmez (bkz. `bindJobKey`). Yeni anahtar
         // YALNIZCA backend krediye dokunulmadigini/iade edildigini acikca
-        // soylediginde yeni anahtar (kural degismedi).
-        renewKey: newRequestKey,
+        // soylediginde uretilir (kural degismedi).
+        ...bindJobKey(requestKeyRef, () => session === sessionRef.current),
         // `isCancelled` BILINCLI olarak verilmiyor: kullanici baska bir
         // ekrana gecse bile is bitene kadar yoklanir, cunku kredi harcaniyor
         // ve sonuc asagida gecmise yazilmali (ekran guncellemesi oturum
