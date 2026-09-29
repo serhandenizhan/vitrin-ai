@@ -1240,7 +1240,7 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   .hero-slide {
     height: min(140svh, 200vw, 90rem);
     aspect-ratio: 4 / 5;
-    translate: 0 20%;
+    translate: 0 calc(20% + var(--hero-adjust, 0%));
     will-change: transform, opacity;
   }
 
@@ -1248,7 +1248,7 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
      taki onlarin altinda, ekranin ortasinda kalsin. */
   @media (min-width: 768px) {
     .hero-slide {
-      translate: 0 34%;
+      translate: 0 calc(34% + var(--hero-adjust, 0%));
     }
   }
 
@@ -1272,7 +1272,7 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
 
   /* Yuzugu elden one cikaran parlak kopya (kesim, ayni kadraj). */
   .hero-ring-lift {
-    filter: brightness(1.45) saturate(1.08) contrast(1.05);
+    filter: brightness(var(--hero-lift, 1.45)) saturate(1.08) contrast(1.05);
   }
 
   .hero-glint {

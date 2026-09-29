@@ -45,6 +45,7 @@ import {
   HERO_PHOTO_WIDTH,
   HERO_SCENES,
   pageHandSrc,
+  sceneLayout,
   type HeroScene,
 } from "@/lib/hero-scenes";
 import { cn } from "@/lib/utils";
@@ -75,9 +76,15 @@ function supportsWebGL(): boolean {
   }
 }
 
-function lookStyle(look: SlideLook): CSSProperties {
+/**
+ * `sceneScale` (sahnenin kendi olcegi, `sceneLayout`) AYNI transform'a
+ * girer: ayri bir CSS `scale` ozelligi translate(-50%)'ten SONRA elemanin
+ * kendi ortasi etrafinda calisiyor ve kuculen sahneyi saga itiyordu
+ * (telefonda olculdu: kolye 115 px sagda).
+ */
+function lookStyle(look: SlideLook, sceneScale: number): CSSProperties {
   return {
-    transform: `translate3d(calc(-50% + ${look.x * 100}%), 0, 0) scale(${look.scale})`,
+    transform: `translate3d(calc(-50% + ${look.x * 100}%), 0, 0) scale(${look.scale * sceneScale})`,
     opacity: look.opacity,
     zIndex: look.zIndex,
   };
@@ -131,7 +138,10 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
     const { position } = springRef.current;
     slideRefs.current.forEach((node, index) => {
       if (!node) return;
-      Object.assign(node.style, lookStyle(slideLook(relativeOffset(index, position, count), neighboursRef.current)));
+      Object.assign(
+        node.style,
+        lookStyle(slideLook(relativeOffset(index, position, count), neighboursRef.current), sceneLayout(scenes[index]).scale),
+      );
     });
     const nextActive = wrapIndex(position, count);
     if (nextActive !== activeRef.current) {
@@ -139,7 +149,7 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
       setActive(nextActive);
       setGlintKey((key) => key + 1);
     }
-  }, [count]);
+  }, [count, scenes]);
 
   // Dongu kendini bir sonraki karede cagiriyor; ref uzerinden, cunku
   // useCallback kendi adina tanimlanmadan once erisemez.
@@ -387,7 +397,11 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
                 slideRefs.current[index] = node;
               }}
               className="hero-slide absolute bottom-0 left-1/2 origin-bottom"
-              style={lookStyle(slideLook(relativeOffset(index, 0, count), false))}
+              style={{
+                ...lookStyle(slideLook(relativeOffset(index, 0, count), false), sceneLayout(item).scale),
+                ["--hero-adjust" as string]: `${sceneLayout(item).adjust * 100}%`,
+                ["--hero-lift" as string]: item.lift ?? 1.45,
+              }}
               role="group"
               aria-roledescription="slide"
               aria-label={`${index + 1} / ${count}: ${item.name}`}
@@ -468,7 +482,7 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
                 type="button"
                 onClick={() => go(-1)}
                 aria-label="Önceki takı"
-                className="press flex size-10 items-center justify-center rounded-full bg-white/[0.06] text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12"
+                className="press hidden size-10 md:flex items-center justify-center rounded-full bg-white/[0.06] text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12"
               >
                 <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
               </button>
@@ -502,7 +516,7 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
                 type="button"
                 onClick={() => go(1)}
                 aria-label="Sonraki takı"
-                className="press flex size-10 items-center justify-center rounded-full bg-white/[0.06] text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12"
+                className="press hidden size-10 md:flex items-center justify-center rounded-full bg-white/[0.06] text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12"
               >
                 <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
               </button>
@@ -511,10 +525,11 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
               type="button"
               onPointerEnter={() => void loadZoom()}
               onClick={(event) => openZoom(active, event.currentTarget)}
-              className="press ml-1 flex h-10 items-center gap-2 rounded-full bg-white/[0.06] px-4 text-[0.875rem] font-medium text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12"
+              aria-label="Yakından inceleyin"
+              className="press ml-1 flex h-10 items-center gap-2 rounded-full bg-white/[0.06] px-3 text-[0.875rem] font-medium text-[#f3f0eb] ring-1 ring-white/12 transition-colors hover:bg-white/12 sm:px-4"
             >
               <ZoomIn className="size-4" strokeWidth={1.75} aria-hidden />
-              Yakından inceleyin
+              <span className="hidden sm:inline">Yakından inceleyin</span>
             </button>
           </div>
         </div>

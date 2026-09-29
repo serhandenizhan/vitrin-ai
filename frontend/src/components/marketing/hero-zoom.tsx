@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 export type ZoomOrigin = { left: number; top: number; width: number; height: number };
 
 type Timeline = { seconds: number; direction: 1 | -1; playing: boolean };
-type Spin = { yaw: number; pitch: number; dragging: boolean; lastX: number; lastY: number };
+type Spin = { yaw: number; pitch: number; dragging: boolean; lastX: number; lastY: number; sway?: number };
 
 const ENV_URL = "/hero/studio.hdr";
 
@@ -315,7 +315,15 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
           </div>
         </fieldset>
 
-        <div className="mx-auto mt-4 w-full max-w-[8rem] md:mt-5 md:max-w-[13rem]">
+        {/* Genislik gorselin oranina gore: dikey bir yakin plan (kolye)
+            paneli ekrandan uzun yapiyordu (olculdu). */}
+        <div
+          className="mx-auto mt-4 w-[var(--ba-sm)] md:mt-5 md:w-[var(--ba-lg)]"
+          style={{
+            ["--ba-sm" as string]: `${Math.min(8, 9 * (scene.close.width / scene.close.height))}rem`,
+            ["--ba-lg" as string]: `${Math.min(13, 15 * (scene.close.width / scene.close.height))}rem`,
+          }}
+        >
           <HeroBeforeAfter
             before={close.before}
             after={close.after}
@@ -395,8 +403,8 @@ function ZoomScene({ scene, origin, handShift, timelineRef, spinRef, reduceMotio
   // Sahnenin odagi — zemin katmaniyla AYNI hesap (`zoomFocus`), yuzuk kaideye otursun.
   const productEnd = useMemo(() => {
     const focus = zoomFocus(size.width, size.height);
-    return { center: toWorld(focus.x, focus.y), height: focus.height * unit };
-  }, [size, toWorld, unit]);
+    return { center: toWorld(focus.x, focus.y), height: focus.height * (scene.zoomScale ?? 1) * unit };
+  }, [scene.zoomScale, size, toWorld, unit]);
 
   const planeMaterial = useRef<THREE.ShaderMaterial | null>(null);
   const jewel = useRef<THREE.Group | null>(null);
@@ -462,10 +470,22 @@ function ZoomScene({ scene, origin, handShift, timelineRef, spinRef, reduceMotio
       const height = THREE.MathUtils.lerp(from.height, to.height, frame.travel);
       group.scale.setScalar(height / (group.userData.modelHeight as number));
       const s = spinRef.current;
-      if (!s.dragging && t.seconds >= ZOOM_END && !reduceMotion) s.yaw += delta * 0.35;
+      const settled = !s.dragging && t.seconds >= ZOOM_END && !reduceMotion;
+      if (settled && scene.idle === "sway") {
+        // Suruklenmediyse onden sagi-sola salinim; suruklemeden sonra oraya doner.
+        s.sway = (s.sway ?? 0) + delta;
+        s.yaw += (Math.sin(s.sway * 0.6) * 0.45 - s.yaw) * Math.min(1, delta * 2);
+      } else if (settled) {
+        s.yaw += delta * 0.35;
+      }
       // Yolda bir tam tur; kullanicinin cevirdigi aci da yolculukla olceklenir
       // ki kapanista yuzuk fotograftaki pozuna (0) donsun.
-      group.rotation.set(s.pitch * frame.travel, travelSpin(frame.travel) + s.yaw * frame.travel, 0);
+      const pose = scene.pose ?? { yaw: 0, pitch: 0 };
+      group.rotation.set(
+        pose.pitch + s.pitch * frame.travel,
+        pose.yaw + travelSpin(frame.travel) + s.yaw * frame.travel,
+        0,
+      );
     }
 
     const panel = frame.panel && t.direction === 1;
@@ -577,7 +597,8 @@ const GLINT_VERTEX = /* glsl */ `
   attribute vec3 aNormal;
   attribute float aHue;
   uniform vec3 uLights[${GLINT_LIGHT_COUNT}];
-  uniform float uSize;
+  uniform float uWorldSize;
+  uniform float uViewport;
   varying float vIntensity;
   varying float vHue;
   void main() {
@@ -589,8 +610,12 @@ const GLINT_VERTEX = /* glsl */ `
     for (int i = 0; i < ${GLINT_LIGHT_COUNT}; i++) glint = max(glint, pow(max(dot(mirror, uLights[i]), 0.0), 40.0));
     vIntensity = glint;
     vHue = aHue;
-    gl_PointSize = uSize * smoothstep(0.02, 0.6, glint);
-    gl_Position = projectionMatrix * viewMatrix * world;
+    vec4 clip = projectionMatrix * viewMatrix * world;
+    // Boy dunya biriminde (tasin boyuna bagli), ekrana perspektifle cevrilir:
+    // kucuk yan taslarda kucuk, yakinlasinca buyur.
+    float modelScale = length(modelMatrix[0].xyz);
+    gl_PointSize = uWorldSize * modelScale * projectionMatrix[1][1] * uViewport / clip.w * smoothstep(0.02, 0.6, glint);
+    gl_Position = clip;
   }
 `;
 
@@ -631,7 +656,14 @@ function DiamondGlints({ geometry, matrix }: { geometry: THREE.BufferGeometry; m
       c.fromBufferAttribute(pos, i + 2);
       normal.subVectors(c, b).cross(new THREE.Vector3().subVectors(a, b)).normalize();
       if (normal.y < 0.25) continue;
-      centers.push((a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3, (a.z + b.z + c.z) / 3);
+      // Faset merkezinin biraz ONUNDE: derinlik testi acik (kapak ya da tirnak
+      // arkasindaki parilti gorunmesin) ama tasin kendi yuzeyi onu ortmesin.
+      const lift = 0.12;
+      centers.push(
+        (a.x + b.x + c.x) / 3 + normal.x * lift,
+        (a.y + b.y + c.y) / 3 + normal.y * lift,
+        (a.z + b.z + c.z) / 3 + normal.z * lift,
+      );
       normals.push(normal.x, normal.y, normal.z);
       hues.push((centers.length / 3) * 0.618 % 1);
     }
@@ -645,7 +677,19 @@ function DiamondGlints({ geometry, matrix }: { geometry: THREE.BufferGeometry; m
 
   useEffect(() => () => points.dispose(), [points]);
 
-  const uniforms = useMemo(() => ({ uLights: { value: GLINT_LIGHTS }, uSize: { value: 44 * dpr } }), [dpr]);
+  const viewportHeight = useThree((state) => state.size.height);
+  const worldSize = useMemo(() => {
+    geometry.computeBoundingSphere();
+    return (geometry.boundingSphere?.radius ?? 3) * 1.1;
+  }, [geometry]);
+  const uniforms = useMemo(
+    () => ({
+      uLights: { value: GLINT_LIGHTS },
+      uWorldSize: { value: worldSize },
+      uViewport: { value: (viewportHeight * dpr) / 2 },
+    }),
+    [dpr, viewportHeight, worldSize],
+  );
 
   return (
     <points geometry={points} matrix={matrix} matrixAutoUpdate={false} renderOrder={4} frustumCulled={false}>
@@ -655,7 +699,7 @@ function DiamondGlints({ geometry, matrix }: { geometry: THREE.BufferGeometry; m
         fragmentShader={GLINT_FRAGMENT}
         transparent
         depthWrite={false}
-        depthTest={false}
+        depthTest
         blending={THREE.AdditiveBlending}
         toneMapped={false}
       />

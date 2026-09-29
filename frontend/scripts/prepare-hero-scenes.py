@@ -85,6 +85,9 @@ ERASE_GROW_PX = 9
 # tutan parmak uclarini kapsar, elin geri kalanini disarida birakir.
 PRODUCT_REGIONS: dict[str, tuple[float, float, float, float]] = {
     "sahne1": (0.385, 0.255, 0.625, 0.495),
+    "sahne2": (0.26, 0.3, 0.57, 0.845),
+    "sahne3": (0.22, 0.04, 0.82, 0.63),
+    "sahne4": (0.405, 0.285, 0.592, 0.427),
 }
 
 
@@ -225,17 +228,20 @@ def erase_metal(source: Image.Image, close_cut: Image.Image, crop_box: tuple[int
 
 def backdrop_tone(hand: Image.Image, bbox: tuple[int, int, int, int]) -> str:
     """
-    Takinin cevresindeki zeminin tonu (#rrggbb): kutunun iki yanindan, ust
-    ceyrek hizasinda (parmaklar alt yarida). Uretilen fotograflarin zemini
-    sayfa zemininden (#0c0b0a) belirgin sicak ve acik (sahne 1: #1b130d).
+    Takinin cevresindeki zeminin tonu (#rrggbb): kutunun etrafindaki bir
+    seritten YALNIZ koyu (zemin) pikseller, medyan. Ilk surum kutunun iki
+    yanindan tek nokta okuyordu; kolyede o nokta elin ustune dustu (#6e5040).
     """
-    x0, y0, x1, y1 = bbox
-    y = y0 + (y1 - y0) // 4
-    pad = (x1 - x0) // 3
     pixels = np.asarray(hand).astype(np.float32)
-    samples = [pixels[y - 12 : y + 12, max(0, x0 - pad - 12) : max(1, x0 - pad + 12)],
-               pixels[y - 12 : y + 12, x1 + pad - 12 : x1 + pad + 12]]
-    r, g, b = np.concatenate([s.reshape(-1, 3) for s in samples]).mean(axis=0).round().astype(int)
+    h, w = pixels.shape[:2]
+    x0, y0, x1, y1 = bbox
+    pad = max(40, (x1 - x0) // 3)
+    outer = np.zeros((h, w), bool)
+    outer[max(0, y0 - pad) : min(h, y1 + pad), max(0, x0 - pad) : min(w, x1 + pad)] = True
+    outer[y0:y1, x0:x1] = False
+    luma = pixels @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    ring = pixels[outer & (luma < 45)]
+    r, g, b = np.median(ring, axis=0).round().astype(int)
     return f"#{r:02x}{g:02x}{b:02x}"
 
 

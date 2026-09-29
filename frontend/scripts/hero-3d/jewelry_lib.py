@@ -137,6 +137,151 @@ def round_brilliant(name, girdle_radius, crown_angle=34.5, pavilion_angle=40.75,
     return obj
 
 
+def outline_stone(name, outline, crown_height, pavilion_depth, table=0.55, girdle=0.12):
+    """
+    Dis hatti verilen kesimli tas (armut, oval...): `outline` XY duzleminde
+    rondiz noktalari (tas yuzu +Z'ye bakar). Tabla, yildiz ve alt yari
+    fasetlerinin kose noktalari hattin olceklenmis kopyalarindan kurulur,
+    dis bukey zarf alinir — `round_brilliant` ile ayni yol.
+    """
+    import numpy as np
+
+    pts = np.asarray(outline, float)
+    center = pts.mean(axis=0)
+    rel = pts - center
+    corners = []
+    n = len(pts)
+    for i, (x, y) in enumerate(rel):
+        corners.append((center[0] + x, center[1] + y, girdle / 2))
+        corners.append((center[0] + x, center[1] + y, -girdle / 2))
+        if i % 2 == 0:
+            corners.append((center[0] + x * table, center[1] + y * table, crown_height))
+        else:
+            k = (1 + table) / 2
+            corners.append((center[0] + x * k, center[1] + y * k, crown_height * 0.55))
+            corners.append((center[0] + x * 0.28, center[1] + y * 0.28, -pavilion_depth * 0.78))
+    # Kulet armutta bir cizgi degil nokta sayilir (goz farki fark etmez).
+    corners.append((center[0], center[1], -pavilion_depth))
+    bm = bmesh.new()
+    verts = [bm.verts.new(p) for p in corners]
+    bmesh.ops.convex_hull(bm, input=verts)
+    bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(0.5), verts=bm.verts, edges=bm.edges)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _link(name, bm, smooth=False)
+
+
+def pear_outline(length, width, count=32):
+    """Armut (damla) dis hatti: sivri uc +Y'de, yuvarlak taraf -Y'de."""
+    pts = []
+    for i in range(count):
+        t = 2 * math.pi * i / count
+        x = width / 2 * math.sin(t) * abs(math.sin(t / 2)) ** 0.9
+        y = length / 2 * math.cos(t)
+        pts.append((x, y))
+    return pts
+
+
+def chain_links(bm, path, pitch, link_length, link_width, wire, sides=8, segments=20):
+    """
+    Bir egri boyunca kablo zincir: oval halkalar, her biri bir oncekine gore
+    90 derece dondurulmus. `path` noktalari egriyi tanimlar; halkalar egri
+    uzunlugu boyunca `pitch` araliklarla dizilir.
+    """
+    from mathutils import Matrix, Vector
+
+    samples = [Vector(p) for p in _catmull_rom(path, 24)]
+    lengths = [0.0]
+    for a, b in zip(samples, samples[1:]):
+        lengths.append(lengths[-1] + (b - a).length)
+    total = lengths[-1]
+    count = max(2, int(total / pitch))
+    j = 0
+    for k in range(count):
+        target = k * total / (count - 1)
+        while j < len(lengths) - 2 and lengths[j + 1] < target:
+            j += 1
+        span = lengths[j + 1] - lengths[j] or 1.0
+        f = (target - lengths[j]) / span
+        p = samples[j].lerp(samples[j + 1], f)
+        tangent = (samples[j + 1] - samples[j]).normalized()
+        side = tangent.orthogonal().normalized()
+        up = tangent.cross(side)
+        twist = Matrix.Rotation(math.radians(90 * (k % 2)), 3, tangent)
+        side, up = twist @ side, twist @ up
+        basis = Matrix((tangent, side, up)).transposed().to_4x4()
+        basis.translation = p
+        # Oval halka: yerel X boyunca uzun, XY duzleminde.
+        ring = []
+        for i in range(segments):
+            a = 2 * math.pi * i / segments
+            cx = math.cos(a) * (link_length / 2 - wire)
+            cy = math.sin(a) * (link_width / 2 - wire)
+            tx, ty = -math.sin(a) * (link_length / 2 - wire), math.cos(a) * (link_width / 2 - wire)
+            tvec = Vector((tx, ty, 0)).normalized()
+            radial = Vector((tvec.y, -tvec.x, 0))
+            loop = []
+            for s_ in range(sides):
+                b = 2 * math.pi * s_ / sides
+                offset = radial * math.cos(b) * wire + Vector((0, 0, 1)) * math.sin(b) * wire
+                loop.append(bm.verts.new(basis @ (Vector((cx, cy, 0)) + offset)))
+            ring.append(loop)
+        for i in range(segments):
+            a_, b_ = ring[i], ring[(i + 1) % segments]
+            for s_ in range(sides):
+                t_ = (s_ + 1) % sides
+                bm.faces.new((a_[s_], a_[t_], b_[t_], b_[s_]))
+    return count
+
+
+def prong_head(bm, matrix, girdle_radius, seat_z, base_radius, prongs=4, wire=0.34, start_angle=45.0):
+    """
+    Tirnakli yuva, TASIN yerel koordinatlarinda kurulur (tas merkezi orijin,
+    tac +Z) ve `matrix` ile yerine tasinir. Tirnak `seat_z`'den (tasin altinda)
+    baslar, rondize yaslanir, ucu tacin kenarina doner.
+    """
+    from mathutils import Vector
+
+    top = 0.03 * girdle_radius
+    for k in range(prongs):
+        a = math.radians(360 / prongs * k + start_angle)
+        c, s_ = math.cos(a), math.sin(a)
+        local = [
+            (base_radius * c, base_radius * s_, seat_z),
+            ((girdle_radius * 0.75) * c, (girdle_radius * 0.75) * s_, seat_z * 0.45),
+            ((girdle_radius + 0.25) * c, (girdle_radius + 0.25) * s_, -0.2),
+            ((girdle_radius + 0.18) * c, (girdle_radius + 0.18) * s_, top + 0.25),
+            ((girdle_radius - 0.15) * c, (girdle_radius - 0.15) * s_, top + 0.52),
+        ]
+        tube(bm, [matrix @ Vector(p) for p in local], wire * 1.25, wire)
+
+
+def rounded_box(name, size, radius, segments=4):
+    """Kenarlari yuvarlatilmis kutu (kadife kutu parcalari)."""
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.scale = size
+    bpy.ops.object.transform_apply(scale=True)
+    bevel = obj.modifiers.new("bevel", "BEVEL")
+    bevel.width = radius
+    bevel.segments = segments
+    bevel.limit_method = "NONE"
+    bpy.ops.object.modifier_apply(modifier=bevel.name)
+    bpy.ops.object.shade_smooth()
+    return obj
+
+
+def velvet_material(name, color):
+    """Kadife: yuksek puruzluluk + parlama (sheen; glTF KHR_materials_sheen)."""
+    mat, bsdf = _principled(name)
+    _set(bsdf, "Base Color", color)
+    _set(bsdf, "Roughness", 0.95)
+    _set(bsdf, "Sheen Weight", 0.6)
+    _set(bsdf, "Sheen Roughness", 0.4)
+    _set(bsdf, "Sheen Tint", (0.9, 0.75, 0.72, 1.0))
+    return mat
+
+
 def _catmull_rom(points, samples_per_span=10):
     pts = [Vector(p) for p in points]
     ext = [pts[0] + (pts[0] - pts[1])] + pts + [pts[-1] + (pts[-1] - pts[-2])]
@@ -330,8 +475,32 @@ def _setup_cycles(samples, size):
     scene.view_settings.look = "AgX - Medium High Contrast"
 
 
-def export_and_render(slug, target, distance, azimuth=30, elevation=20, samples=256, size=1200, preview=False):
-    """`.glb`'yi public/hero'ya, render'i depo disindaki kaynak klasorune yazar."""
+def scene_bounds():
+    """Sahnedeki butun nesnelerin dunya sinir kutusu: (merkez, boy)."""
+    from mathutils import Vector
+
+    lo = Vector((1e9, 1e9, 1e9))
+    hi = Vector((-1e9, -1e9, -1e9))
+    for obj in bpy.context.scene.objects:
+        if obj.type != "MESH":
+            continue
+        for corner in obj.bound_box:
+            world = obj.matrix_world @ Vector(corner)
+            lo = Vector(map(min, lo, world))
+            hi = Vector(map(max, hi, world))
+    return (lo + hi) / 2, hi - lo
+
+
+def export_and_render(slug, target=None, distance=None, azimuth=30, elevation=20, samples=256, size=1200, preview=False, lens=100):
+    """
+    `.glb`'yi public/hero'ya, render'i depo disindaki kaynak klasorune yazar.
+    `target`/`distance` verilmezse sinir kutusundan kadrajlanir.
+    """
+    if target is None or distance is None:
+        center, extent = scene_bounds()
+        target = target or tuple(center)
+        half_fov = math.atan(18 / lens)
+        distance = distance or max(extent.x, extent.z) / 2 / math.tan(half_fov) * 1.25
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     (SOURCE_DIR / "renders").mkdir(parents=True, exist_ok=True)
     glb = PUBLIC_DIR / f"{slug}.glb"
@@ -347,7 +516,7 @@ def export_and_render(slug, target, distance, azimuth=30, elevation=20, samples=
     print(f"glb: {glb} ({glb.stat().st_size / 1024:.0f} KB)")
 
     _setup_world()
-    _setup_camera(target, distance, azimuth, elevation)
+    _setup_camera(target, distance, azimuth, elevation, lens)
     _setup_cycles(64 if preview else samples, 700 if preview else size)
     out = SOURCE_DIR / "renders" / f"{slug}{'-preview' if preview else ''}.png"
     bpy.context.scene.render.filepath = str(out)
