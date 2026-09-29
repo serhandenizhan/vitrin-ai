@@ -34,6 +34,7 @@ import {
 } from "@/lib/hero-backdrops";
 import { closeSrc, cutoutSrc, handSrc, type HeroScene } from "@/lib/hero-scenes";
 import { travelSpin, ZOOM_END, ZOOM_SPEED, zoomFrame } from "@/lib/hero-zoom-timeline";
+import { heroDisplayFont } from "@/lib/hero-display-font";
 import { cn } from "@/lib/utils";
 
 /** DOM'daki fotografin, vitrin kapsayicisina gore piksel kutusu. */
@@ -218,49 +219,69 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
         />
       )}
 
-      {/* Cevirme ipucu yuzugun altinda: yuzukle ilgili, panelde yer kaplamasin. */}
-      {webgl && focus ? (
-        <p
-          aria-hidden={!panelOpen}
+      {/* Sol ust: vitrine donus. */}
+      <button
+        ref={closeRef}
+        type="button"
+        onClick={requestClose}
+        className={cn(
+          "liquid-glass press absolute top-[calc(var(--header-offset)+1.25rem)] left-[max(1rem,calc((100%-72rem)/2+1.25rem))] flex h-10 items-center gap-1 rounded-full pr-4 pl-3 text-[0.875rem] transition-opacity duration-500",
+          panelOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
+        <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
+        Vitrine dön
+      </button>
+
+      {/* Urun adi yuzugun ALTINDA, genis ve buyuk harfle (Serhan, 29.09.2026;
+          referans blazing-energy basliklari). Acik zeminde koyu yazilir. */}
+      {focus ? (
+        <div
           className={cn(
-            "fine-print pointer-events-none absolute -translate-x-1/2 rounded-full bg-black/35 px-3 py-1 text-[#f3f0eb]/80 backdrop-blur-md transition-opacity duration-500",
+            "pointer-events-none absolute -translate-x-1/2 text-center transition-[opacity,color] duration-500",
             panelOpen ? "opacity-100" : "opacity-0",
+            backdrop?.light ? "text-[#1a1917]" : "text-[#f3f0eb]",
           )}
-          style={{ left: focus.x, top: focus.y + focus.height / 2 + focus.height * 0.08 }}
+          style={{
+            left: focus.x,
+            top: focus.y + focus.height / 2 + focus.height * 0.07,
+            // Desenli zeminde (kadifenin parlak yerleri) okunsun diye yumusak golge.
+            textShadow: backdrop?.light
+              ? "0 1px 14px rgb(255 255 255 / 0.55)"
+              : "0 1px 14px rgb(0 0 0 / 0.55)",
+          }}
         >
-          Sürükleyerek çevirin
-        </p>
+          <h2
+            className={cn(heroDisplayFont.className, "text-[clamp(1.75rem,3.4vw,3.25rem)] leading-none font-extrabold whitespace-nowrap uppercase")}
+            style={{ fontVariationSettings: '"wdth" 125', letterSpacing: "-0.01em" }}
+          >
+            {scene.name}
+          </h2>
+          <ul className="fine-print mt-3 flex items-center justify-center gap-2 text-[0.75rem] whitespace-nowrap md:gap-3 md:text-[0.875rem]">
+            {scene.facts.map((fact, index) => (
+              <li key={fact} className="flex items-center gap-2 md:gap-3">
+                {index > 0 ? <span aria-hidden className="h-3 w-px bg-current opacity-35" /> : null}
+                <span className="opacity-80">{fact}</span>
+              </li>
+            ))}
+          </ul>
+          {webgl ? <p className="fine-print mt-2 hidden opacity-55 md:block">Sürükleyerek çevirin</p> : null}
+        </div>
       ) : null}
 
+      {/* Sag panel: yalniz zemin, kesim/ozgun ve eylem. */}
       <aside
-        aria-label={`${scene.name} yakından`}
+        aria-label={`${scene.name}: zemin ve kesim`}
         className={cn(
-          "liquid-glass absolute inset-x-4 bottom-4 max-h-[56%] overflow-y-auto rounded-3xl p-5 text-[#f3f0eb] transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:top-[calc(var(--header-offset)+1.25rem)] md:right-[max(1.25rem,calc((100%-72rem)/2+1.25rem))] md:bottom-auto md:max-h-[calc(100%-var(--header-offset)-2.5rem)] md:w-[22rem] md:p-6",
+          "liquid-glass hero-panel-glass absolute inset-x-4 bottom-4 max-h-[49%] overflow-y-auto rounded-3xl p-5 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:inset-x-auto md:top-[calc(var(--header-offset)+1.25rem)] md:right-[max(1.25rem,calc((100%-72rem)/2+1.25rem))] md:bottom-auto md:max-h-[calc(100%-var(--header-offset)-2.5rem)] md:w-[21rem] md:p-6",
           panelOpen ? "opacity-100" : "pointer-events-none translate-y-3 opacity-0",
         )}
       >
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={requestClose}
-          className="press -ml-2 flex h-9 items-center gap-1 rounded-full px-2 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
-        >
-          <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
-          Vitrine dön
-        </button>
-
-        <h2 className="display-feature mt-3">{scene.name}</h2>
-        <ul className="fine-print on-dark-muted mt-2 space-y-0.5">
-          {scene.facts.map((fact) => (
-            <li key={fact}>{fact}</li>
-          ))}
-        </ul>
-        {/* Panel KAYDIRMASIZ sigmali (Serhan, 29.09.2026): "Surukleyerek
-            cevirin" yuzugun altina, zemin aciklamasi basliga, once/sonra'nin
-            aciklamasi yanina alindi. */}
-        <fieldset className="mt-5">
-          <legend className="fine-print text-[#f3f0eb]/70">Stüdyodaki bir zemine koyun</legend>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <fieldset>
+          <legend className="fine-print text-[#f3f0eb]/75">
+            {backdrop ? `Zemin: ${backdrop.name}` : "Stüdyodaki bir zemine koyun"}
+          </legend>
+          <div className="mt-3 grid grid-cols-6 gap-1.5 md:grid-cols-3 md:gap-2">
             <button
               type="button"
               onClick={() => setBackdrop(null)}
@@ -268,11 +289,11 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
               aria-label="Zeminsiz"
               title="Zeminsiz"
               className={cn(
-                "flex size-10 items-center justify-center rounded-full bg-[#0c0b0a] ring-1 transition-[box-shadow]",
+                "flex aspect-square items-center justify-center rounded-xl bg-[#0c0b0a] ring-1 transition-[box-shadow] md:rounded-2xl",
                 !backdrop ? "ring-2 ring-[#f0c779]" : "ring-white/15 hover:ring-white/40",
               )}
             >
-              <span aria-hidden className="h-px w-5 rotate-45 bg-white/40" />
+              <span aria-hidden className="h-px w-1/2 rotate-45 bg-white/40" />
             </button>
             {HERO_BACKDROPS.map((item) => (
               <button
@@ -283,37 +304,32 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
                 aria-label={item.name}
                 title={item.name}
                 className={cn(
-                  "size-10 overflow-hidden rounded-full ring-1 transition-[box-shadow]",
+                  "aspect-square overflow-hidden rounded-xl ring-1 transition-[box-shadow] md:rounded-2xl",
                   backdrop?.id === item.id ? "ring-2 ring-[#f0c779]" : "ring-white/15 hover:ring-white/40",
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- 2 KB'lik kucuk resim */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- 2-3 KB'lik kucuk resim */}
                 <img src={backdropSwatchSrc(item)} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>
         </fieldset>
 
-        <div className="mt-5 flex items-start gap-4">
-          <div className="w-[10.5rem] shrink-0">
-            <HeroBeforeAfter
-              before={close.before}
-              after={close.after}
-              beforeAlt={scene.photoAlt}
-              afterAlt={scene.cutoutAlt}
-              width={scene.close.width}
-              height={scene.close.height}
-              sizes="10.5rem"
-            />
-          </div>
-          <p className="fine-print on-dark-muted pt-1 text-pretty">
-            Çizgiyi sürükleyin: sağda özgün fotoğraf, solda arka planı kaldırılmış hâli.
-          </p>
+        <div className="mx-auto mt-4 w-full max-w-[8rem] md:mt-5 md:max-w-[13rem]">
+          <HeroBeforeAfter
+            before={close.before}
+            after={close.after}
+            beforeAlt={scene.photoAlt}
+            afterAlt={scene.cutoutAlt}
+            width={scene.close.width}
+            height={scene.close.height}
+            sizes="13rem"
+          />
         </div>
 
         <a
           href="#dene"
-          className="press mt-5 flex min-h-11 w-fit items-center rounded-full bg-[linear-gradient(135deg,#f0c779,#d6a756)] px-6 text-[0.9375rem] font-semibold text-[#171614]"
+          className="press mt-4 flex min-h-11 w-full md:mt-5 items-center justify-center rounded-full bg-[linear-gradient(135deg,#f0c779,#d6a756)] px-6 text-[0.9375rem] font-semibold text-[#171614]"
         >
           Kendi fotoğrafınızı deneyin
         </a>

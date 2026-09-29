@@ -122,10 +122,10 @@ export function HeroBeforeAfter({
           </span>
         </div>
 
-        <span className="pointer-events-none absolute top-3 left-3 rounded-full bg-black/60 px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-white uppercase backdrop-blur-sm">
+        <span className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.5625rem] font-medium tracking-[0.06em] text-white uppercase backdrop-blur-sm md:top-3 md:left-3 md:px-2.5 md:py-1 md:text-[0.625rem] md:tracking-[0.08em]">
           Kesim
         </span>
-        <span className="bg-gold pointer-events-none absolute top-3 right-3 rounded-full px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-black uppercase">
+        <span className="bg-gold pointer-events-none absolute top-2 right-2 rounded-full px-2 py-0.5 text-[0.5625rem] font-medium tracking-[0.06em] text-black uppercase md:top-3 md:right-3 md:px-2.5 md:py-1 md:text-[0.625rem] md:tracking-[0.08em]">
           Özgün
         </span>
       </div>

@@ -21,14 +21,16 @@ export type HeroBackdrop = {
   anchor: { x: number; y: number };
   /** Yuzugun boyuna gore gorselin boyu: kaideyle yuzugun orani. */
   scale: number;
+  /** Acik zeminde urun adi koyu yazilir (okunsun). */
+  light: boolean;
 };
 
 export const HERO_BACKDROPS: HeroBackdrop[] = [
-  { id: "yesil-kadife", name: "Yeşil kadife", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.5 }, scale: 2.1 },
-  { id: "kum-tas", name: "Kum ve taş", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.58 }, scale: 2.4 },
-  { id: "siyah-su", name: "Siyah su", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.45 }, scale: 2.4 },
-  { id: "mermer", name: "Mermer", width: 2400, height: 1309, anchor: { x: 0.56, y: 0.62 }, scale: 1.9 },
-  { id: "saten", name: "Saten", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.62 }, scale: 1.9 },
+  { id: "yesil-kadife", name: "Yeşil kadife", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.5 }, scale: 2.1, light: false },
+  { id: "kum-tas", name: "Kum ve taş", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.58 }, scale: 2.4, light: true },
+  { id: "siyah-su", name: "Siyah su", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.45 }, scale: 2.4, light: false },
+  { id: "mermer", name: "Mermer", width: 2400, height: 1309, anchor: { x: 0.56, y: 0.62 }, scale: 1.9, light: true },
+  { id: "saten", name: "Saten", width: 2400, height: 1309, anchor: { x: 0.5, y: 0.62 }, scale: 1.9, light: true },
 ];
 
 export function backdropSrc(backdrop: HeroBackdrop): string {
@@ -43,20 +45,22 @@ export function backdropSwatchSrc(backdrop: HeroBackdrop): string {
 export type ZoomFocus = { x: number; y: number; height: number };
 
 /**
- * Genis ekranda sol-orta (sagda panel), telefonda ust yari. 3D sahne ile
- * zemin katmani AYNI hesabi kullanir; ayri yazilsalardi yuzuk kaideden
- * kayardi.
+ * Genis ekranda sol-orta (sagda panel), telefonda ust yari; yuzugun altinda
+ * urun adina yer kalir. 3D sahne ile zemin katmani AYNI hesabi kullanir;
+ * ayri yazilsalardi yuzuk kaideden kayardi.
  */
 export function zoomFocus(width: number, height: number): ZoomFocus {
   const wide = width >= 768;
   if (wide) {
     return {
       x: Math.min(width * 0.36, width - 26 * 16 - 180),
-      y: height * 0.52,
-      height: Math.min(height * 0.56, width * 0.38),
+      y: height * 0.45,
+      height: Math.min(height * 0.5, width * 0.36),
     };
   }
-  return { x: width / 2, y: height * 0.27, height: Math.min(height * 0.3, width * 0.62) };
+  // Telefonda ust cubuk + "Vitrine don" dugmesinin altinda kalsin (olculdu:
+  // 0.22'de yuzugun tepesi cubuga degiyordu).
+  return { x: width / 2, y: height * 0.28, height: Math.min(height * 0.22, width * 0.5) };
 }
 
 export type Rect = { left: number; top: number; width: number; height: number };
