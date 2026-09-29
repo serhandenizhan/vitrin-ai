@@ -25,7 +25,6 @@ farkli bir aciyla yeniden cizdi, once/sonra ust uste oturmadi.)
 Cozulme/isik maskesi ve el katmani ham kesimi kullanmaya devam eder.
 
 Uretilenler (sahne basina):
-  public/hero/<sahne>.webp             fotograf, 1600x2000 (4:5)
   public/hero/<sahne>-kesim.webp       ayni kadrajda yalniz yuzuk (bolge disi saydam;
                                        halka yuzukte ONARILMIS). Sayfada el katmaninin
                                        ustunde durur: yuzugu parlatir ve kaydirinca el
@@ -273,7 +272,6 @@ def main(scenes: list[str]) -> None:
         source = Image.open(source_path).convert("RGB")
         fx0, fy0, fx1, fy1 = frame_box(source.size)
         fw, fh = fx1 - fx0, fy1 - fy0
-        photo = source.crop((fx0, fy0, fx1, fy1)).resize((WIDTH, HEIGHT), Image.LANCZOS)
 
         # Bolge KAYNAK cozunurlugunde kesilir: modelin girdisi keskin olsun.
         rx0, ry0, rx1, ry1 = region
@@ -317,7 +315,6 @@ def main(scenes: list[str]) -> None:
         page_hand = page_hand.crop((fx0, fy0, fx1, fy1)).resize((WIDTH, HEIGHT), Image.LANCZOS)
 
         close_h = round(CLOSE_WIDTH * close.height / close.width)
-        photo.save(OUTPUT_DIR / f"{scene}.webp", "WEBP", quality=QUALITY, method=6)
         hand.save(OUTPUT_DIR / f"{scene}-el.webp", "WEBP", quality=QUALITY, method=6)
         page_hand.save(OUTPUT_DIR / f"{scene}-el-sayfa.webp", "WEBP", quality=QUALITY, method=6)
         cutout.save(OUTPUT_DIR / f"{scene}-kesim.webp", "WEBP", quality=QUALITY, method=6, exact=True)

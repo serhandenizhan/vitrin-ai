@@ -249,8 +249,13 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
   }, [count, run, zoom]);
 
   // Yakinlasma parcasini bosta onceden indir: tiklandiginda bekleme olmasin.
-  // Modeller ve isik ortami yine yalnizca yakinlasmada iner.
+  // Modeller ve isik ortami yine yalnizca yakinlasmada iner. Veri tasarrufu
+  // aciksa ya da baglanti yavassa (2G/3G) onceden indirilmez: ziyaretcinin
+  // hic tiklamayacagi ~250 KB'i mobil veriden harcamayalim; tiklaninca iner.
   useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+      .connection;
+    if (connection?.saveData || /(^|-)(2g|3g)$/.test(connection?.effectiveType ?? "")) return;
     const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2500));
     const handle = idle(() => void loadZoom(), { timeout: 5000 });
     return () => (window.cancelIdleCallback ?? window.clearTimeout)(handle as number);

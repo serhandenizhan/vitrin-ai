@@ -34,6 +34,7 @@ import {
 } from "@/lib/hero-backdrops";
 import { closeSrc, cutoutSrc, handSrc, type HeroScene } from "@/lib/hero-scenes";
 import { travelSpin, ZOOM_END, ZOOM_SPEED, zoomFrame } from "@/lib/hero-zoom-timeline";
+import { heroAsset } from "@/lib/hero-asset";
 import { heroDisplayFont } from "@/lib/hero-display-font";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export type ZoomOrigin = { left: number; top: number; width: number; height: num
 type Timeline = { seconds: number; direction: 1 | -1; playing: boolean };
 type Spin = { yaw: number; pitch: number; dragging: boolean; lastX: number; lastY: number; sway?: number };
 
-const ENV_URL = "/hero/studio.hdr";
+const ENV_URL = heroAsset("studio.hdr");
 
 type HeroZoomProps = {
   scene: HeroScene;
@@ -63,6 +64,8 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
   const spin = useRef<Spin>({ yaw: 0, pitch: 0, dragging: false, lastX: 0, lastY: 0 });
   const [panelOpen, setPanelOpen] = useState(reduceMotion || !webgl);
   const [closing, setClosing] = useState(false);
+  // Bu parca yalniz istemcide calisir (ssr:false), pencere olcusu hazir.
+  const [compact] = useState(() => window.innerWidth < 768);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const closedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -190,7 +193,10 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
           onPointerCancel={() => (spin.current.dragging = false)}
         >
           <Canvas
-            dpr={[1, 1.75]}
+            // Telefonda (dar ekran) daha dusuk piksel yogunlugu ve daha az ic
+            // yansima: kirilma shader'i piksel basina calisir, zayif GPU'da
+            // kare dusurmesin. Masaustu kalitesi degismez.
+            dpr={compact ? [1, 1.5] : [1, 1.75]}
             camera={{ fov: 20, position: [0, 0, 20], near: 0.1, far: 100 }}
             gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
             aria-hidden
@@ -203,6 +209,7 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
                 timelineRef={timeline}
                 spinRef={spin}
                 reduceMotion={reduceMotion}
+                compact={compact}
                 onReady={handleReady}
                 onFrameState={onFrameState}
                 onClosed={finish}
@@ -356,12 +363,24 @@ type ZoomSceneProps = {
   timelineRef: MutableRefObject<Timeline>;
   spinRef: MutableRefObject<Spin>;
   reduceMotion: boolean;
+  compact: boolean;
   onReady: () => void;
   onFrameState: (frame: { panel: boolean }) => void;
   onClosed: () => void;
 };
 
-function ZoomScene({ scene, origin, handShift, timelineRef, spinRef, reduceMotion, onReady, onFrameState, onClosed }: ZoomSceneProps) {
+function ZoomScene({
+  scene,
+  origin,
+  handShift,
+  timelineRef,
+  spinRef,
+  reduceMotion,
+  compact,
+  onReady,
+  onFrameState,
+  onClosed,
+}: ZoomSceneProps) {
   const gl = useThree((state) => state.gl);
   const hand = useTexture(handSrc(scene), (loaded) => {
     const texture = loaded as THREE.Texture;
@@ -499,7 +518,7 @@ function ZoomScene({ scene, origin, handShift, timelineRef, spinRef, reduceMotio
   return (
     <>
       <Environment map={env} />
-      <Jewel url={scene.model} envMap={env} groupRef={jewel} />
+      <Jewel url={scene.model} envMap={env} groupRef={jewel} compact={compact} />
       <HandPlane hand={hand} plane={plane} shift={handShift} materialRef={planeMaterial} />
     </>
   );
@@ -714,10 +733,12 @@ function Jewel({
   url,
   envMap,
   groupRef,
+  compact,
 }: {
   url: string;
   envMap: THREE.Texture;
   groupRef: MutableRefObject<THREE.Group | null>;
+  compact: boolean;
 }) {
   // Meshopt acik, Draco kapali: cozucu three.js paketinde, dis istek yok.
   const gltf = useGLTF(url, false, true);
@@ -750,7 +771,7 @@ function Jewel({
                     katli maliyet olculdu (bkz. frontend/README). */}
                 <MeshRefractionMaterial
                   envMap={envMap}
-                  bounces={5}
+                  bounces={compact ? 3 : 5}
                   ior={2.42}
                   fresnel={1}
                   aberrationStrength={0.035}

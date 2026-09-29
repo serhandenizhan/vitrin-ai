@@ -16,6 +16,7 @@
  * ORNEKTIR, satista olan bir urunu temsil etmez.
  */
 
+import { heroAsset } from "@/lib/hero-asset";
 import geometry from "@/lib/hero-scene-geometry.json";
 
 export type ProductBox = { x: number; y: number; w: number; h: number };
@@ -31,7 +32,7 @@ export type HeroScene = {
   facts: string[];
   photoAlt: string;
   cutoutAlt: string;
-  /** `public/hero/` altındaki meshopt sıkıştırılmış model. */
+  /** Meshopt sıkıştırılmış model (`public/hero/`, sürümlü adres). */
   model: string;
   /** Takının fotoğraftaki kutusu (0-1 kesir; betikle üretilir). */
   product: ProductBox;
@@ -80,7 +81,7 @@ export const HERO_SCENES: HeroScene[] = [
     facts: ["Sarı altın", "Yuvarlak kesim pırlanta", "Altı tırnaklı yuva"],
     photoAlt: "Parmak uçlarında tutulan tek taş pırlanta yüzük",
     cutoutAlt: "Arka planı kaldırılmış tek taş yüzük",
-    model: "/hero/ring-solitaire.glb",
+    model: heroAsset("ring-solitaire.glb"),
     ...measure("sahne1"),
     glints: [
       { x: 0.6, y: 0.07, size: 1.6 },
@@ -93,7 +94,7 @@ export const HERO_SCENES: HeroScene[] = [
     facts: ["Sarı altın", "Üç taşlı yuva", "Kadife kutu"],
     photoAlt: "Avuçta açık kadife kutu içinde üç taşlı yüzük",
     cutoutAlt: "Arka planı kaldırılmış kadife kutu ve yüzük",
-    model: "/hero/box-ring.glb",
+    model: heroAsset("box-ring.glb"),
     ...measure("sahne3"),
     pose: { yaw: -0.25, pitch: 0.32 },
     lift: 1.08,
@@ -110,7 +111,7 @@ export const HERO_SCENES: HeroScene[] = [
     facts: ["Sarı altın", "Armut kesim pırlanta", "Kablo zincir"],
     photoAlt: "Parmaklarda sarkan armut kesim pırlanta kolye",
     cutoutAlt: "Arka planı kaldırılmış damla kolye",
-    model: "/hero/necklace-drop.glb",
+    model: heroAsset("necklace-drop.glb"),
     lift: 1.25,
     idle: "sway",
     ...measure("sahne2"),
@@ -125,7 +126,7 @@ export const HERO_SCENES: HeroScene[] = [
     facts: ["Sarı altın", "Kanal taşlı", "Düz alyans"],
     photoAlt: "Parmak uçlarında tutulan iki alyans",
     cutoutAlt: "Arka planı kaldırılmış alyans çifti",
-    model: "/hero/wedding-bands.glb",
+    model: heroAsset("wedding-bands.glb"),
     ...measure("sahne4"),
     glints: [
       { x: 0.82, y: 0.14, size: 1.2 },
@@ -154,25 +155,21 @@ export function sceneLayout(scene: HeroScene): { scale: number; adjust: number }
   return { scale, adjust };
 }
 
-export function photoSrc(scene: HeroScene): string {
-  return `/hero/${scene.id}.webp`;
-}
-
 export function cutoutSrc(scene: HeroScene): string {
-  return `/hero/${scene.id}-kesim.webp`;
+  return heroAsset(`${scene.id}-kesim.webp`);
 }
 
 /** Yüzüğün bütün bölgesi temizlenmiş el: yakınlaşmada yüzüğü bırakıp inen katman. */
 export function handSrc(scene: HeroScene): string {
-  return `/hero/${scene.id}-el.webp`;
+  return heroAsset(`${scene.id}-el.webp`);
 }
 
 /** Yalnız metali onarılmış el: sayfada yüzük katmanının altında durur. */
 export function pageHandSrc(scene: HeroScene): string {
-  return `/hero/${scene.id}-el-sayfa.webp`;
+  return heroAsset(`${scene.id}-el-sayfa.webp`);
 }
 
 /** Yakın plandaki önce/sonra: ürün bölgesi ve modelin o bölgeden kesimi. */
 export function closeSrc(scene: HeroScene): { before: string; after: string } {
-  return { before: `/hero/${scene.id}-yakin.webp`, after: `/hero/${scene.id}-yakin-kesim.webp` };
+  return { before: heroAsset(`${scene.id}-yakin.webp`), after: heroAsset(`${scene.id}-yakin-kesim.webp`) };
 }

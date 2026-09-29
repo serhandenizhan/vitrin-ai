@@ -8,6 +8,8 @@
  * vitrine koymak.
  */
 
+import { heroAsset } from "@/lib/hero-asset";
+
 export type HeroBackdrop = {
   id: string;
   name: string;
@@ -34,11 +36,11 @@ export const HERO_BACKDROPS: HeroBackdrop[] = [
 ];
 
 export function backdropSrc(backdrop: HeroBackdrop): string {
-  return `/hero/zemin/${backdrop.id}.webp`;
+  return heroAsset(`zemin/${backdrop.id}.webp`);
 }
 
 export function backdropSwatchSrc(backdrop: HeroBackdrop): string {
-  return `/hero/zemin/${backdrop.id}-kucuk.webp`;
+  return heroAsset(`zemin/${backdrop.id}-kucuk.webp`);
 }
 
 /** Yakinlasmada yuzugun sahnedeki yeri (piksel): merkez ve boy. */
