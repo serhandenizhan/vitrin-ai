@@ -87,8 +87,36 @@ export function StudioTour() {
   const aspect = OUTPUT_FORMATS[format].outputWidth / OUTPUT_FORMATS[format].outputHeight;
 
   return (
-    <div className="mt-10 grid gap-10 lg:mt-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14">
-      <ul role="tablist" aria-label="Stüdyo özellikleri" aria-orientation="vertical" className="flex flex-col">
+    <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 md:mt-14 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:gap-10 lg:gap-14">
+      {/* Dar ekranda ozellikler onizlemenin USTUNDE yatay basliklar: dikey
+          liste tek sutunda bir ekran boyu yer kapliyor, onizleme ekranin
+          altinda kaliyordu ve bolum bos gorunuyordu (Serhan, Safari'de). */}
+      <div className="md:hidden">
+        <div role="tablist" aria-label="Stüdyo özellikleri" className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {FEATURES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={item.id === feature}
+              onClick={() => choose(item.id)}
+              className={cn(
+                "press h-10 shrink-0 rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap ring-1 transition-colors",
+                item.id === feature
+                  ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent"
+                  : "bg-white/[0.04] text-[#f3f0eb]/75 ring-white/12",
+              )}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+        <p key={feature} className="on-dark-muted soft-fade mt-4 text-[0.9375rem] leading-relaxed text-pretty">
+          {FEATURES.find((item) => item.id === feature)?.text}
+        </p>
+      </div>
+
+      <ul role="tablist" aria-label="Stüdyo özellikleri" aria-orientation="vertical" className="hidden flex-col md:flex">
         {FEATURES.map((item) => {
           const active = item.id === feature;
           return (
