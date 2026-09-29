@@ -1182,6 +1182,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     yokluyordu (kredi harcanıp sonuç kayboluyor ya da yanlış sonuç geçmişe
     yazılıyordu). Artık iş anahtarını yüklemeden önce sabitliyor
     (`bindJobKey`, kök `CLAUDE.md` ders 35).
+    **29.09.2026, PR #32 kalan üç birleşme engeli kapatıldı:** Redis yoklama
+    hatası yeni krediye izin vermiyor; işçi geçici Redis/DB hatasında ayakta
+    kalıp alınmış işi yeniden sıraya koyuyor; Windows VS Code görevleri ortak
+    R2 bucket'ı için silme korumasını açıyor. Windows test uyumluluğu ve
+    kararsız ön yüz testi ayrı takipte (PR #32 bulguları).
   - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
     `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
   - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,

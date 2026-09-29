@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.api.routes.remove_background import get_cutout_queue
 from app.core.auth import CurrentUser, get_current_user
@@ -108,6 +109,27 @@ def test_unknown_job_is_404(call, create_user):
     response = call(uuid.uuid4(), uuid.uuid4())
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "job_not_found"
+
+
+async def test_poll_redis_error_does_not_authorize_a_second_credit(
+    call, db_session, create_user
+):
+    user, key = await create_user(), uuid.uuid4()
+    provider = AsyncMock(spec=Iyzico)
+    reservation = await reserve(db_session, user, key, provider)
+    queue = FakeCutoutQueue()
+    queue.get_job = AsyncMock(side_effect=RedisConnectionError("anlık kesinti"))
+
+    response = call(user, key, queue)
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "queue_unavailable"
+    assert detail.get("retry_safe") is not True
+    from app.services.billing.db import one
+
+    row = await one(db_session, "SELECT status FROM usage_reservations WHERE id=:id", id=reservation.id)
+    assert row["status"] == "pending"
 
 
 async def test_expired_queue_record_still_serves_the_24h_stored_result(

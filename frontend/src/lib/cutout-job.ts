@@ -48,15 +48,14 @@ export type CutoutOptions = {
   silentRetries?: number;
 };
 
-/** Kredisi iade edilmis, tekrar denemesi guvenli ve GECICI hatalar. */
+/** Yeni anahtarla tekrar denemesi guvenli olan GECICI hatalar. */
 export const TRANSIENT_CODES = new Set([
   "worker_lost",
   "job_expired",
   "result_storage_unavailable",
   "reservation_released",
-  "queue_unavailable",
-  "queue_busy",
 ]);
+const SAME_KEY_RETRY_CODES = new Set(["queue_unavailable", "queue_busy"]);
 
 export const POLL_INTERVAL_MS = 1500;
 export const SLOW_AFTER_MS = 30_000;
@@ -141,8 +140,13 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
   };
 
   // Hata kullaniciya gosterilecek mi, yoksa sessizce yeniden mi denenecek?
-  const handleFailure = async (response: Response): Promise<void> => {
-    const error = await errorFrom(response);
+  const handleFailure = async (response: Response, knownError?: CutoutError): Promise<void> => {
+    const error = knownError ?? await errorFrom(response);
+    if (error.code && SAME_KEY_RETRY_CODES.has(error.code) && retriesLeft > 0) {
+      retriesLeft -= 1;
+      await sleep(retryDelay(response));
+      return;
+    }
     if (error.retrySafe) options.renewKey();
     if (error.retrySafe && error.code && TRANSIENT_CODES.has(error.code) && retriesLeft > 0) {
       retriesLeft -= 1;
@@ -195,11 +199,25 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
           }
           continue;
         }
-        consecutiveErrors = 0;
         if (polled.ok && isPng(polled)) return await asResult(polled);
-        if (polled.status === 202) continue;
-        await handleFailure(polled);
-        retryJob = true; // sessiz tekrar: yeni anahtarla bastan yukle
+        if (polled.status === 202) {
+          consecutiveErrors = 0;
+          continue;
+        }
+        if (polled.status === 503) {
+          const error = await errorFrom(polled);
+          if (error.code === "queue_unavailable") {
+            // Yoklama hatası işin ve kredi ayırmasının sonucunu söylemez.
+            // Aynı anahtarla beklemeye devam et; yeni POST ikinci kredi açabilir.
+            consecutiveErrors += 1;
+            if (consecutiveErrors >= MAX_CONSECUTIVE_POLL_ERRORS) throw error;
+            continue;
+          }
+          await handleFailure(polled, error);
+        } else {
+          await handleFailure(polled);
+        }
+        retryJob = true; // sessiz tekrar: kredi sonucuna gore ayni ya da yeni anahtarla yukle
       }
     }
   } finally {

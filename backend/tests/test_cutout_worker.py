@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from botocore.exceptions import BotoCoreError
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -22,7 +23,7 @@ from app.core.config import settings
 from app.services.billing.db import one
 from app.services.billing.entitlements import reserve, resolve_reservation
 from app.services.billing.provider import Iyzico
-from app.services.cutout_queue import DONE, FAILED, CutoutQueue
+from app.services.cutout_queue import DONE, FAILED, ClaimError, CutoutQueue, job_id_for
 from app.workers.cutout import CutoutWorker
 
 
@@ -456,3 +457,53 @@ async def test_worker_runs_jobs_in_parallel_up_to_its_concurrency(
     assert removal.max_parallel == 2
     for user, request, reservation_id in jobs:
         assert await _reservation_status(db_session, reservation_id) == "consumed"
+
+
+@pytest.mark.parametrize("failure_at", ["claim", "claim_after_move", "outcome"])
+async def test_worker_recovers_from_one_transient_dependency_error(
+    db_session, create_user, provider, queue, session_factory, monkeypatch, failure_at
+):
+    user, request, reservation_id = await _queued_job(db_session, create_user, provider, queue)
+    worker = _worker(queue, session_factory)
+    stop = asyncio.Event()
+
+    if failure_at in ("claim", "claim_after_move"):
+        original = queue.claim
+        calls = 0
+
+        async def fail_once(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                if failure_at == "claim_after_move":
+                    await original(*args, **kwargs)
+                    raise ClaimError(job_id_for(user, request))
+                raise RedisConnectionError("anlık kesinti")
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(queue, "claim", fail_once)
+    else:
+        original = worker._outcome
+        calls = 0
+
+        async def fail_once(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ConnectionError("veritabanı anlık kesinti")
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(worker, "_outcome", fail_once)
+
+    async def stop_when_done():
+        while True:
+            record = await queue.get_job(user, request)
+            if record["status"] == DONE:
+                stop.set()
+                return
+            await asyncio.sleep(0.05)
+
+    await asyncio.wait_for(asyncio.gather(worker.run(1, stop), stop_when_done()), timeout=15)
+
+    assert calls >= 2
+    assert await _reservation_status(db_session, reservation_id) == "consumed"

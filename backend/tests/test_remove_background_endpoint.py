@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -701,8 +702,23 @@ def test_job_that_cannot_enter_the_queue_releases_the_credit():
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "queue_unavailable"
-    assert response.json()["detail"]["retry_safe"] is True
+    assert response.json()["detail"]["retry_safe"] is False
     assert quota.resolved == [(False, None)]
+
+
+def test_post_queue_lookup_error_keeps_the_existing_job_key():
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    fake_queue = FakeCutoutQueue()
+    fake_queue.get_job = AsyncMock(side_effect=RedisConnectionError("anlık kesinti"))
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+
+    response = _post_with(fake_queue, quota)
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "queue_unavailable" and detail["retry_safe"] is False
+    assert quota.reserved == []
 
 
 def test_full_queue_answers_busy_without_touching_the_credit():
@@ -713,7 +729,7 @@ def test_full_queue_answers_busy_without_touching_the_credit():
 
     assert response.status_code == 503
     detail = response.json()["detail"]
-    assert detail["code"] == "queue_busy" and detail["retry_safe"] is True
+    assert detail["code"] == "queue_busy" and detail["retry_safe"] is False
     assert response.headers["Retry-After"] == "30"
     # Dolu kuyrukta kredi hiç ayrılmadı (ayrılıp hemen iade edilmesi boşuna olurdu).
     assert quota.reserved == []
@@ -794,5 +810,3 @@ def test_missing_result_storage_stops_the_job_before_inference():
     # Güvenli tekrar: hiç kredi tüketilmedi, istemci yeni anahtara geçebilir.
     assert response.json()["detail"]["retry_safe"] is True
     assert fake_queue.received_content is None and quota.resolved == []
-
-

@@ -290,6 +290,14 @@ hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
 | `app/services/cutout_queue.py` | Redis kuyruğu; iş kimliği `(kullanıcı, Idempotency-Key)` |
 | `app/workers/cutout.py` (`python -m app.workers.cutout`) | modeli bir kez yükler, `MAX_CONCURRENT_INFERENCES` kadar kesimi aynı anda işler; sonuç ÖNCE R2, kredi SONRA; her hata yolunda kredi iade + `retry_safe` |
 
+Redis yoklaması kesilirse `GET .../jobs/{id}` `retry_safe` vermez: mevcut işin
+kredisi hâlâ ayrılmış olabilir. Ön yüz aynı anahtarla yoklamayı sürdürür;
+hatası uzarsa hata gösterir ama ikinci POST göndermez. POST tarafındaki kuyruk
+hataları da aynı anahtarla tekrar edilir. İşçi geçici Redis/DB
+hatasında açık kalır; alınmış işi aynı kimlikle atomik olarak yeniden sıraya
+koyar. Yerel VS Code backend/işçi görevleri ortak R2 bucket'ından canlı dosya
+silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
+
 - **Fotoğraf:** Redis'te en fazla 15 dk, iş bitince silinir, diske/R2'ye
   yazılmaz (KVKK metninde yazılı). İşçi alırken değil bitirince silinir ki
   çöken işçinin işi başka işçiye fotoğrafıyla verilebilsin.
@@ -800,7 +808,7 @@ sunucu/instance seçin.
 | `MAX_FILE_SIZE_MB` | `20` | Yükleme boyutu sınırı (dosya içeriği) |
 | `MAX_CONCURRENT_INFERENCES` | `1` | Faz 7'den beri: bir kesim İŞÇİSİNİN aynı anda işlediği kesim sayısı (tek model kopyasını paylaşır). Aynı CPU'da >1 hızlandırmaz, belleği artırır |
 | `MAX_CONCURRENT_UPLOADS` | `4` | API'nin aynı anda ayrıştırdığı yükleme sayısı (bellek koruması); fazlası 429 — kesim sırası değil |
-| `CUTOUT_QUEUE_MAX_JOBS` | `50` | Kuyruk üst sınırı (bekleyen fotoğraflar Redis belleğinde, 50 × ≤20 MB). Aşılırsa `503 queue_busy` + `Retry-After: 30`; ön yüz sessizce bekleyip yeniden dener |
+| `CUTOUT_QUEUE_MAX_JOBS` | `50` | Kuyruk üst sınırı (bekleyen fotoğraflar Redis belleğinde, 50 × ≤20 MB). Aşılırsa `503 queue_busy` + `Retry-After: 30`; ön yüz aynı anahtarla sessizce bekleyip yeniden dener |
 | `CUTOUT_QUEUE_PREFIX` | `cutout` | Redis anahtar öneki; API ve işçi AYNI olmalı. Yük testi kendi önekini kullanır |
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
@@ -815,7 +823,7 @@ sunucu/instance seçin.
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
 | `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Settings → API Keys → Secret keys). Hesap silme **ve** Faz 6 admin panelinin kullanıcı listesi/detayı için gerekli; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` ve `GET /api/admin/users` hiçbir şeye dokunmadan `503` döner |
 | `LOCAL_ADMIN_EMAILS` | boş | **Yalnız yerel geliştirme.** `./execute.sh`'ın kullanıcı eşitlemesi (`scripts/sync_local_auth.py`) bu virgüllü e-postaları yerel `admin_users`'a ekler. Uygulama okumaz, production'da anlamı yoktur |
-| `R2_SHARED_WITH_PRODUCTION` | `false` | **Yalnız yerel geliştirme.** `true` iken `DELETE /api/admin/backgrounds/{id}` yalnız veritabanı satırını siler, R2 nesnelerine dokunmaz — yerel zemin satırları production'dan kopyalandığı ve bucket ortak olduğu için. `execute.sh` kendisi `true` verir, `.env.example`'da da `true`. **Production'da `false` olmalı**, yoksa silinen zeminlerin dosyaları bucket'ta sahipsiz kalır |
+| `R2_SHARED_WITH_PRODUCTION` | `false` | **Yalnız yerel geliştirme.** `true` iken `DELETE /api/admin/backgrounds/{id}` yalnız veritabanı satırını siler, R2 nesnelerine dokunmaz — yerel zemin satırları production'dan kopyalandığı ve bucket ortak olduğu için. `execute.sh` ve VS Code backend/işçi görevleri `true` verir; `.env.example`'da da `true`. **Production'da `false` olmalı**, yoksa silinen zeminlerin dosyaları bucket'ta sahipsiz kalır |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |

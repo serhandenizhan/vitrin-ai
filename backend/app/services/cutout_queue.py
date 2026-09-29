@@ -77,6 +77,14 @@ class QueueFull(Exception):
     """Kuyruk üst sınırda — fotoğraflar Redis belleğinde beklediği için sınırsız olamaz."""
 
 
+class ClaimError(Exception):
+    """Kuyruktan alınmış ama iş kaydı okunamamış; iş kimliği kurtarma için saklanır."""
+
+    def __init__(self, job_id: str):
+        super().__init__(job_id)
+        self.job_id = job_id
+
+
 class RedisPersistenceEnabled(RedisError):
     """Redis belleği diske yazıyor YA DA yazmadığı doğrulanamıyor: özgün
     fotoğraf kuyruğa konamaz.
@@ -228,29 +236,32 @@ class CutoutQueue:
         if raw_id is None:
             return None
         job_id = _text(raw_id)
-        job_key = self._key("job", job_id)
-        pipe = redis.pipeline(transaction=True)
-        pipe.hgetall(job_key)
-        pipe.get(self._key("photo", job_id))
-        pipe.hset(job_key, mapping={"status": PROCESSING, "worker": worker_id})
-        pipe.hincrby(job_key, "attempts", 1)
-        raw_job, photo, _, attempts = await pipe.execute()
-        if not raw_job:
-            # İş kaydının süresi dolmuş (çok uzun beklemiş); geride kalan
-            # yarım kaydı ve listedeki kimliği temizle.
-            await redis.delete(job_key)
-            await redis.lrem(processing, 0, job_id)
-            return None
-        job = {_text(k): _text(v) for k, v in raw_job.items()}
-        return ClaimedJob(
-            job_id=job_id,
-            user_id=job["user_id"],
-            request_id=job["request_id"],
-            reservation_id=job.get("reservation_id") or None,
-            enqueued_at=float(job["enqueued_at"]),
-            attempts=int(attempts),
-            photo=photo,
-        )
+        try:
+            job_key = self._key("job", job_id)
+            pipe = redis.pipeline(transaction=True)
+            pipe.hgetall(job_key)
+            pipe.get(self._key("photo", job_id))
+            pipe.hset(job_key, mapping={"status": PROCESSING, "worker": worker_id})
+            pipe.hincrby(job_key, "attempts", 1)
+            raw_job, photo, _, attempts = await pipe.execute()
+            if not raw_job:
+                # İş kaydının süresi dolmuş (çok uzun beklemiş); geride kalan
+                # yarım kaydı ve listedeki kimliği temizle.
+                await redis.delete(job_key)
+                await redis.lrem(processing, 0, job_id)
+                return None
+            job = {_text(k): _text(v) for k, v in raw_job.items()}
+            return ClaimedJob(
+                job_id=job_id,
+                user_id=job["user_id"],
+                request_id=job["request_id"],
+                reservation_id=job.get("reservation_id") or None,
+                enqueued_at=float(job["enqueued_at"]),
+                attempts=int(attempts),
+                photo=photo,
+            )
+        except Exception as exc:
+            raise ClaimError(job_id) from exc
 
     async def complete(
         self, worker_id: str | None, job_id: str, result: bytes | None, result_key: str | None
@@ -281,6 +292,26 @@ class CutoutQueue:
         if worker_id:
             pipe.lrem(self._key("processing", worker_id), 0, job_id)
         await pipe.execute()
+
+    async def requeue(self, worker_id: str, job_id: str) -> bool:
+        """Beklenmedik işçi hatasından sonra işi aynı kimlikle yeniden sıraya koyar."""
+        # Önceki deneme işi bitirdiyse processing listesinde artık yoktur.
+        # Liste ve durum değişimi tek betikte yapılır; başka işçi araya giremez.
+        moved = await self._redis().eval(
+            """
+            if redis.call('LREM', KEYS[1], 1, ARGV[1]) == 0 then return 0 end
+            if redis.call('EXISTS', KEYS[2]) == 0 then return 0 end
+            redis.call('HSET', KEYS[2], 'status', 'queued')
+            redis.call('RPUSH', KEYS[3], ARGV[1])
+            return 1
+            """,
+            3,
+            self._key("processing", worker_id),
+            self._key("job", job_id),
+            self._key("queue"),
+            job_id,
+        )
+        return bool(moved)
 
     async def recover_stale(self, *, max_attempts: int = 2) -> list[tuple[str, str | None]]:
         """Nabzı kesilmiş işçilerin elindeki işleri kurtarır.

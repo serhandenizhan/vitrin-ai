@@ -248,14 +248,14 @@ def _queue_busy():
         "Şu anda çok yoğunuz; birkaç dakika sonra tekrar deneyin.",
         503,
         retry=30,
-        retry_safe=True,
+        retry_safe=False,
     )
 
 
 def _queue_unavailable():
     return billing_error(
         "queue_unavailable",
-        "İşlem şu anda başlatılamadı; birazdan tekrar deneyin.",
+        "Kuyruğa şu anda ulaşılamıyor; birazdan tekrar deneyin.",
         503,
-        retry_safe=True,
+        retry_safe=False,
     )

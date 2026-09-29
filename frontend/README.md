@@ -137,9 +137,13 @@ işi `/api/remove-background/jobs/[id]` üzerinden 1,5 sn'de bir yoklar ve PNG
 gelince bileşene verir. Karar (Serhan): yoğunluk **müşteriye hissettirilmez** —
 sıra numarası yok; 30 sn'den sonra bekleme ekranında (`processing-state.tsx`)
 yalnız nötr bir cümle çıkar. Kredisi iade edilmiş GEÇİCİ hatalar (`worker_lost`,
-`job_expired`, `queue_busy`…) yeni anahtarla sessizce en fazla iki kez yeniden
+`job_expired`…) yeni anahtarla sessizce en fazla iki kez yeniden
 denenir; kalıcı hata (`processing_failed`) gösterilir. Anahtar kuralı
-değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. **Bu sessiz yeniden
+değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. `queue_busy` ve POST
+`queue_unavailable` aynı anahtarla yeniden yüklenir; yoklamadaki Redis
+kesintisinde işin kredisi hâlâ ayrılmış olabilir. Bu durumda aynı anahtarla
+en fazla beş kez yeniden yoklanır, ardından hata gösterilir ve anahtar korunur.
+**Sessiz yeniden
 deneme, backend'in `retry_safe`'i yalnız kredi GERÇEKTEN iade edildiğinde
 yazmasına dayanır.** 27.09.2026'ya kadar bu garanti yoktu: kredisi tüketilmiş
 bir iş, işçi yeniden denediğinde `reservation_released` olarak dönebiliyordu
@@ -147,7 +151,7 @@ ve buradaki yeniden deneme müşteriye ikinci bir kredi harcatıyordu (Codex
 incelemesi; düzeltme backend'de, `backend/README.md` → "Kesim kuyruğu"). **Kullanıcı ekrandan
 ayrılsa da yoklama sürer:** kredi harcanıyor ve sonuç geçmişe yazılmalı (ekran
 güncellemesi oturum sayacıyla atlanır). Testler sahte zamanlayıcıyla
-(`cutout-job.test.ts`, 11 test; beş bozma denendi).
+(`cutout-job.test.ts`, 17 test; beş bozma denendi).
 
 ## Yükleme kısıtları backend ile senkron tutulur
 
@@ -518,7 +522,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**457 test** (28.09.2026'da sayıldı; Kaan'ın PR #30 incelemesiyle kesim işinin anahtarını ekrandan ayıran `bindJobKey` testleri eklendi — `lib/cutout-job.test.ts`; 27.09.2026: /cso incelemesiyle CMYK oturum/hız sınırı, `lib/change-password.test.ts` ve OWASP ZAP bulgusuyla `lib/forms-post-method.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**460 test** (29.09.2026'da sayıldı; Redis yoklaması kesintisinde ikinci POST açılmasını engelleyen üç test eklendi; 28.09.2026: Kaan'ın PR #30 incelemesiyle kesim işinin anahtarını ekrandan ayıran `bindJobKey` testleri eklendi — `lib/cutout-job.test.ts`; 27.09.2026: /cso incelemesiyle CMYK oturum/hız sınırı, `lib/change-password.test.ts` ve OWASP ZAP bulgusuyla `lib/forms-post-method.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de

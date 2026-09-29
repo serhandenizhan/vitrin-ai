@@ -84,6 +84,30 @@ describe("runCutout", () => {
     expect(env.renewKey).not.toHaveBeenCalled();
   });
 
+  it("yoklamadaki Redis hatasindan sonra ayni isi yoklar, ikinci kredi acmaz", async () => {
+    const env = setup([queued(), failure("queue_unavailable", true), queued(), png()]);
+    const result = await settle(runCutout({ file, ...env }));
+
+    expect(result.blob.size).toBe(4);
+    expect(env.calls.filter((call) => call.url === "/api/remove-background")).toHaveLength(1);
+    expect(env.calls.slice(1).map((call) => call.url)).toEqual([
+      "/api/remove-background/jobs/anahtar-0",
+      "/api/remove-background/jobs/anahtar-0",
+      "/api/remove-background/jobs/anahtar-0",
+    ]);
+    expect(env.renewKey).not.toHaveBeenCalled();
+  });
+
+  it("uzun Redis kesintisinde isi durdurur ama anahtari ve krediyi korur", async () => {
+    const env = setup([queued(), ...Array.from({ length: 5 }, () => failure("queue_unavailable", true))]);
+    const error = await settle(runCutout({ file, ...env })).catch((e) => e);
+
+    expect(error).toBeInstanceOf(CutoutError);
+    expect(error.code).toBe("queue_unavailable");
+    expect(env.calls.filter((call) => call.url === "/api/remove-background")).toHaveLength(1);
+    expect(env.renewKey).not.toHaveBeenCalled();
+  });
+
   it("bekleme uzarsa onSlow'u 30 sn'den once degil, bir kez cagirir", async () => {
     const env = setup([queued(), ...Array.from({ length: 30 }, () => queued()), png()]);
     const onSlow = vi.fn();
@@ -109,13 +133,25 @@ describe("runCutout", () => {
   });
 
   it("kuyruk doluysa Retry-After kadar bekleyip yeniden yukler", async () => {
-    const env = setup([failure("queue_busy", true, 503, "30"), queued(), png()]);
+    const env = setup([failure("queue_busy", false, 503, "30"), queued(), png()]);
     const promise = runCutout({ file, ...env });
 
     await vi.advanceTimersByTimeAsync(29_000);
     expect(env.calls).toHaveLength(1); // 30 sn dolmadan tekrar yok
     await settle(promise);
     expect(env.calls[1].url).toBe("/api/remove-background");
+    expect(env.calls[1].key).toBe("anahtar-0");
+    expect(env.renewKey).not.toHaveBeenCalled();
+  });
+
+  it("POST kuyruk kesintisinde ikinci POST ayni anahtari kullanir", async () => {
+    const env = setup([failure("queue_unavailable", false), queued(), png()]);
+    const result = await settle(runCutout({ file, ...env }));
+
+    expect(result.blob.size).toBe(4);
+    expect(env.calls[0].key).toBe("anahtar-0");
+    expect(env.calls[1].key).toBe("anahtar-0");
+    expect(env.renewKey).not.toHaveBeenCalled();
   });
 
   it("kalici hatayi (fotograf islenemedi) gosterir; iade edildigi icin anahtari yeniler", async () => {

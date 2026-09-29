@@ -39,7 +39,7 @@ from app.services.billing.entitlements import (
     reservation_outcome,
     resolve_reservation,
 )
-from app.services.cutout_queue import PHOTO_TTL_SECONDS, ClaimedJob, CutoutQueue
+from app.services.cutout_queue import PHOTO_TTL_SECONDS, ClaimError, ClaimedJob, CutoutQueue
 from app.services.storage import R2ConfigurationError, R2StorageService, get_storage_service
 
 logger = logging.getLogger("vitrin.cutout-worker")
@@ -48,6 +48,7 @@ STORAGE_ERRORS = (BotoCoreError, ClientError, R2ConfigurationError)
 HEARTBEAT_SECONDS = 10
 HEARTBEAT_TTL_SECONDS = 30
 RECOVERY_SECONDS = 30
+ERROR_RETRY_SECONDS = 1
 
 
 def result_key_for(job: ClaimedJob) -> str:
@@ -181,11 +182,22 @@ class CutoutWorker:
         return len(lost)
 
     async def run(self, concurrency: int, stop: asyncio.Event) -> None:
-        await self.queue.heartbeat(self.worker_id, HEARTBEAT_TTL_SECONDS)
+        while not stop.is_set():
+            try:
+                await self.queue.heartbeat(self.worker_id, HEARTBEAT_TTL_SECONDS)
+                break
+            except Exception:
+                logger.exception("İşçi nabzı başlatılamadı")
+                await asyncio.sleep(ERROR_RETRY_SECONDS)
+        if stop.is_set():
+            return
 
         async def heartbeat():
             while not stop.is_set():
-                await self.queue.heartbeat(self.worker_id, HEARTBEAT_TTL_SECONDS)
+                try:
+                    await self.queue.heartbeat(self.worker_id, HEARTBEAT_TTL_SECONDS)
+                except Exception:
+                    logger.exception("İşçi nabzı yenilenemedi")
                 await asyncio.sleep(HEARTBEAT_SECONDS)
 
         async def recovery():
@@ -198,9 +210,28 @@ class CutoutWorker:
 
         async def consumer():
             while not stop.is_set():
-                job = await self.queue.claim(self.worker_id, timeout_seconds=1)
-                if job is not None:
-                    await self.process(job)
+                job = None
+                try:
+                    job = await self.queue.claim(self.worker_id, timeout_seconds=1)
+                    if job is not None:
+                        await self.process(job)
+                except Exception as exc:
+                    logger.exception("Kesim işi alınamadı veya işlenemedi")
+                    job_id = job.job_id if job is not None else (
+                        exc.job_id if isinstance(exc, ClaimError) else None
+                    )
+                    if job_id is not None:
+                        # Kredi henüz ayrılmış ya da tüketilmiş olabilir.
+                        # Aynı işi yeniden almak güvenlidir: process ayırmanın
+                        # gerçek durumunu okuyup sonucu teslim eder veya işler.
+                        while not stop.is_set():
+                            try:
+                                await self.queue.requeue(self.worker_id, job_id)
+                                break
+                            except Exception:
+                                logger.exception("Kesim işi yeniden sıraya konamadı")
+                                await asyncio.sleep(ERROR_RETRY_SECONDS)
+                    await asyncio.sleep(ERROR_RETRY_SECONDS)
 
         background = [asyncio.create_task(heartbeat()), asyncio.create_task(recovery())]
         try:
