@@ -37,6 +37,10 @@ admin_limiter = RequestRateLimiter(60, 60, redis_url=settings.redis_url)
 #: sınır, oturumlu bir hesabın tabloyu 4000 karakterlik satırlarla doldurmasını
 #: engelliyor. Yön `limit_scoped` ile fail-open — gerekçe modül docstring'inde.
 support_limiter = RequestRateLimiter(5, 3600, redis_url=settings.redis_url)
+#: CMYK dönüşümü (Next.js `/api/cmyk`, `sharp` ile 40 MP'ye kadar görsel): bir
+#: kullanıcı birkaç boyutta indirme yapsa bile 10 dakikada 20 dönüşümü aşmaz.
+#: Yön FAIL-CLOSED — bkz. `limit_cmyk`.
+cmyk_limiter = RequestRateLimiter(20, 600, redis_url=settings.redis_url)
 
 
 def client_ip(request: Request) -> str:
@@ -90,6 +94,34 @@ async def limit_admin(admin: CurrentUser = Depends(get_current_user)):
     if retry:
         raise billing_error(
             "rate_limited", "Çok fazla yönetici isteği. Biraz bekleyin.", 429, retry
+        )
+
+
+async def limit_cmyk(user: CurrentUser = Depends(get_current_user)):
+    """CMYK dönüşüm izni — **fail-closed**, bilinçli (/cso incelemesi, 27.09.2026).
+
+    Korunan şey sunucunun işlemcisi: her dönüşüm 40 MP'ye kadar bir görseli
+    çözüp renk profiliyle yeniden kodluyor. Uç eskiden oturumsuz ve sınırsızdı;
+    herkes sunucuyu bununla meşgul edebiliyordu. Redis arızasında sınırın
+    sessizce kalkması aynı açığı geri getirirdi. Kaybedilen şey ise ana akış
+    değil (kesim ve PNG indirme çalışmaya devam eder), yalnız CMYK dosyası
+    birkaç dakika gecikir.
+    """
+    try:
+        retry = await cmyk_limiter.retry_after("cmyk:" + str(user.id))
+    except RedisError as exc:
+        logger.warning("CMYK hız sınırı sorulamadı (Redis); istek reddedildi")
+        raise billing_error(
+            "rate_limit_unavailable",
+            "Baskı dosyası şu anda hazırlanamıyor; birazdan tekrar deneyin.",
+            503,
+        ) from exc
+    if retry:
+        raise billing_error(
+            "rate_limited",
+            "Çok fazla baskı dosyası isteği. Biraz bekleyin.",
+            429,
+            retry,
         )
 
 

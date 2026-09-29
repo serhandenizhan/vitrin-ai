@@ -387,7 +387,7 @@ function AuthForm({ initialMode, onDone }: { initialMode: AuthMode; onDone: () =
           ilk alana geciyor — kullanici yeni ekrana gectigini hem gorup hem
           klavyeyle hissediyor. Girilen degerler ust bilesende durdugu icin
           "Geri"de kaybolmuyor. */}
-      <form
+      <form method="post"
         key={`${mode}-${step}`}
         onSubmit={handleSubmit}
         noValidate

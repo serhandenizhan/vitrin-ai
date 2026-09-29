@@ -31,3 +31,6 @@ cryptography==50.0.1
 redis==5.2.1
 # iyzico ve Supabase sunucu çağrıları (test bağımlılığından bağımsız).
 httpx==0.28.1
+# Faz 7 hata izleme (app/core/monitoring.py). SENTRY_DSN boşken başlatılmaz.
+# SDK MIT lisanslı; sentry.io'ya ya da kendi barındırılan GlitchTip'e bağlanır.
+sentry-sdk==2.70.0

@@ -27,6 +27,7 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
+import { bindJobKey, CutoutError, runCutout } from "@/lib/cutout-job";
 import { createPreviewUrl } from "@/lib/heic-preview";
 import {
   formatBytes,
@@ -194,35 +195,23 @@ export function BackgroundRemover() {
     const startedAt = performance.now();
 
     try {
-      const body = new FormData();
-      body.append("file", file);
-
       if (!requestKeyRef.current) newRequestKey();
-      const response = await fetch("/api/remove-background", {
-        method: "POST",
-        headers: { "Idempotency-Key": requestKeyRef.current },
-        body,
+      // Faz 7: istek bir kuyruga giriyor; yukleme, yoklama ve kredisi iade
+      // edilmis gecici hatalarin sessizce tekrar denenmesi `runCutout`ta.
+      const { blob, mocked } = await runCutout({
+        file,
+        // Is kendi anahtarini tutar; ekran sifirlanip yeni fotograf secilse
+        // de ortak anahtari okumaz, ezmez (bkz. `bindJobKey`). Yeni anahtar
+        // YALNIZCA backend krediye dokunulmadigini/iade edildigini acikca
+        // soylediginde uretilir (kural degismedi).
+        ...bindJobKey(requestKeyRef, () => session === sessionRef.current),
+        // `isCancelled` BILINCLI olarak verilmiyor: kullanici baska bir
+        // ekrana gecse bile is bitene kadar yoklanir, cunku kredi harcaniyor
+        // ve sonuc asagida gecmise yazilmali (ekran guncellemesi oturum
+        // sayaciyla ayrica atlaniyor).
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-          code?: string;
-          retry_safe?: boolean;
-        } | null;
-        // Oturum bu arada dustu (suresi doldu, baska sekmede cikis yapildi).
-        if (payload?.code === "auth_required") openSignIn();
-        // YALNIZCA backend krediye dokunulmadigini/iade edildigini acikca
-        // soylediginde yeni anahtar.
-        if (payload?.retry_safe === true) newRequestKey();
-        throw new Error(
-          payload?.error ?? "Arka plan kaldırma işlemi başarısız oldu.",
-        );
-      }
-
       window.dispatchEvent(new Event("billing-updated"));
-      const blob = await response.blob();
-      const mocked = response.headers.get("X-Mock-Response") === "true";
       const duration = (performance.now() - startedAt) / 1000;
 
       // Gecmise yazmak, ekranda hala bu oturum gosteriliyor mu diye
@@ -245,6 +234,8 @@ export function BackgroundRemover() {
       setStatus("done");
     } catch (error) {
       if (session !== sessionRef.current) return;
+      // Oturum bu arada dustu (suresi doldu, baska sekmede cikis yapildi).
+      if (error instanceof CutoutError && error.code === "auth_required") openSignIn();
       setErrorMessage(
         error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
       );

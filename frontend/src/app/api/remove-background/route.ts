@@ -41,11 +41,12 @@ const USE_MOCK_BACKEND = process.env.USE_MOCK_BACKEND === "true";
 const MOCK_DELAY_MS = 1200;
 
 /**
- * Model ilk istekte bellege yuklendigi icin ~30-35sn surebiliyor; sonraki
- * istekler ~15sn (bkz. kok CLAUDE.md "Bilinen kisit"). Zaman asimi bunun
- * uzerinde tutuluyor ki yavas ama saglikli bir istek bosuna kesilmesin.
+ * Faz 7'den beri backend bu istekte KESMIYOR: fotografi dogrulayip siraya
+ * koyuyor ve `202` donuyor; kesim ayri bir iscide, sonucu istemci
+ * `/api/remove-background/jobs/[id]` ile yokluyor. Bekleme yalnizca 20 MB'a
+ * kadar yuklemenin kendisi icin.
  */
-const BACKEND_TIMEOUT_MS = 180_000;
+const BACKEND_TIMEOUT_MS = 120_000;
 
 const MOCK_CUTOUT_PATH = path.join(
   process.cwd(),
@@ -183,6 +184,20 @@ export async function POST(request: Request): Promise<Response> {
     return result;
   }
 
+  // Is siraya girdi (Faz 7): govdeyi oldugu gibi gecir; istemci yoklamaya
+  // baslar. Sira bilgisi backend'den zaten gelmiyor.
+  if (upstream.status === 202) {
+    const job = (await upstream.json().catch(() => null)) as {
+      job_id?: string;
+      status?: string;
+    } | null;
+    return Response.json(
+      { job_id: job?.job_id, status: job?.status ?? "queued" },
+      { status: 202, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  // 200: ayni anahtarin sonucu zaten hazirdi (idempotency) — PNG dogrudan.
   const result = await upstream.arrayBuffer();
   return new Response(result, {
     headers: {
@@ -204,7 +219,9 @@ export async function POST(request: Request): Promise<Response> {
  */
 async function upstreamErrorMessage(upstream: Response): Promise<string> {
   if (upstream.status === 503) {
-    return "Sistem şu anda meşgul, aynı anda yalnızca bir fotoğraf işlenebiliyor. Birkaç saniye sonra tekrar deneyin.";
+    // Faz 7'den beri kesimler siraya giriyor; "ayni anda tek fotograf"
+    // artik dogru degil ve yogunluk musteriye anlatilmiyor.
+    return "Sistem şu anda meşgul. Birkaç saniye sonra tekrar deneyin.";
   }
 
   if (upstream.status === 413) {

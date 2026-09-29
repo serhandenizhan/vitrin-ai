@@ -220,7 +220,7 @@ export function AdminBackgrounds() {
 
   return (
     <div>
-      <form onSubmit={(event) => void upload(event)} className="glass-panel rounded-3xl p-6">
+      <form method="post" onSubmit={(event) => void upload(event)} className="glass-panel rounded-3xl p-6">
         <h2 className="flex items-center gap-2 text-sm font-medium">
           <ImagePlus className="size-4" strokeWidth={1.7} aria-hidden />
           Yeni zemin yükle
@@ -314,6 +314,7 @@ export function AdminBackgrounds() {
 
       <p className="on-dark-muted mt-2 text-xs">
         Pasife alınan zemin kullanıcıya gitmez ama silinmez; silme geri alınamaz.
+        Silinen zemini kullanan yarım kalmış çalışmalar, açılınca başka bir zeminle devam eder.
       </p>
       {rowError ? (
         <p role="alert" className="mt-2 text-xs text-red-300">

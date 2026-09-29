@@ -42,44 +42,49 @@ cp .env.example .env
 
 ## Testler
 
+**Tek doğru komut (repo kökünden):**
+
 ```bash
-.venv/bin/pytest tests/ -v
+backend/scripts/test.sh                              # bütün backend testleri
+backend/scripts/test.sh tests/test_billing.py -k iade -x   # argümanlar pytest'e aynen geçer
+```
+
+Betik ayrı bir compose projesinde (`vitrin-ai-test`) kendi Postgres'ini
+(**5434**) ve Redis'ini (**6380**) açar, hazır olmalarını bekler,
+`DATABASE_URL`/`REDIS_URL`'i onlara yöneltip `pytest`'i çalıştırır; çıkış
+kodu `pytest`'inkidir. `execute.sh`'ın geliştirme ortamına dokunmaz, açıkken
+de güvenle koşar. Değiştirmek için: `VITRIN_TEST_DB_PORT`,
+`VITRIN_TEST_REDIS_PORT`, `VITRIN_TEST_PROJECT`, `VITRIN_VENV_DIR` (ders 11).
+Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
+`VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
+Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
+Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
+`.venv\Scripts\pytest.exe`'yi de bulur). Bash yoksa PowerShell'de aynısı elle
+(repo kökünden):
+
+```powershell
+$env:POSTGRES_PORT="5434"; $env:REDIS_PORT="6380"; docker compose -p vitrin-ai-test up -d postgres redis
+cd backend; $env:DATABASE_URL="postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai"; $env:REDIS_URL="redis://localhost:6380/0"; .venv\Scripts\pytest
 ```
 
 Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her
 test çalıştırmasında indirip inference yapmak pratik değil (ağır kaynak
 kullanımı). Gerçek modelle doğrulama ayrı ve manuel yapılır.
 
-Testler gerçek bir Postgres ister (`docker compose up -d postgres`) ve oturum
-başında `alembic upgrade head`, sonunda `alembic downgrade base` çalıştırır —
-yani bağlandıkları veritabanını **sıfırlar**. Başka bir işin veritabanına karşı
-çalıştırmayın; paralel worktree'lerde ayrı bir Postgres açıp `DATABASE_URL` ile
-yönlendirin:
+Testler gerçek bir Postgres ister ve oturum başında `alembic upgrade head`,
+sonunda `alembic downgrade base` çalıştırır — yani bağlandıkları veritabanını
+**sıfırlar**. **27.09.2026'da `DATABASE_URL` verilmeden koşturulan düz
+`pytest`, `execute.sh` açıkken onun geliştirme veritabanını sildi** (eşitlenmiş
+kullanıcılar, zeminler ve yerel çalışmalar gitti; çalışan backend boş
+veritabanına baktı). Bu yüzden düz `pytest` artık geliştirme veritabanında
+(yerel + port 5432 + ad `vitrin_ai`) **hiçbir şeye dokunmadan durur** ve
+`backend/scripts/test.sh`'ı söyler (aşağıdaki koruma, 3. aşama). CI'ın
+`vitrin_ai_test`'i ve `test.sh`'ın 5434'teki veritabanı bu kurala takılmaz.
+Geliştirme veritabanı BİLEREK sıfırlanacaksa `VITRIN_ALLOW_DEV_DB_RESET=1`.
 
-```bash
-POSTGRES_PORT=5434 docker compose -p <worktree-adi> up -d postgres
-DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai .venv/bin/pytest
-```
-
-**`./execute.sh` açıkken dikkat:** varsayılan `DATABASE_URL`, `execute.sh`'ın
-kullandığı veritabanıdır. Testler onu sıfırlarsa eşitlenmiş kullanıcılar ve
-zeminler gider (bir sonraki `execute.sh` açılışı geri getirir) ve çalışan
-backend tablolar yeniden kurulana kadar hata verir. Aynı container'da ayrı bir
-veritabanı yeterli (26.09.2026'da 404 test bu yolla geçti):
-
-```bash
-docker compose exec -T postgres psql -U vitrin_ai -d vitrin_ai -c "create database vitrin_ai_test"
-DATABASE_URL=postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5432/vitrin_ai_test .venv/bin/pytest
-```
-
-Ayrıca gerçek bir **Redis** ister (`docker compose up -d redis`) — yükleme hız
-sınırlayıcısı testleri gerçek Redis'e karşı çalışır, mock'lanmaz. Postgres gibi
-paralel worktree'lerde ayrı bir porta yönlendirilebilir:
-
-```bash
-REDIS_PORT=6380 docker compose -p <worktree-adi> up -d redis
-REDIS_URL=redis://localhost:6380/0 .venv/bin/pytest
-```
+Ayrıca gerçek bir **Redis** ister — yükleme hız sınırlayıcısı ve kesim
+kuyruğu testleri gerçek Redis'e karşı çalışır, mock'lanmaz (`test.sh`
+6380'de kendi Redis'ini açar).
 
 Redis testleri Postgres'inki gibi ağır bir "sıfırlama" koruması gerektirmiyor:
 her test kendi rastgele anahtarını kullanıyor (ör. `user:<uuid4>`) ve yazılan
@@ -102,6 +107,28 @@ olasılıkla Supabase ise — testler hiçbir şeye dokunmadan çıkış kodu 3 
 (`tests/db_safety.py`). `.env`'e Supabase `DATABASE_URL`'i yazıldıktan sonra
 yanlışlıkla `pytest` çalıştırmak bu korumadan önce gerçek kullanıcıların hepsini
 silerdi; sahte bir Supabase veritabanında birebir gösterildi.
+3. **Bağlanmadan önce, geliştirme veritabanı mı (27.09.2026):** yerel sunucu +
+   port 5432 + ad `vitrin_ai` ise çıkış kodu 3, mesaj doğru komutu söyler.
+   `execute.sh`'ın veritabanı ilk iki kontrolden geçiyordu (yerel ve 0002
+   işaretli). Bilerek geçmek için `VITRIN_ALLOW_DEV_DB_RESET=1`. Uçtan uca
+   testi ayrı bir `pytest` süreci başlatır; sunucu adı olarak `postgres`
+   seçildi, ana makinede çözülmediği için koruma kaldırılsa bile hiçbir
+   veritabanına dokunulamaz.
+4. **Oturum kilidi (27.09.2026):** oturum boyunca açık bir bağlantıda
+   `pg_try_advisory_lock` tutulur. Aynı veritabanında ikinci bir test oturumu
+   kilidi alamaz ve hiçbir şeye dokunmadan durur — aynı gün iki oturum aynı
+   test veritabanında çakışıp birbirinin tablolarını düşürdü (393 kırmızı).
+   Kilit bağlantı kapanınca, süreç ölse bile, bırakılır.
+
+Dört kuralın da red ve kabul yolları `tests/test_db_safety.py`'de; 3. ve 4.
+kuralın testleri koruma geri alınınca kırmızı yandı.
+
+**Migration zinciri** (`tests/test_migration_chain.py`, veritabanısız): revizyon
+numaraları benzersiz, dosya adıyla uyumlu, zincir tek uçlu olmalı. 27.09.2026'da
+iki dal aynı anda `0011` açtı; Alembic bunu yalnız uyarıyla okuyor ve hata ancak
+`upgrade head`'de, hangi dosyaların çakıştığını söylemeden çıkıyor. Yeni
+migration'ın "önceki revizyon uygulanmış DB" yolu ayrıca sınanır
+(`test_migration_0006.py`, `test_migration_0007.py`, `test_migration_0011.py`).
 
 **Faz 4 ve Faz 5 incelemesindeki testlerin tamamı** izole yerel PostgreSQL
 (`localhost:5434`) ve Redis (`localhost:6380`) üzerinde çalıştırıldı: **285
@@ -114,7 +141,318 @@ imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit edil
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
 `set local role` ile taklit ediyor (`tests/test_rls.py`).
 
+### Yetkilendirme ve IDOR paketi (`tests/test_idor.py`, Faz 7)
+
+Her uç dört sınıftan TAM OLARAK birine atanır: `PUBLIC`, `SESSION` (yalnız
+oturum sahibinin hesabında çalışır), `OWNED` (kaynağın kimliği yoldan gelir)
+ve `ADMIN`. Rotalar uygulamanın OpenAPI şemasından okunur; **sınıflandırılmamış
+yeni bir uç testi kırmızı yakar** — yeni uç eklerken önce sınıfını seçin.
+Sınıfa göre otomatik sınananlar:
+
+- `SESSION`/`OWNED`/`ADMIN`: oturumsuz istek 401.
+- `ADMIN`: sıradan kullanıcı 403, yönetici yetki kapısını GEÇER (ders 15:
+  iki yol birlikte). Uç gerçekten çağrılır; yetkinin decorator'da mı
+  imzada mı yazıldığına bakılmaz.
+- `OWNED`: başka kullanıcı 404 alır ve kaynak DEĞİŞMEZ, sahibi aynı istekle
+  başarılı olur (projeler GET/PATCH/DELETE, checkout görüntüleme/iptal).
+- Liste ve toplu silme başka kullanıcıya ulaşmaz; `Idempotency-Key`
+  kullanıcıya göre ayrılır (B, A'nın anahtarıyla A'nın saklanan kesimini
+  alamaz — hem `reserve()` hem HTTP düzeyinde).
+
+**Paketin kendisi sınandı (26.09.2026):** yedi ayrı bozma denendi ve her biri
+yalnız ilgili testi kırmızı yaktı — bir admin ucundan `require_admin`'in
+kaldırılması, proje sahiplik filtresinin, checkout görüntüleme ve iptal
+sahiplik filtrelerinin kaldırılması, `reserve()`'ün anahtarı kullanıcıya göre
+süzmemesi, sonuç yolunun kullanıcıdan bağımsız olması ve sınıflandırılmamış
+bir uç eklenmesi. Bozuk kodu hiçbir mevcut uçta BULMADI: 45 ucun hepsi
+beklenen yetki davranışını gösteriyor.
+
+### Model optimizasyonu: ölçüm ve karar (Faz 7, 27.09.2026)
+
+**Kural (Serhan):** kaliteye dokunabilecek HİÇBİR optimizasyon yapılmaz —
+FP16/INT8 niceleme, 1024'ün altında giriş çözünürlüğü, lite model kapsam dışı
+("kuyumcu işi, kalite asla bozulmamalı").
+
+`scripts/profile_cutout.py` bir kesimi adım adım ölçer ve ürettiği PNG'nin
+rembg'nin kendi çıktısıyla **bit düzeyinde aynı** olduğunu doğrular (değilse
+ölçüm geçersiz sayılıp durur). Apple M4, 3 tekrarın ortancası:
+
+| Adım | 832×1248 (1 MP) | 4032×3024 (12 MP) |
+| --- | --- | --- |
+| Açma + EXIF döndürme | 0,00 sn | 0,04 sn |
+| 1024'e küçültme | 0,03 sn | 0,05 sn |
+| **Model (BiRefNet, FP32)** | **10,91 sn (%99)** | **9,33 sn (%93)** |
+| Maskeyi tam boyuta büyütme | 0,00 sn | 0,04 sn |
+| Kesimi oluşturma | 0,00 sn | 0,07 sn |
+| PNG kaydetme | 0,01 sn | 0,47 sn |
+
+**Karar:** kaliteye dokunmadan CPU'da kazanılabilecek pay %5'in altında —
+CPU optimizasyonu YAPILMADI. PNG sıkıştırma seviyesini düşürmek (kayıpsız,
+12 MP'de ~0,3 sn) dosyaları büyütüp R2 alanı/indirme süresi harcadığı için,
+iş parçacığı ayarı da kazancı önemsiz olduğu için reddedildi. Asıl hız GPU'da:
+yazarların FP32 ölçümüyle model ~0,1–0,4 sn, kesim başına tahmini ~0,3–1,5 sn
+(bugün ~10–12 sn). GPU kararı ve fiyatlar Faz 7.5'te —
+`docs/research/sunucu-fiyatlari-2026-09-27.md`. GPU'ya geçmeden önce aynı
+betik GPU sunucusunda koşulur ve FP32 GPU çıktısı `compare_cutouts.py` ile
+CPU çıktısına karşı karşılaştırılır.
+
+### Veritabanı yedeği ve geri yükleme testi (`scripts/backup_database.py`, Faz 7, 27.09.2026)
+
+**Neden bizim işimiz:** Supabase otomatik günlük yedeği yalnız Pro ve üstü
+paketlerde alıyor; proje **ücretsiz pakette** — bu betiğin ürettiği yedek
+**tek yedek**. (Supabase belgesi, `docs/guides/platform/backups`: ücretsiz
+projeler verilerini düzenli dışa aktarıp başka yerde saklamalı.)
+
+```bash
+.venv/bin/python scripts/backup_database.py keygen            # bir kez; anahtar .env'e + parola yöneticisine
+.venv/bin/python scripts/backup_database.py backup --out-dir ~/vitrin-ai-backups
+.venv/bin/python scripts/backup_database.py restore-test ~/vitrin-ai-backups/<dosya>.dump.fernet
+```
+
+- **Kapsam:** `public` (21 tablomuz) + `auth` (kullanıcı hesapları).
+  Supabase'in yönettiği diğer şemalar yeni projede zaten oluşur.
+- **Şifre:** `cryptography` Fernet (AES + HMAC; yanlış anahtar ya da bozuk
+  dosya sessizce geçmez). Şifresiz döküm diske HİÇ yazılmaz. Anahtar
+  `BACKUP_ENCRYPTION_KEY` (`backend/.env`); **kaybolursa bütün yedekler
+  açılamaz — parola yöneticisinde de saklanır.**
+- **pg_dump sürümü sunucuyla aynı ana sürüm olmalı** (production Postgres
+  17.6 → Docker `postgres:17-alpine`, `BACKUP_PG_IMAGE` ile değişir).
+- **Parola `ps`'te görünmez:** bağlantı adresi yalnız sahibinin okuyabildiği
+  geçici bir env dosyasıyla Docker'a verilir ve hemen silinir.
+- **Yedek depo DIŞINDA** saklanır (betik depo içini reddeder); dosyalar 600,
+  klasör 700.
+
+**Geri yükleme testi ne kanıtlıyor:** yedek bellekte açılıp veri tmpfs'te
+duran atılabilir bir Postgres 17'ye yüklenir, sonra üç şey kayıtla
+(manifest) karşılaştırılır: her tablonun **satır sayısı**, **şema parmak
+izi** — RLS açık tablo, politika, tetikleyici, fonksiyon, indeks, kısıt
+sayıları — ve **yetkiler** (tablo/dizi/fonksiyon/şema üzerindeki her
+GRANT, satır satır; sahibin kendi yetkileri ve `postgres` hariç, çünkü
+geri yükleme `--no-owner` ile yapılıyor). Parmak izi şart: bu projede güvenlik ve iş kuralları veritabanında
+(RLS, `period_snapshot` ve `admin_audit_log` değişmezlik tetikleyicileri);
+satırlar tutup bunlar kaybolsa geri yüklenen sistem sessizce korumasız kalırdı.
+
+**Sonuç (27.09.2026, production):** döküm 11,8 sn (190 KB, şifreli 254 KB);
+geri yükleme 2,8 sn; 48 tablo, 346 satır birebir; 37 RLS tablo, 2 politika,
+10 tetikleyici, 10 fonksiyon, 168 indeks, 222 kısıt birebir; `pg_restore`
+hatası yok (boş Postgres'teki "public zaten var" zararsız uyarısı ayrı
+tutuluyor). Kontrolün kendisi dört bozmayla sınandı — yanlış anahtar,
+değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış kodu 1.
+Şifreli dosyada döküm imzası, e-posta ya da tablo adı izi yok.
+
+**Codex incelemesi düzeltmeleri (27.09.2026):**
+
+- **Yetkiler korunuyor.** Eskiden `pg_dump`/`pg_restore` `--no-privileges`
+  ile koşuyordu: bütün GRANT/REVOKE'lar dökümden düşüyor (tetikleyici
+  fonksiyonlarındaki `REVOKE ... FROM PUBLIC`, `auth` şema izinleri) ve
+  test yetkilere bakmadığı için yine "birebir" diyordu. Boş Postgres'te
+  olmayan roller (Supabase'in `supabase_auth_admin` vb.) geri yükleme
+  sırasında `role "x" does not exist` görüldükçe giriş yetkisiz oluşturulur
+  ve geri yükleme temiz bir veritabanında yinelenir.
+- **Tek anlık görüntü.** Satır sayıları, parmak izi, yetkiler ve döküm aynı
+  `REPEATABLE READ` işleminden (`pg_export_snapshot` + `pg_dump --snapshot`).
+  Eskiden sayılar dökümden önce ayrı sorgularla alınıyordu; araya giren tek
+  bir yazma (her oturum yenilemesi `auth.sessions`'a yazar) sağlam yedeği
+  "başarısız" gösteriyordu. Supabase havuzunun **oturum kipi (5432)** bunu
+  destekler; işlem kipi (6543) desteklemez.
+- **Dosyalar ezilmez.** Ad rastgele bir ek taşır, dosya yalnız yoksa ve
+  baştan 600 izniyle oluşturulur (O_EXCL).
+- **Yerel veritabanı da yedeklenebilir:** `localhost` adresi Docker içinden
+  `host.docker.internal`'a çevrilir (testler bunu kullanıyor).
+- **Testler:** `tests/test_backup_script.py` gerçek `pg_dump`/`pg_restore`
+  ile (Docker; yoksa atlanır) dört senaryoyu sınar — sayım ile döküm
+  arasına yazma, yetkilerin dökümde ve geri yüklemede kalması, eksik yetkinin
+  yakalanması, aynı saniyede biten iki yedek. Dördü de eski betikte kırmızı.
+- **Sonuç (27.09.2026, production, yeni betik):** döküm 18,9 sn; geri
+  yükleme 2,3 sn; 48 tablo/350 satır, **416 yetki** ve şema parmak izi
+  birebir, `pg_restore` hatası yok. **Önceki yedekler yetki içermiyor:**
+  `restore-test` onları "bu yedek yetki içermiyor — yeni yedek alın" diye
+  başarısız sayar.
+- **Yan bulgu (düzeltilmedi, ayrı iş):** production'da
+  `public.record_signup_consents()` PUBLIC ve `anon` için EXECUTE açık
+  (diğer tetikleyici fonksiyonlarının yetkisi geri alınmış). Fonksiyon
+  `returns trigger` olduğu için doğrudan çağrılamaz; tutarlılık için yeni
+  bir migration'da `REVOKE` edilmeli.
+
+**Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
+çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
+
+### Kesim kuyruğu (Faz 7, 27.09.2026)
+
+Yük testinde süreç başına tek eşzamanlı kesim ve fazlasına anında 429 çıktı;
+Serhan'ın kararıyla istekler artık reddedilmez, **sıraya girer ve müşteriye
+hissettirilmez**. Kesim API'de değil, ayrı bir işçi sürecinde:
+
+| Parça | Görev |
+| --- | --- |
+| `POST /api/remove-background` | doğrular, kredi AYIRIR, fotoğrafı Redis'e koyar → `202 {job_id, status}` (aynı anahtarın sonucu hazırsa doğrudan PNG) |
+| `GET /api/remove-background/jobs/{id}` | sürüyorsa `202 {status}` (sıra numarası YOK), bittiyse PNG, başarısızsa `code` + `retry_safe` |
+| `app/services/cutout_queue.py` | Redis kuyruğu; iş kimliği `(kullanıcı, Idempotency-Key)` |
+| `app/workers/cutout.py` (`python -m app.workers.cutout`) | modeli bir kez yükler, `MAX_CONCURRENT_INFERENCES` kadar kesimi aynı anda işler; sonuç ÖNCE R2, kredi SONRA; her hata yolunda kredi iade + `retry_safe` |
+
+Redis yoklaması kesilirse `GET .../jobs/{id}` `retry_safe` vermez: mevcut işin
+kredisi hâlâ ayrılmış olabilir. Ön yüz aynı anahtarla yoklamayı sürdürür;
+hatası uzarsa hata gösterir ama ikinci POST göndermez. POST tarafındaki kuyruk
+hataları da aynı anahtarla tekrar edilir. İşçi geçici Redis/DB
+hatasında açık kalır; alınmış işi aynı kimlikle atomik olarak yeniden sıraya
+koyar. Yerel VS Code backend/işçi görevleri ortak R2 bucket'ından canlı dosya
+silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
+
+- **Fotoğraf:** Redis'te en fazla 15 dk, iş bitince silinir, diske/R2'ye
+  yazılmaz (KVKK metninde yazılı). İşçi alırken değil bitirince silinir ki
+  çöken işçinin işi başka işçiye fotoğrafıyla verilebilsin.
+- **Redis diske yazmamalı (Codex incelemesi, 27.09.2026).** Redis'in
+  varsayılanı belleği `dump.rdb`'ye yazar; yerel Redis'te dolu bir
+  `dump.rdb` bulundu. Artık üç katman var: `docker-compose.yml` Redis'i
+  `--save "" --appendonly no` ile açar ve `/data`'yı bellekte (tmpfs) tutar
+  — imajın `/data` volume'u compose'da yeniden oluşturmada bile korunuyor ve
+  eski `dump.rdb` açılışta geri yükleniyordu (ölçüldü); API her kuyruğa
+  koymadan önce `CONFIG GET save/appendonly` ile doğrular (60 sn önbellek),
+  açıksa fotoğrafı almaz (kredi iade, `503 queue_unavailable`). `CONFIG`
+  yasaksa (bazı yönetilen Redis'ler) de almaz: doğrulanamayan bir söz
+  verilmiş sayılmaz (Codex, 2. tur; ilk sürüm uyarıp devam ediyordu). Böyle
+  bir sağlayıcı seçilecekse karar Faz 7.5'te bilinçli verilir. **Windows'ta** `redis-windows`
+  `redis-server --save "" --appendonly no` ile başlatılmalı. Testler
+  (`conftest.py`) yerel test Redis'ini aynı ayara çeker; CI'daki servis
+  kapsayıcısına komut satırı argümanı verilemediği için bu şart.
+- **Aynı iş iki kez işlenebilir (Codex incelemesi, 27.09.2026).** İşçi
+  sonucu saklayıp krediyi tükettikten sonra, işi Redis'te bitmiş
+  işaretleyemeden ölürse kurtarma işi onu yeniden kuyruğa koyar. Eskiden
+  ikinci deneme bunu "kredi iade edilmiş" sanıp saklanan sonucu siliyor ve
+  `retry_safe` yazıyordu; ön yüz de sessizce ikinci bir kredi harcıyordu.
+  Artık işçi işe başlarken ayırmanın durumunu okur (`reservation_outcome`):
+  tüketilmişse inference çalışmaz, iş saklanan kopyayla (`result_key`)
+  biter; iade edilmişse `reservation_released`. Aynı kontrol her iade
+  denemesinde ve tüketim `False` döndüğünde de yapılır.
+- **Her deneme kendi sonuç anahtarına yazar** (Codex, 2. tur):
+  `results/<kullanıcı>/<anahtar>-<rastgele>.png`. İki deneme paralel
+  yürürse (nabzı gecikip kurtarılan işçi) ikisi de `pending` görüp
+  yükleyebilir; sabit anahtarda sonra yükleyen, kredisi ödenmiş sonucun
+  üzerine yazıyordu. Ödenen anahtar `usage_reservations.result_r2_key`'de
+  durur (sonucu okuyan her yer oradan alır), tüketemeyen deneme kendi
+  nesnesini siler ve ödenen sonucu teslim eder. `results/<kullanıcı>/`
+  öneki hesap silme temizliği için korunur.
+- **Kuyruk sınırı atomik:** uzunluk kontrolü ve ekleme tek bir Lua
+  betiğinde. Eskiden `max_jobs=1` ile 5 eşzamanlı isteğin 5'i de kabul
+  ediliyordu (ölçüldü).
+- **Çöken işçi:** nabzı kesilen işçinin işleri sırasını kaybetmeden kuyruğun
+  önüne döner; iki denemede bitmeyen ya da fotoğrafı düşen işin kredisi
+  iade edilir.
+- **Kredi ayırma zaman aşımı 5 → 30 dk:** sırada bekleyen işin kredisi bakım
+  işince iade edilip sonucu çöpe gitmesin (eski değerde kırmızı yanan test var).
+- **Neden Celery/RQ değil:** ihtiyaç tek bir model kopyasını paylaşan N
+  eşzamanlı kesim, kısa ömürlü fotoğraf ve kullanıcıya bağlı iş kimliği;
+  RQ işleri varsayılan olarak ayrı süreçte (fork) çalıştırır, her işte modeli
+  yeniden yüklemek demekti. ~200 satırlık Redis kuyruğu bu ihtiyacı tam
+  karşılıyor ve Redis zaten kurulu.
+- **Dürüst sınır:** aynı CPU makinesinde aynı anda N kesim throughput'u
+  artırmaz (model bütün çekirdekleri kullanıyor), belleği katlar. Kapasite
+  işçi MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar.
+- **Başlatma:** `./execute.sh`, `./execute-supabase.sh` ve VS Code görevi
+  işçiyi de açar (`VITRIN_START_WORKER=0` ile kapatılır). İşçi çalışmıyorsa
+  kesimler sırada bekler.
+
+**Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
+başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);
+kesimler sırayla ~11,7 sn'de bir, sıra dahil ortalama 38,5 sn; kesim sürerken
+`/api/health` p95 13 ms, `/api/projects` p95 29 ms. **2 işçi bu makinede
+ÖLÇÜLMEDİ:** 16 GB'lık Mac'te iki model kopyası belleği tüketip sistemi
+kilitledi (kök `CLAUDE.md` ders 31); ölçüm canlı sunucuda (açık takip maddesi 7).
+
+**Bellek sıkışınca boştaki işçi yavaş uyanır (27.09.2026, Serhan'ın tarayıcı
+denemesi):** iki fotoğraf aynı anda gönderilince ilki 43 sn, ikincisi 55 sn
+sürdü; aynı büyük fotoğraf birkaç dakika önce tek başına 12 sn'de kesilmişti.
+Sebep kod değil ortamdı: Mac'te takas 15,5/16 GB doluydu, macOS boşta bekleyen
+işçinin model ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Gerçek işçiyle
+ölçüldü: boşta kalıştan sonraki ilk kesim **30,1 sn**, hemen ardından gelenler
+**9,3 / 9,1 sn** (RSS 5,14 GB'a döndü). **Canlıya etkisi:** sunucu modeli
+bellekte tutacak kadar RAM'e sahip olmalı (takas tercihen kapalı); yoksa her
+boşta kalıştan sonraki ilk müşteri ~20 sn fazladan bekler. Canlı ölçüm
+listesinde (açık takip maddesi 7).
+
+### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
+
+Yerelde, gerçek model + Postgres + Redis + gerçek JWT doğrulamasıyla. Depolama
+bellekte sahte (R2 production ile ortak — yük testi oraya yazmaz); kullanıcılar
+ayrı bir TEST veritabanına eklenir, betik uzak veritabanını ve `execute.sh`'ın
+`vitrin_ai`'sini reddeder (`tests/test_load_test_script.py`). Kullanım betiğin
+başındaki açıklamada. **Ölçüm sınırı:** tek makine (Apple M4, 16 GB), yük
+üreticisi sunucuyla aynı CPU'yu paylaşıyor; macOS belleği sıkıştırdığı için
+RSS değerleri Linux'taki 12 GB'lık ölçümün yerine GEÇMEZ. Canlı sunucu
+ölçümü Faz 7.5'te.
+
+**Arka plan kaldırma** (tek uvicorn süreci, `MAX_CONCURRENT_INFERENCES=1`):
+
+| Senaryo | Sonuç |
+| --- | --- |
+| 4 istemci × 2 deneme, 832×1248 foto | 2 × 200 (~13 sn), 6 × 429 (**6 ms**, gövde okunmadan) |
+| 2 istemci × 3 deneme, 12 MP iPhone foto (3,9 MB) | 3 × 200 (11–16 sn), 3 × 429 (8–10 ms) |
+| Inference SÜRERKEN `/api/health` ve `/api/projects` | p95 7–20 ms, hata yok — model iş parçacığında, olay döngüsü tıkanmıyor |
+| Sunucu RSS (macOS) | tepe 4,5–5,0 GB (Linux referansı: 12 GB, ROADMAP bölüm 2) |
+
+**Bulgu 1 — kapasite:** bir kesim ~13 sn sürdüğü ve süreç başına aynı anda
+yalnız bir inference çalıştığı için, bir kullanıcının işi sürerken gelen
+İKİNCİ kullanıcı anında 429 alır ("Şu anda çok fazla istek işleniyor…"); ön
+yüz otomatik yeniden denemiyor, kullanıcı tekrar basmak zorunda. Süreç başına
+tavan ~4–5 kesim/dakika. Bu bir hata değil, bilinçli koruma (bellek), ama
+eşzamanlı ikinci kullanıcı geldiği anda UX sorunu olur. Seçenekler (karar
+bekliyor): kısa süreli bekleme kuyruğu, ön yüzde `Retry-After` ile otomatik
+yeniden deneme, ya da ROADMAP'teki Celery/RQ kuyruğu. **Yan not:** vekildeki
+yoğunluk mesajı 503 için yazılmış; backend yoğunlukta 429 döndüğü için o dal
+kullanılmıyor, kullanıcı backend'in kendi Türkçe mesajını görüyor (doğru ama
+tutarsız).
+
+**Bulgu 2 — ölçekleme:** model süreç başına bir kez yükleniyor
+(`background_removal._get_session`, `lru_cache`). `uvicorn --workers N`, N
+ayrı model = N × ~12 GB demektir. API'yi süreç sayısıyla ölçeklemeden ÖNCE
+inference ayrı bir işçiye (Celery/RQ) taşınmalı; `Dockerfile` bugün bilinçli
+olarak tek süreç çalıştırıyor.
+
+**Okuma uçları** (eşzamanlılık / istek·sn / p95, 10 sn'lik pencereler, hata 0):
+
+| Uç | 10 | 25 | 50 |
+| --- | --- | --- | --- |
+| `GET /api/projects` | 685 / 50 ms | 459 / 165 ms | 242 / 640 ms |
+| `GET /api/backgrounds` | 401 / 62 ms | 368 / 211 ms | 196 / 708 ms |
+| `GET /api/subscriptions/me` | 384 / 60 ms | 407 / 195 ms | 207 / 690 ms |
+| `GET /api/health` | 1427 / 9 ms | 740 / 101 ms | 730 / 199 ms |
+
+Hiçbir seviyede hata yok. 50'de sunucu CPU'su yalnız %18–34 (tepe) iken
+gecikme artıyor: sunucu bir şey BEKLİYOR. Teşhis için havuz 40 bağlantıya
+çıkarıldı (`--pool-size`, yalnız yük testinde): proje ve zemin listesi 1,7–2,3
+kat hızlandı, abonelik ucu değişmedi — havuz (varsayılan 5 + 10 taşma)
+darboğazın BİR parçası. Üretim havuzu DEĞİŞTİRİLMEDİ: doğru boyut Supabase
+pooler'ının bağlantı sınırına bağlı, karar Faz 7.5'te canlı ölçümle.
+
+### Hata izleme (`app/core/monitoring.py`, Faz 7)
+
+`SENTRY_DSN` boşken SDK hiç başlatılmaz. Doluyken yalnız 5xx hataları gider
+(4xx `HTTPException`'lar gitmez) ve şunlar gitmez: istek gövdesi (yüklenen
+fotoğraf, formlar), yerel değişkenler (yığın çerçevesindeki fotoğraf baytları,
+token), SDK'nın kullanıcı/IP eklemesi, performans izi. `before_send` ikinci
+bir ağ: kimlik bilgisi taşıyan başlıklar (`Authorization`, `Cookie`,
+`X-Expected-User-Id`, `Idempotency-Key`, iyzico imzası, `X-Forwarded-For`…),
+çerezler, sorgu dizesi ve gövde silinir; kalan her metinde e-posta, JWT,
+`Bearer` token'ı ve SQLAlchemy hata mesajındaki `[parameters: …]` maskelenir.
+Dış çağrı kırıntılarının URL'sinden sorgu dizesi atılır (Supabase yönetici
+aramasında e-posta orada). Kalan tek kimlik: yol ya da R2 anahtarındaki
+kullanıcı UUID'si (takma ad, ama kişisel veri — aydınlatma metni şartı bu
+yüzden).
+
+**Doğrulama (26.09.2026):** gerçek backend sahte bir Sentry sunucusuna
+bağlanıp veritabanı kapalıyken `GET /api/backgrounds` çağrıldı: gerçek 500 tek
+olay olarak ulaştı (tür, ortam, yol okunur), çerez/sorgu dizesi silinmiş,
+e-posta ve çerez değeri hiçbir yerde yok. `tests/test_monitoring.py`
+aynı yolu gerçek SDK ve sahte taşıyıcıyla sınıyor; yerel değişkenlerin
+açılması, `before_send`'in kaldırılması, gövde temizliğinin kaldırılması, SQL
+parametre maskesinin kaldırılması ve DSN'siz başlatma ayrı ayrı denendi, her
+biri testi kırmızı yaktı. **Testler hiçbir zaman gerçek servise yazmaz:**
+`tests/conftest.py` `SENTRY_DSN`'i boşaltır (`.env`'de gerçek bir DSN olsa
+bile — korumasız hâlde testin kırmızı yandığı görüldü).
+
 ### CI ve bağımlılık taraması (Faz 7)
+
+**Kod kuralı kontrolü (27.09.2026):** CI'ın backend işi testlerden önce `ruff check app tests scripts alembic` koşar — yalnız pyflakes kuralları (`backend/ruff.toml`): tanımsız isim, kullanılmayan içe aktarma/değişken, yinelenen tanım. Biçim/stil kuralları bilinçli olarak yok. İlk koşuda 4 kullanılmayan içe aktarma çıktı; biri (`scripts/manual_model_check.py`) HEIC desteğini açan bilinçli bir yan etki olduğu için `# noqa: F401` ile işaretlendi, üçü silindi.
 
 `.github/workflows/ci.yml` her PR'da ve `main`'e her push'ta testleri
 `.env` OLMADAN, servis olarak açılan Postgres 16 + Redis 7'ye karşı koşar.
@@ -282,6 +620,14 @@ satırı siler, canlıdaki dosyaya dokunmaz.
 `message` 10–4000 karakter, isteğe bağlı `email`) satırı token'daki kullanıcıya
 yazar ve kullanıcı başına **saatte 5** istekle sınırlıdır (`support_limiter`,
 fail-open — Redis'in düştüğü an kullanıcının sorun bildirmek isteyeceği andır).
+
+`POST /api/cmyk/permit` (oturum zorunlu, `204`) Next.js'teki CMYK dönüşümünün
+izin kapısıdır: dönüşüm `sharp` ile Next sunucusunda yapılıyor ve orada ne JWT
+doğrulaması ne ortak bir sayaç var. Kullanıcı başına **10 dakikada 20**
+(`cmyk_limiter`), Redis arızasında **fail-closed** (`503 rate_limit_unavailable`):
+korunan şey sunucunun işlemcisi (40 MP'ye kadar görsel), kaybedilen yalnız CMYK
+dosyası. /cso incelemesinde (27.09.2026) `/api/cmyk`'nın oturumsuz ve sınırsız
+olduğu bulundu; testler `tests/test_cmyk_permit.py`.
 
 Yanıtlarda görseller süreli imzalı URL (`result_url`, `thumbnail_url`,
 `expires_in` = `PROJECT_URL_EXPIRY_SECONDS`).
@@ -460,7 +806,10 @@ sunucu/instance seçin.
 | Değişken | Varsayılan | Açıklama |
 | --- | --- | --- |
 | `MAX_FILE_SIZE_MB` | `20` | Yükleme boyutu sınırı (dosya içeriği) |
-| `MAX_CONCURRENT_INFERENCES` | `1` | Aynı anda çalışabilecek BiRefNet inference sayısı (sürece/worker'a özgü) |
+| `MAX_CONCURRENT_INFERENCES` | `1` | Faz 7'den beri: bir kesim İŞÇİSİNİN aynı anda işlediği kesim sayısı (tek model kopyasını paylaşır). Aynı CPU'da >1 hızlandırmaz, belleği artırır |
+| `MAX_CONCURRENT_UPLOADS` | `4` | API'nin aynı anda ayrıştırdığı yükleme sayısı (bellek koruması); fazlası 429 — kesim sırası değil |
+| `CUTOUT_QUEUE_MAX_JOBS` | `50` | Kuyruk üst sınırı (bekleyen fotoğraflar Redis belleğinde, 50 × ≤20 MB). Aşılırsa `503 queue_busy` + `Retry-After: 30`; ön yüz aynı anahtarla sessizce bekleyip yeniden dener |
+| `CUTOUT_QUEUE_PREFIX` | `cutout` | Redis anahtar öneki; API ve işçi AYNI olmalı. Yük testi kendi önekini kullanır |
 | `MAX_IMAGE_PIXELS` | `40000000` | Kabul edilen maksimum piksel sayısı (decompression-bomb koruması) |
 | `MAX_REQUEST_BODY_BYTES` | boş (otomatik: `MAX_FILE_SIZE_MB` + 64KB) | Toplam istek gövdesi sınırı (multipart zarf dahil); ayrıca, açıkça override edilebilir |
 | `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` | `60` | Upload hız sınırının kayan pencere süresi |
@@ -474,12 +823,13 @@ sunucu/instance seçin.
 | `SUPABASE_LEGACY_JWT_SECRET` | boş | Yalnızca JWKS'ye geçmemiş eski projeler için HS256 secret'ı. Yeni projelerde boş kalmalı |
 | `SUPABASE_SECRET_KEY` | boş | Supabase gizli sunucu anahtarı (`sb_secret_...`; Dashboard → Settings → API Keys → Secret keys). Hesap silme **ve** Faz 6 admin panelinin kullanıcı listesi/detayı için gerekli; RLS'i atlar, frontend'e asla yazılmaz. Boşsa `DELETE /api/account` ve `GET /api/admin/users` hiçbir şeye dokunmadan `503` döner |
 | `LOCAL_ADMIN_EMAILS` | boş | **Yalnız yerel geliştirme.** `./execute.sh`'ın kullanıcı eşitlemesi (`scripts/sync_local_auth.py`) bu virgüllü e-postaları yerel `admin_users`'a ekler. Uygulama okumaz, production'da anlamı yoktur |
-| `R2_SHARED_WITH_PRODUCTION` | `false` | **Yalnız yerel geliştirme.** `true` iken `DELETE /api/admin/backgrounds/{id}` yalnız veritabanı satırını siler, R2 nesnelerine dokunmaz — yerel zemin satırları production'dan kopyalandığı ve bucket ortak olduğu için. `execute.sh` kendisi `true` verir, `.env.example`'da da `true`. **Production'da `false` olmalı**, yoksa silinen zeminlerin dosyaları bucket'ta sahipsiz kalır |
+| `R2_SHARED_WITH_PRODUCTION` | `false` | **Yalnız yerel geliştirme.** `true` iken `DELETE /api/admin/backgrounds/{id}` yalnız veritabanı satırını siler, R2 nesnelerine dokunmaz — yerel zemin satırları production'dan kopyalandığı ve bucket ortak olduğu için. `execute.sh` ve VS Code backend/işçi görevleri `true` verir; `.env.example`'da da `true`. **Production'da `false` olmalı**, yoksa silinen zeminlerin dosyaları bucket'ta sahipsiz kalır |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Virgülle ayrılmış origin'ler; `*` ve yollu değerler reddedilir. Production alan adı belli olunca eklenmeli |
 | `PROJECT_URL_EXPIRY_SECONDS` | `3600` | Proje görsellerinin imzalı URL süresi; yanıtta `expires_in` olarak da dönüyor |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | boş | Cloudflare R2 kimlik bilgileri. Dördü de dolu olmadan R2 client'ı oluşturulmaz: eksik ayarları adlarıyla listeleyen bir `R2ConfigurationError` fırlatılır. Yalnızca gerçekten R2'ye dokunan yollar etkilenir: sunucu ayağa kalkar, boş bir veritabanında `GET /api/backgrounds` hiç client oluşturmaz. **Ama Faz 5'ten beri `POST /api/remove-background` da R2 istiyor** (idempotency sonuç deposu) ve ayarlar eksikse inference'a girmeden `503 result_storage_unavailable` döner — yani arka plan kaldırmayı yerelde denemek için de dört ayar gerekli |
 | `BACKGROUND_URL_EXPIRY_SECONDS` | `3600` | `GET /api/backgrounds` presigned URL geçerlilik süresi. Aynı değer yanıtta `expires_in` alanı olarak da dönüyor — istemci yenileme zamanını buradan öğrenir, kendi tarafına sabitlemez |
 | `TRUSTED_PROXY_IPS` | boş | Virgülle ayrılmış, GÜVENİLEN ters proxy adresleri. `X-Forwarded-For` yalnızca bağlantı bu listedeki bir adresten geliyorsa okunur; boşken başlık hiç okunmaz (sahte başlıkla hız sınırı kovası değiştirilemez). Uvicorn'un `--forwarded-allow-ips` değeriyle aynı liste olmalı |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_TRACES_SAMPLE_RATE` | boş / `local` / `0` | Hata izleme (Faz 7, `app/core/monitoring.py`). **DSN boşken izleme tamamen kapalı.** Sentry protokolü: sentry.io (AB bölgesi) ya da kendi barındırılan GlitchTip. Production'da açmadan önce sağlayıcı KVKK aydınlatma metnine alıcı olarak eklenmeli. Testler bu değeri her zaman boşaltır |
 | `RESEND_API_KEY` / `RESEND_BASE_URL` / `BILLING_EMAIL_FROM` | boş / `https://api.resend.com` / boş | "Ödemeniz alınamadı, kartınızı güncelleyin" e-postası. **Ücretli checkout'un açılış koşuludur**: eksikse `BILLING_CHECKOUT_ENABLED=true` olsa bile satın alma 503 döner — kullanıcıya vaat edilen 3 günlük grace penceresinin tek uyarısı bu e-posta. Gönderim yine de yapılamazsa `billing_alerts`'e `dunning_email_not_sent` yazılır; action başarılı sayılmaz, sınırlı retry/manual inceleme için açık kalır. Gönderim isteği `provider_actions.id`'yi Resend'e `Idempotency-Key` başlığıyla taşır: timeout sonrası tekrar deneme çift e-posta göndermez |
 
 Frontend'in yükleme kısıtları (`ALLOWED_CONTENT_TYPES` / `MAX_FILE_SIZE_MB`) bu
@@ -542,7 +892,7 @@ HTTP sözleşmesi `app/api/routes/billing.py` içindedir. PostgreSQL kalıcı ku
 `POST /api/remove-background` UUID `Idempotency-Key` ister. **Anahtar isteği
 değil İŞİ tanımlar** ve kredi anahtar başına yalnızca bir kez tüketilir:
 
-- başarılı PNG, `results/<user_id>/<request_id>.png` altında **geçici bir R2
+- başarılı PNG, `results/<user_id>/<request_id>-<random>.png` altında **geçici bir R2
   nesnesi** olarak saklanır; `usage_reservations` satırı bu anahtarı ve son
   kullanma zamanını tutar (`RESULT_RETENTION`, **24 saat**);
 - aynı `Idempotency-Key` tekrar gelirse **inference hiç çalışmaz**, saklanan
@@ -566,10 +916,12 @@ inference'a bağlamak, aynı krediyi ikinci kez yakma riski demekti. **Yerel
 geliştirmede de R2 ayarları gerekiyor** (`R2_*`); yalnız arayüzü denemek için
 `frontend/.env.local` içindeki `USE_MOCK_BACKEND=true` kullanılabilir.
 
-Süresi dolan sonuçları bakım turu (`purge_expired_results`) R2'den siler; DB
-kaydı yalnız nesne gerçekten silindikten sonra temizlenir, silme başarısız
-olursa bir sonraki turda tekrar denenir. Hesap silmede `projects/<uid>/` ile
-birlikte `results/<uid>/` öneki de kaldırılır.
+Süresi dolan sonuçları bakım turu (`purge_expired_results`) R2'den siler. Her
+kesim denemesinin R2 anahtarı yüklemeden önce `cutout_result_attempts`'a
+kaydedilir; işçi yüklemeden sonra ölürse veya sahipsiz dosyayı silemezse bakım
+turu onu da temizler. DB kaydı yalnız nesne gerçekten silindikten sonra
+temizlenir, silme başarısız olursa bir sonraki turda tekrar denenir. Hesap
+silmede `projects/<uid>/` ile birlikte `results/<uid>/` öneki de kaldırılır.
 
 **Hata yanıtlarında `retry_safe`:** kredinin hiç tüketilmediğini ya da iade
 edildiğini backend AÇIKÇA bildirir. İstemci yeni bir idempotency anahtarına

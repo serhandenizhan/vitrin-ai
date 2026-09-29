@@ -1,0 +1,7 @@
+# Backend kod kuralı kontrolü (CI, Faz 7 — 27.09.2026). Bilinçli olarak dar:
+# yalnız pyflakes (F) — tanımsız isim, kullanılmayan içe aktarma/değişken,
+# yinelenen tanım gibi testlerin kaçırabileceği GERÇEK hatalar. Biçim/stil
+# kuralları eklenmedi: mevcut kodu toptan değiştirir, iki kişilik ekipte
+# inceleme gürültüsü üretirdi.
+[lint]
+select = ["F"]

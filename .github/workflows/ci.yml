@@ -62,6 +62,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: pip install -r requirements-dev.txt
+      # Tanımsız isim / kullanılmayan içe aktarma gibi testlerin kaçırabileceği
+      # hatalar (27.09.2026). İş adı DEĞİŞMEDİ: "protect main" kural seti bu
+      # işi adıyla bekliyor (kök CLAUDE.md → Git iş akışı).
+      - run: ruff check app tests scripts alembic
       - run: pytest -q
 
   frontend-tests:

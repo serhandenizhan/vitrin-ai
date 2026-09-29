@@ -17,6 +17,14 @@
  * kosulunun ICC profiliyle yapiliyor (`CMYK_ICC_PATH`) ve profil dosyaya
  * GOMULUYOR ki matbaa hangi kosula gore ayrildigini bilsin.
  *
+ * OTURUM VE HIZ SINIRI (/cso incelemesi, 27.09.2026):
+ * Uc eskiden oturumsuz ve sinirsizdi; herkes 40 MP'ye kadar gorselleri
+ * donusturtup sunucuyu mesgul edebiliyordu. Artik istegin GOVDESI
+ * OKUNMADAN once backend'e sorulur (`POST /api/cmyk/permit`): oturumu
+ * dogrular ve kullanici basina sayaci (Redis) isletir. Next'te ortak bir
+ * sayac yok ve surec belleginde tutulan bir sayac birden fazla sunucu
+ * orneginde ise yaramaz; bu yuzden karar backend'de.
+ *
  * SAYDAMLIK:
  * CMYK'nin alfa kanali yoktur. Saydam bir PNG once beyaz zemine duzlestiriliyor
  * (`flatten`); aksi halde saydam bolgeler siyaha donerdi.
@@ -26,6 +34,7 @@ import { readFile } from "node:fs/promises";
 
 import sharp from "sharp";
 
+import { callBackend, foreignOrigin } from "@/lib/backend-proxy";
 import {
   MAX_FILE_BYTES,
   MAX_INPUT_PIXELS,
@@ -123,6 +132,19 @@ async function parseFormData(body: Uint8Array, contentType: string | null): Prom
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Baska bir sitenin tarayicidan tetikledigi istek kullanicinin kotasini yakamaz.
+  const foreign = foreignOrigin(request);
+  if (foreign) return foreign;
+
+  // Oturum + hiz siniri, govde OKUNMADAN once: oturumsuz ya da siniri asmis
+  // bir istek dosyayi sunucuya hic okutamaz. 401 `auth_required`, 429
+  // `Retry-After` ile, Redis arizasinda 503 (backend fail-closed) aynen doner.
+  const permit = await callBackend("/api/cmyk/permit", {
+    method: "POST",
+    fallbackError: "Baskı dosyası şu anda hazırlanamıyor.",
+  });
+  if (!permit.ok) return permit.response;
+
   const body = await readBodyWithinLimit(request);
   if (!body) {
     return createErrorResponse("Dosya çok büyük.", 413);
@@ -167,7 +189,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
     return createErrorResponse("Desteklenmeyen görsel türü.", 400);
   }
-  if (!(requestedFormat in FORMATS)) {
+  // `in` prototip anahtarlarini da kabul ediyordu ("constructor").
+  if (!Object.hasOwn(FORMATS, requestedFormat)) {
     return createErrorResponse("Desteklenmeyen biçim.", 400);
   }
 

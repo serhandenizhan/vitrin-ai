@@ -983,8 +983,11 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     fail-closed admin hız sınırından geçiyor ve `background_create` audit izi
     yazıyor. Kayıtlı taslağın kullandığı zemin kalıcı silinemiyor (`409`, pasife
     alma öneriliyor); yeni taslaklarda `editor_state.backgroundId` aynı zamanda
-    `projects.background_id` FK alanına yazılarak bu kural DB seviyesinde de
-    korunuyor. Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
+    `projects.background_id` alanına yazılıyor. **27.09.2026'da değişti:**
+    `/cso` incelemesi 409'un kötüye kullanılabildiğini gösterdi (herhangi bir
+    kullanıcı bir zemini taslağına bağlayıp silinmesini engelleyebiliyordu);
+    Serhan'ın kararıyla silme artık taslak bağlantısını temizleyip yapılıyor.
+    (`background_id` sütununda yabancı anahtar kısıtı yok.) Genel bakıştaki açık bonus bakiye süresi dolmuş grant'leri
     dışlıyor; panelde mutasyondan önce başlamış liste cevabı yeni durumu artık
     geri alamıyor.
 - **Faz 6 kapanış turu (19.09.2026, Serhan) — dal
@@ -1116,11 +1119,176 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
   taraması + CI, (2) sistematik IDOR test paketi, (3) hata izleme, (4) yük
   testi, (5) model optimizasyonu; yedekleme/geri yükleme testi arada.
+- **Süreç notu — PR #29, Kaan'ın incelemesi beklenmeden birleştirildi
+  (Serhan'ın kararı, 26.09.2026).** Codex incelemesi ve düzeltmelerinden sonra
+  birleştirildi ki güvenlik yükseltmesi beklemesin; bu, kök `CLAUDE.md`'deki
+  "PR'lar diğer ekip üyesi tarafından incelenir" kuralının bilinçli bir
+  istisnasıdır. **Kaan'ın incelemesi geriye dönük yapılır:** Faz 7'nin
+  Serhan kısmını kapatan sonraki PR'ın açıklaması PR #29'un özetiyle başlar.
+  Aynı açıklamada Kaan için ayrıca şu yazılır: `main` artık üç CI işi yeşil
+  olmadan birleştirilemiyor (kural seti "protect main"), CI iş adı değişirse
+  kural seti de güncellenmeli, yeni bir güvenlik açığı bulunduğunda kapatılana
+  kadar hiçbir PR birleşmez, ve `./execute.sh` bir sonraki açılışta backend
+  bağımlılıklarını kendiliğinden günceller (ayrıntı kök `CLAUDE.md` → "Git iş
+  akışı").
 - **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
   eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
   `pip-audit` + `npm audit`; tarama haftada bir de koşar. İlk bulgusu, yerel
   `.env`'ye gizlice bağlı bir admin testiydi (düzeltildi).
+- **Model optimizasyonu — ✅ ölçüldü, CPU'da optimizasyon YAPILMADI (27.09.2026).**
+  Serhan'ın kuralı: kaliteye dokunabilecek hiçbir seçenek (FP16/INT8,
+  düşük çözünürlük, lite model) kullanılmaz. `backend/scripts/profile_cutout.py`
+  (çıktısı rembg ile bit düzeyinde aynı) sürenin %93–99'unun model hesabında
+  olduğunu gösterdi; model dışı adımlar en fazla ~0,6 sn. Kalan kayıpsız
+  seçenekler (PNG sıkıştırma seviyesi, iş parçacığı) kazancı değmediği için
+  reddedildi. Asıl hız GPU'da (FP32, kesim başına tahmini ~0,3–1,5 sn) —
+  karar Faz 7.5. Ayrıntı `backend/README.md` → "Model optimizasyonu".
+- **Veritabanı yedeği ve geri yükleme testi — ✅ (27.09.2026).**
+  Supabase ücretsiz pakette otomatik yedek almıyor (Serhan: paket Free) —
+  kendi yedeğimiz tek yedek. `backend/scripts/backup_database.py`: `pg_dump`
+  17 (Docker) ile `public` + `auth`, bellekte şifrelenir (Fernet), depo
+  dışına yazılır. Production'dan alınan yedek atılabilir bir Postgres'e geri
+  yüklendi: 48 tablo/346 satır ve RLS/politika/tetikleyici/fonksiyon/indeks/
+  kısıt sayıları birebir, 2,8 sn; kontrol dört bozmayla sınandı. Ayrıntı
+  `backend/README.md` → "Veritabanı yedeği". **Faz 7.5'e:** günlük otomatik
+  çalıştırma, ayrı özel R2 bucket, saklama süresi.
+  **Codex incelemesi düzeltmeleri (27.09.2026):** (1) yetkiler korunuyor —
+  eskiden `--no-privileges` bütün GRANT/REVOKE'ları atıyordu ve test bunu
+  görmüyordu; artık dökümde ve geri yüklemede duruyor, geri yükleme testi
+  yetkileri satır satır karşılaştırıyor (production: 416 yetki birebir);
+  (2) satır sayıları, parmak izi ve döküm AYNI anlık görüntüden
+  (`pg_export_snapshot` + `pg_dump --snapshot`), canlı yazmalar sağlam yedeği
+  "başarısız" göstermiyor; (3) dosya adı rastgele ek taşıyor ve dosya yalnız
+  yoksa oluşturuluyor. Üçü de Docker'da gerçek `pg_dump`/`pg_restore` ile
+  test edildi (eski betikte kırmızı). Önceki yedekler yetki içermiyor.
+- **Kesim kuyruğu — ✅ (27.09.2026; Faz 7'ye eklendi, Serhan'ın kararı 26.09.2026).**
+  Yük testinde "aynı anda tek kesim, fazlası anında 429" çıktı; Serhan:
+  "her türlü bir anda bir kesim kabul edilemez", fazla istekler reddedilmek
+  yerine SIRAYA alınmalı ve **bu müşteriye hissettirilmemeli** (hata yok,
+  yalnız normal işleme görünümü). Kapsam: kesim API'den ayrı işçi
+  süreç(ler)ine taşınır, istekler Redis tabanlı kuyruğa girer, aynı anda
+  işlenen kesim sayısı yapılandırılabilir (>1). Bu aynı zamanda "model süreç
+  başına yüklenir" bulgusunu çözer (API süreçleri modeli yüklemez).
+  **Tasarım (26.09.2026, Serhan'ın onayladığı kararlar):**
+  - Özgün fotoğraf işçiye ulaşana kadar **Redis'te en fazla 15 dk** bekler,
+    işçi alınca silinir; diske/R2'ye yazılmaz. KVKK metni buna göre
+    güncellenir.
+  - Uzun beklemede müşteriye **sıra bilgisi gösterilmez**; ~30 sn'den sonra
+    yalnız nötr bir cümle çıkar. Hata gösterilmez.
+  - Ön yüz değişikliğini Serhan yapar, **Kaan PR'da ayrıca inceler**.
+    **Kaan'ın incelemesi (28.09.2026):** bir bulgu çıktı ve düzeltildi —
+    yükleme sürerken ekran sıfırlanınca eski iş yeni fotoğrafın anahtarıyla
+    yokluyordu (kredi harcanıp sonuç kayboluyor ya da yanlış sonuç geçmişe
+    yazılıyordu). Artık iş anahtarını yüklemeden önce sabitliyor
+    (`bindJobKey`, kök `CLAUDE.md` ders 35).
+    **29.09.2026, PR #32 kalan üç birleşme engeli kapatıldı:** Redis yoklama
+    hatası yeni krediye izin vermiyor; işçi geçici Redis/DB hatasında ayakta
+    kalıp alınmış işi yeniden sıraya koyuyor; Windows VS Code görevleri ortak
+    R2 bucket'ı için silme korumasını açıyor. Windows test uyumluluğu ve
+    kararsız ön yüz testi ayrı takipte (PR #32 bulguları).
+  - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
+    `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
+  - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,
+    `202`. `GET /api/remove-background/jobs/{id}` → durum ya da PNG ya da hata.
+  - İşçi: `python -m app.workers.cutout`; modeli bir kez yükler,
+    `MAX_CONCURRENT_INFERENCES` kadar kesimi aynı anda işler (tek model
+    kopyası). Çöken işçinin işleri başka işçiye geri verilir.
+  - Kredi ayırma zaman aşımı 5 dk → 30 dk (kuyrukta bekleyen işin kredisi
+    bakım işince iade edilmesin); 15 dk içinde başlamayan iş kendisi iade eder.
+  - Kuyruk üst sınırı ayarlanabilir (fotoğraflar Redis belleğinde); aşılırsa
+    nazik bir yoğunluk mesajı — yalnız aşırı durumda.
+  - **Dürüst sınır:** aynı CPU makinesinde aynı anda N kesim throughput'u
+    artırmaz (model zaten bütün çekirdekleri kullanıyor); kapasite işçi
+    MAKİNESİ sayısıyla ya da GPU'yla (Faz 7.5) artar. Kuyruğun değeri: hata
+    yerine bekleme ve API'ye dokunmadan işçi ekleyebilmek.
+  **Codex incelemesi düzeltmeleri (27.09.2026):** (1) işçi krediyi tükettikten
+  sonra ölürse kurtarılan ikinci deneme tüketilmiş krediye ait sonucu siliyor
+  ve ön yüz sessizce ikinci kredi harcıyordu — artık işçi ayırmanın gerçek
+  durumunu okuyor, tüketilmişse saklanan sonucu teslim ediyor (kök
+  `CLAUDE.md` ders 32); (2) kuyruk sınırı eşzamanlı isteklerde aşılıyordu —
+  kontrol ve ekleme tek bir Lua betiğinde; (3) Redis'in varsayılanı belleği
+  diske (`dump.rdb`) yazıyordu, KVKK metniyle çelişiyordu — compose'da
+  RDB/AOF kapalı + `/data` tmpfs, API her kuyruğa koymadan önce doğruluyor
+  (ders 33). Dördü de eski kodda kırmızı yanan testlerle. **İkinci tur:**
+  paralel iki deneme ödenmiş sonucun üzerine yazabiliyordu (artık her deneme
+  kendi anahtarına yazar); `CONFIG` yasak Redis'te fotoğraf yine alınıyordu
+  (artık reddedilir); yedek betiği `[::1]` adresini bozuyordu.
+  **Sonuç (27.09.2026):** tek işçi, 4 eşzamanlı istemci × 2 istek → 8/8
+  başarılı, 0 × 429 (önce 6/8 reddediliyordu); sıra dahil ortalama 38,5 sn,
+  kesim sürerken diğer uçlar p95 ≤29 ms. Ayrıntı `backend/README.md` →
+  "Kesim kuyruğu". Yol boyunca: fotoğrafın işçi ALIRKEN değil BİTİRİNCE
+  silinmesi (çöken işçinin işi kurtarılabilsin), kullanıcı ekrandan ayrılınca
+  yoklamanın DURMAMASI (kredi harcanıyor, sonuç geçmişe yazılmalı), Windows'ta
+  işçinin sinyal işleyicisi yüzünden çökmemesi. **2 işçi yerelde ölçülemedi:**
+  16 GB'lık makineyi kilitledi (kök `CLAUDE.md` ders 31) — canlıda ölçülecek. **Faz 7.5'e:** GPU'ya
+  (sunucusuz GPU) geçiş kararı ve sağlayıcı/maliyet karşılaştırması.
+- **Yük testi (yerel) — ✅ (26.09.2026).** `backend/scripts/load_test.py`
+  (gerçek model/Postgres/Redis/JWT, depolama bellekte). Sonuçlar ve tablolar:
+  `backend/README.md` → "Yük testi". Özet: kabul sınırlayıcısı fazla
+  inference'ı 6–10 ms'de 429'la reddediyor, inference sürerken diğer uçlar
+  p95 ≤20 ms; okuma uçları eşzamanlılık 50'de hatasız, p95 ~0,7 sn. Yük
+  testinin iki bulgusu **kesim kuyruğuyla çözüldü (27.09.2026, yukarıdaki
+  madde):** (1) aynı anda ikinci kullanıcının 429 alması — istekler artık
+  reddedilmeden sıraya giriyor (Serhan'ın seçimi bekleme kuyruğu oldu, kendi
+  küçük kuyruğumuz; Celery/RQ değil); (2) modelin her API sürecine
+  yüklenmesi — model artık yalnız ayrı işçide, API süreç sayısıyla serbestçe
+  ölçeklenebiliyor. **Faz 7.5'e:** veritabanı havuz boyutu
+  (varsayılan 5+10 darboğazın bir parçası çıktı; Supabase sınırıyla birlikte
+  canlıda ölçülecek) ve Linux'ta bellek ölçümü.
+- **Hata izleme (backend) — ✅ (26.09.2026).** `app/core/monitoring.py`:
+  Sentry SDK kuruldu, `SENTRY_DSN` boşken hiç başlatılmıyor; doluyken yalnız
+  5xx hataları maskelenmiş olarak gidiyor (gövde, yerel değişken, kimlik
+  bilgisi, çerez, sorgu dizesi yok; e-posta/JWT/SQL parametresi maskeli).
+  Gerçek backend sahte bir Sentry sunucusuna bağlanarak uçtan uca doğrulandı.
+  **Sağlayıcı seçimi ve DSN Faz 7.5'te** (kod ikisiyle de çalışıyor).
+  **Frontend de aynı gün eklendi (Serhan'ın isteği, Kaan PR'da ayrıca
+  inceleyecek):** `frontend/src/lib/error-tracking.ts`, DSN yokken SDK
+  tarayıcıya hiç yüklenmiyor (üretim derlemesinde ve gerçek tarayıcıda
+  ölçüldü); DSN'li derleme gerçek tarayıcıda sahte Sentry'ye bağlanıp
+  maskelemenin çalıştığı görüldü. **KVKK aydınlatma metni ve gizlilik
+  politikası güncellendi:** "hata izleme hizmet sağlayıcısı" alıcı grubu
+  olarak eklendi, yasal sürüm `2026-09-27` (yeni kayıtlar bu sürümü kabul
+  eder; eski kabul kayıtları tarihçede kalır).
+- **Güvenlik incelemesi (kod) — ✅ (27.09.2026, `/cso`, ücretsiz).** Bütün kod
+  tabanı tarandı; kritik/yüksek bulgu yok. Bulunanlar ve yapılanlar: (1) yerel
+  Postgres/Redis bütün ağa açıktı, varsayılan parolayla ve production'dan kopyalanan
+  kullanıcı verisiyle — portlar `127.0.0.1`'e bağlandı; (2) `/api/cmyk` oturumsuz ve
+  sınırsızdı — backend izin ucu (`/api/cmyk/permit`, oturum + 10 dk'da 20,
+  fail-closed); (3) herhangi bir kullanıcı bir zemini taslağına bağlayıp yöneticinin
+  onu silmesini engelleyebiliyordu — Serhan'ın kararıyla silme artık taslak
+  bağlantısını temizleyip yapılıyor; (4) belgedeki "token tarayıcıya hiç açılmıyor"
+  ve "parola değiştirme her yolda kanıt istiyor" cümleleri yanlıştı — düzeltildi,
+  Hesabım sayfası mevcut parolayı Supabase'e de gönderiyor, sunucu tarafı koruma
+  Supabase panel ayarında (Serhan kontrol edecek); (5) `.env.supabase` izni 600.
+  **Dinamik tarama — ✅ (27.09.2026, OWASP ZAP, ücretsiz, yerel):** uygulama test
+  veritabanına bağlı ayrı bir kopya olarak açılıp tarandı. Backend API (OpenAPI'den,
+  aktif saldırı kalıpları): 116 kontrol geçti, açık yok; yalnız iki eksik başlık
+  (`X-Content-Type-Options`, `Cross-Origin-Resource-Policy`). Ön yüz (pasif): açık yok;
+  eksik güvenlik başlıkları (CSP, tıklama tuzağı koruması, `X-Content-Type-Options`,
+  `Permissions-Policy`, COOP/COEP/CORP, `X-Powered-By` sızıntısı) ve **bir gerçek
+  bulgu:** formlarda `method` yoktu, JS yüklenmeden gönderilen bir form alanları
+  GET ile adres çubuğuna yazıyordu (destek formunda e-posta/mesaj; satın alma
+  formunda aynı yol T.C. kimlik no, telefon, adres) — 12 forma `method="post"` ve
+  hepsini tarayan bir test eklendi. **Oturumlu tarama (aynı gün):** normal
+  kullanıcı ve yönetici kimliğiyle iki ayrı aktif API taraması. Gerçek Supabase'e
+  dokunmamak için tarama backend'i yerel sahte bir JWKS sunucusuna bağlandı
+  (token'lar yerelde üretildi); R2/iyzico/Resend/Supabase yönetici anahtarı boş
+  bırakıldı. Sonuç: 116 kontrol geçti, açık yok; normal kullanıcı yönetici uçlarında
+  42 kez 403 aldı; tek 5xx'ler kasıtlı olarak koparılan Supabase yönetici API'sinin
+  503'ü. **Sınır:** R2 ve Supabase yönetici API'sine dayanan uçların içi taranmadı
+  (kopuktular); ön yüz oturumlu taranmadı. Supabase panelinde "Require current
+  password when changing password", "Secure password change" ve "Secure email
+  change" Serhan tarafından 27.09.2026'da açıldı. **Kalan:** güvenlik başlıkları
+  Faz 7.5 (CSP/HSTS).
+- **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
+  45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
+  yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
+  sahipli kaynaklar hem red hem kabul yoluyla, `Idempotency-Key`'in
+  kullanıcıya göre ayrılması hem veritabanı hem HTTP düzeyinde sınanıyor
+  (71 test). Mevcut kodda açık BULUNMADI. Paketin işe yaradığı yedi ayrı
+  bozmayla kanıtlandı (ayrıntı `backend/README.md` → "Yetkilendirme ve IDOR
+  paketi").
 - **Bağımlılık taraması — ✅ (26.09.2026).** Backend'de 6 pakette 34 bilinen
   açık sürüm yükseltmesiyle kapatıldı (ayrıntı `backend/README.md` → "CI ve
   bağımlılık taraması"); frontend `npm audit` temizdi. rembg 2.0.61 → 2.0.85
@@ -1220,6 +1388,109 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
   ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+- **Otomatik veritabanı yedeği (Faz 7'den, 27.09.2026):** Supabase
+  ücretsiz pakette otomatik yedek YOK. `backup_database.py backup` günlük
+  çalışacak şekilde zamanlanır (sunucuda cron/systemd timer), çıktı AYRI ve
+  özel bir R2 bucket'ına yüklenir (yalnız o bucket'a yetkili ayrı anahtar),
+  saklama süresi belirlenir ve ayda bir `restore-test` koşulur. Alternatif:
+  Supabase Pro'ya geçmek (7 gün otomatik yedek) — o durumda bizimki ek,
+  başka yerde duran kopya olur. `BACKUP_ENCRYPTION_KEY` parola
+  yöneticisinde saklanmış olmalı.
+- **GPU'ya geçiş kararı (Faz 7'den, Serhan'ın kararı 26.09.2026):**
+  kesim kapasitesini asıl artıran adım. Sunucusuz GPU sağlayıcıları (Modal,
+  RunPod, Replicate vb.) fiyat, soğuk başlangıç süresi, veri konumu (KVKK) ve
+  BiRefNet MIT ağırlıklarının çalıştırılabilirliği açısından karşılaştırılır.
+  Faz 7'deki kuyruk, işçiyi GPU'ya taşımayı API'ye dokunmadan mümkün kılacak
+  biçimde kurulur.
+  **27.09.2026 güncellemesi:** kuyruk kuruldu (işçi API'den ayrı). Örnek
+  fiyat araştırması: `docs/research/sunucu-fiyatlari-2026-09-27.md` (yalnız
+  CPU / aylık GPU sunucusu / saatlik GPU / sunucusuz GPU; aylık hacme göre
+  kaba karşılaştırma; KVKK veri konumu notu). **Yalnız FP32** (Serhan: kalite
+  bozan optimizasyon yok). Geçişten önce `profile_cutout.py` GPU'da koşulur
+  ve GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı ölçülür.
+- **Canlı sunucuda yapılacak ölçümler (Faz 7'den, 26.09.2026 — unutulmasın,
+  kök `CLAUDE.md` açık takip maddesi 7):** yerel ölçümler tek makinede
+  yapıldı ve aşağıdakilerin yerine geçmez.
+  1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
+     serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
+     çıktı ama bellek sıkıştırması yüzünden karşılaştırılamaz). Sunucu boyutu
+     bu ölçüme göre seçilir.
+  2. **Kesim süresi:** production CPU'sunda fotoğraf başına süre (yerelde
+     Apple M4'te ~13 sn). Süre kapasiteyi doğrudan belirler: tek süreçte
+     dakikada 60 / süre kesim.
+  3. **Yük testi:** `backend/scripts/load_test.py` production'a benzer bir
+     sunucuda, yük üreticisi AYRI bir makineden koşulur (yerelde ikisi aynı
+     CPU'yu paylaşıyordu). R2'ye yazmaz; ayrı bir test veritabanı gerekir.
+  4. **Veritabanı bağlantı havuzu:** varsayılan (5 + 10 taşma) yerel yük
+     testinde darboğazın bir parçası çıktı (havuz 40'ta iki uç 1,7–2,3 kat
+     hızlandı). Doğru boyut Supabase pooler'ının bağlantı sınırıyla birlikte
+     canlıda ölçülerek seçilir; sınırı aşan havuz bağlantı hatası üretir.
+  5. **CMYK dönüşümü:** 40 MP'lik görselin production'da süresi ve belleği
+     (Faz 6'dan taşınan madde, açık takip maddesi 1).
+  6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
+     maskelemenin orada da doğru göründüğü kontrol edilir.
+  7. **Kesim kuyruğu kapasitesi:** aynı makinede 2 işçi ya da
+     `MAX_CONCURRENT_INFERENCES=2` throughput'u artırıyor mu (yerelde 16 GB'lık
+     makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
+     seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
+     başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
+  8. **Boşta kalıştan sonraki ilk kesim:** işçi bir süre boşta kaldıktan sonra
+     ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
+     diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
+     bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
+  9. **GPU seçilirse:** `backend/scripts/profile_cutout.py` GPU sunucusunda
+     koşulup kesim süresi tahmini (~0,3–1,5 sn) gerçek ölçüme çevrilir; FP32
+     GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
+     fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
+     kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
+  10. **Redis diske yazmıyor mu:** kesim kuyruğu özgün fotoğrafı Redis'te
+     tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
+     kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
+     koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
+     (kredi iade + 503). **`CONFIG` yasaksa da fotoğrafı almıyor**
+     (doğrulanamayan söz verilmiş sayılmaz — Codex incelemesi, 2. tur).
+     Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
+     sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
+     dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
+- **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
+  takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
+  1. **Güvenlik başlıkları** (ZAP'in iki taramasında da çıkan tek eksik):
+     ön yüzde CSP, tıklama tuzağı koruması (`frame-ancestors` /
+     `X-Frame-Options`), `X-Content-Type-Options: nosniff`,
+     `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, `X-Powered-By`
+     kapatma (`poweredByHeader: false`); backend'de `nosniff` ve CORP;
+     canlıda HSTS. **CSP ayrıca önemli:** oturum token'ı tarayıcıdan
+     okunabildiği için (`@supabase/ssr`, `SECURITY.md` 3.1) XSS'e karşı asıl
+     önlem CSP. Başlıklar eklendikten sonra CI'a ZAP pasif taraması
+     (`zaproxy/action-baseline`) eklenebilir.
+  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+     canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
+     ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
+     R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
+     sırasında bilerek koparılmıştı) ve ön yüzün oturumlu taraması.
+  3. **Canlı Redis:** özel ağda, parolalı, RDB/AOF kapalı ve `CONFIG GET`
+     izinli (ölçüm listesi madde 10).
+  4. **Canlı altyapı denetimi:** HTTPS/HSTS, ters vekil, `TRUSTED_PROXY_IPS`
+     (açık takip 3), R2 CORS ve bucket politikası (açık takip 2), Supabase
+     Auth panel ayarları — "Require current password when changing
+     password", "Secure password change", "Secure email change" (27.09.2026'da
+     açıldı; değişirse `SECURITY.md` 3.1 güncellenir).
+  5. **Profesyonel penetrasyon testi:** ücretsiz karşılığı yok; canlıya
+     çıkmadan önce bütçe olursa staging'de.
+  6. **CI'a eklenebilecekler (27.09.2026 değerlendirmesi):** kod kapsama
+     raporu (`pytest-cov`, önce yalnız bilgi amaçlı), ZAP pasif taraması
+     (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
+     Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
+     27.09.2026'da eklendi.
+- **Hata izleme sağlayıcısı (Faz 7'den, 26.09.2026):** sentry.io'nun AB
+  bölgesi mi kendi barındırılan GlitchTip mi seçilir; `SENTRY_DSN` ve
+  `SENTRY_ENVIRONMENT=production` verilir. **Açmadan önce** sağlayıcı KVKK
+  aydınlatma metninin alıcılar bölümüne (ve yurt dışıysa aktarım bilgisine)
+  eklenir — metin değişince sürüm/onay akışı işler (`SECURITY.md` bölüm 9).
+  **26.09.2026 güncellemesi:** alıcı GRUBU metne eklendi; kalan iş seçilen
+  sağlayıcının adını gizlilik tablosuna yazmak, `NEXT_PUBLIC_SENTRY_DSN`'i
+  vermek ve kaynak haritası yüklemesine (`withSentryConfig` + auth token)
+  karar vermek. Yeni metin hukukçu son kontrolüne dahildir.
 - **Launch öncesi son kapı — dış girdiye bağlı (kullanıcı kararı
   14.09.2026; Faz 7'den buraya taşındı 26.09.2026):**
   - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık

@@ -1,20 +1,22 @@
-from botocore.exceptions import ClientError
 
 from app.services.billing.entitlements import Reservation
 from app.services.billing.usage import get_usage_quota
 from app.services.storage import R2ConfigurationError, get_storage_service
 import asyncio
 import io
+
+import anyio
 import struct
 import threading
 import time
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.api.routes.remove_background import get_background_removal_service, remove_background
+from app.api.routes.remove_background import get_cutout_queue, remove_background
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import (
     DEFAULT_METADATA_BUDGET_BYTES,
@@ -27,14 +29,37 @@ from app.validation import upload as upload_module
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
-class FakeBackgroundRemovalService:
-    def __init__(self, result: bytes = b"fake-png-bytes"):
-        self.result = result
-        self.received_content: bytes | None = None
+class FakeCutoutQueue:
+    """Kesim kuyruğunun yerine: API artık modeli çağırmıyor, işi SIRAYA koyuyor
+    (Faz 7). `received_content` sıraya konan fotoğraftır; `None` ise hiçbir
+    iş açılmamıştır (eski "model hiç çağrılmadı" kontrollerinin karşılığı)."""
 
-    def remove(self, image_bytes: bytes) -> bytes:
-        self.received_content = image_bytes
-        return self.result
+    def __init__(self, *, full: bool = False, fail_enqueue: Exception | None = None):
+        self.received_content: bytes | None = None
+        self.enqueued: list[tuple] = []
+        self.jobs: dict[tuple, dict] = {}
+        self.results: dict[tuple, bytes] = {}
+        self.max_jobs = 0 if full else 50
+        self.fail_enqueue = fail_enqueue
+
+    async def queued_count(self) -> int:
+        return len(self.enqueued)
+
+    async def get_job(self, user_id, request_id):
+        return self.jobs.get((str(user_id), str(request_id)))
+
+    async def enqueue(self, user_id, request_id, reservation_id, photo):
+        if self.fail_enqueue:
+            raise self.fail_enqueue
+        self.received_content = photo
+        self.enqueued.append((user_id, request_id, reservation_id))
+        self.jobs[(str(user_id), str(request_id))] = {"status": "queued"}
+
+    async def result(self, user_id, request_id):
+        return self.results.get((str(user_id), str(request_id)))
+
+    async def forget(self, user_id, request_id):
+        self.jobs.pop((str(user_id), str(request_id)), None)
 
 
 def _jpeg_bytes() -> bytes:
@@ -111,10 +136,10 @@ class FakeStorage:
         return self.objects[key]
 
 
-def _client_with_fake_service(fake_service: FakeBackgroundRemovalService) -> TestClient:
+def _client_with_fake_queue(fake_queue: FakeCutoutQueue) -> TestClient:
     # Bu dosyadaki testler yükleme/doğrulama davranışını sınıyor; oturum
     # zorunluluğu aşağıdaki ayrı testlerde gerçek token doğrulamasıyla sınanıyor.
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_current_user] = _signed_in_user
     app.dependency_overrides[get_usage_quota] = FakeQuota
     app.dependency_overrides[get_storage_service] = FakeStorage
@@ -127,25 +152,23 @@ def teardown_function():
 
 
 def test_returns_png_for_valid_jpeg_upload():
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
         files={"file": ("product.jpg", _jpeg_bytes(), "image/jpeg")},
     )
 
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert response.content == b"cutout-png-bytes"
-    assert fake_service.received_content == _jpeg_bytes()
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content == _jpeg_bytes()
 
 
 def test_rejects_request_without_session_with_401_and_service_not_called(tokens):
     # Faz 4 kararı: giriş yapmadan arka plan kaldırılamaz. RED yolu (ders 15):
     # oturumsuz istek 401 alıyor ve BiRefNet HİÇ çağrılmıyor.
-    fake_service = FakeBackgroundRemovalService()
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    fake_queue = FakeCutoutQueue()
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_usage_quota] = FakeQuota
     app.dependency_overrides[get_storage_service] = FakeStorage
     client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
@@ -156,12 +179,12 @@ def test_rejects_request_without_session_with_401_and_service_not_called(tokens)
     )
 
     assert response.status_code == 401
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_invalid_token_with_401_and_service_not_called(tokens):
-    fake_service = FakeBackgroundRemovalService()
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    fake_queue = FakeCutoutQueue()
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_usage_quota] = FakeQuota
     app.dependency_overrides[get_storage_service] = FakeStorage
     client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
@@ -173,13 +196,13 @@ def test_rejects_invalid_token_with_401_and_service_not_called(tokens):
     )
 
     assert response.status_code == 401
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_accepts_request_with_valid_token(tokens):
     # KABUL yolu (ders 15): override yok, gerçek JWT doğrulaması.
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    fake_queue = FakeCutoutQueue()
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_usage_quota] = FakeQuota
     app.dependency_overrides[get_storage_service] = FakeStorage
     client = TestClient(app, headers={"Idempotency-Key": str(uuid.uuid4())})
@@ -190,39 +213,39 @@ def test_accepts_request_with_valid_token(tokens):
         headers=tokens.headers(uuid.uuid4()),
     )
 
-    assert response.status_code == 200
-    assert response.content == b"cutout-png-bytes"
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content is not None
 
 
 def test_returns_png_for_valid_webp_upload():
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
         files={"file": ("product.webp", _webp_bytes(), "image/webp")},
     )
 
-    assert response.status_code == 200
-    assert fake_service.received_content == _webp_bytes()
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content == _webp_bytes()
 
 
 def test_returns_png_for_valid_heic_upload():
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
         files={"file": ("product.heic", _heic_bytes(), "image/heic")},
     )
 
-    assert response.status_code == 200
-    assert fake_service.received_content == _heic_bytes()
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content == _heic_bytes()
 
 
 def test_rejects_disallowed_content_type_with_400():
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
@@ -231,15 +254,15 @@ def test_rejects_disallowed_content_type_with_400():
 
     assert response.status_code == 400
     assert "content-type" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_corrupted_png_with_valid_signature_without_500():
     # CRC'si bozuk bir PNG: magic-byte/content-type kontrolünü geçer ama
     # `image.verify()` decode sırasında PIL'in `SyntaxError` fırlatmasına yol
     # açar. Bu, 500'e sızmadan 400'e çevrilmeli ve servis hiç çağrılmamalı.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
@@ -248,15 +271,15 @@ def test_rejects_corrupted_png_with_valid_signature_without_500():
 
     assert response.status_code == 400
     assert "geçerli bir görüntü değil" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_jpeg_truncated_after_header_without_500():
     # Header'dan hemen sonra kesilmiş bir JPEG: `Image.open()` başlığı
     # ayrıştırır ama `image.verify()` decode sırasında patlar. 500 yerine
     # 400 üretilmeli, servis hiç çağrılmamalı.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     truncated = _jpeg_bytes()[:30]
     response = client.post(
@@ -266,7 +289,7 @@ def test_rejects_jpeg_truncated_after_header_without_500():
 
     assert response.status_code == 400
     assert "geçerli bir görüntü değil" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_jpeg_truncated_after_sos_entropy_data_without_500():
@@ -275,8 +298,8 @@ def test_rejects_jpeg_truncated_after_sos_entropy_data_without_500():
     # durumdur (sadece marker yapısına bakar) — yalnızca ayrı bir
     # `Image.open()` + `image.load()` decode aşaması bunu tespit eder. 500
     # yerine 400 üretilmeli, servis hiç çağrılmamalı.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
@@ -291,7 +314,7 @@ def test_rejects_jpeg_truncated_after_sos_entropy_data_without_500():
 
     assert response.status_code == 400
     assert "geçerli bir görüntü değil" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_struct_error_during_decode_with_400_and_service_not_called(monkeypatch):
@@ -304,8 +327,8 @@ def test_rejects_struct_error_during_decode_with_400_and_service_not_called(monk
 
     monkeypatch.setattr(upload_module.Image, "open", raise_struct_error)
 
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     response = client.post(
         "/api/remove-background",
@@ -314,7 +337,7 @@ def test_rejects_struct_error_during_decode_with_400_and_service_not_called(monk
 
     assert response.status_code == 400
     assert "geçerli bir görüntü değil" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_accepts_exact_file_size_with_metadata_within_default_budget():
@@ -323,8 +346,8 @@ def test_accepts_exact_file_size_with_metadata_within_default_budget():
     # bütçenin altında kaldığında, tam `max_file_size_bytes` boyutundaki
     # geçerli bir dosya VARSAYILAN `max_request_body_bytes` ile 413 almıyor —
     # gerçek/operasyonel sınır her zaman `MAX_REQUEST_BODY_BYTES`'tir.
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     base = _jpeg_bytes()
     exact_size_content = base + b"\x00" * (settings.max_file_size_bytes - len(base))
@@ -344,16 +367,16 @@ def test_accepts_exact_file_size_with_metadata_within_default_budget():
         data={"not_used_extra_field": extra_field_value},
     )
 
-    assert response.status_code == 200
-    assert fake_service.received_content == exact_size_content
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content == exact_size_content
 
 
 def test_rejects_oversized_part_header_with_400_without_calling_service():
     # python-multipart'ın parça başlığı sınırı (~4 KB, PYSEC-2026-3039
     # düzeltmesi) aşıldığında istek 500'e değil 400'e düşmeli ve model hiç
     # çalışmamalı. Sınırı kaldıran bir sürüm düşüşü bu testi kırmızı yakar.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     oversized_filename = "urun-" + ("x" * 8000) + ".jpg"
     response = client.post(
@@ -362,7 +385,7 @@ def test_rejects_oversized_part_header_with_400_without_calling_service():
     )
 
     assert response.status_code == 400
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_exact_file_size_with_metadata_beyond_default_allowance():
@@ -372,8 +395,8 @@ def test_rejects_exact_file_size_with_metadata_beyond_default_allowance():
     # açıkça artırılmadığı sürece bu 413 alır (bkz. app/core/config.py
     # dokümantasyonu ve test_body_size_limit_middleware.py'deki override
     # testi).
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     base = _jpeg_bytes()
     exact_size_content = base + b"\x00" * (settings.max_file_size_bytes - len(base))
@@ -387,15 +410,15 @@ def test_rejects_exact_file_size_with_metadata_beyond_default_allowance():
     )
 
     assert response.status_code == 413
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_body_exceeding_max_request_body_bytes_with_413():
     # Toplam gövde `max_request_body_bytes`'i (max_file_size + overhead payı)
     # açıkça aşıyor -> BodySizeLimitMiddleware, multipart parser gövdeyi
     # tamamlamadan devreye girip 413 döndürmeli; route/servis hiç çalışmamalı.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     grossly_oversized = _jpeg_bytes() + b"\x00" * (settings.max_request_body_bytes + 1)
     response = client.post(
@@ -404,15 +427,15 @@ def test_rejects_body_exceeding_max_request_body_bytes_with_413():
     )
 
     assert response.status_code == 413
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_rejects_file_just_over_max_file_size_with_400():
     # Gövde `max_request_body_bytes` eşiğinin altında kalacak kadar küçük bir
     # payla `max_file_size_bytes`'i az miktarda aşıyor -> middleware'i geçer,
     # ama `validate_upload`'ın içerik-boyutu kontrolü bunu 400 ile reddetmeli.
-    fake_service = FakeBackgroundRemovalService()
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     just_over_file_limit = _jpeg_bytes() + b"\x00" * (
         settings.max_file_size_bytes - len(_jpeg_bytes()) + 1024
@@ -426,14 +449,14 @@ def test_rejects_file_just_over_max_file_size_with_400():
 
     assert response.status_code == 400
     assert "boyut" in response.json()["detail"]
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 def test_accepts_upload_at_exact_max_file_size_boundary():
     # Tam `max_file_size_bytes` boyutunda geçerli bir dosya ne middleware'den
     # (413) ne de içerik-boyutu kontrolünden (400) yanlışlıkla reddedilmemeli.
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    client = _client_with_fake_service(fake_service)
+    fake_queue = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake_queue)
 
     base = _jpeg_bytes()
     exact_size_content = base + b"\x00" * (settings.max_file_size_bytes - len(base))
@@ -444,25 +467,27 @@ def test_accepts_upload_at_exact_max_file_size_boundary():
         files={"file": ("product.jpg", exact_size_content, "image/jpeg")},
     )
 
-    assert response.status_code == 200
-    assert fake_service.received_content == exact_size_content
+    assert response.status_code == 202 and response.json()["status"] == "queued"
+    assert fake_queue.received_content == exact_size_content
 
 
-def test_returns_429_immediately_when_admission_capacity_is_full():
-    # `settings.max_concurrent_inferences` varsayılan olarak 1. İlk isteği
-    # bilerek bir thread'de "inference sürüyor" durumunda bekleten sahte bir
-    # servisle tutarken, ikinci (eşzamanlı) istek admission middleware
-    # tarafından parser/route'a hiç ulaşmadan anında 429 almalı.
+def test_returns_429_immediately_when_admission_capacity_is_full(monkeypatch):
+    # Faz 7: kabul sınırlayıcısı artık aynı anda AYRIŞTIRILAN YÜKLEME sayısını
+    # tutuyor (`MAX_CONCURRENT_UPLOADS`, varsayılan 4); kesim işçide. Kapasite
+    # testte 1'e indiriliyor ve ilk istek sıraya koyma adımında bekletiliyor;
+    # ikinci (eşzamanlı) istek parser/route'a hiç ulaşmadan anında 429 almalı.
+    monkeypatch.setattr(admission_limiter._limiter, "total_tokens", 1)
     started = threading.Event()
     release = threading.Event()
 
-    class BlockingService:
-        def remove(self, image_bytes: bytes) -> bytes:
+    class BlockingQueue(FakeCutoutQueue):
+        async def enqueue(self, user_id, request_id, reservation_id, photo):
             started.set()
-            release.wait(timeout=5)
-            return b"cutout-png-bytes"
+            await anyio.to_thread.run_sync(release.wait, 5)
+            await super().enqueue(user_id, request_id, reservation_id, photo)
 
-    app.dependency_overrides[get_background_removal_service] = lambda: BlockingService()
+    blocking_queue = BlockingQueue()
+    app.dependency_overrides[get_cutout_queue] = lambda: blocking_queue
     app.dependency_overrides[get_current_user] = _signed_in_user
     app.dependency_overrides[get_usage_quota] = FakeQuota
     app.dependency_overrides[get_storage_service] = FakeStorage
@@ -490,10 +515,10 @@ def test_returns_429_immediately_when_admission_capacity_is_full():
         release.set()
         worker.join(timeout=5)
 
-    assert first_response["response"].status_code == 200
+    assert first_response["response"].status_code == 202
 
 
-def test_admission_full_blocks_real_middleware_stack_before_receive_is_ever_called():
+def test_admission_full_blocks_real_middleware_stack_before_receive_is_ever_called(monkeypatch):
     # Gerçek `app` (BodySizeLimitMiddleware + EndpointAdmissionLimiterMiddleware
     # + ExceptionMiddleware + router, hepsi gerçek kayıtlı haliyle) doğrudan bir
     # ASGI çağrısıyla sürülüyor. Kapasite, üretimde kullanılan gerçek
@@ -502,8 +527,10 @@ def test_admission_full_blocks_real_middleware_stack_before_receive_is_ever_call
     # çağrılmadığı sayılarak kanıtlanıyor -- bu, admission middleware'in
     # kendisinden SONRAKİ hiçbir katmanın (body-size middleware, multipart
     # parser, route) devreye girmediğini gösterir.
-    fake_service = FakeBackgroundRemovalService()
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    fake_queue = FakeCutoutQueue()
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
+    # Varsayılan yükleme kapasitesi 4; tek izinle doldurulabilsin diye 1.
+    monkeypatch.setattr(admission_limiter._limiter, "total_tokens", 1)
 
     receive_call_count = 0
 
@@ -547,7 +574,7 @@ def test_admission_full_blocks_real_middleware_stack_before_receive_is_ever_call
     assert receive_call_count == 0
     starts = [m for m in sent_messages if m["type"] == "http.response.start"]
     assert starts[0]["status"] == 429
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
 
 
 class _FakeUploadFile:
@@ -587,12 +614,12 @@ def test_validate_upload_runs_in_threadpool_without_blocking_event_loop(monkeypa
 
     async def call_route():
         fake_file = _FakeUploadFile(_jpeg_bytes(), "image/jpeg")
-        fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+        fake_queue = FakeCutoutQueue()
         response = await remove_background(
             quota=FakeQuota(), request_id=uuid.uuid4(), storage=FakeStorage(),
-            file=fake_file, service=fake_service, _user=_signed_in_user()
+            file=fake_file, queue=fake_queue, _user=_signed_in_user()
         )
-        assert response.status_code == 200
+        assert response.status_code == 202
 
     async def scenario():
         start = time.monotonic()
@@ -621,8 +648,10 @@ class RecordingQuota:
     def __init__(self, reservation: Reservation):
         self.reservation = reservation
         self.resolved: list[tuple[bool, str | None]] = []
+        self.reserved: list = []
 
     async def reserve(self, user_id, request_id):
+        self.reserved.append(request_id)
         return self.reservation
 
     async def resolve(self, reservation_id, success, result_key=None):
@@ -630,19 +659,96 @@ class RecordingQuota:
         return True
 
 
-def test_successful_result_is_stored_before_the_credit_is_consumed():
-    # Ters sırada, saklama adımında çöken bir süreç krediyi harcanmış ama
-    # sonucu yok bırakırdı.
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
-    storage = FakeStorage()
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+def _post_with(queue, quota, storage=None, key=None):
+    app.dependency_overrides[get_cutout_queue] = lambda: queue
     app.dependency_overrides[get_current_user] = _signed_in_user
     app.dependency_overrides[get_usage_quota] = lambda: quota
-    app.dependency_overrides[get_storage_service] = lambda: storage
+    app.dependency_overrides[get_storage_service] = lambda: storage or FakeStorage()
     try:
         with TestClient(app) as client:
-            key = str(uuid.uuid4())
+            return client.post(
+                "/api/remove-background",
+                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": key or str(uuid.uuid4())},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_api_only_reserves_the_credit_and_queues_the_job():
+    # Faz 7: kesim, sonucun saklanması ve kredinin TÜKETİLMESİ işçinin işi
+    # (tests/test_cutout_worker.py). API krediyi yalnız AYIRIR; ne tüketir ne
+    # iade eder — iş sıraya girip sürüyor.
+    fake_queue = FakeCutoutQueue()
+    reservation_id = uuid.uuid4()
+    quota = RecordingQuota(Reservation(id=reservation_id))
+    key = str(uuid.uuid4())
+
+    response = _post_with(fake_queue, quota, key=key)
+
+    assert response.status_code == 202
+    assert response.json() == {"job_id": key, "status": "queued"}
+    assert fake_queue.enqueued[0][2] == reservation_id
+    assert quota.resolved == []
+
+
+def test_job_that_cannot_enter_the_queue_releases_the_credit():
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    fake_queue = FakeCutoutQueue(fail_enqueue=RedisConnectionError("redis kapalı"))
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+
+    response = _post_with(fake_queue, quota)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "queue_unavailable"
+    assert response.json()["detail"]["retry_safe"] is False
+    assert quota.resolved == [(False, None)]
+
+
+def test_post_queue_lookup_error_keeps_the_existing_job_key():
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    fake_queue = FakeCutoutQueue()
+    fake_queue.get_job = AsyncMock(side_effect=RedisConnectionError("anlık kesinti"))
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+
+    response = _post_with(fake_queue, quota)
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "queue_unavailable" and detail["retry_safe"] is False
+    assert quota.reserved == []
+
+
+def test_full_queue_answers_busy_without_touching_the_credit():
+    fake_queue = FakeCutoutQueue(full=True)
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+
+    response = _post_with(fake_queue, quota)
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "queue_busy" and detail["retry_safe"] is False
+    assert response.headers["Retry-After"] == "30"
+    # Dolu kuyrukta kredi hiç ayrılmadı (ayrılıp hemen iade edilmesi boşuna olurdu).
+    assert quota.reserved == []
+    assert fake_queue.received_content is None
+
+
+def test_repeat_with_the_same_key_sees_the_queued_job_instead_of_a_second_one():
+    fake_queue = FakeCutoutQueue()
+    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
+    key = str(uuid.uuid4())
+    user = _signed_in_user()
+    fake_queue.jobs[(str(user.id), key)] = {"status": "processing"}
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
+    app.dependency_overrides[get_usage_quota] = lambda: quota
+    app.dependency_overrides[get_storage_service] = FakeStorage
+    try:
+        with TestClient(app) as client:
             response = client.post(
                 "/api/remove-background",
                 files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
@@ -651,19 +757,16 @@ def test_successful_result_is_stored_before_the_credit_is_consumed():
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 200 and response.content == b"cutout-png-bytes"
-    stored_key = next(iter(storage.objects))
-    assert stored_key.endswith(f"{key}.png") and storage.objects[stored_key] == b"cutout-png-bytes"
-    # Kredi, sonuç saklandıktan SONRA tüketiliyor ve anahtar kayda geçiyor.
-    assert quota.resolved == [(True, stored_key)]
+    assert response.status_code == 202 and response.json()["status"] == "processing"
+    assert fake_queue.enqueued == [] and quota.reserved == []
 
 
 def test_stored_result_is_returned_without_running_inference_again():
-    fake_service = FakeBackgroundRemovalService(result=b"yeni-sonuc")
+    fake_queue = FakeCutoutQueue()
     storage = FakeStorage()
     storage.objects["results/onceki.png"] = b"saklanan-sonuc"
     quota = RecordingQuota(Reservation(result_key="results/onceki.png"))
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_current_user] = _signed_in_user
     app.dependency_overrides[get_usage_quota] = lambda: quota
     app.dependency_overrides[get_storage_service] = lambda: storage
@@ -680,15 +783,15 @@ def test_stored_result_is_returned_without_running_inference_again():
     assert response.status_code == 200
     assert response.content == b"saklanan-sonuc"
     # Inference HİÇ çalışmadı ve ikinci bir kredi hareketi olmadı.
-    assert fake_service.received_content is None
+    assert fake_queue.received_content is None
     assert quota.resolved == []
 
 
 def test_missing_result_storage_stops_the_job_before_inference():
     # Belirsiz sonucu yeniden inference'a bağlamak yerine açıkça durur.
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
+    fake_queue = FakeCutoutQueue()
     quota = RecordingQuota(Reservation(id=uuid.uuid4()))
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
+    app.dependency_overrides[get_cutout_queue] = lambda: fake_queue
     app.dependency_overrides[get_current_user] = _signed_in_user
     app.dependency_overrides[get_usage_quota] = lambda: quota
     app.dependency_overrides[get_storage_service] = lambda: FakeStorage(configured=False)
@@ -706,34 +809,4 @@ def test_missing_result_storage_stops_the_job_before_inference():
     assert response.json()["detail"]["code"] == "result_storage_unavailable"
     # Güvenli tekrar: hiç kredi tüketilmedi, istemci yeni anahtara geçebilir.
     assert response.json()["detail"]["retry_safe"] is True
-    assert fake_service.received_content is None and quota.resolved == []
-
-
-def test_failed_result_upload_releases_the_credit():
-    fake_service = FakeBackgroundRemovalService(result=b"cutout-png-bytes")
-    quota = RecordingQuota(Reservation(id=uuid.uuid4()))
-
-    class BrokenStorage(FakeStorage):
-        async def upload(self, key, content, content_type):
-            raise ClientError(
-                {"Error": {"Code": "InternalError", "Message": "boom"}}, "PutObject"
-            )
-
-    app.dependency_overrides[get_background_removal_service] = lambda: fake_service
-    app.dependency_overrides[get_current_user] = _signed_in_user
-    app.dependency_overrides[get_usage_quota] = lambda: quota
-    app.dependency_overrides[get_storage_service] = lambda: BrokenStorage()
-    try:
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/remove-background",
-                files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")},
-                headers={"Idempotency-Key": str(uuid.uuid4())},
-            )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "result_storage_unavailable"
-    # Kredi iade edildi; aksi hâlde sonucu olmayan bir kredi yanardı.
-    assert quota.resolved == [(False, None)]
+    assert fake_queue.received_content is None and quota.resolved == []

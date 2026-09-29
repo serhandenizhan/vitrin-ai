@@ -2,3 +2,5 @@
 pytest==9.1.1
 httpx==0.28.1
 pytest-asyncio==1.4.0
+# Kod kuralı kontrolü (yalnız pyflakes; ayar backend/ruff.toml). CI'da testlerden önce koşar.
+ruff==0.16.9

@@ -152,7 +152,7 @@ function BillingPlansForUser({ catalog }: { catalog: PlanPresentation[] }) {
       </Reveal>
     )}
 
-    {selected && <form onSubmit={submit} className="soft-enter mx-auto mt-16 max-w-xl rounded-[1.6rem] bg-white/[0.035] p-7 ring-1 ring-white/10 sm:p-8">
+    {selected && <form method="post" onSubmit={submit} className="soft-enter mx-auto mt-16 max-w-xl rounded-[1.6rem] bg-white/[0.035] p-7 ring-1 ring-white/10 sm:p-8">
       <h2 className="text-[1.25rem] font-semibold tracking-[-0.015em]">{selected.name} · Fatura bilgileri</h2>
       <p className="on-dark-muted mt-3 text-[0.9375rem] leading-relaxed">Ödeme için giriş yapmış olmanız gerekir. Kart bilgilerinizi bir sonraki adımda iyzico formuna gireceksiniz. Kimlik ve adres bilgileri ödeme sağlayıcısına iletilir.</p>
       {[["name", "Ad", "text"], ["surname", "Soyad", "text"], ["phone", "Telefon (+905xxxxxxxxx)", "tel"], ["identity", "T.C. kimlik numarası", "text"], ["city", "Şehir", "text"], ["address", "Fatura adresi", "text"]].map(([name, label, type]) => <label className="mt-4 block text-[0.9375rem]" key={name}>{label}<input required name={name} type={type} maxLength={name === "address" ? 500 : 100} className="mt-2 block min-h-12 w-full rounded-xl bg-white/[0.04] px-4 ring-1 ring-white/15 outline-none focus:ring-white/35" /></label>)}

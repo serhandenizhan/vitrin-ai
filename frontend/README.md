@@ -49,6 +49,50 @@ ama düğmeler çalışmaz. Windows ilk açılışta sorarsa Node.js'e **özel a
 E-posta bağlantıları (doğrulama, sıfırlama) Supabase Redirect URLs'te yalnızca
 localhost kayıtlı olduğu için telefondaki IP adresine dönmez; şifreyle giriş çalışır.
 
+## Hata izleme (Faz 7, 26.09.2026)
+
+`@sentry/nextjs` 11.0.0, **sihirbazsız, elle** kuruldu (kök `CLAUDE.md` ders
+12: sihirbaz `next.config`'i ve birkaç dosyayı kendiliğinden değiştiriyor).
+`NEXT_PUBLIC_SENTRY_DSN` boşken SDK **hiç yüklenmez**: çağrılar dinamik
+`import()` ile ve DSN koşuluyla yazıldı. Üretim derlemesinde ölçüldü: SDK
+parçaları yalnız webpack'in gerektiğinde-yükle haritasında, hiçbir sayfanın
+HTML'inde yok; gerçek tarayıcıda `/kvkk` açıldığında 15 parçanın hiçbiri
+Sentry değildi. DSN'li derlemede parçalar hata anında yüklendi.
+
+| Dosya | Görev |
+| --- | --- |
+| `src/lib/error-tracking.ts` | Ortak ayarlar + temizleyiciler (tarayıcı, Next sunucusu, edge) |
+| `src/instrumentation-client.ts` | Tarayıcıda başlatma |
+| `src/instrumentation.ts` | Next sunucusu/edge başlatma + `onRequestError` (vekil ve render hataları) |
+| `src/app/global-error.tsx` | Kök düzen dahil çöküş ekranı; hatayı bildirir. **Next 16'da prop `retry`** (eski `reset` değil — eski örneklerden yazılsa "Tekrar dene" hiçbir şey yapmazdı) |
+
+**Gitmeyenler** (backend `app/core/monitoring.py` ile aynı kurallar):
+istek gövdesi ve çerezler, kimlik bilgisi başlıkları, adreslerdeki sorgu
+dizesi (şifre sıfırlama kodu, e-posta, `next` orada), **tıklama/klavye
+kırıntıları** (düğmenin metni — ör. ürün adı — taşınabiliyor), kullanıcı
+bilgisi, oturum kaydı (Replay eklenmedi), performans izi (`tracesSampleRate`
+bilinçli olarak verilmedi) ve sunucu tarafında yerel değişkenler
+(`includeLocalVariables: false` — Node SDK'sında `LocalVariablesAsync`
+entegrasyonu yüklü geliyor). Kalan metinde e-posta, JWT, `Bearer` ve Supabase
+oturum çerezi maskelenir. Not: sunucu SDK'sı hatanın çevresindeki KAYNAK kod
+satırlarını da gönderir (kullanıcı verisi değil, bizim kodumuz).
+
+**Doğrulama:** gerçek tarayıcıda DSN'li üretim derlemesi sahte bir Sentry
+sunucusuna bağlandı; sorgu dizesinde e-posta ve kod, bir oturum çerezi ve
+metinli bir düğme tıklamasıyla hata atıldı. Tek olay ulaştı:
+`kayit basarisiz [e-posta]`, adres sorgusuz, çerez/kod/düğme metni/kullanıcı
+hiçbir yerde yok. `error-tracking.test.ts` aynı yolu gerçek SDK ve sahte
+taşıyıcıyla sınar; beş bozma denendi (temizleyicinin kaldırılması, tıklama
+filtresinin kaldırılması, kırıntı temizleyicisinin ayardan düşmesi, kullanıcının
+silinmemesi, istek adresinden sorgunun atılmaması), her biri kırmızı yaktı.
+
+**Lisans notu:** `@sentry/nextjs`'in derleme eklentileri `sentry` (Sentry CLI)
+paketini getiriyor; lisansı **FSL-1.1-Apache-2.0** (Sentry'ye rakip ürün
+dışında her kullanım serbest, iki yıl sonra Apache-2.0). Yalnız derleme
+aracı, kullanıcıya dağıtılmıyor; bizim kullanımımız serbest. Kaynak haritası
+yükleme (`withSentryConfig` + auth token) şimdilik **kurulmadı** — yığın
+izleri küçültülmüş kodu gösterir; karar Faz 7.5'te.
+
 ## Neden sunucu tarafı vekil
 
 Tarayıcı FastAPI'ye **doğrudan gitmiyor**; istek önce
@@ -78,12 +122,36 @@ Vekil ayrıca iki iş daha yapıyor:
 | Backend 413 | "Dosya çok büyük. En fazla 20 MB olabilir." |
 | Backend 503 (kapasite dolu) | "Sistem şu anda meşgul — aynı anda yalnızca bir fotoğraf işlenebiliyor." |
 | Backend'e ulaşılamıyor | "Arka plan servisine ulaşılamadı. Servis çalışmıyor olabilir." |
-| Zaman aşımı (180 sn) | "İşlem zaman aşımına uğradı." |
+| Zaman aşımı (yükleme, 120 sn) | "İşlem zaman aşımına uğradı." |
 
-503 ayrı bir mesaj hak ediyor çünkü bir hata değil, geçici bir durum: backend
-aynı anda tek inference'a izin veriyor (`MAX_CONCURRENT_INFERENCES=1`, BiRefNet'in
-12–14 GB RAM ayak izi yüzünden). Kullanıcının yapması gereken tek şey biraz
-beklemek.
+503 ayrı bir mesaj hak ediyor çünkü bir hata değil, geçici bir durum. Faz 7'den
+beri kesimler kuyruğa girdiği için "aynı anda tek fotoğraf" diye bir red yok;
+503 yalnız kuyruk üst sınırda (`queue_busy`) ya da altyapı geçici olarak
+kullanılamıyorken gelir ve `lib/cutout-job.ts` bunları kullanıcıya göstermeden
+`Retry-After` kadar bekleyip yeniden dener.
+
+## Kesim kuyruğu ve yoklama (Faz 7, 27.09.2026)
+
+`POST /api/remove-background` artık `202 {job_id}` döner; `lib/cutout-job.ts`
+işi `/api/remove-background/jobs/[id]` üzerinden 1,5 sn'de bir yoklar ve PNG
+gelince bileşene verir. Karar (Serhan): yoğunluk **müşteriye hissettirilmez** —
+sıra numarası yok; 30 sn'den sonra bekleme ekranında (`processing-state.tsx`)
+yalnız nötr bir cümle çıkar. Kredisi iade edilmiş GEÇİCİ hatalar (`worker_lost`,
+`job_expired`…) yeni anahtarla sessizce en fazla iki kez yeniden
+denenir; kalıcı hata (`processing_failed`) gösterilir. Anahtar kuralı
+değişmedi: yeni anahtara yalnız `retry_safe`'te geçilir. `queue_busy` ve POST
+`queue_unavailable` aynı anahtarla yeniden yüklenir; yoklamadaki Redis
+kesintisinde işin kredisi hâlâ ayrılmış olabilir. Bu durumda aynı anahtarla
+en fazla beş kez yeniden yoklanır, ardından hata gösterilir ve anahtar korunur.
+**Sessiz yeniden
+deneme, backend'in `retry_safe`'i yalnız kredi GERÇEKTEN iade edildiğinde
+yazmasına dayanır.** 27.09.2026'ya kadar bu garanti yoktu: kredisi tüketilmiş
+bir iş, işçi yeniden denediğinde `reservation_released` olarak dönebiliyordu
+ve buradaki yeniden deneme müşteriye ikinci bir kredi harcatıyordu (Codex
+incelemesi; düzeltme backend'de, `backend/README.md` → "Kesim kuyruğu"). **Kullanıcı ekrandan
+ayrılsa da yoklama sürer:** kredi harcanıyor ve sonuç geçmişe yazılmalı (ekran
+güncellemesi oturum sayacıyla atlanır). Testler sahte zamanlayıcıyla
+(`cutout-job.test.ts`, 17 test; beş bozma denendi).
 
 ## Yükleme kısıtları backend ile senkron tutulur
 
@@ -454,7 +522,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**417 test** (26.09.2026'da sayıldı; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**460 test** (29.09.2026'da sayıldı; Redis yoklaması kesintisinde ikinci POST açılmasını engelleyen üç test eklendi; 28.09.2026: Kaan'ın PR #30 incelemesiyle kesim işinin anahtarını ekrandan ayıran `bindJobKey` testleri eklendi — `lib/cutout-job.test.ts`; 27.09.2026: /cso incelemesiyle CMYK oturum/hız sınırı, `lib/change-password.test.ts` ve OWASP ZAP bulgusuyla `lib/forms-post-method.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -474,7 +542,7 @@ Faz 2-3 dosyaları:
 | `app/api/backgrounds/route.test.ts` | Zemin vekili — hiç 5xx dönmemesi, bozuk kayıt eleme, `expires_in` yokluğu |
 | `lib/backgrounds.test.ts` | Yenileme zamanlaması ve yer tutucuya düşme |
 | `lib/composition.test.ts` | Sığdırma geometrisi, açı normalizasyonu, merkeze yakalama, dışa aktarma oranı |
-| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları ve profil yapılandırması |
+| `app/api/cmyk/route.test.ts` | CMYK yükleme boyutu/piksel sınırları, profil yapılandırması, oturum/hız sınırı (gövde okunmadan), CSRF, biçim kontrolü |
 | `components/composer/use-backgrounds.test.ts` | Sekme yeniden görünür olduğunda R2 imzalı URL yenilemesi |
 | `components/composer/composition-editor.test.ts` | Yenilenmiş listede seçili zeminin `id` ile korunması; `toDataURL` hata attığında ya da Konva boş veri URL'i döndürdüğünde (tainted tuval) sahne boyutu/ölçeği ve Transformer'ların geri yüklenmesi, hatanın gösterilmesi, CMYK isteğinin hiç atılmaması; Pazaryeri → beyaz zemin, WhatsApp paylaşımı (telefon ve masaüstü yolu), SVG logo reddi, geçersiz gram uyarısı |
 
@@ -801,9 +869,10 @@ bırakırdı.
 
 ## Bilinen kısıt
 
-İlk istek modeli belleğe yüklediği için ~30-35 saniye sürebilir; sonrakiler
-~15 saniye (bkz. kök `CLAUDE.md` "Bilinen kısıt"). Bekleme ekranı geçen süreyi
-sayıyor ve 20 saniyeden sonra bunun ilk istek olabileceğini açıklıyor — donmuş
+Bir kesim CPU'da ~12–15 saniye sürer (bkz. kök `CLAUDE.md` "Bilinen kısıt");
+Faz 7'den beri işçi modeli iş almadan önce yüklediği için "ilk istek" gecikmesi
+yok, ama yoğunlukta sırada beklenebilir. Bekleme ekranı geçen süreyi sayıyor ve
+30 saniyeden sonra nötr bir "biraz daha uzun sürebilir" cümlesi gösteriyor — donmuş
 gibi görünen bir ekranda kullanıcı sekmeyi kapatıyor.
 
 ## Katalog (`/katalog`)
@@ -1042,6 +1111,12 @@ Geometri ve doğrulama `src/lib/overlays.ts`'te, Konva'dan bağımsız (testli).
   düğmesi önce onay penceresi açar: "Bu görsel baskıya önerilmiyor. Yine de onaylıyor
   musunuz?" — Vazgeç hiçbir şey indirmez, "Evet, indir" normal akışa devam eder. Kontrol
   arayüzde; `/api/cmyk` yalnızca çizilmiş sahneyi alır.
+- **`/api/cmyk` oturum ister ve hız sınırlıdır (27.09.2026, /cso incelemesi):** rota
+  isteğin gövdesini okumadan önce backend'e sorar (`POST /api/cmyk/permit`: oturum +
+  kullanıcı başına 10 dakikada 20 dönüşüm). Oturumsuz istek `401 auth_required`, sınırı
+  aşan `429` + `Retry-After` alır; başka bir siteden gelen istek (CSRF) 403. Sonuç:
+  girişsiz bir ziyaretçi Katalog'da CMYK indiremez, "Bu işlem için giriş yapın." görür.
+  Testler `app/api/cmyk/route.test.ts` (gövdenin hiç okunmadığı da ölçülüyor).
 - **Yerelde zeminler görünmüyorsa:** artık ilk şüpheli Redis DEĞİL. PR #18'e kadar
   Redis yokken `GET /api/backgrounds` 500 veriyor ve vekil
   `X-Backgrounds-Source: unavailable` ile boş liste döndürüyordu; zemin listelemenin

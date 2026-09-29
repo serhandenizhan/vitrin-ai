@@ -269,10 +269,11 @@ async def claim_checkouts(db):
 
 
 async def purge_expired_results(db, storage):
-    """Saklama süresi dolmuş idempotency sonuçlarını R2'den siler.
+    """Saklama süresi dolmuş sonuçları ve sahipsiz denemeleri R2'den siler.
 
-    DB kaydı YALNIZCA nesne gerçekten silindikten sonra temizlenir; silme
-    başarısız olursa kayıt kalır ve bir sonraki turda tekrar denenir.
+    Deneme anahtarı yüklemeden önce DB'ye yazılır. İşçi yüklemeden sonra
+    ölürse veya kaybeden denemenin silmesi başarısız olursa bu kayıt kalır.
+    DB kaydı yalnız R2 silmesi başarılı olduktan sonra temizlenir.
     """
     rows = await many(
         db,
@@ -292,6 +293,34 @@ async def purge_expired_results(db, storage):
             """UPDATE usage_reservations SET result_r2_key=NULL,result_expires_at=NULL
             WHERE id=:id""",
             id=row["id"],
+        )
+        await execute(
+            db,
+            "DELETE FROM cutout_result_attempts WHERE key=:key",
+            key=row["result_r2_key"],
+        )
+        await db.commit()
+
+    attempts = await many(
+        db,
+        """SELECT a.key FROM cutout_result_attempts a
+        JOIN usage_reservations r ON r.id=a.reservation_id
+        WHERE a.created_at<=now()-interval '24 hours'
+          AND r.status<>'pending'
+          AND (a.key IS DISTINCT FROM r.result_r2_key OR r.result_expires_at<=now())
+        ORDER BY a.created_at LIMIT 200""",
+    )
+    await db.commit()
+    for attempt in attempts:
+        try:
+            await storage.delete(attempt["key"])
+        except Exception:  # noqa: BLE001 - başarısız silme sonraki turda denenir
+            await db.rollback()
+            continue
+        await execute(
+            db,
+            "DELETE FROM cutout_result_attempts WHERE key=:key",
+            key=attempt["key"],
         )
         await db.commit()
 
