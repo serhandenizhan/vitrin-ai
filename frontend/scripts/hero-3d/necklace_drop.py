@@ -48,13 +48,16 @@ def build():
     bail = jl.link_bmesh("metal_bail", bm, smooth=True)
     jl.assign(bail, gold)
 
-    # Zincir: sahne 2 fotografindaki gibi iki ACIK kol (fotograftan olculdu,
-    # piksel -> mm): sol kol isaret parmagina dik cikar, sag kol basparmagin
-    # ustunden asarak yukari kivrilir. Uclar parmaklarin arasinda kalir.
+    # Zincir: sahne 2 fotografindaki poz (fotograftan olculdu, piksel -> mm):
+    # sol kol isaret parmagina dik cikar, sag kol basparmagin ustunden asarak
+    # yukari kivrilir. Iki kol TEPEDE BIRLESIR: fotografta uclar parmaklarin
+    # arasinda kayboluyor, acik birakilinca yakinlasmada kolye "kirpilmis"
+    # gorunuyordu (Serhan). Fazladan tepe, ilk karede parmaklarin arkasinda
+    # kalir (el katmani modelin onunde cizilir).
     bottom = tip + 2.6
     strands = [
-        [(0.0, 0.0), (-4.9, 35.3), (-6.4, 63.3)],
-        [(0.0, 0.0), (11.0, 23.9), (23.9, 53.4), (16.3, 68.6), (7.2, 70.9)],
+        [(0.0, 0.0), (-4.9, 35.3), (-6.4, 63.3), (-3.4, 73.5), (1.0, 77.0)],
+        [(0.0, 0.0), (11.0, 23.9), (23.9, 53.4), (16.3, 68.6), (7.2, 74.5), (1.0, 77.0)],
     ]
     bm = jl.new_bmesh()
     for strand in strands:

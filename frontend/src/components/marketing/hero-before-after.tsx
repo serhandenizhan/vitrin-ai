@@ -31,6 +31,12 @@ type HeroBeforeAfterProps = {
   height: number;
   /** `next/image` icin; kaydiracin ekrandaki genisligi. */
   sizes?: string;
+  /**
+   * Cerceve bundan daha dikey olmaz (en / boy). Cok dikey bir gorsel
+   * (kolye) daralip etiketleri ust uste bindiriyordu; o zaman gorsel
+   * ustten kirpilir, alt kenar (tas) korunur.
+   */
+  minAspect?: number;
 };
 
 export function HeroBeforeAfter({
@@ -41,7 +47,10 @@ export function HeroBeforeAfter({
   width,
   height,
   sizes = "(max-width: 1024px) 90vw, 420px",
+  minAspect = 0,
 }: HeroBeforeAfterProps) {
+  const aspect = Math.max(width / height, minAspect);
+  const cropped = aspect > width / height;
   const [ratio, setRatio] = useState(0.5);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Surukleme durumu REF'te: `pointermove` icinde state okunsaydi kapanis eski
@@ -60,7 +69,7 @@ export function HeroBeforeAfter({
     <div>
       <div
         ref={containerRef}
-        style={{ aspectRatio: `${width} / ${height}` }}
+        style={{ aspectRatio: cropped ? String(aspect) : `${width} / ${height}` }}
         className="relative w-full cursor-ew-resize touch-none overflow-hidden rounded-2xl border border-white/12 shadow-2xl select-none"
         onPointerDown={(event) => {
           isDraggingRef.current = true;
@@ -89,6 +98,7 @@ export function HeroBeforeAfter({
           height={height}
           draggable={false}
           sizes={sizes}
+          style={cropped ? { objectPosition: "50% 100%" } : undefined}
           className="absolute inset-0 h-full w-full object-cover"
         />
         {/* Kesim saydam: dama deseni uzerinde, arka planin gercekten gittigi
@@ -100,7 +110,7 @@ export function HeroBeforeAfter({
           height={height}
           draggable={false}
           sizes={sizes}
-          style={{ clipPath: `inset(0 ${(1 - ratio) * 100}% 0 0)` }}
+          style={{ clipPath: `inset(0 ${(1 - ratio) * 100}% 0 0)`, objectPosition: cropped ? "50% 100%" : undefined }}
           className="checkerboard absolute inset-0 h-full w-full object-cover"
         />
 

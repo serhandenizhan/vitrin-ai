@@ -320,8 +320,8 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
         <div
           className="mx-auto mt-4 w-[var(--ba-sm)] md:mt-5 md:w-[var(--ba-lg)]"
           style={{
-            ["--ba-sm" as string]: `${Math.min(8, 9 * (scene.close.width / scene.close.height))}rem`,
-            ["--ba-lg" as string]: `${Math.min(13, 15 * (scene.close.width / scene.close.height))}rem`,
+            ["--ba-sm" as string]: `${Math.min(8, 9 * Math.max(0.75, scene.close.width / scene.close.height))}rem`,
+            ["--ba-lg" as string]: `${Math.min(13, 15 * Math.max(0.75, scene.close.width / scene.close.height))}rem`,
           }}
         >
           <HeroBeforeAfter
@@ -332,6 +332,7 @@ export default function HeroZoom({ scene, origin, handOffset, webgl, reduceMotio
             width={scene.close.width}
             height={scene.close.height}
             sizes="13rem"
+            minAspect={0.75}
           />
         </div>
 
