@@ -34,10 +34,11 @@ const COLUMNS: {
     title: "Ürün",
     items: [
       { label: "Deneyin", href: "/#dene" },
+      { label: "Stüdyo", href: "/#studyo" },
       { label: "Zeminler", href: "/#zeminler" },
       { label: "Nasıl çalışır", href: "/#nasil" },
+      { label: "Sık sorulanlar", href: "/#sss" },
       { label: "Teknik bilgiler", href: "/#teknik" },
-      { label: "Hakkımızda", href: "/#hakkimizda" },
     ],
   },
   {

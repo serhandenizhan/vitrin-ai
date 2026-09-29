@@ -1322,6 +1322,29 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   -webkit-backdrop-filter: blur(22px) saturate(200%) contrast(1.04);
 }
 
+/* Ana sayfa stüdyo turu (`studio-tour.tsx`). Sahne sabit yukseklikli bir
+   kap; cerceve secili bicimin oraninda (--a = en/boy), sahneye sigan en
+   buyuk boyda. Genislik gecisle degisir: bicim secilince cerceve
+   yumusakca daralip genisler. Cerceve de bir kap: urun boyu onun
+   yuksekligine gore (cqh). */
+@layer components {
+  .studio-tour-stage {
+    container-type: size;
+    height: clamp(24rem, 64vw, 31rem);
+  }
+
+  .studio-tour-frame {
+    container-type: size;
+    width: min(100cqw, 100cqh * var(--a, 0.8));
+    aspect-ratio: var(--a, 0.8);
+  }
+
+  .studio-tour-reflection {
+    transform: scaleY(-1);
+    mask-image: linear-gradient(to top, rgb(0 0 0 / 0.9), transparent 45%);
+  }
+}
+
 @keyframes hero-float {
   0%,
   100% {

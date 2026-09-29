@@ -56,7 +56,7 @@ export function HowItWorks() {
   return (
     <section id="nasil" className="surface-charcoal section-rhythm relative overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(45%_80%_at_50%_0%,rgba(214,167,86,0.14),transparent_74%)]" />
-      <div className="relative mx-auto w-full max-w-5xl px-5">
+      <div className="relative mx-auto w-full max-w-6xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
             Üç adımda bitiyor
