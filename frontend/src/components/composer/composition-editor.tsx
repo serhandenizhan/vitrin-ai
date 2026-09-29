@@ -2360,7 +2360,7 @@ export function CompositionEditor({
             <p className="relative mt-5 text-[0.6875rem] font-medium tracking-[0.14em] text-[#d1a25b]">VİTRİN AI</p>
             <p className="relative mt-1.5 text-[1.375rem] font-semibold tracking-[-0.02em]">Teşekkürler</p>
             <p id="indirme-bitti-aciklama" className="relative mt-2 text-[0.875rem] leading-relaxed text-[#a8a29a]">
-              İndirme işlemi başarıyla tamamlandı. Vitrin AI&apos;ı tercih ettiğiniz için teşekkür ederiz.
+              İndirme işlemi başarıyla tamamlandı. Vitrin&apos;i tercih ettiğiniz için teşekkür ederiz.
             </p>
             <div className="relative mx-auto my-5 h-px w-10 bg-white/15" aria-hidden />
             <h2

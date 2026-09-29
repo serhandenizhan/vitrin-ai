@@ -15,7 +15,7 @@ import Link from "next/link";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "Bağlantı geçersiz — Vitrin AI",
+  title: "Bağlantı geçersiz — Vitrin",
   robots: { index: false },
 };
 

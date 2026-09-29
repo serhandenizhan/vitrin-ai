@@ -1,5 +1,5 @@
 /**
- * Vitrin AI bulteni — icerik (one alinan is, 17.09.2026).
+ * Vitrin bulteni — icerik (one alinan is, 17.09.2026).
  *
  * Icerik KODDA duruyor (Kaan karari): veritabanina ve backend'e dokunmuyor.
  * Yeni bir paylasim eklemek icin `POSTS` dizisinin BASINA bir kayit eklemek
@@ -87,7 +87,7 @@ export const POSTS: BulletinPost[] = [
     kind: "yakinda",
     date: "2026-09-15",
     title: "Mobil uygulama",
-    body: "Fotoğrafı çektiğiniz telefondan doğrudan vitrin görseline: Vitrin AI'ın iOS ve Android uygulaması yol haritasında.",
+    body: "Fotoğrafı çektiğiniz telefondan doğrudan vitrin görseline: Vitrin'in iOS ve Android uygulaması yol haritasında.",
   },
 ];
 

@@ -14,7 +14,7 @@ const sans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Vitrin AI — Kuyumcu ürün görseli",
+  title: "Vitrin — Kuyumcu ürün görseli",
   description:
     "Kuyum ürünü fotoğraflarının arka planını yapay zekâ ile kaldırın ve satışa hazır görseller elde edin.",
 };

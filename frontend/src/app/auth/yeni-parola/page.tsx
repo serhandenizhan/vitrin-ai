@@ -20,7 +20,7 @@ import { SiteShell } from "@/components/site-shell";
 import { RECOVERY_COOKIE } from "@/lib/password-recovery";
 
 export const metadata: Metadata = {
-  title: "Yeni parola — Vitrin AI",
+  title: "Yeni parola — Vitrin",
   robots: { index: false },
 };
 

@@ -82,7 +82,7 @@ const HAKKINDA = [
   {
     baslik: "Amacımız",
     metin:
-      "Bir yüzüğü satışa hazır göstermek için ya stüdyoya para veriyorsunuz ya da saatlerce fotoğraf düzenliyorsunuz. Çoğu zaman sorun ürün değil, arkasındaki tezgâh. Vitrin AI, telefonla çektiğiniz tek bir fotoğraftan temiz bir ürün görseli çıkarıyor.",
+      "Bir yüzüğü satışa hazır göstermek için ya stüdyoya para veriyorsunuz ya da saatlerce fotoğraf düzenliyorsunuz. Çoğu zaman sorun ürün değil, arkasındaki tezgâh. Vitrin, telefonla çektiğiniz tek bir fotoğraftan temiz bir ürün görseli çıkarıyor.",
   },
   {
     baslik: "Misyonumuz",

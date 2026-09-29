@@ -5,7 +5,7 @@ import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "Ürün Çekim Rehberi — Vitrin AI",
+  title: "Ürün Çekim Rehberi — Vitrin",
   description: "Takı fotoğraflarında temiz arka plan kaldırma sonucu için çekim önerileri.",
 };
 

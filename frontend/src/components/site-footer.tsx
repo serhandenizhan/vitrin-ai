@@ -103,7 +103,7 @@ export function SiteFooter() {
             <Link href="/#top" className="inline-flex items-center gap-2.5">
               <BrandMark className="text-gold h-7 w-auto" />
               <span className="text-[1.125rem] font-semibold tracking-[-0.015em]">
-                Vitrin AI
+                Vitrin
               </span>
             </Link>
             <p className="fine-print on-dark-muted mt-4 max-w-xs text-pretty">
@@ -188,7 +188,7 @@ export function SiteFooter() {
         </ol>
 
         <div className="mt-8 flex flex-col gap-2 text-[0.75rem] text-[#f3f0eb]/45 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Vitrin AI. Tüm hakları saklıdır.</p>
+          <p>© {new Date().getFullYear()} Vitrin. Tüm hakları saklıdır.</p>
           <p>Türkiye&apos;deki kuyumcular için geliştiriliyor.</p>
         </div>
       </div>

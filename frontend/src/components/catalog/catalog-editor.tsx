@@ -69,7 +69,7 @@ const SAMPLE: { template: TemplateName; texts: CatalogTexts; images: string[] } 
   texts: {
     eyebrow: "Sonbahar 2026",
     title: "Pırlanta Koleksiyonu",
-    footer: "Vitrin AI ile hazırlandı",
+    footer: "Vitrin ile hazırlandı",
   },
   images: ["/showcase/vitrin-kadife.webp", "/showcase/vitrin-altin.webp"],
 };
@@ -118,7 +118,7 @@ const CATALOG_TABS: { id: CatalogTab; label: string }[] = [
 const DEFAULT_TEXTS: CatalogTexts = {
   eyebrow: "Sonbahar 2026",
   title: "Yeni Koleksiyon",
-  footer: "Vitrin AI ile hazırlandı",
+  footer: "Vitrin ile hazırlandı",
 };
 
 export function CatalogEditor() {

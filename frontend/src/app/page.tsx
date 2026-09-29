@@ -1,5 +1,5 @@
 /**
- * Vitrin AI — ana sayfa (Faz 2).
+ * Vitrin — ana sayfa (Faz 2).
  *
  * Kurgu, apple.com/tr'nin urun sayfalarindan uyarlandi: tam genislikte,
  * donusumlu koyu/acik bolumler; her bolumun tek bir isi var ve kaydirdikca

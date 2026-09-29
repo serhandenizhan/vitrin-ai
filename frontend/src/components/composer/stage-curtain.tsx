@@ -2,7 +2,7 @@
 
 /**
  * Stüdyo açılış perdesi (Kaan, 19.09.2026): "Arka plan ekle"ye basınca koyu
- * cam bir perde kapalı başlar; solda Vitrin AI logosu, ortada aşama numarası
+ * cam bir perde kapalı başlar; solda Vitrin logosu, ortada aşama numarası
  * ve adı, altın çizgi soldan sağa dolar, perde yukarı kalkar. Toplam ~1,5 sn.
  * "Hareketi azalt" açıkken gösterilmez.
  *
