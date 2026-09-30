@@ -1193,8 +1193,14 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     **29.09.2026, PR #32 kalan üç birleşme engeli kapatıldı:** Redis yoklama
     hatası yeni krediye izin vermiyor; işçi geçici Redis/DB hatasında ayakta
     kalıp alınmış işi yeniden sıraya koyuyor; Windows VS Code görevleri ortak
-    R2 bucket'ı için silme korumasını açıyor. Windows test uyumluluğu ve
-    kararsız ön yüz testi ayrı takipte (PR #32 bulguları).
+    R2 bucket'ı için silme korumasını açıyor. Windows test uyumluluğu
+    30.09.2026'da kapandı (migration SQL'i UTF-8 okunuyor, `compare_cutouts`
+    Windows'ta açılıyor, günlük mutabakat için Windows'ta `tzdata` kuruluyor,
+    `test.sh` `localhost` yerine `127.0.0.1` veriyor (Windows'ta paket ~1 sa → ~3 dk),
+    Unix izni isteyen 6 yedek testi Windows'ta atlanıyor —
+    kök `CLAUDE.md` ders 37); kararsız ön yüz testi ayrı takipte (PR #32
+    bulguları; 30.09.2026'da `error-tracking.test.ts` yük altında 5 sn zaman
+    aşımına düştü, tek başına geçiyor).
   - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
     `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
   - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,

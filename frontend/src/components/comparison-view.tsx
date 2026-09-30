@@ -352,11 +352,13 @@ function OnceSonra({
           )}
         </button>
 
+        {/* Kesim SOLDA kırpılarak çiziliyor (clipPath inset sağdan), özgün sağda
+            görünüyor; etiketler de bu sırada — açılıştaki kaydıraçla aynı. */}
         <span className="fine-print pointer-events-none absolute top-3 left-3 rounded-full bg-black/55 px-2 py-0.5 text-white backdrop-blur-sm">
-          Özgün
+          Kesim
         </span>
         <span className="fine-print pointer-events-none absolute top-3 right-3 rounded-full bg-black/55 px-2 py-0.5 text-white backdrop-blur-sm">
-          Kesim
+          Özgün
         </span>
       </div>
 
