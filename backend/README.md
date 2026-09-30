@@ -59,16 +59,17 @@ Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
 `VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
 Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
 Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
-`.venv\Scripts\pytest.exe`'yi de bulur). Windows'ta tam paket ~1 saat sürer
-(her test Docker'daki Postgres'e gidip gelir; takılmış sanılmasın) ve yedek
-betiğinin Unix dosya izni (`os.fchmod`, 0o600) isteyen 6 testi orada
+`.venv\Scripts\pytest.exe`'yi de bulur). Betik adresleri `localhost` değil
+`127.0.0.1` olarak verir: Windows'ta `localhost` önce `::1`'e gidip her yeni
+bağlantıda ~2 sn bekliyordu ve paket ~1 saat sürüyordu; artık ~3 dk (ölçüldü,
+30.09.2026). Yedek betiğinin Unix dosya izni (`os.fchmod`, 0o600) isteyen 6 testi orada
 **atlanır** — izin taklit edilmez, CI (Linux) hepsini koşar (30.09.2026, kök
 `CLAUDE.md` ders 37). Bash yoksa PowerShell'de aynısı elle
 (repo kökünden):
 
 ```powershell
 $env:POSTGRES_PORT="5434"; $env:REDIS_PORT="6380"; docker compose -p vitrin-ai-test up -d postgres redis
-cd backend; $env:DATABASE_URL="postgresql+asyncpg://vitrin_ai:change_me_locally@localhost:5434/vitrin_ai"; $env:REDIS_URL="redis://localhost:6380/0"; .venv\Scripts\pytest
+cd backend; $env:DATABASE_URL="postgresql+asyncpg://vitrin_ai:change_me_locally@127.0.0.1:5434/vitrin_ai"; $env:REDIS_URL="redis://127.0.0.1:6380/0"; .venv\Scripts\pytest
 ```
 
 Testler `BackgroundRemovalService`'i mock'lar — gerçek BiRefNet modelini her

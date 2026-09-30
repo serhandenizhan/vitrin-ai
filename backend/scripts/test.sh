@@ -72,8 +72,12 @@ if [ "$ready" != true ]; then
   exit 2
 fi
 
-export DATABASE_URL="postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@localhost:${TEST_DB_PORT}/${DB_NAME}"
-export REDIS_URL="redis://localhost:${TEST_REDIS_PORT}/0"
+# `localhost` değil 127.0.0.1: compose portları yalnız 127.0.0.1'de açıyor.
+# Windows'ta `localhost` önce ::1'e gidiyor ve reddi ~2 sn sonra bildiriyor;
+# her yeni bağlantı 2 sn bekleyince paket ~1 saat sürüyordu (30.09.2026, ölçüldü:
+# localhost 2,05 sn / 127.0.0.1 0,03 sn). macOS/Linux'ta fark yok.
+export DATABASE_URL="postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@127.0.0.1:${TEST_DB_PORT}/${DB_NAME}"
+export REDIS_URL="redis://127.0.0.1:${TEST_REDIS_PORT}/0"
 
 cd "$BACKEND_DIR"
 exec "$PYTEST" "$@"
