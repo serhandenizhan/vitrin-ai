@@ -114,7 +114,7 @@ export function SiteHeader() {
             {/* Cok dar ekranda yalnizca isaret kaliyor: 320 px'te cubuk
                 tasiyordu. Isaret tek basina markayi tasiyabiliyor. */}
             <span className="hidden font-semibold tracking-[-0.015em] whitespace-nowrap min-[430px]:inline">
-              Vitrin AI
+              Vitrin
             </span>
           </Link>
 

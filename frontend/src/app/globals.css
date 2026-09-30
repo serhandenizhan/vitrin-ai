@@ -1225,3 +1225,184 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.625rem, #000 calc(100% - 0.625rem), transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 0.625rem, #000 calc(100% - 0.625rem), transparent);
 }
+
+/* --------------------------------------------------------------------------
+   Acilis vitrini (28.09.2026, `hero-showcase.tsx`)
+   `@layer components`: sahnelerin konumu Tailwind yardimci siniflariyla
+   veriliyor; katmansiz bir kural onlari ezerdi (ders 28).
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* 4:5 fotograf, alttan yukselir. Ekrandan BUYUK tutulup asagi
+     kaydirilir (telefonda %20, genis ekranda %34): el avuc ortasindan kesik girer (Synais referansi) ve taki
+     ekranin ortasinda, one cikar (Serhan: "yuzuk daha onde olmali").
+     Telefonda genislikten tasar (200vw); yanlarda yalniz zemin kesilir.
+     `translate` ozelligi JS'in yazdigi `transform`dan AYRI, ikisi toplanir. */
+  .hero-slide {
+    height: min(140svh, 200vw, 90rem);
+    aspect-ratio: 4 / 5;
+    translate: 0 calc(20% + var(--hero-adjust, 0%));
+    will-change: transform, opacity;
+  }
+
+  /* Genis ekranda daha asagi: baslik ve dugmeler ustte daha cok yer kaplar,
+     taki onlarin altinda, ekranin ortasinda kalsin. */
+  @media (min-width: 768px) {
+    .hero-slide {
+      translate: 0 calc(34% + var(--hero-adjust, 0%));
+    }
+  }
+
+  /* Fotografin kenarlari sayfa zeminine erir; el alt kenardan, bilekten
+     kesik girer. Alt koseler de tamamen silinir: 70%'lik bir elips onlari
+     %70 opak birakiyordu ve fotograf zeminin isigindan koyu bir dikdortgen
+     gibi ayriliyordu (olculdu). DEGISIRSE `hero-zoom.tsx` edgeMask da. */
+  .hero-photo {
+    mask-image: radial-gradient(50% 84% at 50% 100%, #000 55%, transparent 100%);
+  }
+
+  /* Duragan halde suzulme. Ilk surum (0.45rem / 7 sn) ekranda fark
+     edilmiyordu (Serhan); genlik iki katina cikti. */
+  .hero-float {
+    animation: hero-float 6s ease-in-out infinite;
+  }
+
+  .hero-float.hero-float-paused {
+    animation-play-state: paused;
+  }
+
+  /* Yuzugu elden one cikaran parlak kopya (kesim, ayni kadraj). */
+  .hero-ring-lift {
+    filter: brightness(var(--hero-lift, 1.45)) saturate(1.08) contrast(1.05);
+  }
+
+  .hero-glint {
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 0.35rem rgba(255, 236, 200, 0.9));
+    animation: hero-glint 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ~5 sn'de bir kisa parlama (Serhan: "5 saniye"). */
+  .hero-glint.hero-glint-idle {
+    animation: hero-glint-idle 5s ease-out infinite;
+  }
+}
+
+/* Kaydirinca el hafifce iner, yuzuk yerinde kalir — yakinlasmadaki "el
+   yuzugu birakir" anin kucuk bir yankisi. Tamamen CSS (kaydirmaya bagli
+   animasyon): JavaScript yok, tekerlek yakalanmiyor. Desteklemeyen tarayici
+   (Firefox) eli yerinde birakir; bir sey bozulmaz. */
+@supports (animation-timeline: view()) {
+  .hero-scroll {
+    view-timeline: --hero-scroll block;
+  }
+
+  .hero-hand {
+    animation: hero-hand-drop linear both;
+    animation-timeline: --hero-scroll;
+    animation-range: exit 0% exit 100%;
+  }
+}
+
+@keyframes hero-hand-drop {
+  to {
+    translate: 0 6%;
+  }
+}
+
+/* Yakinlasma paneli: liquid-glass'tan bir kademe SAYDAM (Serhan, 29.09.2026:
+   arkaya zemin konunca zemin belirgin olsun, ama cok saydam olmasin).
+   Bilesik secici (0-2-0): tek sinifli .liquid-glass'i siradan bagimsiz ezer. */
+.liquid-glass.hero-panel-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent 38%),
+    radial-gradient(120% 90% at 50% 120%, rgb(214 167 86 / 0.08), transparent 60%),
+    radial-gradient(90% 140% at 12% -30%, rgb(255 255 255 / 0.14), transparent 50%),
+    linear-gradient(135deg, rgb(44 42 39 / 0.64), rgb(18 17 16 / 0.58));
+  backdrop-filter: blur(22px) saturate(200%) contrast(1.04);
+  -webkit-backdrop-filter: blur(22px) saturate(200%) contrast(1.04);
+}
+
+/* Ana sayfa stüdyo turu (`studio-tour.tsx`). Sahne sabit yukseklikli bir
+   kap; cerceve secili bicimin oraninda (--a = en/boy), sahneye sigan en
+   buyuk boyda. Genislik gecisle degisir: bicim secilince cerceve
+   yumusakca daralip genisler. Cerceve de bir kap: urun boyu onun
+   yuksekligine gore (cqh). */
+@layer components {
+  /* Safari'de konteyner sorgu birimleri (cqw/cqh) ile boyutlanan cerceve
+     bos kaliyordu (Serhan); duz yuzde + aspect-ratio ile yeniden yazildi. */
+  .studio-tour-stage {
+    height: clamp(24rem, 64vw, 31rem);
+  }
+
+  .studio-tour-frame {
+    height: 100%;
+    max-width: 100%;
+    aspect-ratio: var(--a, 0.8);
+  }
+
+  .studio-tour-reflection {
+    transform: scaleY(-1);
+    mask-image: linear-gradient(to top, rgb(0 0 0 / 0.9), transparent 45%);
+  }
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.9rem);
+  }
+}
+
+@keyframes hero-glint {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(-30deg);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5) rotate(25deg);
+  }
+}
+
+/* Surekli ama seyrek: dongunun cogunda gorunmez, kisa bir an parlar. */
+@keyframes hero-glint-idle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(-30deg);
+  }
+  8% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  20% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.45) rotate(25deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-glint {
+    display: none;
+  }
+  .hero-float,
+  .hero-hand {
+    animation: none;
+  }
+}
+
+html.reduce-motion .hero-glint {
+  display: none;
+}
+
+html.reduce-motion .hero-float,
+html.reduce-motion .hero-hand {
+  animation: none;
+}

@@ -1,5 +1,5 @@
 /**
- * Vitrin AI — ana sayfa (Faz 2).
+ * Vitrin — ana sayfa (Faz 2).
  *
  * Kurgu, apple.com/tr'nin urun sayfalarindan uyarlandi: tam genislikte,
  * donusumlu koyu/acik bolumler; her bolumun tek bir isi var ve kaydirdikca
@@ -16,16 +16,20 @@
 import { BackgroundRemover } from "@/components/background-remover";
 import { BackgroundsShowcase } from "@/components/marketing/backgrounds-showcase";
 import { Hero } from "@/components/marketing/hero";
+import { HomeClosing } from "@/components/marketing/home-closing";
+import { HomeFaq } from "@/components/marketing/home-faq";
+import { StudioSection } from "@/components/marketing/studio-section";
 import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Specs } from "@/components/marketing/specs";
-import { About } from "@/components/marketing/about";
 import { Reveal } from "@/components/reveal";
+import { ScrollTopOnReload } from "@/components/scroll-top-on-reload";
 import { SiteShell } from "@/components/site-shell";
 
 export default function HomePage() {
   return (
     <SiteShell>
+        <ScrollTopOnReload />
         <Hero />
 
         <section id="dene" className="surface-mist section-rhythm relative overflow-hidden">
@@ -50,15 +54,18 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Zemin galerisi araci HEMEN takip ediyor: kullanici kendi
+        {/* Aracin HEMEN ardindan "kesimden sonrasi": kullanici kendi
             fotografini denedikten sonra "peki baska ne yapabilirim"
-            sorusunun cevabi bu. */}
+            sorusunun cevabi — stüdyo turu, sonra zemin kutuphanesi.
+            Sira ve zeminler (30.09.2026): koyu/acik donusumu korunur. */}
+        <StudioSection />
         <BackgroundsShowcase />
 
-        <Highlights />
         <HowItWorks />
+        <Highlights />
+        <HomeFaq />
         <Specs />
-        <About />
+        <HomeClosing />
     </SiteShell>
   );
 }

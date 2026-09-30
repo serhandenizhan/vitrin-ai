@@ -57,6 +57,8 @@ type WorkspaceValue = {
   works: WorkRecord[];
   isHistoryLoaded: boolean;
   hasMoreWorks: boolean;
+  /** Liste alinamadi: bos ekran "hic calismaniz yok" yerine "yuklenemedi" gosterir. */
+  worksLoadFailed: boolean;
   isLoadingMoreWorks: boolean;
   loadMoreWorks: () => void;
   recordWork: (work: NewWork) => Promise<WorkRecord | null>;
@@ -313,7 +315,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     userId: string | null;
     works: WorkRecord[];
     nextCursor: string | null;
-  }>({ userId: null, works: [], nextCursor: null });
+    failed: boolean;
+  }>({ userId: null, works: [], nextCursor: null, failed: false });
   const [historyVersion, setHistoryVersion] = useState(0);
   const [isLoadingMoreWorks, setLoadingMoreWorks] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -395,7 +398,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void listWorks().then((page) => {
       if (cancelled) return;
-      setHistory({ userId, works: page.items, nextCursor: page.nextCursor });
+      setHistory({ userId, works: page.items, nextCursor: page.nextCursor, failed: page.failed === true });
     });
     return () => {
       cancelled = true;
@@ -422,6 +425,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             ...page.items.filter((work) => !knownIds.has(work.id)),
           ],
           nextCursor: page.nextCursor,
+          failed: current.failed,
         };
       });
     });
@@ -570,6 +574,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       works,
       isHistoryLoaded,
       hasMoreWorks: history.userId === userId && history.nextCursor !== null,
+      worksLoadFailed: history.userId === userId && history.failed,
       isLoadingMoreWorks,
       loadMoreWorks,
       recordWork,
@@ -623,6 +628,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       isHistoryLoaded,
       history.userId,
       history.nextCursor,
+      history.failed,
       isLoadingMoreWorks,
       loadMoreWorks,
       recordWork,

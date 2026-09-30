@@ -1,5 +1,5 @@
 /**
- * Vitrin AI Bulteni (one alinan is, 17.09.2026).
+ * Vitrin Bulteni (one alinan is, 17.09.2026).
  *
  * Iki bolum: sosyal medya gonderisi gibi gorselli paylasimlar (guncelleme
  * notlari, duyurular, yakinda gelecekler) ve gozden kacabilecek ozellikler.
@@ -25,9 +25,9 @@ import {
 } from "@/lib/bulletin";
 
 export const metadata: Metadata = {
-  title: "Bülten — Vitrin AI",
+  title: "Bülten — Vitrin",
   description:
-    "Vitrin AI bülteni: güncelleme notları, duyurular ve gözden kaçabilecek özellikler.",
+    "Vitrin bülteni: güncelleme notları, duyurular ve gözden kaçabilecek özellikler.",
 };
 
 const KIND_STYLE: Record<BulletinPost["kind"], string> = {
@@ -53,7 +53,7 @@ export default function BulletinPage() {
         <div className="relative mx-auto w-full max-w-3xl px-5 text-center">
           <Reveal>
             <BrandMark className="text-gold mx-auto h-16 w-auto sm:h-20" />
-            <h1 className="display-hero mt-5 text-balance">Vitrin AI Bülteni</h1>
+            <h1 className="display-hero mt-5 text-balance">Vitrin Bülteni</h1>
             <p className="lede on-dark-muted mx-auto mt-6 max-w-xl text-pretty">
               Yeni özellikler, güncelleme notları, yakında gelecekler ve işinizi
               kolaylaştıran ama gözden kaçabilecek küçük ayrıntılar.
@@ -80,7 +80,7 @@ export default function BulletinPage() {
                       <BrandMark className="text-gold h-3.5 w-auto" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[0.875rem] font-semibold">Vitrin AI</span>
+                      <span className="block text-[0.875rem] font-semibold">Vitrin</span>
                       <time dateTime={post.date} className="on-light-muted fine-print block">
                         {formatPostDate(post.date)}
                       </time>

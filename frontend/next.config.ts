@@ -17,6 +17,16 @@ const nextConfig: NextConfig = {
    * (kok CLAUDE.md ders 11): `.env.local`e virgulle ayrilmis
    * `DEV_ALLOWED_ORIGINS=192.168.1.181`. Uretim derlemesini etkilemiyor.
    */
+  images: {
+    /*
+     * Acilis vitrininin varliklari icerikten turetilen surumle (`?v=<ozet>`)
+     * verilir (`lib/hero-asset.ts`): yeniden uretilen bir gorsel onbellekten
+     * eski haliyle gelmesin. Next 16 sorgu dizeli yerel gorseli ancak burada
+     * izin verilirse kabul ediyor (uretim derlemesi aksi halde duruyor).
+     * Yalniz /hero/ sorgulu; sitenin diger yerel gorselleri sorgusuz kalir.
+     */
+    localPatterns: [{ pathname: "/hero/**" }, { pathname: "/**", search: "" }],
+  },
   allowedDevOrigins: (process.env.DEV_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((origin) => origin.trim())

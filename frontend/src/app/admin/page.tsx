@@ -13,7 +13,7 @@ import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "Yönetim — Vitrin AI",
+  title: "Yönetim — Vitrin",
   robots: { index: false, follow: false },
 };
 

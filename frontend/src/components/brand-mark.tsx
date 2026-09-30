@@ -1,5 +1,5 @@
 /**
- * Vitrin AI isareti.
+ * Vitrin isareti.
  *
  * Kullanicinin verdigi logonun YAZISIZ hali. Dalga rastgele bir sus degil,
  * markanin adini yaziyor:

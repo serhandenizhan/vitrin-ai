@@ -35,7 +35,12 @@ export type NewWork = {
 export type WorkPage = {
   items: WorkRecord[];
   nextCursor: string | null;
+  /** Liste ALINAMADI (ag/sunucu hatasi ya da zaman asimi): bos liste "hic calisma yok" DEMEK DEGIL. */
+  failed?: boolean;
 };
+
+/** Istek bu sureden uzun surerse vazgecilir; yoksa sayfa sonsuza dek "yukleniyor"da kalirdi. */
+const LIST_TIMEOUT_MS = 15_000;
 
 /** Kenar cubugundaki onizleme icin kucuk kare. */
 const THUMB_SIZE = 128;
@@ -47,11 +52,14 @@ const LEGACY_DB_NAME = "vitrin-ai";
 export async function listWorks(cursor: string | null = null): Promise<WorkPage> {
   try {
     const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-    const response = await fetch(`/api/projects${query}`, { cache: "no-store" });
-    if (!response.ok) return { items: [], nextCursor: null };
+    const response = await fetch(`/api/projects${query}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(LIST_TIMEOUT_MS),
+    });
+    if (!response.ok) return { items: [], nextCursor: null, failed: true };
     return (await response.json()) as WorkPage;
   } catch {
-    return { items: [], nextCursor: null };
+    return { items: [], nextCursor: null, failed: true };
   }
 }
 

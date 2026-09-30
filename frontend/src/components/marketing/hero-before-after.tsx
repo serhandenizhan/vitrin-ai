@@ -1,17 +1,15 @@
 "use client";
 
 /**
- * Acilistaki etkilesimli once/sonra (one alinan is, 13.09.2026 — ROADMAP
- * Faz 4 altindaki 9. madde onerisi 5).
+ * Etkilesimli once/sonra (one alinan is, 13.09.2026 — ROADMAP Faz 4 altindaki
+ * 9. madde onerisi 5). 28.09.2026'dan beri acilis vitrininin yakinlasma
+ * gorunumunde, her sahnenin kendi gorsel cifti ile (`hero-zoom.tsx`).
  *
  * Ziyaretci daha fotograf yuklemeden aracin sonucunu KENDI ELIYLE surukleyerek
- * goruyor. Iki gorsel GERCEK ve BIREBIR HIZALI:
- *  - `once.webp`: vitrin karesinin kendisi.
- *  - `sonra.webp`: ayni kareden BiRefNet'in urettigi kesim, ayni pencereden
- *    kirpilmis (bkz. scripts/prepare-before-after.py). Hizalama olculdu:
- *    kesimin opak piksellerinde ortalama renk farki ~2 (12 px kaydirildiginda
- *    ~25). Hizasiz bir cift kullanilsaydi kolye iki tarafta farkli yerde durur
- *    ve karsilastirma yaniltici olurdu.
+ * goruyor. Iki gorsel GERCEK ve BIREBIR HIZALI olmali: "sonra", "once"nin
+ * AYNI kadrajindan BiRefNet'in urettigi kesim (bkz.
+ * scripts/prepare-hero-scenes.py). Hizasiz bir cift kullanilsaydi urun iki
+ * tarafta farkli yerde durur ve karsilastirma yaniltici olurdu.
  *
  * Inceleme ekranindaki `OnceSonra` (comparison-view.tsx) ile ayni teknik:
  * ustteki gorsel `clip-path` ile kirpiliyor, olceklenmiyor — iki taraf ayni
@@ -24,7 +22,35 @@
 import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 
-export function HeroBeforeAfter() {
+type HeroBeforeAfterProps = {
+  before: string;
+  after: string;
+  beforeAlt: string;
+  afterAlt: string;
+  width: number;
+  height: number;
+  /** `next/image` icin; kaydiracin ekrandaki genisligi. */
+  sizes?: string;
+  /**
+   * Cerceve bundan daha dikey olmaz (en / boy). Cok dikey bir gorsel
+   * (kolye) daralip etiketleri ust uste bindiriyordu; o zaman gorsel
+   * ustten kirpilir, alt kenar (tas) korunur.
+   */
+  minAspect?: number;
+};
+
+export function HeroBeforeAfter({
+  before,
+  after,
+  beforeAlt,
+  afterAlt,
+  width,
+  height,
+  sizes = "(max-width: 1024px) 90vw, 420px",
+  minAspect = 0,
+}: HeroBeforeAfterProps) {
+  const aspect = Math.max(width / height, minAspect);
+  const cropped = aspect > width / height;
   const [ratio, setRatio] = useState(0.5);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Surukleme durumu REF'te: `pointermove` icinde state okunsaydi kapanis eski
@@ -43,7 +69,8 @@ export function HeroBeforeAfter() {
     <div>
       <div
         ref={containerRef}
-        className="relative aspect-square w-full cursor-ew-resize touch-none overflow-hidden rounded-2xl border border-white/12 shadow-2xl select-none"
+        style={{ aspectRatio: cropped ? String(aspect) : `${width} / ${height}` }}
+        className="relative w-full cursor-ew-resize touch-none overflow-hidden rounded-2xl border border-white/12 shadow-2xl select-none"
         onPointerDown={(event) => {
           isDraggingRef.current = true;
           try {
@@ -65,26 +92,25 @@ export function HeroBeforeAfter() {
         }}
       >
         <Image
-          src="/showcase/once.webp"
-          alt="Vitrin standında duran pırlanta kolyenin özgün fotoğrafı"
-          width={900}
-          height={900}
-          priority
+          src={before}
+          alt={beforeAlt}
+          width={width}
+          height={height}
           draggable={false}
-          sizes="(max-width: 1024px) 90vw, 560px"
+          sizes={sizes}
+          style={cropped ? { objectPosition: "50% 100%" } : undefined}
           className="absolute inset-0 h-full w-full object-cover"
         />
         {/* Kesim saydam: dama deseni uzerinde, arka planin gercekten gittigi
             gorulsun. Kirpma soldan; cizginin solu kesim, sagi ozgun. */}
         <Image
-          src="/showcase/sonra.webp"
-          alt="Aynı fotoğraftan aracın ürettiği, arka planı kaldırılmış kesim"
-          width={900}
-          height={900}
-          priority
+          src={after}
+          alt={afterAlt}
+          width={width}
+          height={height}
           draggable={false}
-          sizes="(max-width: 1024px) 90vw, 560px"
-          style={{ clipPath: `inset(0 ${(1 - ratio) * 100}% 0 0)` }}
+          sizes={sizes}
+          style={{ clipPath: `inset(0 ${(1 - ratio) * 100}% 0 0)`, objectPosition: cropped ? "50% 100%" : undefined }}
           className="checkerboard absolute inset-0 h-full w-full object-cover"
         />
 
@@ -106,10 +132,10 @@ export function HeroBeforeAfter() {
           </span>
         </div>
 
-        <span className="pointer-events-none absolute top-3 left-3 rounded-full bg-black/60 px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-white uppercase backdrop-blur-sm">
+        <span className="pointer-events-none absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.5625rem] font-medium tracking-[0.06em] text-white uppercase backdrop-blur-sm md:top-3 md:left-3 md:px-2.5 md:py-1 md:text-[0.625rem] md:tracking-[0.08em]">
           Kesim
         </span>
-        <span className="bg-gold pointer-events-none absolute top-3 right-3 rounded-full px-2.5 py-1 text-[0.625rem] font-medium tracking-[0.08em] text-black uppercase">
+        <span className="bg-gold pointer-events-none absolute top-2 right-2 rounded-full px-2 py-0.5 text-[0.5625rem] font-medium tracking-[0.06em] text-black uppercase md:top-3 md:right-3 md:px-2.5 md:py-1 md:text-[0.625rem] md:tracking-[0.08em]">
           Özgün
         </span>
       </div>

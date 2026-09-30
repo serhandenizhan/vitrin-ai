@@ -38,7 +38,7 @@ export function Highlights() {
   return (
     <section id="ozellikler" className="surface-mist section-rhythm relative overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(45%_80%_at_50%_0%,rgba(214,167,86,0.11),transparent_75%)]" />
-      <div className="relative mx-auto w-full max-w-5xl px-5">
+      <div className="relative mx-auto w-full max-w-6xl px-5">
         <Reveal>
           <h2 className="display-section max-w-2xl text-balance">
             Farkı ayrıntılarda görürsünüz

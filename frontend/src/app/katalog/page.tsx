@@ -25,7 +25,7 @@ import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "Katalog — Vitrin AI",
+  title: "Katalog — Vitrin",
   description:
     "Hazırladığınız ürün görsellerini katalog ve dergi sayfası şablonlarına yerleştirin.",
 };

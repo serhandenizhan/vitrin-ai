@@ -1,6 +1,6 @@
-<img src="docs/brand/vitrin-ai-logo-2.png" alt="Vitrin AI" width="180" />
+<img src="docs/brand/vitrin-ai-logo-2.png" alt="Vitrin" width="180" />
 
-# Vitrin AI
+# Vitrin
 
 **Kuyumcular için yapay zekâ destekli ürün görseli platformu.**
 
@@ -29,6 +29,7 @@ fotoğraf yükle  →  arka plan kalksın  →  zemine yerleştir  →  satışa
 
 | | |
 | --- | --- |
+| **Açılış vitrini** | El + takı sahneleri arasında geçiş; birine yakınlaşınca ürün 3D döner ve kütüphane zeminlerine oturur, yanında aracın gerçek kesimi |
 | **Arka plan kaldırma** | BiRefNet ile yüksek kenar hassasiyeti; ince zincir, tırnak montür ve küçük taşlar korunur |
 | **Kompozisyon stüdyosu** | Üç adım: boyut ve zemin, ürün (sürükle/ölçekle/döndür; parlaklık, kontrast, doygunluk; gölge, yansıma), bitir |
 | **Hazır ölçüler** | A4 katalog sayfası, Instagram (kare, dikey, hikâye), pazaryeri 2000×2000 beyaz zemin; hepsi tek tıkla birlikte indirilebilir |
@@ -189,7 +190,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 backend/scripts/test.sh          # 587 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
-cd frontend && npm test          # 461 test
+cd frontend && npm test          # 478 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 

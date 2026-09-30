@@ -69,9 +69,9 @@ const SAMPLE: { template: TemplateName; texts: CatalogTexts; images: string[] } 
   texts: {
     eyebrow: "Sonbahar 2026",
     title: "Pırlanta Koleksiyonu",
-    footer: "Vitrin AI ile hazırlandı",
+    footer: "Vitrin ile hazırlandı",
   },
-  images: ["/showcase/vitrin-kadife.webp", "/showcase/vitrin-altin.webp"],
+  images: ["/showcase/vitrin-yuzuk.webp", "/showcase/vitrin-kolye.webp"],
 };
 
 /**
@@ -90,9 +90,10 @@ const SAMPLE: { template: TemplateName; texts: CatalogTexts; images: string[] } 
  * `<img>` yuklemeye gerek yok.
  */
 const GALLERY_PREVIEW_IMAGES = [
-  "/showcase/vitrin-kadife.webp",
-  "/showcase/vitrin-altin.webp",
-  "/showcase/vitrin-sicak-gri.webp",
+  "/showcase/vitrin-yuzuk.webp",
+  "/showcase/vitrin-kutu.webp",
+  "/showcase/vitrin-kolye.webp",
+  "/showcase/vitrin-alyans.webp",
 ];
 
 function galleryPreviewSlots(template: Template): SlotContent[] {
@@ -118,7 +119,7 @@ const CATALOG_TABS: { id: CatalogTab; label: string }[] = [
 const DEFAULT_TEXTS: CatalogTexts = {
   eyebrow: "Sonbahar 2026",
   title: "Yeni Koleksiyon",
-  footer: "Vitrin AI ile hazırlandı",
+  footer: "Vitrin ile hazırlandı",
 };
 
 export function CatalogEditor() {

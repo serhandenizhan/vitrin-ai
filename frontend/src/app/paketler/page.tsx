@@ -37,9 +37,9 @@ import { Reveal } from "@/components/reveal";
 import { SiteShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
-  title: "Paketler — Vitrin AI",
+  title: "Paketler — Vitrin",
   description:
-    "Vitrin AI paketleri: deneme, atölye ve mağaza planları. Aylık krediler ve güvenli ödeme.",
+    "Vitrin paketleri: deneme, atölye ve mağaza planları. Aylık krediler ve güvenli ödeme.",
 };
 
 type Paket = {
