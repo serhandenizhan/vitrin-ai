@@ -58,3 +58,6 @@ docs/superpowers/
 # commit edilmez (19.09.2026: iki tanesi kok dizinde bulunup silindi).
 /Ekran görüntüsü*.png
 /screenshot*.png
+
+# Playwright MCP ekran görüntüleri ve günlükleri
+.playwright-mcp/
