@@ -59,7 +59,11 @@ Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
 `VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
 Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
 Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
-`.venv\Scripts\pytest.exe`'yi de bulur). Bash yoksa PowerShell'de aynısı elle
+`.venv\Scripts\pytest.exe`'yi de bulur). Windows'ta tam paket ~1 saat sürer
+(her test Docker'daki Postgres'e gidip gelir; takılmış sanılmasın) ve yedek
+betiğinin Unix dosya izni (`os.fchmod`, 0o600) isteyen 6 testi orada
+**atlanır** — izin taklit edilmez, CI (Linux) hepsini koşar (30.09.2026, kök
+`CLAUDE.md` ders 37). Bash yoksa PowerShell'de aynısı elle
 (repo kökünden):
 
 ```powershell

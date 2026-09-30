@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CalendarDays, CreditCard, Gauge, LoaderCircle, ReceiptText } from "lucide-react";
 
 import { useWorkspace } from "@/components/workspace-provider";
-import { billingFetch, money, type BillingTransaction, type Subscription } from "@/lib/billing";
+import { billingFetch, money, remainingCredits, type BillingTransaction, type Subscription } from "@/lib/billing";
 
 export function BillingPanel() {
   const { user, isAuthLoaded, openSignIn } = useWorkspace();
@@ -58,11 +58,7 @@ function SignedInBillingPanel() {
     }
   }
 
-  const remaining = subscription
-    ? subscription.admin_exempt
-      ? "Sınırsız"
-      : String(subscription.billing_issue ? 0 : Math.max(0, (subscription.period?.quota_snapshot ?? 0) - (subscription.period?.used_this_period ?? 0)) + (subscription.bonus_credits ?? 0))
-    : "—";
+  const remaining = subscription ? remainingCredits(subscription) : "—";
 
   return (
     <section id="abonelik" className="glass-panel-light mt-8 rounded-3xl p-6 transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:border-[#d6a756]/35 hover:shadow-[0_28px_60px_-34px_rgba(82,61,29,0.46)] sm:p-8" aria-label="Abonelik ve ödemeler">

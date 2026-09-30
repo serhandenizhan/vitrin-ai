@@ -11,7 +11,7 @@ depends_on = None
 
 def upgrade():
     # Ayrı ifadeler asyncpg'nin tek prepared statement kuralını korur.
-    sql = Path(__file__).with_suffix(".sql").read_text()
+    sql = Path(__file__).with_suffix(".sql").read_text(encoding="utf-8")
     for statement in sql.split("\n-- statement\n"):
         if statement.strip():
             op.execute(statement)
