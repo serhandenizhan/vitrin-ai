@@ -1114,7 +1114,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
-  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Açık kalan: "Vitrin AI" → "Vitrin" yasal metin değişikliği (sürüm + yeniden onay + hukukçu) ve gerçek telefonda 3D ölçümü (Faz 7.5).
+  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5).
   - **E2E — ilk tur yapıldı (30.09.2026, Kaan):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Açık:** CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme.
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
@@ -1149,7 +1149,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   CPU, ~8 Mbps): açılışa kadar JS 280 → 285 KB, LCP 916 → 848 ms. **Açık:**
   el katmanlarındaki silme izleri (kesik parmak uçları) yapay zekayla üretilmiş takısız ellerle çözüldü (`scripts/build-hero-hands.py`; sayfa ve yakınlaşma aynı el dosyasını kullanır); bilezikli sahne fikrinden vazgeçildi (alyans kalıyor);
   gerçek telefon GPU'sunda 3D akıcılığı (Faz 7.5 listesine); yasal metinlerde
-  "Vitrin AI" → "Vitrin" (sürümle birlikte).
+  "Vitrin AI" → "Vitrin" (sürümle birlikte; **yapıldı, 30.09.2026**, ayrı PR `feature/yasal-metin-vitrin`: yasal sürüm `2026-09-30`).
 - **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
   eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
