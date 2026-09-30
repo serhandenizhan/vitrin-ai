@@ -1131,6 +1131,19 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   kadar hiçbir PR birleşmez, ve `./execute.sh` bir sonraki açılışta backend
   bağımlılıklarını kendiliğinden günceller (ayrıntı kök `CLAUDE.md` → "Git iş
   akışı").
+- **Öne alınan iş — açılış vitrini ve ana sayfa yenileme (28–30.09.2026, Serhan;
+  ✅).** Faz 7'nin (test/optimizasyon/sağlamlaştırma) kapsamı dışında bir arayüz
+  işi; Serhan'ın kararıyla ("genel düzenleme ve yeni eklemeler bir faza bağlı
+  olmak zorunda değil") bu dalda yapıldı. Ayrıntı: kök `CLAUDE.md` →
+  "Açılış vitrini ve ana sayfa düzeni", `frontend/README.md` → "Açılış vitrini".
+  Kapsam: 4 sahneli el+takı vitrini, 3D yakınlaşma (three.js, `next/dynamic`),
+  kütüphane zeminlerine koyma, stüdyo turu, yeni zemin galerisi, SSS, kapanış
+  çağrısı; uygulama adı "Vitrin AI" → "Vitrin"; markalı 404/hata sayfası, simge,
+  paylaşım önizlemesi, `robots`/site haritası; Çalışmalar'da "yüklenemedi"
+  durumu; katalog ve bülten görselleri. Ölçüm (üretim derlemesi, 375 px, 4x
+  CPU, ~8 Mbps): açılışa kadar JS 280 → 285 KB, LCP 916 → 848 ms. **Açık:**
+  gerçek telefon GPU'sunda 3D akıcılığı (Faz 7.5 listesine); yasal metinlerde
+  "Vitrin AI" → "Vitrin" (sürümle birlikte).
 - **CI — ✅ kuruldu (26.09.2026; roadmap'te yoktu, Serhan'ın onayıyla Faz 7'ye
   eklendi).** `.github/workflows/ci.yml`: backend testleri (`.env`'siz, servis
   olarak Postgres + Redis), frontend lint/test/build ve ayrı bir iş olarak
