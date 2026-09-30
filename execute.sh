@@ -224,6 +224,18 @@ trap cleanup EXIT INT TERM
   R2_SHARED_WITH_PRODUCTION=true "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
 ) > "$LOG_DIR/backend.log" 2>&1 &
 
+# Faz 7: kesimi ayrı işçi yapar; işçi yoksa istekler sırada bekler ve arayüz
+# "işleniyor"da kalır. İşçi modeli AÇILIŞTA yükler (birkaç GB bellek);
+# kesim denenmeyecekse `VITRIN_START_WORKER=0 ./execute.sh`.
+if [ "${VITRIN_START_WORKER:-1}" != "0" ]; then
+  (
+    cd "$BACKEND_DIR"
+    R2_SHARED_WITH_PRODUCTION=true "$VENV_DIR/bin/python" -m app.workers.cutout
+  ) > "$LOG_DIR/worker.log" 2>&1 &
+else
+  echo "  UYARI: kesim işçisi başlatılmadı (VITRIN_START_WORKER=0); arka plan kaldırma sırada bekler." > "$LOG_DIR/worker.log"
+fi
+
 (
   cd "$FRONTEND_DIR"
   # BACKEND_URL burada process ortamına yazılıyor: Next.js .env.local'i
@@ -235,6 +247,6 @@ trap cleanup EXIT INT TERM
 
 # Her iki log'u da terminale akıtır ki VS Code görevlerindeki "ayrı panel"
 # deneyimine yakın bir şey olsun; loglar ayrıca dosyada da kalıcı kalıyor.
-tail -n +1 -f "$LOG_DIR/backend.log" "$LOG_DIR/frontend.log" &
+tail -n +1 -f "$LOG_DIR/backend.log" "$LOG_DIR/worker.log" "$LOG_DIR/frontend.log" &
 
 wait

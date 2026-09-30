@@ -135,7 +135,7 @@ function WorkTitle({ name, onRename }: { name: string; onRename: (name: string) 
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="soft-fade">
+    <form method="post" onSubmit={(event) => void submit(event)} className="soft-fade">
       <div className="flex items-center gap-1.5">
         <input
           autoFocus

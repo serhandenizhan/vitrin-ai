@@ -170,7 +170,7 @@ export function NewPasswordForm({ cameFromResetLink }: { cameFromResetLink: bool
         ) : null}
       </p>
 
-      <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-3">
+      <form method="post" onSubmit={handleSubmit} noValidate className="mt-5 space-y-3">
         {/* Parola yoneticisi hangi hesaba ait oldugunu bilsin diye gizli
             kullanici adi alani (tarayici onerisi). */}
         <input

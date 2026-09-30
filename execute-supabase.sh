@@ -145,11 +145,23 @@ trap cleanup EXIT INT TERM
   "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"
 ) > "$LOG_DIR/backend.log" 2>&1 &
 
+# Faz 7: kesimi ayrı işçi yapar; işçi yoksa istekler sırada bekler ve arayüz
+# "işleniyor"da kalır. İşçi modeli AÇILIŞTA yükler (birkaç GB bellek);
+# kesim denenmeyecekse `VITRIN_START_WORKER=0 ./execute.sh`.
+if [ "${VITRIN_START_WORKER:-1}" != "0" ]; then
+  (
+    cd "$BACKEND_DIR"
+    "$VENV_DIR/bin/python" -m app.workers.cutout
+  ) > "$LOG_DIR/worker.log" 2>&1 &
+else
+  echo "  UYARI: kesim işçisi başlatılmadı (VITRIN_START_WORKER=0); arka plan kaldırma sırada bekler." > "$LOG_DIR/worker.log"
+fi
+
 (
   cd "$FRONTEND_DIR"
   BACKEND_URL="http://localhost:$BACKEND_PORT" npm run dev -- -p "$FRONTEND_PORT"
 ) > "$LOG_DIR/frontend.log" 2>&1 &
 
-tail -n +1 -f "$LOG_DIR/backend.log" "$LOG_DIR/frontend.log" &
+tail -n +1 -f "$LOG_DIR/backend.log" "$LOG_DIR/worker.log" "$LOG_DIR/frontend.log" &
 
 wait

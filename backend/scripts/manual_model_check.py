@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services.background_removal import BackgroundRemovalService
-from app.validation.upload import validate_upload  # pillow-heif kaydını da tetikler
+from app.validation.upload import validate_upload  # noqa: F401 - pillow-heif kaydını tetikler (yan etki)
 
 
 def main() -> None:

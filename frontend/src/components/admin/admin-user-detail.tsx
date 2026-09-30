@@ -258,7 +258,7 @@ function CreditGrantForm({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="glass-panel rounded-3xl p-6">
+    <form method="post" onSubmit={(event) => void submit(event)} className="glass-panel rounded-3xl p-6">
       <h3 className="flex items-center gap-2 text-sm font-medium">
         <Gift className="text-gold size-4" aria-hidden />
         Bonus kredi ver
@@ -439,7 +439,7 @@ function AdminRoleForm({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="flex flex-wrap items-center gap-2">
+    <form method="post" onSubmit={(event) => void submit(event)} className="flex flex-wrap items-center gap-2">
       <label className="text-sm">
         <span className="sr-only">
           {isAdmin ? "Yetkiyi kaldırmak için kullanıcının e-posta adresi" : "Yönetici yapmak için kullanıcının e-posta adresi"}
@@ -525,7 +525,7 @@ function DeleteAccount({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="rounded-3xl p-6 ring-1 ring-red-400/30">
+    <form method="post" onSubmit={(event) => void submit(event)} className="rounded-3xl p-6 ring-1 ring-red-400/30">
       <h3 className="flex items-center gap-2 text-sm font-medium text-red-300">
         <Trash2 className="size-4" aria-hidden />
         Hesabı sil

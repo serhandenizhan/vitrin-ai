@@ -22,6 +22,12 @@ const MESSAGES: Record<string, string> = {
   weak_password:
     "Parola çok zayıf. En az 8 karakter; küçük harf, büyük harf, rakam ve bir sembol (!, @, # gibi) birlikte kullanın.",
   same_password: "Yeni parola eskisiyle aynı olamaz.",
+  // Supabase "Require current password when changing password" / "Secure
+  // password change" ayarlari acikken (bkz. lib/change-password.ts).
+  current_password_required: "Mevcut parolanızı yazın.",
+  current_password_mismatch: "Mevcut parolanız hatalı.",
+  reauthentication_needed:
+    "Güvenliğiniz için çıkış yapıp yeniden giriş yapın, sonra parolanızı değiştirin.",
   // Sifirlama baglantisinin actigi oturum suresi dolmus ya da hic yok.
   session_not_found:
     "Oturumunuzun süresi doldu. Parola sıfırlama bağlantısını yeniden isteyin.",

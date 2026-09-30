@@ -17,8 +17,16 @@
 
 import { useEffect, useState } from "react";
 
-/** Bu surenin uzerinde "ilk istek olabilir" aciklamasi gosteriliyor. */
-const YAVAS_ESIGI_SANIYE = 20;
+/**
+ * Bu surenin uzerinde notr bir "biraz uzun surebilir" cumlesi gosteriliyor.
+ *
+ * Faz 7'den beri istek bir kuyruga giriyor ve yogunlukta sirada bekleyebiliyor.
+ * Karar (Serhan, 26.09.2026): sira/yogunluk MUSTERIYE HISSETTIRILMEZ — sira
+ * numarasi yok, hata yok; yalniz bu cumle. Eski "sunucu yeni acildiysa ilk
+ * fotograf uzun surer" cumlesi artik dogru degil: isci modeli is almadan
+ * once yukluyor.
+ */
+const YAVAS_ESIGI_SANIYE = 30;
 
 /**
  * Asamalar SIRAYLA degil, gecen sureye gore gosteriliyor ve hepsi gercek:
@@ -97,7 +105,7 @@ export function ProcessingState({ onizlemeUrl }: ProcessingStateProps) {
 
       <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
         {gecenSaniye >= YAVAS_ESIGI_SANIYE
-          ? "Sunucu yeni açıldıysa ilk fotoğraf biraz daha uzun sürer. Sonrakiler daha hızlı işlenir."
+          ? "Yüksek çözünürlüklü fotoğraflar biraz daha uzun sürebilir. Sayfayı kapatmayın; sonuç hazır olduğunda burada açılacak."
           : "Sayfayı kapatmayın; sonuç hazır olduğunda burada açılacak."}
       </p>
     </div>

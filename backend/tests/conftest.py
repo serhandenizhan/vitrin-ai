@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import time
@@ -6,6 +7,13 @@ import uuid
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from urllib.parse import urlsplit
+
+# Test oturumu hiçbir koşulda gerçek bir hata izleme servisine yazmaz:
+# geliştiricinin `backend/.env`'sinde SENTRY_DSN olsa bile. Testler bilerek
+# yüzlerce hata üretiyor; `app.main` yüklenirken izleme başlasaydı hepsi
+# gerçek projeye gönderilirdi. Ortam değişkeni `.env`'den önce gelir ve
+# ayarlar bu satırdan SONRA ilk kez okunur (aşağıdaki `app.*` içe aktarmaları).
+os.environ["SENTRY_DSN"] = ""
 
 import jwt
 import pytest
@@ -28,6 +36,9 @@ from tests.db_safety import (
     UnsafeTestDatabaseError,
     ensure_disposable_database,
     ensure_local_database_host,
+    ensure_not_dev_database,
+    SESSION_LOCK_KEY,
+    concurrent_session_message,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -53,6 +64,7 @@ async def _apply_migrations():
     # Adres kontrolü bağlanmadan ÖNCE: uzak bir sunucuya bağlantı bile açılmıyor.
     try:
         ensure_local_database_host(settings.database_url)
+        ensure_not_dev_database(settings.database_url)
     except UnsafeTestDatabaseError as exc:
         pytest.exit(str(exc), returncode=3)
 
@@ -66,6 +78,18 @@ async def _apply_migrations():
     except UnsafeTestDatabaseError as exc:
         pytest.exit(str(exc), returncode=3)
 
+    # Aynı veritabanında ikinci bir test oturumu birincinin tablolarını
+    # oturum sonunda düşürür (27.09.2026'da iki oturum çakıştı: 393 geçen,
+    # 393 kırmızı). Oturum boyunca açık tutulan bir bağlantıda kilit alınır;
+    # alınamıyorsa hiçbir şeye dokunmadan durulur. Kilit bağlantı kapanınca
+    # (süreç ölse bile) kendiliğinden bırakılır.
+    lock_connection = await _engine.connect()
+    locked = await lock_connection.scalar(text("select pg_try_advisory_lock(:key)"), {"key": SESSION_LOCK_KEY})
+    await lock_connection.commit()
+    if not locked:
+        await lock_connection.close()
+        pytest.exit(concurrent_session_message(), returncode=3)
+
     # Testler gerçek Alembic migration'larına karşı çalışır (Base.metadata.create_all
     # DEĞİL) — migration dosyasındaki bir hata bu sayede testlerde de yakalanır.
     # `check=True` migration başarısız olursa test session'ını hemen durdurur.
@@ -76,10 +100,13 @@ async def _apply_migrations():
         [sys.executable, "-m", "alembic", "upgrade", "head"], cwd=BACKEND_DIR, check=True
     )
     yield
-    subprocess.run(
-        [sys.executable, "-m", "alembic", "downgrade", "base"], cwd=BACKEND_DIR, check=True
-    )
-    await _engine.dispose()
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "downgrade", "base"], cwd=BACKEND_DIR, check=True
+        )
+    finally:
+        await lock_connection.close()  # kilit burada bırakılır
+        await _engine.dispose()
 
 
 #: Redis testleri Postgres'inki gibi bir "sıfırlama" korumasına ihtiyaç
@@ -88,6 +115,27 @@ async def _apply_migrations():
 #: "Testler"). Yine de yanlışlıkla paylaşılan/uzak bir Redis'e bağlanıp
 #: gereksiz trafik üretmemek için adres burada da yerelle sınırlanıyor.
 LOCAL_REDIS_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "redis"})
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redis_without_persistence():
+    """Kesim kuyruğu, Redis diske yazıyorsa özgün fotoğrafı kabul etmez
+    (`CutoutQueue.ensure_ephemeral`, KVKK). Test Redis'i de production'ın
+    olması gerektiği gibi yapılandırılır: CI'daki servis kapsayıcısına komut
+    satırı argümanı verilemiyor, yerel Redis ise `docker compose` ile yeniden
+    oluşturulana kadar eski (diske yazan) ayarla çalışıyor olabilir."""
+    import redis as sync_redis
+
+    if (urlsplit(settings.redis_url).hostname or "").lower() not in LOCAL_REDIS_HOSTS:
+        return  # `redis_client` fixture'ı bu durumda okunur bir mesajla durdurur
+    client = sync_redis.Redis.from_url(settings.redis_url)
+    try:
+        client.config_set("save", "")
+        client.config_set("appendonly", "no")
+    except sync_redis.RedisError:
+        pass  # Redis'e ulaşılamıyorsa asıl hata onu kullanan testte okunur
+    finally:
+        client.close()
 
 
 @pytest_asyncio.fixture(scope="session")

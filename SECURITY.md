@@ -79,6 +79,15 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 2.4 İç ağ segmentasyonu
 - PostgreSQL ve Redis sadece backend container'ının erişebileceği internal network'te;
   dışarıya port açılmaz (Docker Compose'da `expose` kullan, `ports` değil).
+  **Formlar `method="post"` (27.09.2026, OWASP ZAP):** JS yüklenmeden gönderilen bir
+  form varsayılan GET ile `name`'li alanları adres çubuğuna/kayıtlara yazıyordu (satın
+  alma formunda T.C. kimlik no dahil). Bütün formlar POST; `frontend/src/lib/forms-post-method.test.ts`
+  yenisinin unutulmasını yakalar.
+  **Yerel geliştirme (27.09.2026, /cso incelemesi):** backend host'ta çalıştığı için
+  `docker-compose.yml` port açmak zorunda; portlar bu yüzden yalnız `127.0.0.1`'e
+  bağlı. Adres verilmeyince Docker bütün ağ arayüzlerinde açıyordu: aynı ağdaki biri
+  depodaki varsayılan parolayla girip `execute.sh`'ın production'dan kopyaladığı
+  kullanıcı verisini okuyabiliyordu, Redis'teki sıradaki fotoğraflara ulaşabiliyordu.
 
 ---
 
@@ -92,6 +101,15 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   değildir; tabloyu koruyan tek şey Row Level Security politikasıdır. **RLS'siz tablo
   oluşturulmaz** — tablo ve politikası aynı migration'da gider. Bu, aşağıdaki 3.2'deki IDOR
   korumasının Supabase tarafındaki karşılığıdır.
+- **SECURITY DEFINER fonksiyonları istemci rollerine kapalıdır.** Böyle bir fonksiyon sahibinin
+  (tablo sahibi) yetkisiyle çalışır ve RLS'i atlar; Postgres yeni fonksiyona varsayılan olarak
+  PUBLIC'e EXECUTE verir, Supabase de `anon`/`authenticated`'a ekler. Bu yüzden
+  `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated` fonksiyonla aynı migration'da
+  gider; `backend/tests/test_rls.py` bunu `public`'teki her SECURITY DEFINER fonksiyonu için
+  genel olarak doğrular. (27.09.2026: production yedeğinin yetki manifestinde
+  `record_signup_consents()` için PUBLIC ve `anon` EXECUTE bulundu — 0004'te REVOKE
+  unutulmuştu; tetikleyici fonksiyonu olduğu için doğrudan çağrılamıyordu. Migration `0012`,
+  29.09.2026'da production'a uygulandı ve sonraki yedekte doğrulandı.)
 - Session token'lar / JWT'ler kısa ömürlü (örn. 15dk access + refresh token deseni).
 - Parola sıfırlama linkleri tek kullanımlık ve süreli (15-60dk).
 - **Uygulandı (Faz 4):**
@@ -105,13 +123,27 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
     kayıtlı adresle kayıtta ve parola sıfırlamada da "e-postanızı kontrol edin" deniyor.
   - Açık yönlendirme kapalı: `/auth/callback`'teki `next` yalnızca site içi yolu kabul
     ediyor (`//`, `/\`, kontrol karakteri ve mutlak adres reddediliyor; `safe-redirect.ts`).
-  - Parola değiştirme her yolda kanıt istiyor: Hesabım sayfası mevcut parolayı soruyor;
-    mevcut parolasız `/auth/yeni-parola` formu yalnızca sıfırlama bağlantısından gelinince
-    açılıyor (`/auth/callback`'in yazdığı 10 dakikalık `httpOnly` çerez,
-    `frontend/src/lib/password-recovery.ts`). Yalnızca oturuma bakılsaydı açık kalmış bir
-    oturum parolayı ele geçirmeye yeterdi.
-  - Oturum çerezde (`@supabase/ssr`), token tarayıcıya ve backend adresine hiç açılmıyor;
-    vekiller iletiyor.
+  - Parola değiştirme: Hesabım sayfası mevcut parolayı soruyor; mevcut parolasız
+    `/auth/yeni-parola` formu yalnızca sıfırlama bağlantısından gelinince açılıyor
+    (`/auth/callback`'in yazdığı 10 dakikalık `httpOnly` çerez,
+    `frontend/src/lib/password-recovery.ts`). **DÜZELTME (27.09.2026, /cso
+    incelemesi):** bu kontroller yalnızca ARAYÜZDE. Oturumu ele geçiren biri (açık
+    bırakılmış bilgisayar) tarayıcı konsolundan Supabase'e doğrudan `updateUser`
+    çağırıp parolayı değiştirebilir; kod bunu engelleyemez. Sunucu tarafı koruma
+    Supabase panelinde: Authentication → Email ayarlarında **"Require current password
+    when changing password"** ve **"Secure password change"**. Hesabım sayfası artık
+    mevcut parolayı Supabase'e de gönderiyor (`current_password`,
+    `frontend/src/lib/change-password.ts`), yani ayar açılınca kırılmaz; sıfırlama
+    bağlantısıyla gelen oturum Supabase'te bu kuraldan muaf. **Serhan 27.09.2026'da
+    panelden açtı** (ders 19: ayar değişirse bu satır da güncellenir). E-posta değişikliği için "Secure email change"
+    (iki adrese de onay) açık olmalı.
+  - Oturum çerezde (`@supabase/ssr`). **DÜZELTME (27.09.2026):** eski metin "token
+    tarayıcıya hiç açılmıyor" diyordu — yanlış. `@supabase/ssr` oturum çerezini
+    tarayıcı istemcisi okuyabilsin diye `httpOnly` OLMADAN yazar (tarayıcıdaki giriş,
+    parola değiştirme ve çıkış buna dayanıyor). Doğru olan: token backend adresine
+    tarayıcıdan gitmiyor, backend çağrılarını Next vekilleri yapıyor. Sonuç: sitede bir
+    XSS açığı çıkarsa oturum token'ı okunabilir; bugün bilinen XSS yok. Asıl önlem CSP
+    başlığı (Faz 7.5 launch listesi).
   - Parola değiştirme mevcut parolayı istiyor; parola sıfırlanınca ve istenirse "tüm
     cihazlardan çıkış" ile diğer oturumlar kapatılıyor.
 
@@ -142,7 +174,13 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
 ### 3.5 Yedekleme
 - Otomatik günlük DB backup + R2'ye ayrı bir bucket'ta saklama.
 - Backup restore süreci en az bir kez test edilmeli (çoğu ekip bunu atlar ve felaket anında
-  backup'ın çalışmadığını öğrenir).
+  backup'ın çalışmadığını öğrenir). **Uygulandı (Faz 7, 27.09.2026):**
+  `backend/scripts/backup_database.py` — şifreli (Fernet) döküm, depo dışında;
+  geri yükleme testi satır sayılarının yanında RLS/tetikleyici/politika
+  sayılarını ve **yetkileri** (GRANT/REVOKE, satır satır) karşılaştırır.
+  Sayılar ve döküm aynı anlık görüntüden alınır. (27.09.2026'dan önceki
+  yedekler `--no-privileges` ile alınmıştı ve yetki içermiyor — Codex
+  incelemesi.) Otomatik günlük çalıştırma ve ayrı bucket Faz 7.5.
 
 ---
 
@@ -206,7 +244,17 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   açıkça `metadata_backfill` olarak taşır. Production gerçek veri sorumlusu
   unvanı/e-postası olmadan build durur; hukukçu son kontrolü hâlâ launch kapısıdır.
 - Üçüncü taraf servislere (Sentry, analytics) gönderilen veri minimize edilmeli — hata
-  loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı.
+  loglarına kullanıcı fotoğrafı veya kişisel veri sızmamalı. **Uygulandı (Faz 7,
+  26.09.2026, backend):** `app/core/monitoring.py` gövdeyi, yerel değişkenleri,
+  kimlik bilgisi başlıklarını, çerezleri ve sorgu dizesini hiç göndermez;
+  e-posta/JWT/SQL parametrelerini maskeler; DSN yokken kapalıdır. Ayrıntı
+  `backend/README.md` → "Hata izleme". **Frontend de uygulandı (aynı gün):**
+  `frontend/src/lib/error-tracking.ts` aynı kuralları tarayıcı ve Next
+  sunucusunda uygular; ayrıca tıklama kırıntılarını ve adreslerdeki sorgu
+  dizesini hiç göndermez, DSN yokken SDK tarayıcıya yüklenmez. KVKK aydınlatma
+  metni ve gizlilik politikasına "hata izleme hizmet sağlayıcısı" alıcı grubu
+  eklendi (yasal sürüm `2026-09-27`). **Açık:** sağlayıcı seçilince adı
+  gizlilik tablosuna yazılır; metin hukukçu kontrolünden geçer (bölüm 9).
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
 
 ---
@@ -300,14 +348,17 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] HTTPS zorunlu, HSTS aktif
 - [ ] Rate limiting tüm public endpoint'lerde aktif
 - [ ] CORS sadece bilinen origin'lere izin veriyor
-- [ ] DB ve Redis dışarıya kapalı
-- [ ] Backup + restore test edildi
+- [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
+- [ ] Redis diske yazmıyor (RDB/AOF kapalı) — KVKK metni özgün fotoğrafın diske yazılmadığını söylüyor. API her kuyruğa koymadan önce `CONFIG GET` ile doğruluyor ve açıksa ya da `CONFIG` yasak olduğu için doğrulanamıyorsa fotoğrafı almıyor (fail-closed); `CONFIG GET`'e izin vermeyen yönetilen bir Redis bu yüzden kesim kuyruğuyla çalışmaz (`CLAUDE.md` ders 33, açık takip maddesi 7)
+- [x] Kesim yoklamasındaki geçici Redis hatası ikinci kredi açmıyor — 29.09.2026: `GET .../jobs/{id}` bu durumda `retry_safe` vermiyor; ön yüz aynı iş anahtarını koruyor. Geçici hatada işçi aldığı işi aynı kimlikle yeniden sıraya koyuyor; yerel VS Code görevleri ortak R2 bucket'ında canlı zemin dosyası silinmesini önleyen ayarı açıyor (`CLAUDE.md` ders 36).
+- [x] Backup + restore test edildi — 27.09.2026, production'dan şifreli döküm alınıp atılabilir Postgres 17'ye geri yüklendi: 48 tablo/346 satır ve şema parmak izi (RLS, politika, tetikleyici, fonksiyon, indeks, kısıt) birebir, 2,8 sn. Aynı gün Codex incelemesinden sonra yetkilerle birlikte yeniden: 48 tablo/350 satır, 416 yetki birebir, 2,3 sn (`backend/README.md` → "Veritabanı yedeği"). **Açık:** Supabase ücretsiz pakette otomatik yedek YOK; günlük otomatik yedek + ayrı R2 bucket Faz 7.5'te (`CLAUDE.md` açık takip maddesi 8)
 - [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
 - [ ] Yasal metinlerde gerçek veri sorumlusu bilgileri ve hukukçu onayı var
-- [ ] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi)
-- [ ] Admin panel erişimi role-based ve backend'de doğrulanıyor
+- [ ] Hata izleme açılacaksa (`SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`) seçilen sağlayıcının adı gizlilik tablosuna yazıldı ve (yurt dışıysa) aktarım bilgisi doğrulandı — alıcı grubu 26.09.2026'da metne eklendi; açılmayacaksa iki DSN de boş
+- [x] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi) — 26.09.2026, Faz 7: `backend/tests/test_idor.py` her ucu sınıflandırır, sahipli kaynaklarda başkası 404 alır ve kaynak değişmez, sahibi başarılı olur; `Idempotency-Key` kullanıcıya göre ayrılır. Paketin gerçekten yakaladığı yedi ayrı bozmayla doğrulandı
+- [x] Admin panel erişimi role-based ve backend'de doğrulanıyor — 26.09.2026: 22 admin ucunun HER biri oturumsuz 401, sıradan kullanıcı 403, yönetici kabul yollarıyla otomatik sınanıyor (`backend/tests/test_idor.py`); yeni bir admin ucu sınıflandırılmadan birleşemez
 - [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. kök `CLAUDE.md` açık takip maddesi 5
 
 ## Faz 5 uygulama sınırları

@@ -371,10 +371,51 @@ async def resolve_reservation(db, reservation_id, success, result_key=None):
     return bool(row)
 
 
+async def register_result_attempt(db, reservation_id, result_key):
+    """R2 yüklemesinden ÖNCE deneme anahtarını kalıcı kaydet.
+
+    İşçi yüklemeden sonra ölürse bakım işi bu kayıttan nesneyi bulur.
+    Sonuçlanmış bir ayırmaya yeni yükleme başlatılmaz.
+    """
+    row = await one(
+        db,
+        """INSERT INTO cutout_result_attempts(key,reservation_id)
+        SELECT :key,id FROM usage_reservations WHERE id=:id AND status='pending'
+        RETURNING key""",
+        key=result_key,
+        id=reservation_id,
+    )
+    await db.commit()
+    return bool(row)
+
+
+async def reservation_outcome(db, reservation_id):
+    """Ayırmanın durumu ve saklanan sonucun anahtarı: `(status, result_r2_key)`.
+
+    `resolve_reservation` False döndüğünde bunun İKİ anlamı olabilir: ayırma
+    iade edilmiş (bakım işi) YA DA aynı işin önceki bir denemesi krediyi zaten
+    tüketmiş. İkisini ayırmadan davranmak tüketilmiş krediye ait sonucu siler
+    ve istemciyi yeni bir krediye yönlendirir; çağıran önce burayı okur.
+    Kayıt yoksa `(None, None)`.
+    """
+    row = await one(
+        db,
+        "SELECT status, result_r2_key FROM usage_reservations WHERE id=:id",
+        id=reservation_id,
+    )
+    await db.commit()
+    if not row:
+        return None, None
+    return row["status"], row["result_r2_key"]
+
+
 async def expire_reservations(db):
     rows = await many(
         db,
-        "SELECT id FROM usage_reservations WHERE status='pending' AND created_at<now()-interval '5 minutes'",
+        # 30 dk (Faz 7 kuyruğu): iş kuyrukta en fazla 15 dk bekler (fotoğraf
+        # süresi) ve sonra kesilir; daha kısa bir süre, sırada bekleyen işin
+        # kredisini iade edip işçinin ürettiği sonucu çöpe attırırdı.
+        "SELECT id FROM usage_reservations WHERE status='pending' AND created_at<now()-interval '30 minutes'",
     )
     await db.commit()
     for row in rows:

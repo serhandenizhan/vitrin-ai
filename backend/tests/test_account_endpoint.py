@@ -8,7 +8,6 @@ import uuid
 
 import httpx
 import pytest
-from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from app.core.auth import CurrentUser, get_current_user

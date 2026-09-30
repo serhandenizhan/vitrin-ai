@@ -11,10 +11,12 @@ from app.api.routes.backgrounds import router as backgrounds_router
 from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.support import router as support_router
+from app.api.routes.cmyk import router as cmyk_router
 from app.api.routes.remove_background import ROUTE_PATH
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
 from app.core.db import engine
+from app.core.monitoring import init_error_tracking
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
 from app.middleware.early_auth import EarlyAuthenticationMiddleware
@@ -25,6 +27,7 @@ from app.services.storage import R2ConfigurationError
 from app.services.billing.limits import (
     admin_limiter,
     checkout_limiter,
+    cmyk_limiter,
     public_limiter,
     support_limiter,
 )
@@ -42,7 +45,13 @@ async def lifespan(app: FastAPI):
     await public_limiter.aclose()
     await admin_limiter.aclose()
     await support_limiter.aclose()
+    await cmyk_limiter.aclose()
 
+
+# Hata izleme uygulama kurulmadan ÖNCE başlatılır: SDK'nın FastAPI/Starlette
+# entegrasyonu sınıfları başlatma anında yamalıyor. `SENTRY_DSN` boşsa hiçbir
+# şey yapmaz (bkz. app/core/monitoring.py).
+init_error_tracking()
 
 app = FastAPI(title="vitrin-ai backend", lifespan=lifespan)
 
@@ -56,7 +65,9 @@ async def r2_configuration_error_handler(_, exc: R2ConfigurationError) -> JSONRe
 # enjekte edilir (Starlette middleware örneğini gecikmeli/gizli oluşturduğu
 # için bu, testlerin üretimde çalışan gerçek limiter'a doğrudan erişebilmesinin
 # tek yoludur — bkz. tests/test_remove_background_endpoint.py).
-admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_inferences)
+# Faz 7: kesim artık ayrı işçide; bu sınır API'nin aynı anda ayrıştırdığı
+# YÜKLEME sayısını tutar (bellek koruması), kesim sayısını değil.
+admission_limiter = InferenceCapacityLimiter(settings.max_concurrent_uploads)
 # Redis tabanli, dagitik hiz sinirlayicilar — birden fazla worker/instance
 # ayni Redis'e baglaninca ayni sayaci paylasir (bkz. app/services/rate_limit.py;
 # baglanti nesnesi calisan event loop basina tembel olusturulur).
@@ -120,6 +131,7 @@ app.include_router(backgrounds_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(support_router)
+app.include_router(cmyk_router)
 app.include_router(account_router)
 app.include_router(billing_router)
 app.include_router(admin_router)

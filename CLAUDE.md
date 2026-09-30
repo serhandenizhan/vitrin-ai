@@ -57,6 +57,13 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 
 30. **Ders — react-konva'ya JSX içinde yazılan dizi/nesne her render'da "değişmiş" sayılır; filtreli bir düğümde bu, her render'da filtrelerin baştan hesaplanması demektir.** `editor-stage.tsx`'te `filters={[Brighten, Contrast, HSL]}` her render'da yeni diziydi; react-konva `!==` ile karşılaştırıp Konva'ya yeniden veriyor, Konva da ürünün filtreli önbelleğini baştan işliyordu (`getImageData` + piksel döngüsü). Stüdyodaki her yeniden çizim (aşama değişimi, panel, hover) Retina'da ~100 ms'lik bir kare üretiyordu; Serhan "geçişler kare kare, makinede mi sorun var" diye sordu. Teşhis: dpr 1 / dpr 2, geliştirme / üretim derlemesi, cam efektleri açık / kapalı karşılaştırıldı; tek fark dpr'deydi ve Long Animation Frame API'si süreyi Konva'nın `requestAnimationFrame` çizimine bağladı. Dizi modül düzeyinde sabit yapılınca dpr 2'de 35 fps → 60 fps, en kötü kare 100 → 18 ms. **Kural: react-konva bileşenine verilen dizi/nesne özellikleri (özellikle `filters`) modül sabiti ya da `useMemo` olur; "makinede mi sorun var" sorusu, aynı ölçüm farklı koşullarda (dpr, derleme modu, efektler) tekrarlanarak cevaplanır.**
 
+31. **Ders — aynı makinede birden fazla model süreci makineyi KİLİTLER; bellek bütçesi komuttan ÖNCE hesaplanır** (27.09.2026). Faz 7'nin kesim kuyruğu yük testinde, "aynı makinede 2 işçi kapasiteyi artırmaz" iddiasını ölçmek için 16 GB'lık Mac'te `load_test.py serve --workers 2` koşuldu. Her işçi BiRefNet'in AYRI bir kopyasını yüklüyor ve iki işçi aynı anda kesim yapınca bellek tükendi: macOS ~70 GB'lık sayfayı diske yazdı ve bilgisayar kilitlendi (süreçler Claude Code'un altında çalıştığı için Etkinlik Monitörü hepsini VS Code'a yazdı, 30 GB+). Model başına 12–14 GB zaten bu dosyada yazılıydı; hesap komuttan önce yapılmadı. Ayrıca betik `kill` ile durdurulunca `atexit` çalışmadığı için işçiler yetim kalıp modeli bellekte tutmaya devam edebiliyordu. **Düzeltme:** `load_test.py serve` artık işçi × eşzamanlılık × 12 GB fiziksel belleğin %75'ini aşarsa başlamayı reddeder (`--force` ile bilerek geçilir) ve SIGTERM'de işçileri kapatır — ikisi de gerçek süreçle doğrulandı. **Kural: model yükleyen süreç sayısını artıran her komuttan önce "süreç × 12 GB ≤ makinenin belleği" hesabı yapılır.** `./execute.sh` de artık açılışta bir işçi başlatıyor (modeli hemen yükler); kesim denenmeyecekse `VITRIN_START_WORKER=0`.
+32. **Ders — bir fonksiyonun `False` dönüşü iki ayrı durumu taşıyorsa, çağıran önce HANGİSİ olduğunu okumalı** (27.09.2026, Codex incelemesi, gerçek Redis + Postgres'te yeniden üretildi). `resolve_reservation(..., success)` "ayırma artık `pending` değil" durumunda `False` döndürüyor; işçi bunu her zaman "bakım işi krediyi iade etmiş" diye yorumlayıp saklanan sonucu siliyor ve işi `retry_safe` işaretliyordu. Ama aynı `False`, **aynı işin önceki denemesi krediyi zaten tüketmiş** anlamına da gelebiliyordu: işçi sonucu saklayıp krediyi tükettikten sonra, işi Redis'te bitmiş işaretleyemeden ölürse kurtarma işi onu kuyruğa geri koyuyor, ikinci deneme de tüketilmiş krediye ait sonucu siliyordu. Ön yüz `reservation_released`'i sessizce yeniden denediği için müşteri hiçbir hata görmeden **ikinci bir kredi** ödüyordu; ekrandaki mesaj ise "kredi iade edildi" diyordu. Düzeltme: `reservation_outcome` ayırmanın gerçek durumunu okur; işçi işe başlarken ve her `False`'ta ona bakar, tüketilmişse işi başarılı sayıp saklanan sonucu teslim eder (inference tekrar çalışmaz). **İkinci tur (Codex):** iki deneme PARALEL yürürse ikisi de `pending` görüp aynı sabit anahtara yüklüyordu; sonra yükleyen, kredisi ödenmiş sonucun üzerine yazıyordu. Artık her deneme kendi anahtarına yazar (`results/<kullanıcı>/<anahtar>-<rastgele>.png`), ödenen anahtar `usage_reservations.result_r2_key`'de durur ve kaybeden kendi nesnesini siler — ödenmiş bir sonuç hiçbir koşulda değişmez. **Kural: bir koşullu güncelleme (`UPDATE ... WHERE status='pending'`) "satır değişmedi" dediğinde, satırın NEDEN değişmediği ayrıca okunur; kullanıcıya "iade edildi" ya da "yeniden dene" demek, iadenin gerçekten bu çağrıda yapıldığı kanıtlanmadan yapılmaz.** Testler (`tests/test_cutout_worker.py`) eski kodda kırmızı yandı.
+33. **Ders — "diske yazılmaz" gibi yasal bir söz bir yapılandırmaya dayanıyorsa, o yapılandırma kodda DOĞRULANIR; Docker imajının `VOLUME`'u da kapsayıcı yeniden oluşturulunca silinmez** (27.09.2026, Codex incelemesi). KVKK metni özgün fotoğrafın diske yazılmadığını söylüyordu; fotoğraf Redis'te duruyordu ve Redis 7'nin varsayılanı (`save 3600 1 300 100 60 10000`) belleği `dump.rdb`'ye yazıyor — yerel Redis'te dolu bir `dump.rdb` bulundu. Düzeltme sırasında ikinci tuzak ölçüldü: `redis` imajı `/data`'yı anonim volume olarak tanımlıyor, compose onu `--force-recreate`'te bile KORUYOR ve Redis açılışta eski `dump.rdb`'yi belleğe geri yüklüyor. Çözüm üç katmanlı: compose'da `--save "" --appendonly no` + `/data` için `tmpfs`, API'de her kuyruğa koymadan önce `CONFIG GET` ile doğrulama (açıksa fotoğraf alınmaz, fail-closed), canlı Redis için Faz 7.5 kontrol maddesi. İlk sürüm `CONFIG` yasak olduğunda uyarıp fotoğrafı YİNE alıyordu; Codex'in ikinci turu bunun sözü kanıtsız bıraktığını gösterdi ve doğrulanamayan durum da reddedildi. **Kural: bir gizlilik/saklama sözü metne yazılırken onu gerçekleştiren ayar da kodda doğrulanır; "varsayılan zaten öyledir" varsayımı yapılmaz.**
+34. **Ders — "şu komutu şu değişkenle çalıştır" diye yazılmış bir uyarı koruma değildir; yıkıcı bir işlemin güvenli yolu KOMUTUN kendisi olmalı** (27.09.2026). Test paketinin `execute.sh` açıkken geliştirme veritabanını sileceği `backend/README.md`'de ve bu dosyada yazılıydı; Claude kullanıcıya testleri çalıştırması için `DATABASE_URL`'siz bir komut verdi, uyarıyı yalnız cümle olarak ekledi ve komut geliştirme veritabanını sildi (eşitleme betikleriyle geri getirildi, yerel çalışmalar gitti). Mevcut iki koruma (adres yerel mi, şema Supabase mi) o veritabanına "atılabilir" diyordu. Aynı gün ikinci bir çakışma da görüldü: iki test oturumu aynı test veritabanında koşup birbirinin tablolarını düşürdü. Çözüm: `backend/scripts/test.sh` (kendi veritabanını açan tek komut), düz `pytest`'in geliştirme veritabanında bağlanmadan durması ve oturum başına bir `pg_try_advisory_lock`. **Kural: veri silen bir işlemin doğru kullanımı belgeye değil koda yazılır — güvenli yol varsayılan yol olur, tehlikeli yol açık bir bayrak ister. Kullanıcıya komut verilirken de bu tek komut verilir.**
+35. **Ders — uzun süren bir iş, ekranın ortak durumunu (ref) GEÇ okumamalı; kendi kimliğini başladığı anda sabitlemeli** (28.09.2026, Kaan'ın PR #30 incelemesi). Kesim kuyruğuyla bir kesim artık tek istek değil, yükleme + dakikalarca yoklama. `runCutout` idempotency anahtarını bileşenin ortak `requestKeyRef`'inden okuyordu ve bunu yüklemeden SONRA, yoklamaya başlarken tekrar yapıyordu. Yükleme sürerken kullanıcı ekranı sıfırlayıp ("Yeni çalışma", sol panelden başka bir çalışma, tarayıcının geri tuşu) yeni fotoğraf seçerse ortak anahtar değişiyor, eski iş yeni fotoğrafın anahtarıyla yokluyordu: ya kendi sonucunu hiç bulamıyordu (kredi harcanır, sonuç geçmişe yazılmaz) ya da yeni fotoğrafın sonucunu eski dosyanın adıyla geçmişe yazıyordu. Sessiz tekrarda da eski iş `renewKey` ile yeni oturumun anahtarını eziyordu. Oturum sayacı (`sessionRef`) yalnız EKRANA yazmayı koruyordu, anahtarı korumuyordu. Düzeltme: anahtar yüklemeden önce yerel değişkende sabitlenir; `bindJobKey` işe kendi anahtarını verir ve ortak anahtarı yalnız ekran hâlâ o işteyken günceller. Testler (`lib/cutout-job.test.ts`) düzeltme geri alınınca kırmızı yandı. **Kural: bir `await` zincirinin ortasında paylaşılan bir ref'ten okunan kimlik, zincirin başındaki kimlikle aynı olduğu varsayılarak kullanılmaz; iş kendi kimliğini başladığı anda yerel olarak alır, ortak duruma ancak hâlâ "güncel" olduğu doğrulanınca yazar.**
+36. **Ders — yoklama hatası kredi durumunu kanıtlamaz** (29.09.2026, PR #32 bulguları). Redis yoklaması kesilince mevcut işin kredisi hâlâ ayrılmış olabilir: API `retry_safe` vermez, ön yüz aynı anahtarla yoklamayı sürdürür. İşçi geçici Redis/DB hatasında alınmış işi aynı kimlikle yeniden sıraya koyar; Windows VS Code görevleri ortak R2 için `R2_SHARED_WITH_PRODUCTION=true` verir. **Kural: yeni krediye ancak önceki kredinin harcanmadığı veya iade edildiği kesinleşince geçilir.**
+
 ## Proje genel bakış
 
 Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hedeftir). Kullanıcılar bir ürün fotoğrafı yükler (yüzük, kolye vb.); AI ürün sınırını yüksek hassasiyetle tespit eder ve arka planı kaldırarak şeffaf arka planlı bir kesim bırakır. Ardından kullanıcılar bu kesimi birçok özel arka plan tasarımından birinin üzerine yerleştirir, ölçeklendirebilir, döndürebilir ve yeniden konumlandırabilir. Tam fazlı plan ve teknoloji kararları için `ROADMAP.md` dosyasına bakın.
@@ -77,13 +84,13 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
-- **Backend:** Python, FastAPI, asenkron işler için Celery/RQ + Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`); Celery/RQ kuyruğunun kendisi henüz kurulmadı.
+- **Backend:** Python, FastAPI, Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`). **Kesim kuyruğu (Faz 7, 27.09.2026):** arka plan kaldırma API'de değil ayrı bir işçide (`python -m app.workers.cutout`); API işi Redis kuyruğuna koyar (`app/services/cutout_queue.py`), istemci `GET /api/remove-background/jobs/{id}` ile yoklar. Celery/RQ yerine kendi küçük kuyruğumuz — gerekçe `backend/README.md` → "Kesim kuyruğu". **İşçi çalışmıyorsa kesimler sırada bekler**; `execute.sh` ve VS Code görevi işçiyi açar. Özgün fotoğraf Redis'te en fazla 15 dk durur (KVKK metninde yazılı). **Redis diske yazmamalı (RDB/AOF kapalı):** `docker-compose.yml` Redis'i `--save "" --appendonly no` ve bellekte `/data` (tmpfs) ile açar; API her kuyruğa koymadan önce bunu doğrular ve açıksa fotoğrafı almaz (`CutoutQueue.ensure_ephemeral`, ders 33). Kaan'ın Windows'taki `redis-windows`'u da aynı argümanlarla başlatılmalı, yoksa kesimler 503 `queue_unavailable` alır.
 - **AI modeli:** BiRefNet — sadece orijinal `ZhengPeng7/BiRefNet` MIT lisanslı ağırlıkları kullanın. BRIA'nın "RMBG" ağırlıklarını asla kullanmayın (aynı mimari, ancak bu ağırlıklar ticari değildir). Üretim modeli doğrudan `birefnet-general` — `-lite` ve `u2net` önceki iterasyonda elendi.
 - **Veritabanı:** PostgreSQL (production'da Supabase — aynı proje, DB ve Auth ayrılmıyor)
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
 - **Frontend:** Next.js, TypeScript, Tailwind, shadcn/ui
 - **Kompozisyon editörü:** Konva.js / react-konva
-- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu ve `anon`/`authenticated`'ın hiçbir yetkisi olmadığını `backend/tests/test_rls.py` genel olarak doğrular (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme"). **Frontend tarafı:** tarayıcı token'ı hiç görmüyor; Next.js vekilleri (`src/lib/backend-proxy.ts`) çerezdeki oturumdan token'ı alıp `Authorization` başlığıyla iletiyor. `src/proxy.ts` her istekte oturumu yeniliyor ama **yetkilendirme sayılmaz** — asıl kontrol backend'de. Ekranda gösterilen profil bilgileri (ad, şirket, hesap türü) Supabase `user_metadata`'da ve kullanıcının düzenleyebildiği veri olduğu için hiçbir yetki kararında kullanılmaz.
+- **Kimlik doğrulama:** **Supabase Auth**. Oturum `@supabase/ssr` ile çerezde tutulur. FastAPI gelen Supabase JWT'sini projenin JWKS'iyle (ES256/RS256) doğrular — `backend/app/core/auth.py`. Yönetici yetkisi `admin_users` tablosundan gelir (Faz 3'ün `X-Admin-Secret`'ı Faz 4'te kaldırıldı). **IDOR koruması iki katmanlı:** backend veritabanına tablo sahibi olarak bağlandığı için RLS onu etkilemez — birinci katman her sorgudaki sahiplik filtresi (`user_id = <token'daki kullanıcı>`), ikinci katman Data API (PostgREST) kapısındaki RLS + grant'ler. **RLS'siz tablo oluşturulmaz**; `public`'teki her tablonun RLS'li olduğunu, `anon`/`authenticated`'ın hiçbir yetkisi olmadığını ve hiçbir SECURITY DEFINER fonksiyonunda PUBLIC/`anon`/`authenticated` için EXECUTE bulunmadığını `backend/tests/test_rls.py` genel olarak doğrular (fonksiyonun `REVOKE ALL ... FROM PUBLIC, anon, authenticated`'ı fonksiyonla aynı migration'da gider; 0004'te unutulan `record_signup_consents` yetkisi production yedeğinin manifestinde bulundu ve `0012`'de kapatıldı) (bkz. `ROADMAP.md` Faz 4, `SECURITY.md` 3.2, `backend/README.md` "Kimlik doğrulama ve yetkilendirme"). **Frontend tarafı:** tarayıcı backend'e hiç doğrudan gitmiyor; Next.js vekilleri (`src/lib/backend-proxy.ts`) çerezdeki oturumdan token'ı alıp `Authorization` başlığıyla iletiyor. `src/proxy.ts` her istekte oturumu yeniliyor ama **yetkilendirme sayılmaz** — asıl kontrol backend'de. Ekranda gösterilen profil bilgileri (ad, şirket, hesap türü) Supabase `user_metadata`'da ve kullanıcının düzenleyebildiği veri olduğu için hiçbir yetki kararında kullanılmaz.
 - **Ödemeler (Faz 5):** iyzico; iş kuralları `backend/app/services/billing` içinde.
   Ödeme kodunu değiştirirken, migration yaparken veya canlı açılış/kurtarma
   yürütürken önce [ödeme runbook’unu](docs/billing-runbook.md) okuyun.
@@ -98,7 +105,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   (`past_due_access_until`, uzamaz) mevcut dönemin KALAN kotasıyla sürer, yeni
   kredi verilmez, sonra `expired`. (4) *idempotency anahtarı İŞİ tanımlar,
   isteği değil* — kredi anahtar başına yalnızca bir kez tüketilir. Başarılı PNG
-  `results/<user_id>/<request_id>.png` altında 24 saat saklanır; aynı anahtar
+  `results/<user_id>/<request_id>-<random>.png` altında 24 saat saklanır; aynı anahtar
   tekrar gelirse **inference hiç çalışmaz**, saklanan nesne döner. Sonuç ÖNCE
   saklanır, kredi SONRA tüketilir; sonuç deposu kullanılamıyorsa iş hiç başlamaz
   (`503 result_storage_unavailable`) — belirsiz bir sonucu yeniden inference'a
@@ -106,7 +113,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   artık R2 olmadan çalışmıyor**, yerelde de `R2_*` ayarları gerekiyor (yalnız
   arayüz için `USE_MOCK_BACKEND=true`). İstemci yeni bir anahtara YALNIZCA
   backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
-  sonuç artık saklanmıyor) anahtar korunur.
+  sonuç artık saklanmıyor) anahtar korunur. **Faz 7'den beri** API krediyi yalnız AYIRIR ve işi kuyruğa koyar; sonucu R2'ye saklamak ve krediyi tüketmek/iade etmek işçinin işidir (`app/workers/cutout.py`). **Bir iş birden fazla kez işlenebilir** (işçi kredi tükettikten sonra ölürse iş kurtarılır): işçi her işe başlarken ayırmanın durumuna bakar; `retry_safe` YALNIZCA kredi gerçekten iade edildiyse yazılır, ayırma zaten tüketilmişse iş başarılı sayılır ve saklanan sonuç teslim edilir (ders 32). Ön yüz (`lib/cutout-job.ts`) kredisi iade edilmiş GEÇİCİ hataları kullanıcıya göstermeden yeni anahtarla sessizce bir kez daha dener.
 - **Admin paneli (Faz 6):** backend uçları `backend/app/api/routes/admin.py`,
   şema migration `0007`. **Beş kural:** (1) *admin'in verdiği kredi dönem
   kotasını BÜYÜTMEZ* — `quota_snapshot` değişmez bir kanıt kaydıdır; bonus
@@ -137,8 +144,8 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   **Pasif, silinmiş değildir:** satır ve
   R2 nesneleri durur, zemin yalnız kullanıcı listesinden çıkar — kütüphaneden
   çekmenin normal yolu budur, silme geri alınamaz ve arayüzde iki adımlıdır.
-  Kayıtlı bir taslağın kullandığı zemin silinmez (`409`); taslak zemini hem
-  JSON `editor_state.backgroundId` hem `projects.background_id` FK alanında
+  **Taslakta kullanılan zemin de silinebilir** (Serhan'ın kararı, 27.09.2026 — eskiden `409`'du; /cso incelemesi, herhangi bir kullanıcının bir zemini taslağına bağlayıp silinmesini engelleyebildiğini gösterdi): silme, zemini kullanan taslakların bağlantısını aynı işlemde temizler ve stüdyo o taslağı uygun ilk zeminle açar; taslak zemini hem
+  JSON `editor_state.backgroundId` hem `projects.background_id` sütununda (yabancı anahtar kısıtı yok)
   tutulur.
   Silmede sıra önce DB satırı sonra R2 nesneleri (ters sırası "satır duruyor,
   dosyası yok" üretirdi — ders 25). **Hesap
@@ -159,13 +166,44 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   düzeltmeleri `0006_billing_review_fixes`'te; `0005`'teki iki fonksiyon orada
   `CREATE OR REPLACE` ile güncelleniyor). Testin de yalnız boş DB'den
   `upgrade head` yolunu değil, **"önceki revizyon uygulanmış DB → yeni
-  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`).
+  migration"** yolunu doğrulaması gerekir (`backend/tests/test_migration_0006.py`,
+  `0011` için `test_migration_0011.py`). **Numara çakışması (27.09.2026):** iki dal
+  aynı anda `0011` açtı; Alembic bunu okurken yalnız uyarıyor, `upgrade head`
+  "Multiple head revisions" ile ancak test oturumu ya da deploy anında,
+  dosyaları söylemeden duruyor. `backend/tests/test_migration_chain.py`
+  (veritabanısız) numaraların benzersiz olduğunu, dosya adıyla uyuştuğunu ve
+  zincirin tek uçlu olduğunu doğrular. Yeni migration açan bir dal, birleştirmeden
+  önce güncel tabanın üstüne alınıp numarası bir sonrakine taşınır.
 - **Dönem snapshot'ı veritabanı seviyesinde değişmezdir** (`period_snapshot`
   trigger'ı): plan sürümü, provider referansları, tarihler ve kota sonradan
   güncellenemez; yalnız `status`, `closed_at`, `used_this_period` ve hesap
   silmedeki `user_id → NULL` serbesttir. Testin zamanı geriye alması gerekiyorsa
   korumayı tek bir yardımcıda (`backend/tests/test_billing.py::backdate_period`)
   ve yalnızca o işlem süresince kapatın — üretim yolunda yürürlükte kalsın.
+- **Model optimizasyonunda kalite bozulmaz (Serhan, 27.09.2026):** FP16/INT8
+  niceleme, 1024'ün altında giriş çözünürlüğü, lite model KULLANILMAZ.
+  Ölçüm: sürenin %93–99'u model hesabı (`backend/scripts/profile_cutout.py`);
+  CPU'da kayıpsız kazanç %5'in altında olduğu için yapılmadı. Hız GPU'yla
+  (FP32) gelir — Faz 7.5.
+- **Model süreç başına yüklenir (yük testi, 26.09.2026):** her kesim İŞÇİSİ
+  BiRefNet'in ayrı bir kopyasını tutar (N işçi × ~12 GB; ders 31). Faz 7'den
+  beri API modeli hiç yüklemez, bu yüzden API süreç sayısıyla serbestçe
+  ölçeklenebilir; kesim kapasitesi işçi MAKİNESİ sayısıyla (ya da GPU'yla,
+  Faz 7.5) artar. Aynı CPU'da `MAX_CONCURRENT_INFERENCES` > 1 hızlandırmaz. Yük testi aracı `backend/scripts/load_test.py`
+  (R2'ye yazmaz, yalnız yerel test veritabanında koşar); sonuçlar
+  `backend/README.md` → "Yük testi".
+- **Hata izleme (Faz 7):** backend `backend/app/core/monitoring.py`, frontend
+  `frontend/src/lib/error-tracking.ts` (tarayıcı + Next sunucusu, DSN yokken SDK
+  hiç yüklenmez; tıklama kırıntıları ve adres sorguları gitmez — ayrıntı
+  `frontend/README.md` → "Hata izleme"). KVKK/gizlilik metnine "hata izleme
+  hizmet sağlayıcısı" alıcı grubu olarak eklendi (yasal sürüm `2026-09-27`).
+  Backend: Sentry protokolü.
+  `SENTRY_DSN` boşken kapalı; doluyken yalnız 5xx gider ve gövde, yerel
+  değişken, kimlik bilgisi başlıkları, çerez, sorgu dizesi hiç gitmez, e-posta/
+  JWT/SQL parametresi maskelenir. **Production'da DSN, sağlayıcı KVKK
+  aydınlatma metnine eklenmeden verilmez.** Testler `SENTRY_DSN`'i her zaman
+  boşaltır (`tests/conftest.py`). Yeni bir kimlik bilgisi başlığı eklenirse
+  `SENSITIVE_HEADERS`'a da eklenir.
 - **Hız sınırı Redis arızasında her uç noktada aynı davranmaz.** Karar, uç
   noktanın NE KORUDUĞUNA göre veriliyor: para/sağlayıcı geri dönüşü/webhook
   yüzeyleri **fail-closed** (`limit_checkout`, `limit_public`), zemin
@@ -175,7 +213,13 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   93 zeminlik kütüphaneyi yok ediyordu. Her iki yön de test edilmiş durumda;
   yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. Destek formu
   (`POST /api/support-requests`, saatte 5/kullanıcı) da fail-open: Redis'in
-  düştüğü an kullanıcının sorun bildirmek isteyeceği andır.
+  düştüğü an kullanıcının sorun bildirmek isteyeceği andır. **CMYK dönüşümü**
+  (Next `/api/cmyk`, 27.09.2026'ya kadar oturumsuz ve sınırsızdı — /cso
+  incelemesi) gövdeyi okumadan önce backend'e sorar (`POST /api/cmyk/permit`:
+  oturum + kullanıcı başına 10 dk'da 20); **fail-closed**, çünkü korunan şey
+  sunucunun işlemcisi ve kaybedilen yalnız CMYK dosyası. **Oturum token'ı
+  tarayıcıdan okunabilir** (`@supabase/ssr` çerezi `httpOnly` değil); "tarayıcı
+  token görmüyor" eski ifadesi yanlıştı, ayrıntı `SECURITY.md` 3.1.
 - **Hız sınırı kovası ters proxy arkasında doğru seçilmeli:** `request.client.host`
   doğrudan okunursa tüm trafik proxy'nin tek kovasını paylaşır, `X-Forwarded-For`'a
   körlemesine güvenmek ise sınırı tamamen kaldırır. Başlık yalnız bağlantı
@@ -187,9 +231,18 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   `.env`'SİZ, frontend lint/test/build'i ve ayrı bir işte `pip-audit` +
   `npm audit`'i koşar. Supabase isteyen bir test `tokens` fixture'ını ister —
   yerel `.env`'ye gizlice dayanan test yerelde yeşil, CI'da kırmızı yanar.
+  CI'ın backend işi testlerden önce `ruff check app tests scripts alembic`
+  koşar (yalnız pyflakes: tanımsız isim, kullanılmayan içe aktarma;
+  `backend/ruff.toml`, 27.09.2026). Yerelde aynısı: `cd backend && .venv/bin/ruff check app tests scripts alembic`.
+  **Backend testleri tek komutla: `backend/scripts/test.sh`** (ayrı compose
+  projesinde kendi Postgres'i 5434 + Redis'i 6380; argümanlar pytest'e geçer,
+  çıkış kodu pytest'inki). Düz `pytest` `execute.sh`'ın geliştirme
+  veritabanında (yerel + 5432 + `vitrin_ai`) hiçbir şeye dokunmadan durur
+  (`VITRIN_ALLOW_DEV_DB_RESET=1` ile bilerek geçilir); aynı test
+  veritabanında ikinci bir oturum da kilit alamayıp durur (ders 34).
   Model çıktısını değiştirebilecek her iş (bağımlılık yükseltmesi, model
   optimizasyonu) `backend/scripts/compare_cutouts.py` ile gerçek fotoğraflarda
-  önce/sonra ölçülür. `./execute.sh` requirements değişince `.venv`'yi günceller.
+  önce/sonra ölçülür. `./execute.sh` requirements değişince `.venv`'yi günceller. **npm tuzağı (PR #30):** Mac'teki eski npm (11.6) ile yapılan `npm install`, kilit dosyasına Linux'ta gereken isteğe bağlı paketleri (`@emnapi/*`) yazmadı ve CI'daki `npm ci` "lock file out of sync" ile düştü. Kilit dosyası CI ile aynı npm'le güncellenir: `docker run --rm -v "$PWD:/app" -w /app node:24-alpine npm install --package-lock-only --ignore-scripts` (frontend klasöründe).
 - **Mobil (sonra):** React Native + Expo
 
 ## Git iş akışı
@@ -201,6 +254,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 - Bir birleştirmeden sonra, yeni işe başlamadan önce yerel olarak `main`'i çekin (pull)
 - **Stacked PR'lar üstten alta birleştirilir.** Bir PR'ın base'i `main` değil başka bir feature dalıysa, önce üstteki PR alt dala, sonra alt dal `main`'e birleştirilir. Ters sırada birleştirilirse üstteki PR'ın işi `main`'e hiç ulaşmaz ve GitHub'da her iki PR da "Merged" göründüğü için bu fark edilmez (bkz. ders 17 — Faz 2'de yaşandı, 8 commit kayboldu)
 - **Bir merge'den sonra işin gerçekten `main`'de olduğu doğrulanır:** `git merge-base --is-ancestor <commit> origin/main`
+- **`main`, CI yeşil olmadan birleştirilemez (26.09.2026, Serhan'ın kararı).** GitHub'daki "protect main" kural setine zorunlu durum kontrolü eklendi: `Backend testleri`, `Frontend lint, test, build`, `Bağımlılık güvenlik taraması` (`.github/workflows/ci.yml`'deki iş adları). Sebep: PR #29, son commit'in CI'ı sürerken birleştirildi — sonuç yeşil çıktı ama kırmızı olsaydı bozuk kod `main`'e girerdi. Kural setinde kimse için istisna (bypass) yok. **Tuzak:** CI'daki bir işin `name:`'i değiştirilirse zorunlu kontrol o adı bir daha görmez ve her PR sonsuza dek "bekliyor"da kalır — iş adı değişirse kural seti aynı anda güncellenir. **Yan etki:** haftalık tarama (ya da herhangi bir PR'daki tarama) yeni bir açık bulduğunda, açık kapatılana kadar hiçbir PR birleştirilemez — ilgisiz bir PR bile. Bu bilinçli (açık bilinerek birleştirme yapılmasın). Doğru çıkış yolu önce açığı kapatan sürüm yükseltmesi PR'ıdır; acil ve başka türlü çözülemeyen bir durumda kural seti (GitHub → Settings → Rules → "protect main") geçici olarak düzenlenir, bu da diğer ekip üyesine haber verilerek ve iş bitince geri alınarak yapılır. Önceki kural seti `gh api repos/serhandenizhan/vitrin-ai/rulesets/22794410` ile okunabilir.
 
 ## Depo yapısı (hedef)
 
@@ -232,7 +286,7 @@ CPU inference için **en az 12–14 GB RAM** bütçeleyin, ya da trafik gerektir
 
 - Hiçbir secret, API key, şifre veya bağlantı string'i kod içine sabit (hardcoded) yazılmaz; her zaman `.env` üzerinden okunur ve `.env` asla commit edilmez.
 - Yeni bir DB sorgusu yazarken string concatenation ile SQL asla oluşturulmaz; ORM (SQLAlchemy) veya parametreli sorgu kullanılır.
-- Kullanıcıya özel bir kaynağa erişen her endpoint (`/api/projects/{id}` gibi) o kaynağın gerçekten istek yapan kullanıcıya ait olduğunu DB seviyesinde doğrular (IDOR koruması) — bu kontrol olmadan endpoint tamamlanmış sayılmaz.
+- Kullanıcıya özel bir kaynağa erişen her endpoint (`/api/projects/{id}` gibi) o kaynağın gerçekten istek yapan kullanıcıya ait olduğunu DB seviyesinde doğrular (IDOR koruması) — bu kontrol olmadan endpoint tamamlanmış sayılmaz. **Yeni her uç `backend/tests/test_idor.py`'daki dört sınıftan birine (`PUBLIC`/`SESSION`/`OWNED`/`ADMIN`) eklenir** — eklenmezse envanter testi kırmızı yanar; `OWNED` bir uç için "başkası 404 + kaynak değişmez, sahibi başarılı" testi de aynı dosyaya yazılır.
 - Dosya yükleme kabul eden hiçbir endpoint sadece dosya uzantısına/content-type header'ına güvenmez; boyut sınırı ve magic-byte içerik doğrulaması **Faz 1'den itibaren** eklenir (önceki iterasyonda sonradan yama olarak eklenmişti).
 - Yeni bir admin/yetkili endpoint yazılırken rol kontrolü backend'de yapılır; frontend'in bir öğeyi gizlemesi yetkilendirme sayılmaz.
 - Ödeme/webhook kodu yazılırken imza doğrulaması ve idempotency olmadan "tamamlandı" denilmez.
@@ -250,7 +304,7 @@ VS Code'da **`Ctrl+Shift+B`** backend ve frontend'i birlikte başlatır (bkz. `.
 **İkinci tuzak:** VS Code görevlerinde `args` içine `&&` yazılmaz; npm'e düz bir argüman olarak geçer ve Windows PowerShell'de `&&` zaten desteklenmez. Zincir gereken yerde `package.json` script'ine taşınır (`npm run kontrol`).
 
 **İkinci betik: `./execute-supabase.sh` (22.09.2026, kullanıcı kararı).** `execute.sh` Postgres için **yerel Docker** kullanıyor; bu, Faz 4'ün yerel Supabase Auth uyumluluk katmanına (`0002_local_supabase_auth_shim.py`) dayanıyor — gerçek Supabase Auth ile giriş yapılabiliyor ama `auth.users`, `admin_users`, `subscriptions` YEREL ve BOŞ bir tablo, gerçek Supabase projesindeki verilerle hiç ilişkili değil. Sonuç: yerel `execute.sh` ile giriş yapan gerçek bir hesap admin panelini hiç göremiyor ve `/api/subscriptions/me` "Hesap bulunamadı" (401 `auth_required`) döndürüyor — çünkü `billing_signup` trigger'ı yalnızca YEREL `auth.users`'a satır eklenince tetikleniyor, gerçek Supabase girişi bu tabloya hiç yazmıyor. Admin yetkisini/aboneliği yerelde test etmenin iki yolu var:
-1. **`execute.sh` (varsayılan, 26.09.2026'dan beri otomatik):** betik her açılışta `backend/scripts/sync_local_auth.py`'yi çalıştırır. Kullanıcılar Supabase'in yönetici API'sinden (HTTPS, `SUPABASE_SECRET_KEY`) okunup yerel `auth.users`'a yazılır; satır eklenince `billing_signup` abonelik satırını kendisi açar (production'daki kayıt yoluyla aynı). Yönetici yetkisi Supabase API'sinde olmadığı için yerelde kimin yönetici olacağı `backend/.env`'deki `LOCAL_ADMIN_EMAILS` ile verilir. Betik yalnız EKLER: listeden çıkarılan adresin yerel yetkisi ve Supabase'de silinen kullanıcı yerelde kalır. **Zemin kütüphanesi de eşitlenir** (`scripts/sync_local_backgrounds.py`): production'daki `backgrounds` satırları `backend/.env.supabase` üzerinden YALNIZCA OKUNUP yerele yazılır — görseller zaten ortak R2'de ama zemin listesi tabloda, tablo boşken stüdyo yalnız sade zeminleri gösteriyordu. Ağ 5432'yi engelliyorsa ~10 sn'de vazgeçer, zeminler son eşitlemedeki hâliyle kalır (ölçüldü). **R2 ortak olduğu için** `execute.sh` backend'i `R2_SHARED_WITH_PRODUCTION=true` ile açar: yerelde zemin silmek yalnız yerel satırı siler, canlıdaki dosyaya dokunmaz (test, koruma geri alınınca kırmızı yandığı görülerek doğrulandı). **Tarihçe:** 22.09.2026'dan önce `execute.sh` ile zeminlerin görünmesinin sebebi, loglara göre `backend/.env`'nin doğrudan Supabase'i göstermesiydi (20.09 logunda backend istekleri ~424 ms, bugün yerel DB ile ~75 ms; o gün düzenlenen zemin kimliği production'da var). Port engeli çıkınca `.env` yerele çevrildi ve zeminler kayboldu. **Tuzak:** backend testleri varsayılan olarak bu aynı yerel veritabanını sıfırlar — `execute.sh` açıkken testleri ayrı bir veritabanında koşun (`backend/README.md` → "Testler"). **Koruma:** betik yalnız 0002'nin işaretlediği yerel şime yazar; bağlandığı veritabanı gerçek Supabase ise hiçbir şeye dokunmadan çıkar (çıkış kodu 2, ölçüldü). Eşitleme başarısız olursa sistem yine açılır, yalnız uyarı basılır. Günlük geliştirme için doğru yol bu: production verisine dokunmaz.
+1. **`execute.sh` (varsayılan, 26.09.2026'dan beri otomatik):** betik her açılışta `backend/scripts/sync_local_auth.py`'yi çalıştırır. Kullanıcılar Supabase'in yönetici API'sinden (HTTPS, `SUPABASE_SECRET_KEY`) okunup yerel `auth.users`'a yazılır; satır eklenince `billing_signup` abonelik satırını kendisi açar (production'daki kayıt yoluyla aynı). Yönetici yetkisi Supabase API'sinde olmadığı için yerelde kimin yönetici olacağı `backend/.env`'deki `LOCAL_ADMIN_EMAILS` ile verilir. Betik yalnız EKLER: listeden çıkarılan adresin yerel yetkisi ve Supabase'de silinen kullanıcı yerelde kalır. **Zemin kütüphanesi de eşitlenir** (`scripts/sync_local_backgrounds.py`): production'daki `backgrounds` satırları `backend/.env.supabase` üzerinden YALNIZCA OKUNUP yerele yazılır — görseller zaten ortak R2'de ama zemin listesi tabloda, tablo boşken stüdyo yalnız sade zeminleri gösteriyordu. Ağ 5432'yi engelliyorsa ~10 sn'de vazgeçer, zeminler son eşitlemedeki hâliyle kalır (ölçüldü). **R2 ortak olduğu için** `execute.sh` backend'i `R2_SHARED_WITH_PRODUCTION=true` ile açar: yerelde zemin silmek yalnız yerel satırı siler, canlıdaki dosyaya dokunmaz (test, koruma geri alınınca kırmızı yandığı görülerek doğrulandı). **Tarihçe:** 22.09.2026'dan önce `execute.sh` ile zeminlerin görünmesinin sebebi, loglara göre `backend/.env`'nin doğrudan Supabase'i göstermesiydi (20.09 logunda backend istekleri ~424 ms, bugün yerel DB ile ~75 ms; o gün düzenlenen zemin kimliği production'da var). Port engeli çıkınca `.env` yerele çevrildi ve zeminler kayboldu. **Tuzak (27.09.2026'da kodla kapatıldı):** backend testleri bağlandıkları veritabanını sıfırlar; düz `pytest` bu yerel veritabanını sildi. Artık düz `pytest` burada durur; testler `backend/scripts/test.sh` ile ayrı bir veritabanında koşar (`backend/README.md` → "Testler", ders 34). **Koruma:** betik yalnız 0002'nin işaretlediği yerel şime yazar; bağlandığı veritabanı gerçek Supabase ise hiçbir şeye dokunmadan çıkar (çıkış kodu 2, ölçüldü). Eşitleme başarısız olursa sistem yine açılır, yalnız uyarı basılır. Günlük geliştirme için doğru yol bu: production verisine dokunmaz.
 2. **`./execute-supabase.sh`:** backend'i yerel Docker Postgres yerine DOĞRUDAN gerçek Supabase veritabanına bağlar (Redis hâlâ yerel Docker'da — Supabase'in parçası değil). `backend/.env.supabase` (gitignored, `.env.*` deseninde) içindeki `DATABASE_URL`'i gerçek bir ortam değişkeni olarak dışarı verip `backend/.env`'deki aynı anahtarı geçersiz kılıyor (pydantic-settings'te ortam değişkeni `.env` dosyasından önce gelir — doğrulandı). `.env`'deki diğer her değer (`SUPABASE_URL`, R2, vb.) aynen kullanılıyor. Önkoşul: `./execute.sh` en az bir kez çalıştırılmış olmalı (venv + `node_modules` kurulumu için) — bu betik onları kurmuyor.
    - **Bu veritabanı production'dır (gerçek kullanıcı verisi).** Betik bu yüzden `alembic upgrade head`'i varsayılan olarak ÇALIŞTIRMAZ: bir feature dalındaki birleşmemiş bir migration production'a sessizce girerse o dosya bir daha düzenlenemez. Bilinçli olarak uygulamak için `VITRIN_SUPABASE_MIGRATE=1 ./execute-supabase.sh` (betiğin ilk incelemesinde bulundu, 26.09.2026).
    - **Ağ kısıtı AĞA BAĞLI, kalıcı değil:** 22.09.2026'da o anki ağdan Supabase pooler'ına (`aws-0-eu-central-1.pooler.supabase.com`) port 443 açılıyor ama **5432** ve **6543** (Postgres) sessizce düşüyordu — kod hatası değil, o ağın (VPN/güvenlik duvarı/ISP) Postgres portlarını engellemesi. **26.09.2026'da aynı makineden ev ağında (en0) yeniden ölçüldü: üç port da açık, gerçek bir `select 1` 1,5 sn'de döndü.** Betik açılışta asılı kalırsa ilk şüpheli yine bulunulan ağdır; o durumda yol 1 kullanılır.
@@ -262,7 +316,7 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 ```
 
 - `frontend/.env.local` içinde `USE_MOCK_BACKEND=true` backend olmadan arayüzü çalıştırır (sahte bir kesim PNG'i döner, arayüzde "Demo modu" olarak işaretlenir). **Dikkat:** bu değer `true` kalırsa gerçek backend ayakta olsa bile arayüz hep demo/mock sonucu gösterir.
-- Gerçek uçtan uca demo için backend'i ayrı bir terminalde başlatın ve `USE_MOCK_BACKEND=false` yapın. İlk istek modeli belleğe yüklediği için daha uzun sürebilir (bkz. "Bilinen kısıt" bölümü).
+- Gerçek uçtan uca demo için backend'i ayrı bir terminalde başlatın ve `USE_MOCK_BACKEND=false` yapın. Kesimi ayrı işçi yapar (`execute.sh` ve VS Code görevi açar); işçi modeli açılışta yüklediği için ilk ~30 sn'deki istek sırada bekler, hata almaz (bkz. "Bilinen kısıt" bölümü).
 - Desteklenen formatlar: JPEG, PNG, WebP, HEIC/HEIF. Chrome/Firefox/Edge HEIC'i `<img>` ile gösteremiyor; önizleme `frontend/src/lib/heic-preview.ts` ile üretiliyor: önce tarayıcının kendi çözücüsü (Safari), olmazsa `heic-to` (libheif WASM, **LGPL-3.0**, ~3 MB) yalnızca HEIC seçildiğinde dinamik yükleniyor. İkisi de başarısızsa eski bilgi kartı çıkıyor. Backend'e her zaman özgün dosya gidiyor; tarayıcıda üretilen JPEG yalnızca gösterim için.
 - **Dosya boyutu sınırı 20 MB** (`backend/app/core/config.py` → `max_file_size_mb`). Frontend'deki karşılığı `frontend/src/lib/upload-constraints.ts`; ikisi elle senkron tutulur.
 - **Telefondan dev sunucusu:** `frontend/.env.local`'e `DEV_ALLOWED_ORIGINS=<yerel IP>` yazılıp sunucu yeniden başlatılır, telefonda `http://<ip>:3000`. Yazılmazsa Next.js 16 istekleri engeller ve sayfa açılır ama etkileşimsiz kalır — hata gibi görünür. IP koda yazılmaz (ders 11). Ayrıntı: `frontend/README.md`.
@@ -270,8 +324,8 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
 - **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). **Faz 5'ten beri R2 zorunlu:** arka plan kaldırma başarılı sonucu idempotency için geçici bir R2 nesnesi olarak saklamadan krediyi tüketmiyor; R2 yapılandırılmamışsa kesim hiç başlamaz ve `503 result_storage_unavailable` döner (eskiden bu cümle "kesim ve indirme akışı etkilenmez" diyordu). Yalnız arayüzü denemek için `USE_MOCK_BACKEND=true`.
-- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: model ilk çağrıda gecikmeli yüklendiği için (bkz. "Bilinen kısıt") health check bunu tetiklerse ilk kontrol ~30-35sn sürerdi. `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 417 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, stüdyonun masaüstü aşamalı akışı ve yalnız açılışta çıkan perde (matchMedia taklidiyle), zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri (kategori + yayın durumu), stüdyoda ilk döndürmede ürün boyutunun değişmemesi, zemin favorileri ile gölge boyutu/yoğunluğu ve yansıma mesafesi, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali, admin listesi/mutasyon yarışı (PR #25 incelemesi: mutasyondan önce başlayan periyodik GET'in yeni durumu geri alamaması — ilk testin tek bir mikro görev turu beklediği için yanlışlıkla düzeltmesiz de yeşil geçtiği fark edildi, birden fazla tur beklenecek şekilde güçlendirildi) ve yönetici ekleme/çıkarma için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
+- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: Faz 7'den beri API süreci modeli hiç yüklemiyor (kesim ayrı işçide); işçinin sağlığı bu uçtan görünmez — işçi çalışmıyorsa kesimler sırada bekler (canlıda servis olarak izlenmesi açık takip maddesi 7'de). `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 460 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, stüdyonun masaüstü aşamalı akışı ve yalnız açılışta çıkan perde (matchMedia taklidiyle), zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri (kategori + yayın durumu), stüdyoda ilk döndürmede ürün boyutunun değişmemesi, zemin favorileri ile gölge boyutu/yoğunluğu ve yansıma mesafesi, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali, kesim işinin anahtarının ekranın ortak anahtarından ayrı tutulması (Kaan'ın PR #30 incelemesi), admin listesi/mutasyon yarışı (PR #25 incelemesi: mutasyondan önce başlayan periyodik GET'in yeni durumu geri alamaması — ilk testin tek bir mikro görev turu beklediği için yanlışlıkla düzeltmesiz de yeşil geçtiği fark edildi, birden fazla tur beklenecek şekilde güçlendirildi) ve yönetici ekleme/çıkarma için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Daha geniş bileşen kapsamı ve E2E (Playwright) Faz 7'de kalır.
 - **Zemin kütüphanesi (öne alınan iş, 17.09.2026):** 93 zemin `backend/scripts/upload_backgrounds.py` ile R2 + `backgrounds` tablosuna "basic" olarak yüklendi; betik yükleme ucuyla aynı kontrolleri yapıp zemini aynı çözünürlükte JPEG %92'ye çevirir ve 480 px önizleme (`backgrounds/thumbs/<id>.jpg`) üretir. **Veritabanı yapısı bilinçli olarak değişmedi** (Kaan: "karışıklık olur"): kategori ve baskı uyarısı `frontend/src/lib/background-catalog.ts`'te (betikle üretilir, elle düzenlenmez), zemin kimliğine göre; katalogda olmayan zemin "Sade" sayılır. 4 kategori (`lib/background-categories.ts`): Sade, Doku & desen, Doğal & çiçekli, Lüks & koyu. Düşük çözünürlüklü 4 ChatGPT zemininde CMYK düğmesi önce "Bu görsel baskıya önerilmiyor. Yine de onaylıyor musunuz?" diye sorar — kontrol yalnız arayüzde, `/api/cmyk` hangi zeminin kullanıldığını bilmez. **Tuzak (PR #18'de KAPATILDI):** Faz 5'in hız sınırlayıcısı Redis ister ve Redis yoksa `GET /api/backgrounds` 500 veriyordu; vekil bütün 5xx'leri "200 + boş liste"ye çevirdiği için stüdyo sessizce gradyan yer tutuculara düşüyordu. Artık zemin listelemenin hız sınırı **fail-open** (para/webhook yüzeyleri fail-closed kaldı, bkz. yukarıdaki hız sınırı maddesi): Redis kapalıyken de 93 zemin dönüyor, yalnızca bir uyarı log'lanıyor. **Sıra (19.09.2026, Serhan):** kategori içinde zeminler DÜZDEN KARMAŞIĞA; sıra `frontend/src/lib/background-order.ts`'te, `backend/scripts/rank_backgrounds.py` R2'deki önizlemelerin kenar şiddetini ölçerek üretir (salt okuma, DB yapısı değişmedi). Yeni zemin yüklenince betik yeniden çalıştırılır; sırada olmayan zemin kategorisinin sonuna düşer. Arayüz de "kütüphane hazırlanıyor" ile "yüklenemedi"yi ayırıyor ve tekrar deneme sunuyor. Zeminler yine görünmüyorsa sıradaki şüpheli Redis değil, **R2 ayarları ya da CORS kuralı**. Yerelde Redis: `Yeni klasör\araclar\redis\` (redis-windows 8.10.1, kurulumsuz), `.claude/launch.json`'daki `redis` kaydı; backend'den önce başlatılır.
 - **Stüdyo ve katalog düzenlemeleri (öne alınan iş, 17.09.2026, Kaan):** stüdyo **A4 ile açılır**, "Kare 2000×2000" kaldırıldı (beyaz zeminli Pazaryeri duruyor). Düzenleme **üç adım**: 1 Boyut ve zemin → 2 Ürün (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma) → 3 Bitir (logo, etiket, indirme, CMYK, WhatsApp). Zemin artık **esnetilmiyor**, biçimi ortadan kırparak kaplıyor (`coverCrop`); fotoğraf/desenli zeminler yalnızca biçimin yönüne (dikey/yatay; kare = yatay) uyuyorsa listelenir, **Sade her biçimde** (`fitsOrientation`; yön katalogda, yükleme betiği ölçülerden üretir). "Işık havuzu" kaldırıldı, yerine **yansıma** (ayrı Konva katmanında `destination-in` ile silikleşen ayna kopya). **Gölge güçlendirildi** (`SHADOW` 50/34/%55): eski değer Konva'da ölçüldü, açık zeminde ~27/255, koyu zeminde ~0 koyulaşma veriyordu — önbellek teşhisi ölçümle çürütüldü, sebep zayıf değerlerdi. Katalog PNG yerine **JPEG + baskıya uygun CMYK** ve **logo** (stüdyoyla aynı depolama; `lib/print-download.ts`, `lib/logo-image.ts` ortak). Sol panelden eski çalışma ana sayfa dışındaki sayfalarda açılmıyordu: bekleyen çalışma `sessionStorage`'a yazılıp ana sayfaya gidiliyor (sağlayıcı her sayfada yeniden kuruluyor, bellek yetmez).
 - **Aynı günün sonraki turları (17.09.2026, Kaan):** indirme sonrası soru (katalog boyutunda önce "şablona ekle" → `lib/catalog-handoff.ts` ile Katalog'da "Tam sayfa", sonra "ana menüye dön"); katalogda 6 şablon, sayfa rengi ve siyah/beyaz metin (`applyTemplateColors`); logo stüdyoda ve katalogda sürüklenip kare köşelerden boyutlandırılıyor (`LogoSettings.position`), renkleri çevrilebiliyor; stüdyoda **gölge kapalı başlıyor**. **Tuzak:** Konva önbelleği `shadowEnabled` değişince yenilenmiyor, gölge aç/kapa için `clearCache()`+`cache()` şart. **Gölge boyutu/yoğunluğu ve yansıma mesafesi (19.09.2026):** `Appearance`'a `shadowSize` (`SHADOW` çarpanı), `shadowOpacity` ve `reflectionGap` eklendi; aynı tuzak nedeniyle önbellek bu değerler değişince de yeniden alınıyor. Eski taslaklar `normalizeAppearance` ile varsayılanlara tamamlanıyor. **Tuzak:** `sessionStorage`'tan okurken silmek geliştirmede (StrictMode, efekt iki kez) veriyi kaybettiriyor — önce oku, teslim edince sil. Bülten `/bulten` (içerik `lib/bulletin.ts`); **altın kuru yok**: ücret/lisans/yazılı izin isteyen veri kaynağı eklenmez (TCMB ticari kullanımda yazılı izin istiyor). Telefonda liste düzenleri içeriğe göre farklı (`globals.css` `.mobile-rail` yalnızca görselli listelerde; diğerleri kısa liste, açılır başlık, sekme).
@@ -518,6 +572,130 @@ başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
 `NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` ile verilmeli ve metinler Türkiye'de yetkili
 bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
 `VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
+
+### 8. Veritabanı yedeği henüz OTOMATİK değil — sahibi: Serhan
+
+Supabase projesi **ücretsiz pakette** ve bu pakette Supabase otomatik yedek
+almıyor; tek yedek `backend/scripts/backup_database.py`'nin ürettiği şifreli
+döküm (27.09.2026'da production'dan alındı, geri yükleme testi birebir
+geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
+
+1. **Faz 7.5'e kadar:** yedek elle alınır (önemli bir değişiklikten ya da
+   migration'dan önce `backup` çalıştırılır). Şifreleme anahtarı
+   (`BACKUP_ENCRYPTION_KEY`) parola yöneticisine kopyalandı (Serhan, 29.09.2026).
+2. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
+   süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
+
+### 10. Faz 7.5 güvenlik kapanış listesi — sahibi: Serhan (27.09.2026, PR #30 sonu)
+
+Faz 7'de kod güvenlik incelemesi (`/cso`) ve OWASP ZAP (oturumsuz + oturumlu,
+yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` Faz 7
+"Güvenlik incelemesi"). Aşağıdakiler bilinçli olarak canlıya çıkışa bırakıldı ve
+**Faz 7.5'e başlarken bu liste hatırlatılmalı** (ROADMAP Faz 7.5'te aynısı):
+
+  1. **Güvenlik başlıkları** (ZAP'in iki taramasında da çıkan tek eksik):
+     ön yüzde CSP, tıklama tuzağı koruması (`frame-ancestors` /
+     `X-Frame-Options`), `X-Content-Type-Options: nosniff`,
+     `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, `X-Powered-By`
+     kapatma (`poweredByHeader: false`); backend'de `nosniff` ve CORP;
+     canlıda HSTS. **CSP ayrıca önemli:** oturum token'ı tarayıcıdan
+     okunabildiği için (`@supabase/ssr`, `SECURITY.md` 3.1) XSS'e karşı asıl
+     önlem CSP. Başlıklar eklendikten sonra CI'a ZAP pasif taraması
+     (`zaproxy/action-baseline`) eklenebilir.
+  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+     canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
+     ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
+     R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
+     sırasında bilerek koparılmıştı) ve ön yüzün oturumlu taraması.
+  3. **Canlı Redis:** özel ağda, parolalı, RDB/AOF kapalı ve `CONFIG GET`
+     izinli (ölçüm listesi madde 10).
+  4. **Canlı altyapı denetimi:** HTTPS/HSTS, ters vekil, `TRUSTED_PROXY_IPS`
+     (açık takip 3), R2 CORS ve bucket politikası (açık takip 2), Supabase
+     Auth panel ayarları — "Require current password when changing
+     password", "Secure password change", "Secure email change" (27.09.2026'da
+     açıldı; değişirse `SECURITY.md` 3.1 güncellenir).
+  5. **Profesyonel penetrasyon testi:** ücretsiz karşılığı yok; canlıya
+     çıkmadan önce bütçe olursa staging'de.
+  6. **CI'a eklenebilecekler (27.09.2026 değerlendirmesi):** kod kapsama
+     raporu (`pytest-cov`, önce yalnız bilgi amaçlı), ZAP pasif taraması
+     (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
+     Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
+     27.09.2026'da eklendi.
+
+### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
+
+Kesim kuyruğu denemesinde iki fotoğraftan ilki 43 sn sürdü (normali ~12 sn).
+Ölçümle bulunan sebep kod değil makine: 16 GB'lık Mac'te **takas (swap)
+15,5 / 16 GB doluydu** ve macOS, boşta bekleyen kesim işçisinin model
+ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Boşta kalıştan sonraki ilk
+kesim 30,1 sn, hemen ardından gelenler 9,3 / 9,1 sn ölçüldü (ayrıntı
+`backend/README.md` → "Kesim kuyruğu"). `./execute.sh` artık açılışta işçiyi
+başlattığı için model (~5 GB) sürekli bellekte duruyor; makine sıkışınca
+hem kesimler hem bilgisayar yavaşlıyor (dün gece iki model aynı anda
+çalışınca makine kilitlenmişti — ders 31).
+
+**Bakılacaklar:**
+1. **Docker Desktop → Settings → Resources → Memory:** Docker'ın Linux sanal
+   makinesine ayrılan bellek. Postgres + Redis için 2–4 GB yeter; fazlası Mac'ten
+   sürekli eksilir. Değer düşürülüp Docker yeniden başlatılır.
+2. `sysctl vm.swapusage` ve Etkinlik Monitörü → Bellek: `execute.sh` açıkken en
+   çok bellek kullananlar (Chrome sekmeleri, VS Code eklentileri, Docker).
+3. Kesim denenmeyecek günlerde `VITRIN_START_WORKER=0 ./execute.sh` (işçi ve
+   model hiç açılmaz; kesimler sırada bekler).
+4. Düzeltmeden sonra ölçüm: işçi birkaç dakika boşta kaldıktan sonra bir
+   kesim yapılır; ~12 sn civarındaysa sorun kapanmıştır ve bu madde silinir.
+
+Bu, yerel geliştirme ortamının sorunu; canlı sunucudaki karşılığı açık takip
+maddesi 7'nin 8. alt maddesi (modelin bellekte kalması).
+
+### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
+
+Faz 7'deki yük testi, bellek ve süre ölçümleri yerelde, tek makinede yapıldı
+(ayrıntı `backend/README.md` → "Yük testi"). Canlı sunucu belli olunca
+şunlar ölçülmeden production'a hazır denmez (`ROADMAP.md` Faz 7.5'te aynı
+liste):
+
+  1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
+     serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
+     çıktı ama bellek sıkıştırması yüzünden karşılaştırılamaz). Sunucu boyutu
+     bu ölçüme göre seçilir.
+  2. **Kesim süresi:** production CPU'sunda fotoğraf başına süre (yerelde
+     Apple M4'te ~13 sn). Süre kapasiteyi doğrudan belirler: tek süreçte
+     dakikada 60 / süre kesim.
+  3. **Yük testi:** `backend/scripts/load_test.py` production'a benzer bir
+     sunucuda, yük üreticisi AYRI bir makineden koşulur (yerelde ikisi aynı
+     CPU'yu paylaşıyordu). R2'ye yazmaz; ayrı bir test veritabanı gerekir.
+  4. **Veritabanı bağlantı havuzu:** varsayılan (5 + 10 taşma) yerel yük
+     testinde darboğazın bir parçası çıktı (havuz 40'ta iki uç 1,7–2,3 kat
+     hızlandı). Doğru boyut Supabase pooler'ının bağlantı sınırıyla birlikte
+     canlıda ölçülerek seçilir; sınırı aşan havuz bağlantı hatası üretir.
+  5. **CMYK dönüşümü:** 40 MP'lik görselin production'da süresi ve belleği
+     (Faz 6'dan taşınan madde, açık takip maddesi 1).
+  6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
+     maskelemenin orada da doğru göründüğü kontrol edilir.
+  7. **Kesim kuyruğu kapasitesi:** aynı makinede 2 işçi ya da
+     `MAX_CONCURRENT_INFERENCES=2` throughput'u artırıyor mu (yerelde 16 GB'lık
+     makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
+     seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
+     başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
+  8. **Boşta kalıştan sonraki ilk kesim:** işçi bir süre boşta kaldıktan sonra
+     ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
+     diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
+     bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
+  9. **GPU seçilirse:** `backend/scripts/profile_cutout.py` GPU sunucusunda
+     koşulup kesim süresi tahmini (~0,3–1,5 sn) gerçek ölçüme çevrilir; FP32
+     GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
+     fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
+     kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
+  10. **Redis diske yazmıyor mu:** kesim kuyruğu özgün fotoğrafı Redis'te
+     tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
+     kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
+     koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
+     (kredi iade + 503). **`CONFIG` yasaksa da fotoğrafı almıyor**
+     (doğrulanamayan söz verilmiş sayılmaz — Codex incelemesi, 2. tur).
+     Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
+     sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
+     dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 

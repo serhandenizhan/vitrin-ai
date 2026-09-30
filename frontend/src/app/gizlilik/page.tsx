@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 18 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
       title="Gizlilik politikası"
       summary="Verinin cihazınızdan başlayıp arka plan kaldırma, çalışma geçmişi ve ödeme süreçlerinde nasıl hareket ettiğini sade ve doğrulanabilir biçimde açıklıyoruz."
     >
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
       <LegalSection title="Fotoğrafın veri akışı">
         <div className="grid gap-3 sm:grid-cols-3">
           {[
-            ["1", "Yükleme", "Özgün dosya güvenli bağlantıyla işlem servisine gönderilir ve bellekte çözülür."],
+            ["1", "Yükleme", "Özgün dosya güvenli bağlantıyla işlem servisine gönderilir; sırası gelene kadar en fazla 15 dakika sunucu belleğinde bekler."],
             ["2", "Kesim", "Arka plan kaldırılır; sonuç tekrar güvenliği için özel R2 alanında en fazla 24 saat tutulur."],
             ["3", "İsteğe bağlı geçmiş", "Geçmiş açıksa sonuç ve küçük önizleme hesabınıza bağlı ayrı kayıt olarak saklanır."],
           ].map(([step, title, text]) => (
@@ -51,6 +51,7 @@ export default function PrivacyPage() {
             ["Cloudflare R2", "Özel nesne depolama", "24 saatlik geçici kesim sonucu; geçmiş açıksa sonuç ve küçük önizleme."],
             ["iyzico", "Ödeme ve abonelik altyapısı", "Ödeme formu, kart verisi, kimlik/fatura bilgileri ve ödeme referansları."],
             ["Barındırma ve e-posta sağlayıcıları", "Uygulamanın sunulması ve işlemsel bildirimler", "Teknik istek kayıtları ve gönderim için gerekli e-posta bilgisi."],
+            ["Hata izleme hizmeti", "Uygulama hatalarının tespiti ve giderilmesi", "Maskelenmiş teknik hata kaydı: hata türü ve konumu, istek yolu, tarayıcı/cihaz bilgisi. Fotoğraf, form içeriği, oturum belirteci, çerez ve e-posta adresi gönderilmez."],
           ]}
         />
         <p>
@@ -90,7 +91,7 @@ export default function PrivacyPage() {
 
       <LegalSection title="Saklama ve silme">
         <p>
-          Özgün fotoğraf işlem tamamlanınca uygulama belleğinde tutulmaz. Geçici sonuç
+          Özgün fotoğraf diske yazılmaz; işlem sırası beklenirken en fazla 15 dakika sunucu belleğinde tutulur ve işlem tamamlanınca silinir. Geçici sonuç
           en fazla 24 saat sonra bakım işiyle silinir. Kaydedilmiş çalışmalar siz silene,
           hesabınızı kapatana veya plan sınırı uygulanana kadar saklanır; ücretsiz planda
           en yeni 10 çalışma korunur. Hesap silme isteği, devam eden ödeme veya abonelik

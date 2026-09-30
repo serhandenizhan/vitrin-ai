@@ -39,7 +39,6 @@ from app.services.billing.actions import (
     prune_projects,
     run_storage_job,
     finish_refund,
-    delete_account_action,
 )
 from app.services.billing.maintenance import process_webhook, reconcile
 from app.api.routes.billing import CheckoutRequest
@@ -261,7 +260,7 @@ async def test_abandoned_reservation_released_once(db_session, create_user, prov
     rid = (await reserve(db_session, uid, uuid.uuid4(), provider)).id
     await execute(
         db_session,
-        "UPDATE usage_reservations SET created_at=now()-interval '6 minutes' WHERE id=:id",
+        "UPDATE usage_reservations SET created_at=now()-interval '31 minutes' WHERE id=:id",
         id=rid,
     )
     await db_session.commit()
@@ -275,6 +274,27 @@ async def test_abandoned_reservation_released_once(db_session, create_user, prov
             uid=uid,
         )
     )["used_this_period"] == 0
+
+
+async def test_reservation_waiting_in_the_cutout_queue_is_not_released(
+    db_session, create_user, provider
+):
+    """Faz 7 kuyruğu: sırada 20 dk bekleyen işin kredisi iade EDİLMEMELİ.
+
+    Eski 5 dakikalık zaman aşımı, yoğunlukta sırada bekleyen işin kredisini
+    iade ediyor ve işçinin ürettiği sonucu `reservation_released` ile çöpe
+    attırıyordu.
+    """
+    uid = await create_user()
+    rid = (await reserve(db_session, uid, uuid.uuid4(), provider)).id
+    await execute(
+        db_session,
+        "UPDATE usage_reservations SET created_at=now()-interval '20 minutes' WHERE id=:id",
+        id=rid,
+    )
+    await db_session.commit()
+    await expire_reservations(db_session)
+    assert await resolve_reservation(db_session, rid, True)
 
 
 async def test_free_period_renews_without_accumulating(

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 18 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
       title="Kullanım koşulları"
       summary="Bu koşullar Vitrin AI hesabını, fotoğraf işleme hizmetini, plan ve kredileri, kullanıcı içeriklerini ve tarafların sorumluluklarını düzenler."
     >
