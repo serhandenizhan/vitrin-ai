@@ -1195,7 +1195,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     kalıp alınmış işi yeniden sıraya koyuyor; Windows VS Code görevleri ortak
     R2 bucket'ı için silme korumasını açıyor. Windows test uyumluluğu
     30.09.2026'da kapandı (migration SQL'i UTF-8 okunuyor, `compare_cutouts`
-    Windows'ta açılıyor, Unix izni isteyen 6 yedek testi Windows'ta atlanıyor —
+    Windows'ta açılıyor, günlük mutabakat için Windows'ta `tzdata` kuruluyor,
+    Unix izni isteyen 6 yedek testi Windows'ta atlanıyor —
     kök `CLAUDE.md` ders 37); kararsız ön yüz testi ayrı takipte (PR #32
     bulguları; 30.09.2026'da `error-tracking.test.ts` yük altında 5 sn zaman
     aşımına düştü, tek başına geçiyor).

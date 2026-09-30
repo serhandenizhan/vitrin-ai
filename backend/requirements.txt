@@ -34,3 +34,8 @@ httpx==0.28.1
 # Faz 7 hata izleme (app/core/monitoring.py). SENTRY_DSN boşken başlatılmaz.
 # SDK MIT lisanslı; sentry.io'ya ya da kendi barındırılan GlitchTip'e bağlanır.
 sentry-sdk==2.70.0
+# Günlük mutabakat `ZoneInfo("Europe/Istanbul")` kullanıyor. Linux/macOS saat
+# dilimi verisini işletim sisteminden okur; Windows'ta yok ve `tzdata` kurulu
+# değilse ZoneInfoNotFoundError atılır (30.09.2026, Kaan'ın Windows'unda iki
+# mutabakat testi bu yüzden düştü). Yalnız Windows'ta kurulur: sunucu değişmez.
+tzdata==2026.4; sys_platform == "win32"
