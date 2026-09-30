@@ -4,6 +4,7 @@ import hmac
 import io
 import json
 import time
+import types
 import urllib.request
 import uuid
 
@@ -216,7 +217,13 @@ class _Clock:
 def jwks_endpoint(tokens, monkeypatch) -> _FakeJwksEndpoint:
     endpoint = _FakeJwksEndpoint([_public_jwk(tokens.private_key, TEST_KEY_ID)])
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", _REAL_FETCH_DATA)
-    monkeypatch.setattr(urllib.request, "urlopen", endpoint.urlopen)
+    # PyJWT 2.14+ JWKS'i yönlendirme (redirect) reddeden özel bir opener ile
+    # çekiyor (`build_opener(...).open`); `urlopen` artık kullanılmıyor.
+    monkeypatch.setattr(
+        urllib.request,
+        "build_opener",
+        lambda *handlers: types.SimpleNamespace(open=endpoint.urlopen),
+    )
     auth_module.get_jwks_client.cache_clear()
     return endpoint
 
