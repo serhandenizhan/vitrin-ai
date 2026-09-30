@@ -3,7 +3,7 @@
 export { LEGAL_DOCUMENT_VERSION } from "@/lib/legal-version";
 
 export const DATA_CONTROLLER_NAME =
-  process.env.NEXT_PUBLIC_DATA_CONTROLLER_NAME?.trim() || "Vitrin AI";
+  process.env.NEXT_PUBLIC_DATA_CONTROLLER_NAME?.trim() || "Vitrin";
 
 export const LEGAL_CONTACT_EMAIL =
   process.env.NEXT_PUBLIC_LEGAL_CONTACT_EMAIL?.trim() || null;
