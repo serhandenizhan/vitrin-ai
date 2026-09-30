@@ -33,6 +33,20 @@ export type BulletinPost = {
 
 export const POSTS: BulletinPost[] = [
   {
+    id: "yeni-vitrin",
+    kind: "guncelleme",
+    date: "2026-09-30",
+    title: "Yeni açılış: ürününüz vitrinde",
+    body: "Ana sayfa baştan kuruldu. Dört örnek ürün elde, kutuda ve zincirde duruyor; birine yakınlaşınca ürün 3D olarak dönüyor ve stüdyodaki zeminlerden birine oturuyor.",
+    notes: [
+      "Yakınlaşınca ürünü sürükleyip her yönden inceleyin",
+      "Ürünü kütüphanedeki zeminlere koyup nasıl duracağını görün",
+      "Yanında aracın gerçek kesimi ile özgün fotoğraf karşılaştırması",
+      "Ana sayfada stüdyo turu: zemin, gölge, logo ve etiket, boyut, teslim",
+    ],
+    image: { src: "/showcase/vitrin-kutu.webp", alt: "Mermer zemin üzerinde kadife kutuda yüzük" },
+  },
+  {
     id: "katalog-yenilendi",
     kind: "guncelleme",
     date: "2026-09-17",
@@ -44,7 +58,7 @@ export const POSTS: BulletinPost[] = [
       "Logo ekleme; sürükleyerek taşıma, köşelerden boyutlandırma",
       "JPEG ve baskıya uygun CMYK (TIFF/JPEG) indirme",
     ],
-    image: { src: "/showcase/vitrin-altin.webp", alt: "Altın zemin üzerinde kolye" },
+    image: { src: "/showcase/vitrin-kutu.webp", alt: "Mermer zemin üzerinde kadife kutuda yüzük" },
   },
   {
     id: "studyo-uc-adim",
@@ -58,7 +72,7 @@ export const POSTS: BulletinPost[] = [
       "Zeminler artık esnemiyor; biçime göre ortadan kırpılıyor",
       "İndirme sonrası kataloğa aktarma ya da ana menüye dönüş",
     ],
-    image: { src: "/showcase/vitrin-kadife.webp", alt: "Kadife zemin üzerinde kolye" },
+    image: { src: "/showcase/vitrin-yuzuk.webp", alt: "Yeşil kadife zemin üzerinde tek taş yüzük" },
   },
   {
     id: "zemin-kutuphanesi",
@@ -66,7 +80,7 @@ export const POSTS: BulletinPost[] = [
     date: "2026-09-17",
     title: "93 yeni zemin eklendi",
     body: "Zemin kütüphanesi büyüdü ve dört kategoriye ayrıldı: Sade, Doku & desen, Doğal & çiçekli, Lüks & koyu. Seçtiğiniz boyut dikeyse dikey, yataysa yatay zeminler listeleniyor; düz renkler her boyutta.",
-    image: { src: "/showcase/vitrin-sicak-gri.webp", alt: "Sıcak gri zemin üzerinde kolye" },
+    image: { src: "/showcase/vitrin-alyans.webp", alt: "Siyah su zemin üzerinde alyans çifti" },
   },
   {
     id: "cmyk",

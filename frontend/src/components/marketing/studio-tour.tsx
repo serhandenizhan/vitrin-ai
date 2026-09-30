@@ -165,7 +165,7 @@ export function StudioTour() {
       <div className="flex flex-col items-center">
         <div className="studio-tour-stage relative flex w-full items-center justify-center rounded-[1.75rem] bg-white/[0.03] p-5 ring-1 ring-white/10 sm:p-8">
           <div
-            className="studio-tour-frame relative overflow-hidden rounded-[0.9rem] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)] transition-[width] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+            className="studio-tour-frame relative overflow-hidden rounded-[0.9rem] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]"
             style={{ ["--a" as string]: aspect } as CSSProperties}
           >
             {/* Zeminler ust uste; secilen belirir (capraz gecis). */}
@@ -185,8 +185,8 @@ export function StudioTour() {
             ))}
 
             {/* Urun: yuzuk kesimi, golge ve yansima. */}
-            <div className="absolute inset-x-0 bottom-[16%] flex flex-col items-center">
-              <div className="relative h-[46cqh] min-h-0">
+            <div className="absolute inset-x-0 bottom-[16%] flex h-[46%] flex-col items-center">
+              <div className="relative h-full min-h-0">
                 <Image
                   src={closeSrc(RING).after}
                   alt="Arka planı kaldırılmış tek taş yüzük"

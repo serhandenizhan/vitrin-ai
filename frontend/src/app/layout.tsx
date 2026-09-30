@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+
+import { siteUrl } from "@/lib/site-url";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -13,7 +15,15 @@ const sans = Inter({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  // Safari'nin ust cubugu ve telefonun durum cubugu siteyle ayni siyah.
+  themeColor: "#0c0b0a",
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
+  openGraph: { siteName: "Vitrin", locale: "tr_TR", type: "website" },
+  twitter: { card: "summary_large_image" },
   title: "Vitrin — Kuyumcu ürün görseli",
   description:
     "Kuyum ürünü fotoğraflarının arka planını yapay zekâ ile kaldırın ve satışa hazır görseller elde edin.",

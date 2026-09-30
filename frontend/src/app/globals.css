@@ -1328,14 +1328,15 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
    yumusakca daralip genisler. Cerceve de bir kap: urun boyu onun
    yuksekligine gore (cqh). */
 @layer components {
+  /* Safari'de konteyner sorgu birimleri (cqw/cqh) ile boyutlanan cerceve
+     bos kaliyordu (Serhan); duz yuzde + aspect-ratio ile yeniden yazildi. */
   .studio-tour-stage {
-    container-type: size;
     height: clamp(24rem, 64vw, 31rem);
   }
 
   .studio-tour-frame {
-    container-type: size;
-    width: min(100cqw, 100cqh * var(--a, 0.8));
+    height: 100%;
+    max-width: 100%;
     aspect-ratio: var(--a, 0.8);
   }
 

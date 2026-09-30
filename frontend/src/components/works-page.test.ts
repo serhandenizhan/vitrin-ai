@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
     },
   ],
   isHistoryLoaded: true,
+  worksLoadFailed: false,
+  refreshWorks: vi.fn(),
   user: { id: "u1" },
   openSignIn: vi.fn(),
   openStudio: vi.fn(),
@@ -101,5 +103,25 @@ describe("Çalışmalarım — silme onayı (19.09.2026)", () => {
 
     expect(state.removeWork).toHaveBeenCalledTimes(1);
     expect(state.removeWork).toHaveBeenCalledWith("w1");
+  });
+});
+
+describe("Çalışmalarım — liste alınamadığında (30.09.2026)", () => {
+  afterEach(() => {
+    cleanup();
+    state.worksLoadFailed = false;
+  });
+
+  it("boş liste 'çalışma yok' değil 'yüklenemedi' der ve yeniden dene sunar", () => {
+    const saved = state.works;
+    state.works = [];
+    state.worksLoadFailed = true;
+    render(createElement(WorksPage));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/yüklenemedi/);
+    expect(screen.queryByText(/çalışma yok/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Yeniden dene" }));
+    expect(state.refreshWorks).toHaveBeenCalled();
+    state.works = saved;
   });
 });

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 type Tab = "draft" | "completed";
 
 export function WorksPage() {
-  const { works, isHistoryLoaded, user, openSignIn, openStudio, openWork, removeWork, renameWork } = useWorkspace();
+  const { works, isHistoryLoaded, worksLoadFailed, refreshWorks, user, openSignIn, openStudio, openWork, removeWork, renameWork } = useWorkspace();
   const [tab, setTab] = useState<Tab>("draft");
   /** Silme iki adimli (Serhan, 19.09.2026): once kartin kendisinde onay sorulur. */
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -36,6 +36,12 @@ export function WorksPage() {
           <h2 className="text-xl font-semibold">Çalışmalarınız hesabınıza bağlıdır</h2>
           <p className="mt-2 text-sm leading-relaxed text-white/60">Yarım bıraktığınız düzenlemelere dönmek ve tamamladığınız görselleri görmek için giriş yapın.</p>
           <button type="button" onClick={() => openSignIn()} className="press bg-gold mt-6 min-h-11 rounded-full px-6 text-sm font-medium text-black">Giriş yap</button>
+        </div>
+      ) : worksLoadFailed && works.length === 0 ? (
+        <div role="alert" className="glass-panel mx-auto mt-12 max-w-xl rounded-3xl p-8 text-center">
+          <h2 className="text-xl font-semibold">Çalışmalarınız yüklenemedi</h2>
+          <p className="mt-2 text-sm leading-relaxed text-white/60">Çalışmalarınız silinmedi; listeye şu an ulaşılamıyor. Bağlantınızı kontrol edip yeniden deneyin.</p>
+          <button type="button" onClick={refreshWorks} className="press bg-gold mt-6 min-h-11 rounded-full px-6 text-sm font-medium text-black">Yeniden dene</button>
         </div>
       ) : visible.length === 0 ? (
         <div className="glass-panel mx-auto mt-12 max-w-xl rounded-3xl p-8 text-center">

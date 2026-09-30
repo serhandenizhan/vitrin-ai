@@ -23,11 +23,13 @@ import { Highlights } from "@/components/marketing/highlights";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Specs } from "@/components/marketing/specs";
 import { Reveal } from "@/components/reveal";
+import { ScrollTopOnReload } from "@/components/scroll-top-on-reload";
 import { SiteShell } from "@/components/site-shell";
 
 export default function HomePage() {
   return (
     <SiteShell>
+        <ScrollTopOnReload />
         <Hero />
 
         <section id="dene" className="surface-mist section-rhythm relative overflow-hidden">
