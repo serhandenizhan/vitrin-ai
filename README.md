@@ -115,7 +115,7 @@ RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölç�
 | Kimlik doğrulama | Supabase Auth (JWKS ile doğrulanan JWT) |
 | Ödemeler | iyzico (abonelik, V3 webhook) |
 | Kuyruklar | PostgreSQL tabanlı kalıcı kuyruk + systemd timer |
-| Test | pytest · Vitest · Playwright (Faz 7) |
+| Test | pytest · Vitest · Playwright (yerelde) |
 | Mobil (Faz 8) | React Native · Expo |
 
 ## Mimari kararlar

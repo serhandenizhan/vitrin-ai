@@ -171,5 +171,9 @@ describe("uçtan uca — gerçek SDK", () => {
     expect(payload).not.toContain(userId);
     expect(payload).not.toContain('"vars"'); // yerel değişken yok
     await Sentry.close();
-  });
+    // Gerçek SDK'nın ilk `import`'u soğuk: tek başına ~0,3 sn, ama 40 meşgul
+    // süreçle ölçülünce 3,1 sn'ye çıktı (varsayılan 5 sn sınırına yaklaştı) ve
+    // PR #32'de yük altında zaman aşımına düştü. Bu, temizleme mantığı değil
+    // modül yükleme süresi; sınır bu yüzden geniş.
+  }, 30_000);
 });

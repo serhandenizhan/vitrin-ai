@@ -895,6 +895,10 @@ export function CompositionEditor({
   }, [onSave]);
   const pendingDraftRef = useRef<EditorDraft | null>(null);
   const lastSavedRef = useRef<string | null>(null);
+  // Stüdyo açıldığındaki ilk taslak. Çalışma kimliği (`onSave`) sonuç sunucuya
+  // kaydedilince GEÇ gelebiliyor; o ana kadar yapılan düzenlemeler "zaten
+  // kayıtlı" sayılıp hiç yazılmıyordu.
+  const openingDraftRef = useRef<string | null>(null);
   const currentDraftRef = useRef<string | null>(null);
   const flushDraft = useCallback(() => {
     const draft = pendingDraftRef.current;
@@ -944,14 +948,18 @@ export function CompositionEditor({
     if (currentDraftRef.current === serialized) setSaveStatus(saved ? "saved" : "error");
   }, [onSave, formatName, selectedBackground.id, transform, appearance, label, step, activeTool]);
   useEffect(() => {
-    if (!canSave) return;
     const draft: EditorDraft = { formatName, backgroundId: selectedBackground.id, transform, appearance, label, step, activeTool };
     const serialized = JSON.stringify(draft);
+    // Kayıt açık olmasa da açılıştaki hali hatırla (yukarıdaki yoruma bak).
+    openingDraftRef.current ??= serialized;
+    if (!canSave) return;
     currentDraftRef.current = serialized;
     // Ilk acilista (ya da elle kaydedilmis haliyle ayniysa) yazacak bir sey yok.
+    // Kayıt açılmadan önce düzenleme yapıldıysa temel açılıştaki taslaktır,
+    // böylece o düzenleme de yazılır.
     if (lastSavedRef.current === null) {
-      lastSavedRef.current = serialized;
-      return;
+      lastSavedRef.current = openingDraftRef.current;
+      if (serialized === lastSavedRef.current) return;
     }
     if (serialized === lastSavedRef.current) return;
     pendingDraftRef.current = draft;

@@ -183,6 +183,7 @@ export function SiteHeader() {
               <button
                 type="button"
                 onClick={openSignIn}
+                aria-label="Giriş yap"
                 className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[0.875rem] text-[#f3f0eb]/80 transition-colors hover:bg-white/10 hover:text-[#f3f0eb]"
               >
                 <LogIn className="size-4" strokeWidth={1.75} aria-hidden />

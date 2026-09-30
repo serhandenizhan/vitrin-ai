@@ -89,6 +89,36 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Playwright E2E (Kaan, 30.09.2026). ZORUNLU KONTROL DEĞİL: "protect main" kural
+  # setine eklenmedi (karar Serhan'ın; iş adı değişirse kural da güncellenir).
+  # Hermetik: gerçek Supabase/backend YOK. Sahte Supabase adresi derlemeye gömülür,
+  # `BACKEND_URL` ulaşılamaz bir adrestir; testler oturumu ve `/api/*` yanıtlarını
+  # tarayıcıda taklit eder (`frontend/e2e/oturum.ts`). Yerelde backend kapalıyken de
+  # aynı koşulla 84 test geçti (16 atlama masaüstü/telefon ayrımı).
+  frontend-e2e:
+    name: Frontend E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: https://e2e-dummy.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-dummy-key
+      BACKEND_URL: http://127.0.0.1:1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run e2e
+
   # Testlerden AYRI bir iş: yeni yayımlanan bir açık PR'ı kırdığında,
   # kırmızının sebebi kod değil bağımlılık olduğu tek bakışta görülsün.
   dependency-audit:
