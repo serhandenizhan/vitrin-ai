@@ -190,7 +190,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 backend/scripts/test.sh          # 587 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
-cd frontend && npm test          # 478 test
+cd frontend && npm test          # 480 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 
