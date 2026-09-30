@@ -40,10 +40,14 @@ olabileceği için depoya konmaz, klasör argümanla verilir.
 import argparse
 import json
 import os
-import resource
 import sys
 import time
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows'ta yok; tepe bellek orada ölçülmez (Kaan'ın ortamı)
+    resource = None
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
@@ -61,7 +65,10 @@ TRANSPARENT = 55
 CHANGED = 8
 
 
-def _peak_rss_mb() -> float:
+def _peak_rss_mb() -> float | None:
+    # Ölçülemiyorsa 0 değil "ölçülemedi" (null) — mean_seconds_warm ile aynı kural.
+    if resource is None:
+        return None
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # macOS bayt, Linux kilobayt döndürüyor.
     return peak / 1024 / 1024 if sys.platform == "darwin" else peak / 1024
@@ -96,7 +103,7 @@ def render(input_dir: Path, out_dir: Path, model_name: str) -> None:
         # İlk fotoğraf model yüklemesini de içerir; ortalamaya katılmaz. Tek
         # fotoğrafta ısınmış ölçüm yoktur: 0.0 değil, "ölçülemedi" (null).
         "mean_seconds_warm": round(sum(warm) / len(warm), 2) if warm else None,
-        "peak_rss_mb": round(_peak_rss_mb()),
+        "peak_rss_mb": round(peak) if (peak := _peak_rss_mb()) is not None else None,
     }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     print(json.dumps(meta, indent=2, ensure_ascii=False))

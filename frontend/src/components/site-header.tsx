@@ -36,7 +36,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { useWorkspace } from "@/components/workspace-provider";
 import { displayName } from "@/lib/profile";
 import { cn } from "@/lib/utils";
-import { billingFetch, type Subscription } from "@/lib/billing";
+import { billingFetch, remainingCredits, type Subscription } from "@/lib/billing";
 
 const LINKS = [
   { href: "/calismalar", label: "Çalışmalar" },
@@ -310,11 +310,7 @@ function AccountMenu() {
   }, [open]);
 
   if (!user) return null;
-  const remaining = subscription
-    ? subscription.admin_exempt
-      ? "Sınırsız"
-      : String(subscription.billing_issue ? 0 : Math.max(0, (subscription.period?.quota_snapshot ?? 0) - (subscription.period?.used_this_period ?? 0)) + (subscription.bonus_credits ?? 0))
-    : quotaError ? "Alınamadı" : "Yükleniyor…";
+  const remaining = subscription ? remainingCredits(subscription) : quotaError ? "Alınamadı" : "Yükleniyor…";
 
   return (
     <div ref={rootRef} className="relative">

@@ -6,6 +6,7 @@ kullanımda betiğin veriyi riske atmadan DURMASI.
 """
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,15 @@ _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "backup_database.py"
 _spec = importlib.util.spec_from_file_location("backup_database", _SCRIPT)
 backup_database = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(backup_database)
+
+# Betik gizli dosyaları `os.fchmod` ile yalnız sahibine açık (0o600) yazar ve
+# testler bu izni doğrular. Windows'ta ne `os.fchmod` ne Unix dosya izni var;
+# orada izin taklit edilirse "yalnız sahibi okur" sözü sessizce zayıflar. Bu
+# yüzden bu testler Windows'ta ATLANIR, gevşetilmez (30.09.2026, Kaan'ın ortamı).
+# Yedek Mac/Linux'ta alınır; CI (Linux) bu testlerin hepsini koşar.
+unix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="Unix dosya izni (os.fchmod / 0o600) Windows'ta yok"
+)
 
 
 @pytest.mark.parametrize("inside", [".", "backend", "backend/yedekler"])
@@ -41,6 +51,7 @@ def test_uses_the_key_from_the_environment(monkeypatch):
     assert Fernet(key.encode()).decrypt(token) == b"dokum"
 
 
+@unix_only
 def test_secret_env_file_is_readable_only_by_its_owner():
     path = backup_database._secret_env_file({"PG_DSN": "postgresql://gizli"})
     try:
@@ -123,6 +134,7 @@ def _dump_sql(path) -> str:
 
 
 @needs_docker
+@unix_only
 def test_write_between_counting_and_dumping_does_not_fail_a_sound_backup(backup_env, monkeypatch):
     # Satır sayıları dökümden ÖNCE ayrı sorgularla alınıyordu: araya giren tek
     # bir yazma sağlam yedeği "başarısız" gösteriyordu. Yazma, `pg_dump`
@@ -144,6 +156,7 @@ def test_write_between_counting_and_dumping_does_not_fail_a_sound_backup(backup_
 
 
 @needs_docker
+@unix_only
 def test_privileges_survive_backup_and_restore(backup_env):
     # `--no-privileges` bütün GRANT/REVOKE'ları atıyordu; geri yükleme testi
     # de yetkilere bakmadığı için yine "birebir" diyordu.
@@ -162,6 +175,7 @@ def test_privileges_survive_backup_and_restore(backup_env):
 
 
 @needs_docker
+@unix_only
 def test_restore_test_fails_when_a_privilege_did_not_come_back(backup_env):
     [path] = _backup(backup_env)
     manifest_path = path.with_suffix(".manifest.json")
@@ -175,6 +189,7 @@ def test_restore_test_fails_when_a_privilege_did_not_come_back(backup_env):
 
 
 @needs_docker
+@unix_only
 def test_two_backups_finishing_in_the_same_second_both_survive(backup_env, monkeypatch):
     frozen = datetime(2026, 9, 27, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -192,6 +207,7 @@ def test_two_backups_finishing_in_the_same_second_both_survive(backup_env, monke
         assert path.stat().st_mode & 0o777 == 0o600
 
 
+@unix_only
 def test_backup_files_are_never_overwritten(tmp_path):
     target = tmp_path / "yedek.dump.fernet"
     backup_database._write_private(target, b"ilk")

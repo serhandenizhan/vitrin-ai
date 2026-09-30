@@ -4,7 +4,6 @@ import hmac
 import io
 import json
 import time
-import types
 import urllib.request
 import uuid
 
@@ -204,6 +203,20 @@ class _FakeJwksEndpoint:
         self.fetches += 1
         return io.BytesIO(json.dumps({"keys": self.keys}).encode())
 
+    def build_opener(self, *handlers):
+        # PyJWT 2.14'ten beri `fetch_data` `urllib.request.urlopen` değil
+        # `build_opener(_NoRedirectHandler, ...).open(...)` kullanıyor
+        # (yönlendirme izlenmiyor); taklit o noktada yapılır.
+        return _FakeOpener(self)
+
+
+class _FakeOpener:
+    def __init__(self, endpoint: "_FakeJwksEndpoint"):
+        self.endpoint = endpoint
+
+    def open(self, request, timeout=None):
+        return self.endpoint.urlopen(request, timeout)
+
 
 class _Clock:
     def __init__(self):
@@ -217,13 +230,7 @@ class _Clock:
 def jwks_endpoint(tokens, monkeypatch) -> _FakeJwksEndpoint:
     endpoint = _FakeJwksEndpoint([_public_jwk(tokens.private_key, TEST_KEY_ID)])
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", _REAL_FETCH_DATA)
-    # PyJWT 2.14+ JWKS'i yönlendirme (redirect) reddeden özel bir opener ile
-    # çekiyor (`build_opener(...).open`); `urlopen` artık kullanılmıyor.
-    monkeypatch.setattr(
-        urllib.request,
-        "build_opener",
-        lambda *handlers: types.SimpleNamespace(open=endpoint.urlopen),
-    )
+    monkeypatch.setattr(urllib.request, "build_opener", endpoint.build_opener)
     auth_module.get_jwks_client.cache_clear()
     return endpoint
 
