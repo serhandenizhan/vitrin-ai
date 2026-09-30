@@ -28,15 +28,18 @@
 
 type BrandMarkProps = {
   className?: string;
+  /** Kaydirmaya bagli parlama gibi degerlerin CSS degiskeniyle surulmesi icin. */
+  style?: React.CSSProperties;
 };
 
-export function BrandMark({ className }: BrandMarkProps) {
+export function BrandMark({ className, style }: BrandMarkProps) {
   return (
     <svg
       viewBox="0 0 70.5 46"
       fill="none"
       aria-hidden
       className={className}
+      style={style}
       focusable="false"
     >
       {/* İ'nin noktasi ELMAS (Kaan, 17.09.2026): kuyumcu markasina yakisan kucuk

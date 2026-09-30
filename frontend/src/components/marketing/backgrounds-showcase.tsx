@@ -22,7 +22,7 @@ import { BACKGROUND_CATEGORIES } from "@/lib/background-categories";
 export function BackgroundsShowcase() {
   const total = Object.keys(BACKGROUND_CATALOG).length;
   return (
-    <section id="zeminler" className="surface-white section-rhythm relative overflow-hidden">
+    <section id="zeminler" className="surface-white section-rhythm light-veil relative overflow-hidden">
       <div className="relative mx-auto w-full max-w-6xl px-5">
         <Reveal>
           <div className="max-w-xl">

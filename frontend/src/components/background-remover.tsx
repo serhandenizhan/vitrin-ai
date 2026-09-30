@@ -16,14 +16,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   FileImage,
+  Layers,
   LoaderCircle,
   RefreshCw,
+  Scissors,
   Sparkles,
+  Upload,
 } from "lucide-react";
 
 import { ComparisonView } from "@/components/comparison-view";
 import { ProcessingState } from "@/components/processing-state";
 import { UploadDropzone } from "@/components/upload-dropzone";
+import { UploadStageBackdrop } from "@/components/upload-stage-backdrop";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -342,13 +346,35 @@ export function BackgroundRemover() {
         </Alert>
       ) : null}
 
-      <div className="glass-panel-light rounded-[2rem] p-5 text-[#1a1917] transition-shadow duration-500 hover:shadow-[0_30px_70px_-34px_rgba(82,61,29,0.42)] sm:p-9">
+      <div
+        className={
+          showDropzone
+            ? "relative isolate overflow-hidden rounded-[2rem] bg-[#0c0b0a] text-[#f3f0eb] shadow-[0_40px_90px_-44px_rgba(30,20,8,0.7)] ring-1 ring-black/10"
+            : "glass-panel-light rounded-[2rem] p-5 text-[#1a1917] transition-shadow duration-500 hover:shadow-[0_30px_70px_-34px_rgba(82,61,29,0.42)] sm:p-9"
+        }
+      >
+        {showDropzone ? <UploadStageBackdrop /> : null}
         {/* `soft-enter`: ekranlar (yukleme -> onizleme -> isleniyor -> sonuc)
             birden degil yumusakca beliriyor. Kosullu cizim her gecis icin
             ogeyi yeniden bagladigi icin animasyon her seferinde oynuyor. */}
         {showDropzone ? (
           <div className="soft-enter">
             <UploadDropzone onFileSelected={handleFileSelected} />
+            <ol className="relative grid grid-cols-3 divide-x divide-white/[0.08] border-t border-white/[0.08]">
+              {[
+                { icon: Upload, label: "Yükleyin" },
+                { icon: Scissors, label: "Arka plan kalksın" },
+                { icon: Layers, label: "Zemine yerleştirin" },
+              ].map(({ icon: Icon, label }, index) => (
+                <li key={label} className="flex flex-col items-center gap-2 px-2 py-5 text-center sm:flex-row sm:justify-center sm:gap-3 sm:py-6">
+                  <Icon className="size-[1.125rem] text-[#f0c779]" strokeWidth={1.5} aria-hidden />
+                  <span className="text-[0.75rem] tracking-[-0.005em] text-[#a8a29a] sm:text-[0.8125rem]">
+                    <span className="sr-only">{index + 1}. adım: </span>
+                    {label}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         ) : null}
 

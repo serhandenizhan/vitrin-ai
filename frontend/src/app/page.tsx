@@ -32,7 +32,9 @@ export default function HomePage() {
         <ScrollTopOnReload />
         <Hero />
 
-        <section id="dene" className="surface-mist section-rhythm relative overflow-hidden">
+        {/* Acik bolum, gecis sahnesi YOK (Kaan, 30.09.2026: "a"): kart kaydirmayla
+            yumusakca buyuyup yerine oturur (`.dene-settle`, globals.css). */}
+        <section id="dene" className="surface-mist section-rhythm light-veil relative overflow-clip">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[30rem] bg-[radial-gradient(48%_75%_at_50%_0%,rgba(214,167,86,0.16),transparent_76%)]" />
           <div className="relative mx-auto w-full max-w-3xl px-5">
             <Reveal>
@@ -48,9 +50,11 @@ export default function HomePage() {
               </div>
             </Reveal>
 
-            <Reveal delay={100}>
-              <BackgroundRemover />
-            </Reveal>
+            <div className="dene-settle">
+              <Reveal delay={100}>
+                <BackgroundRemover />
+              </Reveal>
+            </div>
           </div>
         </section>
 

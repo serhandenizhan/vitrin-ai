@@ -51,17 +51,19 @@ BACKDROPS: dict[str, str] = {
 
 # Kategori -> kutuphanedeki zemin kimlikleri (ana sayfa galerisi). Kategori
 # adlari `background-categories.ts` ile ayni. Secim elle: her kategorinin
-# karakterini gosteren, birbirine benzemeyen uc zemin.
+# karakterini gosteren, birbirine benzemeyen uc zemin. Sade/Desen/Luks 30.09.2026'da
+# Kaan'in istegiyle degistirildi (eski secim: duz siyah/kahve/bej, daire lekesi,
+# gri gurultu); Dogal ayni kaldi.
 GALLERY: dict[str, list[str]] = {
     "sade": [
-        "7495e364-2f8a-455f-9ca8-876f4e8e6542",
-        "c8ca1cb2-d794-4b54-ad9c-fb02d0e310df",
-        "d65d5116-809b-40b3-8901-a8e2ec84eac0",
+        "3c5876cc-6afc-4e48-81ac-a1e6faa5e295",  # seftali gecis
+        "9ffb70ea-7dae-46fa-b5dc-41469f5233d6",  # buzlu isik
+        "d12b6dfb-8ad0-431a-8e64-b44cb7e7dc49",  # celik mavisi gecis
     ],
     "doku": [
-        "32fa076b-aa55-4eed-8c29-962730a00636",
-        "a39d53e7-aa72-4c1c-9861-5452971961b4",
-        "587fb7d7-71f9-4f19-a9e4-72c832d63c91",
+        "bea88b0c-f35b-40f7-9aa6-c1355eec16ab",  # su yansimasi
+        "d5776764-b116-436d-925b-da5464eab4be",  # gumus su dokusu
+        "7db6267c-1112-4fcd-b16e-ea3b6164df8e",  # koyu petrol dokusu
     ],
     "dogal": [
         "b1ac846a-3af8-4a43-9d3e-cebb37618ce2",
@@ -69,12 +71,13 @@ GALLERY: dict[str, list[str]] = {
         "47088b9f-f9ff-47a1-a292-67c3b2c49567",
     ],
     "luks": [
-        "107a2840-21b1-4fe7-8bd3-e0f13eb10d06",
-        "2af248d8-c407-47d9-b3fc-4327afa0861d",
-        "4e559403-b505-4086-a1de-483ef6403033",
+        "5e71ba27-584d-483e-a554-9bab6093de14",  # inci damlali kaide
+        "097444cb-a3a3-48cc-858a-b4f282f82813",  # yesil zeminde altin toz
+        "5ea9e356-49be-403b-84d4-e41099cccab5",  # siyah su dalgalari
     ],
 }
-GALLERY_SIZE = 900
+GALLERY_SIZE = 1200
+GALLERY_QUALITY = 86
 
 
 async def main() -> None:
@@ -102,7 +105,7 @@ async def main() -> None:
             image = Image.open(io.BytesIO(data)).convert("RGB")
             # Kart kare-yakin (4:3); kaynak yatay ya da dikey olabilir.
             card = ImageOps.fit(image, (GALLERY_SIZE, round(GALLERY_SIZE * 3 / 4)), Image.LANCZOS)
-            card.save(gallery_dir / f"{background_id}.webp", "WEBP", quality=QUALITY, method=6)
+            card.save(gallery_dir / f"{background_id}.webp", "WEBP", quality=GALLERY_QUALITY, method=6)
     (FRONTEND / "src" / "lib" / "home-gallery.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"- galeri: {sum(len(v) for v in GALLERY.values())} zemin")
 

@@ -1406,3 +1406,61 @@ html.reduce-motion .hero-float,
 html.reduce-motion .hero-hand {
   animation: none;
 }
+
+
+/* Acik bolumlerde COK hafif ince isleme (Kaan, 30.09.2026): ustte altin bir
+   kil cizgi, yumusak nokta dokusu (kenarlara dogru siliniyor) ve kosede belli
+   belirsiz altin isik. Yeni renk yok (altin `#d6a756`, metin `#1a1917`);
+   icerigin ARKASINDA (`-z-10` + `isolate`), etkilesime karismaz. Koyu bolumlere
+   uygulanmaz: onlarin kendi atmosferi var. */
+.light-veil {
+  isolation: isolate;
+}
+.light-veil::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgb(214 167 86 / 0.5), transparent) top center / min(46rem, 70%) 1px no-repeat,
+    radial-gradient(45% 60% at 100% 0%, rgb(214 167 86 / 0.07), transparent 70%),
+    radial-gradient(rgb(26 25 23 / 0.06) 1px, transparent 1.4px) 0 0 / 24px 24px;
+  -webkit-mask-image: radial-gradient(90% 80% at 50% 45%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(90% 80% at 50% 45%, #000 35%, transparent 100%);
+}
+.high-contrast .light-veil::before {
+  opacity: 0.6;
+}
+
+/* NOT: bolum `overflow-hidden` OLURSA bir kaydirma kabi olusur ve `view()` sayfayi
+   degil onu izler (hic kaymaz, animasyon oynamaz) — `overflow-clip` kullanilir.
+   Deneme bolumundeki yukleme karti: kaydirirken hafifce KUCUK ve asagida baslar,
+   bolumun ortasina gelince tam boyuta oturur (Kaan, 30.09.2026). Tamamen
+   kaydirmaya bagli; kayit/gecis sahnesi yok. Desteklemeyen tarayicida ve
+   "hareketi azalt"ta duz durur. */
+@supports (animation-timeline: view()) {
+  .dene-settle {
+    animation: dene-settle linear both;
+    animation-timeline: view();
+    animation-range: entry 5% cover 38%;
+  }
+}
+@keyframes dene-settle {
+  from {
+    transform: translateY(56px) scale(0.93);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+html.reduce-motion .dene-settle {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dene-settle {
+    animation: none;
+  }
+}

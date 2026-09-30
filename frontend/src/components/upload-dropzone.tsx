@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
 
 import {
   ACCEPT_ATTRIBUTE,
@@ -60,31 +59,37 @@ export function UploadDropzone({
         setIsDraggingOver(false);
         if (!disabled) handleFiles(event.dataTransfer.files);
       }}
+      onPointerMove={(event) => {
+        // Imleci izleyen ince isik (Apple urun kartlari gibi): CSS degiskenleri, yeniden cizim yok.
+        const rect = event.currentTarget.getBoundingClientRect();
+        event.currentTarget.style.setProperty("--x", `${event.clientX - rect.left}px`);
+        event.currentTarget.style.setProperty("--y", `${event.clientY - rect.top}px`);
+      }}
       className={cn(
-        "group relative flex cursor-pointer flex-col items-center justify-center gap-4 overflow-hidden rounded-[1.5rem] border border-dashed px-6 py-16 text-center transition-[transform,border-color,background-color,box-shadow] duration-300",
-        "before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_10%,rgba(214,167,86,0.12),transparent_48%)] before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-        "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
-        isDraggingOver
-          ? "border-[#d6a756] bg-[#d6a756]/8 shadow-[0_18px_44px_-26px_rgba(214,167,86,0.75)]"
-          : "border-black/12 bg-white/45 hover:-translate-y-0.5 hover:border-[#d6a756]/65 hover:bg-white/72 hover:shadow-[0_20px_46px_-30px_rgba(82,61,29,0.5)]",
+        // Apple dili: TEK yuzey (ic cerceve yok), buyuk tipografi, bol bosluk.
+        // Kartin kendisi (background-remover.tsx) cerceveyi ve golgeyi tasir.
+        "group relative flex cursor-pointer flex-col items-center justify-center gap-7 overflow-hidden px-6 py-20 text-center transition-colors duration-500 sm:py-28",
+        "focus-visible:ring-[#f0c779]/60 outline-none focus-visible:ring-2 focus-visible:ring-inset",
+        "before:pointer-events-none before:absolute before:inset-0 before:opacity-0 before:transition-opacity before:duration-500 before:content-[''] before:[background:radial-gradient(420px_circle_at_var(--x,50%)_var(--y,40%),rgba(240,199,121,0.13),transparent_65%)] hover:before:opacity-100",
+        isDraggingOver && "bg-[#d6a756]/[0.09] before:opacity-100",
         disabled && "pointer-events-none opacity-60",
       )}
     >
-      <span className="relative flex size-14 items-center justify-center rounded-full bg-[linear-gradient(145deg,#f6ddb0,#d6a756)] text-[#342719] shadow-[0_12px_26px_-12px_rgba(214,167,86,0.9),inset_0_1px_0_rgba(255,255,255,0.7)] transition-transform duration-300 group-hover:scale-105">
-        <ImagePlus className="size-5" strokeWidth={1.5} aria-hidden />
-      </span>
-
-      <span className="relative flex flex-col gap-1">
-        <span className="text-base font-medium">
-          Ürün fotoğrafını buraya bırakın
+      <span className="relative flex flex-col gap-3">
+        <span className="text-[2rem] leading-[1.05] font-semibold tracking-[-0.03em] text-[#f5f2ed] sm:text-[2.75rem]">
+          {isDraggingOver ? "Bırakın, gerisini biz yapalım." : "Fotoğrafınızı bırakın."}
         </span>
-        <span className="text-muted-foreground text-sm">
-          ya da seçmek için tıklayın
+        <span className="text-[1.0625rem] leading-snug tracking-[-0.015em] text-[#a8a29a] sm:text-[1.1875rem]">
+          Arka plan saniyeler içinde kalksın.
         </span>
       </span>
 
-      <span className="text-muted-foreground relative rounded-full bg-black/[0.035] px-3 py-1.5 text-xs ring-1 ring-black/5">
-        JPEG, PNG, WebP veya HEIC, en fazla {MAX_FILE_SIZE_MB} MB
+      <span className="press relative inline-flex min-h-12 items-center rounded-full bg-[#f5f2ed] px-7 text-[1rem] font-medium tracking-[-0.01em] text-[#171614] transition-colors duration-300 group-hover:bg-white">
+        Fotoğraf seçin
+      </span>
+
+      <span className="relative text-[0.8125rem] tracking-[-0.005em] text-[#77716a]">
+        JPEG, PNG, WebP veya HEIC · en fazla {MAX_FILE_SIZE_MB} MB
       </span>
 
       <input
@@ -92,6 +97,9 @@ export function UploadDropzone({
         type="file"
         accept={ACCEPT_ATTRIBUTE}
         className="hidden"
+        // Girdinin kendi tiklamasi kapsayiciya yukselip secici acmayi TEKRAR
+        // denemesin (tarayicilar ic ice tiklamayi zaten engelliyor; bu acik bir guvence).
+        onClick={(event) => event.stopPropagation()}
         onChange={(event) => {
           handleFiles(event.target.files);
           // Ayni dosya arka arkaya secilebilsin diye input'u sifirla; aksi
