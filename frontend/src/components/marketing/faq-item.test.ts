@@ -10,6 +10,9 @@ describe("SSS satırı — yumuşak akordeon", () => {
   afterEach(() => cleanup());
 
   function ciz() {
+    // `children` FaqItem'ta zorunlu prop olarak tanımlı; `createElement`in üçüncü argümanı
+    // bu tipi karşılamıyor (tsc), prop olarak geçmek de lint kuralına takılıyor.
+    // eslint-disable-next-line react/no-children-prop
     render(createElement(FaqItem, { question: "Ücretsiz deneyebilir miyim?", children: "Evet, ücretsiz." }));
     const soru = screen.getByRole("button", { name: "Ücretsiz deneyebilir miyim?" });
     const panel = document.getElementById(soru.getAttribute("aria-controls")!)!;
