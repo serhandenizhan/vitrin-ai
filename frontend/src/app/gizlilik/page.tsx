@@ -5,14 +5,14 @@ import { LegalPage, LegalSection, LegalTable } from "@/components/legal-page";
 import { LEGAL_DOCUMENT_VERSION } from "@/lib/legal-config";
 
 export const metadata: Metadata = {
-  title: "Gizlilik Politikası — Vitrin AI",
-  description: "Vitrin AI gizlilik, fotoğraf işleme ve veri saklama politikası.",
+  title: "Gizlilik Politikası — Vitrin",
+  description: "Vitrin gizlilik, fotoğraf işleme ve veri saklama politikası.",
 };
 
 export default function PrivacyPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 30 Eylül 2026`}
       title="Gizlilik politikası"
       summary="Verinin cihazınızdan başlayıp arka plan kaldırma, çalışma geçmişi ve ödeme süreçlerinde nasıl hareket ettiğini sade ve doğrulanabilir biçimde açıklıyoruz."
     >
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           <li>Özgün ürün fotoğrafı kalıcı çalışma geçmişine yazılmaz.</li>
           <li>Kesim sonucu, aynı işlemin ikinci kez kredi tüketmesini önlemek için en fazla 24 saat geçici ve özel depoda tutulur.</li>
           <li>Çalışma geçmişi açıksa sonuç ve küçük önizleme hesabınıza kaydedilir; bunları tek tek veya topluca silebilirsiniz.</li>
-          <li>Kart bilgileri Vitrin AI tarafından saklanmaz; ödeme ekranı iyzico tarafından sağlanır.</li>
+          <li>Kart bilgileri Vitrin tarafından saklanmaz; ödeme ekranı iyzico tarafından sağlanır.</li>
           <li>Reklam veya davranışsal takip çerezi kullanılmaz; zorunlu oturum çerezleri ve cihaz tercihleri kullanılır.</li>
         </ul>
       </LegalSection>
@@ -46,7 +46,7 @@ export default function PrivacyPage() {
         <LegalTable
           headers={["Sistem", "Rolü", "İşlenen başlıca veri"]}
           rows={[
-            ["Vitrin AI", "Uygulama ve veri sorumlusu", "Hesap, işlem, çalışma, abonelik, kota ve destek kayıtları."],
+            ["Vitrin", "Uygulama ve veri sorumlusu", "Hesap, işlem, çalışma, abonelik, kota ve destek kayıtları."],
             ["Supabase", "Kimlik doğrulama ve veritabanı altyapısı", "Hesap, profil, oturum, çalışma ve uygulama kayıtları."],
             ["Cloudflare R2", "Özel nesne depolama", "24 saatlik geçici kesim sonucu; geçmiş açıksa sonuç ve küçük önizleme."],
             ["iyzico", "Ödeme ve abonelik altyapısı", "Ödeme formu, kart verisi, kimlik/fatura bilgileri ve ödeme referansları."],
@@ -82,8 +82,8 @@ export default function PrivacyPage() {
         <p>
           Paket satın alırken ad, soyad, GSM, T.C. kimlik numarası ve fatura adresi
           ödeme/abonelik kurulması amacıyla backend üzerinden iyzico’ya iletilir. Kart
-          alanları iyzico’nun izole ödeme formunda işlenir; Vitrin AI kart numarası veya
-          güvenlik kodunu saklamaz. Vitrin AI tarafında plan, tutar, işlem ve abonelik
+          alanları iyzico’nun izole ödeme formunda işlenir; Vitrin kart numarası veya
+          güvenlik kodunu saklamaz. Vitrin tarafında plan, tutar, işlem ve abonelik
           referansları ile ödeme durumu; hizmet, muhasebe, destek ve uyuşmazlık yönetimi
           için tutulur.
         </p>

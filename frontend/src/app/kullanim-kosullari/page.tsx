@@ -12,16 +12,16 @@ import {
 } from "@/lib/legal-config";
 
 export const metadata: Metadata = {
-  title: "Kullanım Koşulları — Vitrin AI",
-  description: "Vitrin AI üyelik, plan, kredi ve hizmet kullanım koşulları.",
+  title: "Kullanım Koşulları — Vitrin",
+  description: "Vitrin üyelik, plan, kredi ve hizmet kullanım koşulları.",
 };
 
 export default function TermsPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 30 Eylül 2026`}
       title="Kullanım koşulları"
-      summary="Bu koşullar Vitrin AI hesabını, fotoğraf işleme hizmetini, plan ve kredileri, kullanıcı içeriklerini ve tarafların sorumluluklarını düzenler."
+      summary="Bu koşullar Vitrin hesabını, fotoğraf işleme hizmetini, plan ve kredileri, kullanıcı içeriklerini ve tarafların sorumluluklarını düzenler."
     >
       {!LEGAL_IDENTITY_COMPLETE ? (
         <LegalNotice>
@@ -32,7 +32,7 @@ export default function TermsPage() {
 
       <LegalSection title="1. Taraflar ve hizmet sağlayıcı">
         <p>
-          Bu sözleşme, Vitrin AI hizmetini kullanan kişi veya işletme ile {" "}
+          Bu sözleşme, Vitrin hizmetini kullanan kişi veya işletme ile {" "}
           <strong>{DATA_CONTROLLER_NAME}</strong> arasında kurulur. Hizmet sağlayıcının
           adresi {LEGAL_ADDRESS ?? "canlı yayın öncesi yapılandırılacaktır"}, telefonu {" "}
           {LEGAL_PHONE ?? "canlı yayın öncesi yapılandırılacaktır"}, sicil/MERSİS/vergi
@@ -43,7 +43,7 @@ export default function TermsPage() {
 
       <LegalSection title="2. Hizmetin kapsamı">
         <p>
-          Vitrin AI; ürün fotoğraflarının arka planını kaldırma, sonucu zemin, gölge,
+          Vitrin; ürün fotoğraflarının arka planını kaldırma, sonucu zemin, gölge,
           yansıma, logo ve metin araçlarıyla düzenleme, katalog kompozisyonu oluşturma ve
           çıktı indirme özellikleri sunar. Planların kapsamı, kredi adedi, fiyatı ve varsa
           kullanım sınırları satın alma anında yayımlanan plan ekranında gösterilir.
@@ -108,18 +108,18 @@ export default function TermsPage() {
         <p>
           Yüklediğiniz fotoğraf, logo, metin ve diğer içeriği kullanma hakkına sahip
           olduğunuzu; içeriğin üçüncü kişi haklarını, kişilik haklarını veya mevzuatı
-          ihlal etmediğini kabul edersiniz. İçeriğinizin mülkiyeti sizde kalır. Vitrin AI’ye
+          ihlal etmediğini kabul edersiniz. İçeriğinizin mülkiyeti sizde kalır. Vitrin’e
           yalnız talep ettiğiniz işlemi sunmak, sonucu geçici olarak korumak ve geçmişi
           seçtiyseniz hesabınızda saklamak için gerekli, sınırlı ve hizmet süresiyle bağlı
           bir kullanım izni verirsiniz.
         </p>
       </LegalSection>
 
-      <LegalSection title="9. Vitrin AI içerikleri ve çıktılar">
+      <LegalSection title="9. Vitrin içerikleri ve çıktılar">
         <p>
-          Yazılım, arayüz, marka, şablonlar ve sağlanan zeminlerin hakları Vitrin AI’ye
+          Yazılım, arayüz, marka, şablonlar ve sağlanan zeminlerin hakları Vitrin’e
           veya ilgili lisans sahiplerine aittir. Oluşturduğunuz çıktıyı kendi ürünlerinizi
-          tanıtmak ve ticari içerik üretmek için kullanabilirsiniz; ancak Vitrin AI
+          tanıtmak ve ticari içerik üretmek için kullanabilirsiniz; ancak Vitrin
           yazılımını, şablonlarını veya zemin arşivini ayrı bir ürün olarak dağıtamazsınız.
           Yapay zekâ çıktılarının benzersizliği veya üçüncü kişilerin benzer çıktı
           üretemeyeceği garanti edilmez.

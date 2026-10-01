@@ -13,8 +13,8 @@ import {
 } from "@/lib/legal-config";
 
 export const metadata: Metadata = {
-  title: "KVKK Aydınlatma Metni — Vitrin AI",
-  description: "Vitrin AI kişisel veri işleme aydınlatma metni.",
+  title: "KVKK Aydınlatma Metni — Vitrin",
+  description: "Vitrin kişisel veri işleme aydınlatma metni.",
 };
 
 const missing = "Canlı yayın öncesi yapılandırılacaktır";
@@ -22,9 +22,9 @@ const missing = "Canlı yayın öncesi yapılandırılacaktır";
 export default function KvkkPage() {
   return (
     <LegalPage
-      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 27 Eylül 2026`}
+      eyebrow={`Sürüm ${LEGAL_DOCUMENT_VERSION} · Yürürlük 30 Eylül 2026`}
       title="KVKK aydınlatma metni"
-      summary="Bu metin; Vitrin AI hesabı, fotoğraf işleme, çalışma geçmişi, ödeme ve destek süreçlerinde kişisel verilerin nasıl işlendiğini açıklar."
+      summary="Bu metin; Vitrin hesabı, fotoğraf işleme, çalışma geçmişi, ödeme ve destek süreçlerinde kişisel verilerin nasıl işlendiğini açıklar."
     >
       {!LEGAL_IDENTITY_COMPLETE ? (
         <LegalNotice>
