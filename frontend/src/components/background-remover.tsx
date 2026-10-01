@@ -45,6 +45,7 @@ export function BackgroundRemover() {
     user,
     isAuthLoaded,
     openSignIn,
+    attachStudioWork,
   } = useWorkspace();
 
   const [status, setStatus] = useState<Status>("idle");
@@ -262,6 +263,13 @@ export function BackgroundRemover() {
   // "Basa don" olayinda arac bos duruma aliniyor. Abonelik, efekt govdesinde
   // setState cagirmadan calisiyor (bkz. workspace-provider.tsx gerekcesi).
   useEffect(() => subscribeToReset(reset), [subscribeToReset, reset]);
+
+  // Kayıt, kullanıcının "Arka plan ekle"ye basmasından SONRA bitmiş olabilir:
+  // stüdyo kimliksiz açılmıştı, kimlik gelince ona bağla (otomatik kayıt ve
+  // "tamamlandı" işareti için). Açık stüdyo başka bir kesimse dokunulmaz.
+  useEffect(() => {
+    if (openedWorkId && resultUrl) attachStudioWork(resultUrl, openedWorkId);
+  }, [openedWorkId, resultUrl, attachStudioWork]);
 
   useEffect(
     () =>

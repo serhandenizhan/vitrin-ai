@@ -1114,6 +1114,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
+  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Açık kalan: "Vitrin AI" → "Vitrin" yasal metin değişikliği (sürüm + yeniden onay + hukukçu) ve gerçek telefonda 3D ölçümü (Faz 7.5).
+  - **E2E — ilk tur yapıldı (30.09.2026, Kaan):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Açık:** CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme.
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
@@ -1211,9 +1213,12 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     Windows'ta açılıyor, günlük mutabakat için Windows'ta `tzdata` kuruluyor,
     `test.sh` `localhost` yerine `127.0.0.1` veriyor (Windows'ta paket ~1 sa → ~3 dk),
     Unix izni isteyen 6 yedek testi Windows'ta atlanıyor —
-    kök `CLAUDE.md` ders 37); kararsız ön yüz testi ayrı takipte (PR #32
-    bulguları; 30.09.2026'da `error-tracking.test.ts` yük altında 5 sn zaman
-    aşımına düştü, tek başına geçiyor).
+    kök `CLAUDE.md` ders 37); kararsız ön yüz testi düzeltildi (PR #32
+    bulguları; `error-tracking.test.ts` gerçek SDK'nın soğuk `import`'u yük
+    altında 5 sn sınırına yaklaşıyordu — 40 meşgul süreçle 0,3 → 3,1 sn ölçüldü;
+    o testin sınırı 30 sn'ye çıkarıldı, 30.09.2026 Kaan. Bu makinede hiç
+    kırmızı üretilemedi, yani düzeltme mekanizmayı ölçüme dayanarak kapatıyor,
+    kırmızı→yeşil kanıtı yok).
   - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
     `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
   - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,

@@ -32,6 +32,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import { displayName, readProfile, type Profile } from "@/lib/profile";
+import { attachWorkId } from "@/lib/studio-attach";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import {
@@ -130,6 +131,14 @@ type WorkspaceValue = {
    */
   studio: StudioData | null;
   openStudio: (veri: StudioData) => void;
+  /**
+   * Sonuç sunucuya kaydedilince çalışma kimliği GEÇ gelir; kullanıcı "Arka plan
+   * ekle"ye ondan önce basmışsa stüdyo kimliksiz açılır ve otomatik kayıt ile
+   * "tamamlandı" işareti bütün oturum boyunca çalışmaz. Kimlik gelince, stüdyo
+   * hâlâ AYNI kesimle ve kimliksiz açıksa ona bağlanır (başka bir çalışmanın
+   * stüdyosuna dokunmaz).
+   */
+  attachStudioWork: (cutoutUrl: string, workId: string) => void;
   closeStudio: () => void;
 
   /**
@@ -366,6 +375,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     // bu cihazdaki oturum kapaniyor; diger cihazlardaki oturumlar suruyor.
     await createClient().auth.signOut({ scope: "local" });
     setSidebarOpen(false);
+  }, []);
+
+  const attachStudioWork = useCallback((cutoutUrl: string, workId: string) => {
+    setStudio((current) => attachWorkId(current, cutoutUrl, workId));
   }, []);
 
   // Ayarlar localStorage'da, yani React disi bir kaynakta — bkz.
@@ -612,6 +625,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // sekilde durup geri donuldugunde sasirtici bicimde aciliyordu.
         setSidebarOpen(false);
       },
+      attachStudioWork,
       closeStudio: () => {
         setStudio(null);
         // Studyo kapaninca kullanici sayfanin kaldigi yerde kaliyordu ve bu
@@ -623,6 +637,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
     }),
     [
+      attachStudioWork,
       isSidebarOpen,
       works,
       isHistoryLoaded,
