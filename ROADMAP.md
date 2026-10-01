@@ -1339,6 +1339,17 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   ölçülen 12 GB'lık değeri DEĞİŞTİRMEZ (macOS belleği sıkıştırıyor, ölçüm
   uvicorn sürecinde ve farklı koşullardaydı) — Linux'ta, servis üzerinde yük
   testiyle yeniden ölçülecek.
+- **Görüntü sıkıştırma / tembel yükleme — ✅ (28.09.2026, Kaan).** Önce
+  ölçüldü (üretim derlemesi, `next start`, sayfanın indirdiği JS/CSS/görsel
+  toplamı): `public/` zaten küçüktü (772 KB, WebP), zemin listeleri zaten
+  `loading="lazy"`, Konva ve HEIC çözücü zaten ayrı parçaydı. Asıl bulgu:
+  `SiteShell` stüdyoyu doğrudan içe aktardığı için stüdyonun arayüz kodu
+  HER sayfaya iniyordu. `StudioHost` (`next/dynamic`) ile yalnız stüdyo
+  açılınca yükleniyor: sayfa başına ilk JS ~1050 → ~940 KB (gzip ~305 →
+  ~275 KB, ≈%10). Çalışmalarım ve Katalog'daki çalışma küçük resimleri de
+  tembel yükleniyor. **Yapılmayan (bilinçli):** yüklenen fotoğrafı istemcide
+  sıkıştırmak — model girdisi özgün dosya olmalı (bölüm 2). Kalan JS React
+  çatısı ve her sayfada gereken Supabase istemcisi.
 - **Kullanıcı etkinliği ekranı — FİKİR, kullanıcılar gelmeye başlayınca
   değerlendirilecek (Serhan, 19.09.2026).** Admin panelindeki "Günlük" yalnız
   YÖNETİCİ eylemlerini gösteriyor (`admin_audit_log`). Kullanıcıların kendi

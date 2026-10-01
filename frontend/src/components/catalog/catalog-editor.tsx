@@ -690,6 +690,10 @@ export function CatalogEditor() {
                         src={work.thumbnailUrl}
                         alt=""
                         aria-hidden
+                        // Gecmis uzadikca liste uzuyor; gorunmeyen kucuk
+                        // resimler sayfa acilirken indirilmesin.
+                        loading="lazy"
+                        decoding="async"
                         className="checkerboard size-9 shrink-0 rounded-md object-contain"
                       />
                       <span className="fine-print truncate">{work.fileName}</span>
