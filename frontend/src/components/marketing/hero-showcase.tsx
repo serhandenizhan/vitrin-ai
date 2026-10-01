@@ -438,12 +438,20 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
                     alt={item.photoAlt}
                     width={HERO_PHOTO_WIDTH}
                     height={HERO_PHOTO_HEIGHT}
-                    priority={index === 0}
+                    // Ilk sahne (LCP): React, tembel olmayan gorseli kendiliginden
+                    // preload ediyor ve preload etiketindeki `sizes` telefonda
+                    // (375 px, 2,6x) gorselin kendisinden FARKLI genislik seciyor:
+                    // 3840 + 2048 px'lik iki ayri dosya iniyordu (uretim
+                    // derlemesinde olculdu). Dosya zaten 1600 px'lik hazir webp
+                    // (`prepare-hero-scenes.py`); `unoptimized` tek adres verir,
+                    // preload ile <img> ayni dosyayi ister.
+                    unoptimized={index === 0}
+                    loading={index === 0 ? "eager" : undefined}
                     draggable={false}
                     sizes="(max-width: 768px) 200vw, 72rem"
                     className="hero-photo hero-hand absolute inset-0 h-full w-full object-cover"
                   />
-                  <RingLift scene={item} />
+                  <RingLift scene={item} first={index === 0} />
                   {isActive && !zoom ? <StoneGlints key={glintKey} scene={item} /> : null}
                 </span>
                 <span className="pointer-events-none absolute inset-0 rounded-[2rem] ring-[#f0c779]/0 transition group-focus-visible:ring-2 group-focus-visible:ring-[#f0c779]/70" />
@@ -561,7 +569,7 @@ export function HeroShowcase({ children, lede }: HeroShowcaseProps) {
  * biraz daha parlak cizilir (Serhan: "yuzuk cok karanlik, el on planda gibi").
  * Kesim yuzugu birebir izledigi icin kenar yok; yalnizca yuzuk parlar.
  */
-function RingLift({ scene }: { scene: HeroScene }) {
+function RingLift({ scene, first }: { scene: HeroScene; first: boolean }) {
   return (
     <Image
       src={cutoutSrc(scene)}
@@ -569,6 +577,9 @@ function RingLift({ scene }: { scene: HeroScene }) {
       aria-hidden
       width={HERO_PHOTO_WIDTH}
       height={HERO_PHOTO_HEIGHT}
+      // İlk sahnenin kesimi Chrome'un LCP öğesi çıktı; tembel yüklenmemeli.
+      loading={first ? "eager" : undefined}
+      unoptimized={first}
       draggable={false}
       sizes="(max-width: 768px) 200vw, 72rem"
       className="hero-ring-lift pointer-events-none absolute inset-0 h-full w-full object-cover"

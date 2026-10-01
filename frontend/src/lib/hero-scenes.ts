@@ -164,9 +164,13 @@ export function handSrc(scene: HeroScene): string {
   return heroAsset(`${scene.id}-el.webp`);
 }
 
-/** Yalnız metali onarılmış el: sayfada yüzük katmanının altında durur. */
+/**
+ * Sayfadaki el: yakınlaşmadakiyle AYNI takısız el (yüzük kesimi onun üstünde
+ * durur). Eskiden metali onarılmış ayrı bir fotoğraftı ve yüzük kalkınca kesik
+ * parmak uçları görünüyordu.
+ */
 export function pageHandSrc(scene: HeroScene): string {
-  return heroAsset(`${scene.id}-el-sayfa.webp`);
+  return handSrc(scene);
 }
 
 /** Yakın plandaki önce/sonra: ürün bölgesi ve modelin o bölgeden kesimi. */

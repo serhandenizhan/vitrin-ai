@@ -40,6 +40,12 @@ Uretilenler (sahne basina):
                                        zeminin tonu (bolumun arkasindaki isik
                                        bu tonla boyanir; fotograf sayfaya karisir)
 
+NOT (30.09.2026): `<sahne>-el.webp` artik BU betikle degil `build-hero-hands.py`
+ile (yapay zekayla uretilmis takisiz elden) uretilir; bu betik onu ESKI yontemle
+(takinin bolgesini zeminle doldurarak) yazar ve kesik parmak uclarini geri getirir.
+Bu betigi calistirdiktan sonra `build-hero-hands.py` ve `npm run hero:versions`
+yeniden calistirilir.
+
 BELLEK: model ~12 GB RAM ister; calistirmadan once kesim iscisi kapali olmali
 ve baska model sureci olmamali (ders 31). Butun sahneler TEK surecte islenir.
 

@@ -526,6 +526,11 @@ function ZoomScene({
 
 // --- El duzlemi ---------------------------------------------------------------
 
+/** Kamera z=20'de (bkz. Canvas); el z=-4'te, ekranda ayni boyut icin (20+4)/20 buyutulur. */
+const CAMERA_Z = 20;
+const HAND_Z = -4;
+const HAND_SCALE = (CAMERA_Z - HAND_Z) / CAMERA_Z;
+
 const PLANE_VERTEX = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -579,8 +584,13 @@ function HandPlane({
     [hand, shift],
   );
   return (
-    <mesh position={plane.center} renderOrder={2}>
-      <planeGeometry args={[plane.width, plane.height]} />
+    // El, takinin ARKASINDA durur: yuzuk parmak uclarinin onunden gecer (orijinal
+    // fotografta da oyle). Duzlem kameradan uzaklastirilir ve ayni ekran boyutunu
+    // korumak icin buyutulur; takinin opak katmani derinlik yazar, el onun
+    // gerisinde kalir. (Eskiden el takinin ONUNDE cizilirdi ve takinin bolgesi
+    // zeminle doldurulurdu.)
+    <mesh position={[plane.center.x * HAND_SCALE, plane.center.y * HAND_SCALE, HAND_Z]} renderOrder={2}>
+      <planeGeometry args={[plane.width * HAND_SCALE, plane.height * HAND_SCALE]} />
       <shaderMaterial
         ref={materialRef}
         uniforms={uniforms}

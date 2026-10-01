@@ -4,12 +4,12 @@
  * rakam iceren sorular (kota, fiyat) Paketler sayfasina yonlendirir, burada
  * elle yazilmis bir sayi eskimesin.
  *
- * `<details>` ile: JavaScript'siz acilir kapanir, sunucu bileseni.
+ * Satirlar `faq-item.tsx` (yumusak acilan akordeon); bu dosya sunucu bileseni.
  */
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 
+import { FaqItem } from "@/components/marketing/faq-item";
 import { Reveal } from "@/components/reveal";
 
 const QUESTIONS: { q: string; a: React.ReactNode }[] = [
@@ -65,17 +65,9 @@ export function HomeFaq() {
         <Reveal delay={80}>
           <div className="divide-y divide-white/10 border-y border-white/10">
             {QUESTIONS.map((item) => (
-              <details key={item.q} className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[1.0625rem] font-semibold tracking-[-0.01em] [&::-webkit-details-marker]:hidden">
-                  {item.q}
-                  <ChevronDown
-                    className="size-5 shrink-0 text-[#f3f0eb]/50 transition-transform duration-300 group-open:rotate-180"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                </summary>
-                <p className="on-dark-muted -mt-1 pb-5 text-[0.9375rem] leading-relaxed text-pretty">{item.a}</p>
-              </details>
+              <FaqItem key={item.q} question={item.q}>
+                {item.a}
+              </FaqItem>
             ))}
           </div>
         </Reveal>
