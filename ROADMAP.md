@@ -1114,8 +1114,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
-  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5).
-  - **E2E — ilk tur yapıldı (30.09.2026, Kaan):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Açık:** CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme.
+  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
+  - **E2E — ilk tur (30.09.2026, Kaan; kalan maddeler aynı gün kapandı, yukarıdaki satır):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Bu turda açık görünen CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme sonradan yapıldı** (`e2e/cikti.spec.ts`, CI işi "Frontend E2E (Playwright)").
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
@@ -1133,6 +1133,59 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   kadar hiçbir PR birleşmez, ve `./execute.sh` bir sonraki açılışta backend
   bağımlılıklarını kendiliğinden günceller (ayrıntı kök `CLAUDE.md` → "Git iş
   akışı").
+- **Faz 7 kapanış denetimi — kalan işler ve sahipleri (01.10.2026).** Kod,
+  PR'lar ve ROADMAP birlikte taranınca Faz 7'de yapılmamış yedi başlık çıktı;
+  dağılımı Serhan onayladı (rol dayanağı: bölüm 5). **Bu maddeler bitmeden Faz 7
+  kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık
+  takip 11 (Serhan) ve 12 (Kaan).
+  - **Serhan:** (1) hız sınırı kapsamı — `GET/PATCH/DELETE /api/projects...` ve
+    `DELETE /api/account` sınırlayıcısız (yalnız `POST /api/projects` ve kesim
+    korunuyor); her uç için yön kararı + "her uç bir hız sınırı sınıfına atanmış"
+    envanter testi (`test_idor.py`'nin kardeşi); (2) ZAP'ın ön yüz OTURUMLU
+    taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) işçi
+    sağlığı görünürlüğü — işçi nabzı yalnız yetim iş kurtarmada okunuyor, işçi
+    ölürse hiçbir yerde görünmüyor: yönetici ucu (canlı işçi, kuyruk uzunluğu,
+    en eski bekleyen işin yaşı) + işçi yokken uyarı; (4) Mac bellek sıkışıklığı
+    (açık takip 9); (5) backend güvenlik başlıkları (`nosniff`, CORP) ve ZAP
+    backend taramasının tekrarı.
+  - **Kaan:** (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
+    tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
+    çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
+    çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları
+    — CSP, tıklama tuzağı koruması, `nosniff`, `Permissions-Policy`,
+    `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. **CSP önerisi
+    (Claude'dan; yöntemi Kaan seçer):** önce `Content-Security-Policy-Report-Only`
+    olarak açılır, ÜRETİM derlemesinde (`next start`; geliştirme sunucusu
+    üretimle aynı değildir, kök `CLAUDE.md` ders 39) sayfalar ve stüdyo akışı
+    gezilip konsoldaki ihlaller toplanır, kaynak listesi (Supabase, R2 imzalı
+    görseller, Sentry DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI,
+    `blob:`/`data:`) bu ihlallerden çıkarılır; ancak ondan sonra zorlayıcı
+    kipe geçilir. Başlıkların geldiğini doğrulayan bir test eklenir ve
+    zorlayıcı CSP'nin E2E'yi bozmadığı görülür; (3) E2E'de testsiz
+    akışlar — ödeme (`/paketler` → `/odeme/{id}` yoklaması), oturumlu admin
+    paneli, kuyrukta bekleme mesajı, katalog editörü, hesap silme, vitrin 3D
+    (WebGL yok / hareketi azalt dalları).
+  - **Güvenlik başlıkları Faz 7.5'ten Faz 7'ye çekildi (Serhan'ın onayı,
+    01.10.2026).** Aynı fazın içinde yer değişikliği, kapsam aşımı değil: HSTS
+    dışındakilerin hiçbiri alan adına bağlı değil, şimdi eklenip test edilebilir
+    ve CSP, token tarayıcıdan okunabildiği için XSS'e karşı asıl önlem. Faz
+    7.5'te yalnız canlıda HSTS ve başlıkların canlı adreste ZAP pasif taramasıyla
+    doğrulanması kalır.
+  - **7.5'e bırakılanlar (değişmedi):** ZAP'ın R2 ve Supabase yönetici API'sine
+    dayanan uçların içini taraması (canlı bağlantı ister) ve gerçek Supabase +
+    gerçek backend ile uçtan uca E2E — ikisi de staging ortamı gerektirir.
+  - **Süreç notu — PR incelemeleri (01.10.2026 taraması, Serhan'ın onayıyla
+    yazıldı).** GitHub'da inceleme kaydı olmayan PR'lar: **#36** (142 dosya) ve
+    **#37** Serhan'ın PR'ları, kendisi birleştirdi, yalnız Copilot yorumu var;
+    **#39, #40, #41, #42, #44** Kaan'ın PR'ları, Serhan birleştirdi, hiç
+    inceleme ya da yorum yok. İnceleme GitHub dışında (sohbet, ekran paylaşımı)
+    yapılmış olabilir; böyleyse kayıt yok. Yazılı istisna yalnız #29 için vardı
+    (#30'u Kaan #32'de geriye dönük inceledi). Kural (kök `CLAUDE.md` → "Git iş
+    akışı") değişmedi. **Karar bekliyor (Serhan + Kaan):** birleştirmeden önce
+    incelemeyi GitHub'da kayda geçirmek (onay/yorum) mi, yoksa küçük ve acil
+    PR'lar için yazılı bir istisna sınırı mı konacak. Büyük bir PR'ın tasarım
+    diline dokunan dosyalarda silme yapıp yapmadığı tarayıcıda bakılarak
+    kontrol edilir (kök `CLAUDE.md` ders 20).
 - **Öne alınan iş — "ürün nasıl kesilir" kaydırma hikâyesi (30.09.2026, Kaan): denendi, beğenilmedi, İPTAL EDİLDİ.** Ayrıntı ve öğrenilenler `frontend/README.md` → "Açılış vitrini".
 - **Öne alınan iş — deneme bölümü ve SSS akordeonu (30.09.2026, Kaan; ✅):** geçiş sahneleri denenip kaldırıldı; bölüm baştan açık, yükleme kartı kaydırmaya bağlı yumuşakça oturur; SSS satırları yumuşak açılır. Ayrıntı `frontend/README.md` → "Açılış vitrini".
 - **Öne alınan iş — "Kendi fotoğrafınızla deneyin" yükleme kartı (30.09.2026, Kaan; ✅):** kapsam dışı olduğu söylendi, Kaan yön seçerek onayladı (koyu sahne kartı). Yalnız görünüm; ayrıntı `frontend/README.md` → "Açılış vitrini".
@@ -1222,7 +1275,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     altında 5 sn sınırına yaklaşıyordu — 40 meşgul süreçle 0,3 → 3,1 sn ölçüldü;
     o testin sınırı 30 sn'ye çıkarıldı, 30.09.2026 Kaan. Bu makinede hiç
     kırmızı üretilemedi, yani düzeltme mekanizmayı ölçüme dayanarak kapatıyor,
-    kırmızı→yeşil kanıtı yok).
+    kırmızı→yeşil kanıtı yok). Aynı PR'da (#34, Kaan): kesim sonucunda "kesim" ve "özgün" etiketleri ters çiziliyordu (solda kesim, sağda özgün; `components/comparison-view.tsx`) — açılış kaydıracıyla aynı sıraya getirildi.
   - İş kimliği = istemcinin `Idempotency-Key`'i; Redis anahtarı
     `(kullanıcı, anahtar)` — başka kullanıcı başkasının işini bulamaz.
   - `POST /api/remove-background` → doğrulama + kredi ayırma + kuyruğa ekleme,
@@ -1316,7 +1369,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   (kopuktular); ön yüz oturumlu taranmadı. Supabase panelinde "Require current
   password when changing password", "Secure password change" ve "Secure email
   change" Serhan tarafından 27.09.2026'da açıldı. **Kalan:** güvenlik başlıkları
-  Faz 7.5 (CSP/HSTS).
+  Faz 7'ye çekildi (01.10.2026, sahipleri "kapanış denetimi"); canlıda HSTS Faz 7.5.
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
@@ -1339,6 +1392,24 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   ölçülen 12 GB'lık değeri DEĞİŞTİRMEZ (macOS belleği sıkıştırıyor, ölçüm
   uvicorn sürecinde ve farklı koşullardaydı) — Linux'ta, servis üzerinde yük
   testiyle yeniden ölçülecek.
+- **Bağımlılık taraması — ikinci tur, `main` CI'ı üç ayrı açık bildirimiyle kırmızıya döndü
+  (30.09–01.10.2026; ROADMAP'e sonradan yazıldı).** Zorunlu CI kuralının
+  (kök `CLAUDE.md` → "Git iş akışı") öngörülen yan etkisi gerçekleşti: yeni
+  yayımlanan açıklar taramayı kırdı ve açık PR'lar (#34, #36) birleştirilemedi.
+  Çıkış yolu kural seti gevşetilmeden açığı kapatan sürüm PR'ları oldu:
+  **PR #35** PyJWT 2.13.0 → 2.14.0 (10 CVE; 2.14 `PyJWKClient`'ta yönlendirme
+  izlemiyor ve isteği `build_opener` ile atıyor — üretim kodu değişmedi, yalnız
+  JWKS önbellek testlerinin sahte uç noktası taşındı); **PR #37** üç geçişli
+  npm paketi (`brace-expansion` yüksek/DoS, `fast-uri`, `ip-address`; yalnız
+  yama sürümleri); **PR #44** `next` 16.3.4 → 16.3.8 (GHSA-vcvr-r3jv-pc5j,
+  `next/og` `ImageResponse`'ta **kritik RCE**; `icon`/`apple-icon`/
+  `opengraph-image` bu API'yi kullanıyor, yani etkilenen sürüm aralığı `main`'de
+  PR #36'dan #44'e kadar vardı — canlı yayında değildi) ve PyJWT 2.14.0 → 2.15.0
+  (CVE-2026-101918). PR #43 (yalnız PyJWT) iki açık birlikte kapanması gerektiği
+  için #44'e katılıp kapatıldı. Sonuç: `npm audit` 0 açık (01.10.2026).
+  **Ders:** bağımlılık açığı zamanlaması kontrol edilemez; kuralın bedeli
+  birkaç saatlik birleştirme kilidi, kazancı bilinen açıkla `main` kirletmemek.
+  Kilit dosyası CI'daki npm'le güncellenir (kök `CLAUDE.md` npm tuzağı).
 - **Görüntü sıkıştırma / tembel yükleme — ✅ (28.09.2026, Kaan).** Önce
   ölçüldü (üretim derlemesi, `next start`, sayfanın indirdiği JS/CSS/görsel
   toplamı): `public/` zaten küçüktü (772 KB, WebP), zemin listeleri zaten
@@ -1499,17 +1570,24 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
      sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
      dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
+  11. **Açılış vitrini (Faz 7'den, 28–30.09.2026; kök `CLAUDE.md` açık takip
+     7 madde 11):** gerçek bir orta sınıf telefonda 3D yakınlaşmanın akıcılığı
+     ölçülür (M4'te 60 fps; telefon ekran kartı hiç ölçülmedi, yakınlaşma
+     telefonda `compact` kaliteyle çalışıyor); alan adı belli olunca
+     `NEXT_PUBLIC_SITE_URL` verilir (paylaşım önizlemesi ve site haritası bu
+     adresi kullanır); canlıda Safari ile ÜRETİM adresinde kontrol yapılır
+     (geliştirme sunucusu üretimle aynı şey değildir, kök `CLAUDE.md` ders 39).
 - **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
   takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
-  1. **Güvenlik başlıkları** (ZAP'in iki taramasında da çıkan tek eksik):
-     ön yüzde CSP, tıklama tuzağı koruması (`frame-ancestors` /
-     `X-Frame-Options`), `X-Content-Type-Options: nosniff`,
-     `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, `X-Powered-By`
-     kapatma (`poweredByHeader: false`); backend'de `nosniff` ve CORP;
-     canlıda HSTS. **CSP ayrıca önemli:** oturum token'ı tarayıcıdan
-     okunabildiği için (`@supabase/ssr`, `SECURITY.md` 3.1) XSS'e karşı asıl
-     önlem CSP. Başlıklar eklendikten sonra CI'a ZAP pasif taraması
-     (`zaproxy/action-baseline`) eklenebilir.
+  1. **HSTS ve başlıkların canlıda doğrulanması.** Ön yüz CSP, tıklama tuzağı
+     koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
+     `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
+     (01.10.2026, Serhan'ın onayı; sahipleri ROADMAP Faz 7 "kapanış denetimi")**
+     — alan adına bağlı değiller. Burada kalan: canlıda HSTS, başlıkların canlı
+     adreste gerçekten geldiğinin ZAP pasif taramasıyla doğrulanması ve
+     başlıklar oturunca CI'a ZAP pasif taraması (`zaproxy/action-baseline`)
+     eklenmesi. (CSP önemli: oturum token'ı tarayıcıdan okunabildiği için
+     `@supabase/ssr`, `SECURITY.md` 3.1 — XSS'e karşı asıl önlem.)
   2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
      canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
      ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
