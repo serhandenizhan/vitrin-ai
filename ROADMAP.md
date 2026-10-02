@@ -1582,6 +1582,12 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      `NEXT_PUBLIC_SITE_URL` verilir (paylaşım önizlemesi ve site haritası bu
      adresi kullanır); canlıda Safari ile ÜRETİM adresinde kontrol yapılır
      (geliştirme sunucusu üretimle aynı şey değildir, kök `CLAUDE.md` ders 39).
+  12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (Faz 7'den,
+     02.10.2026; kök `CLAUDE.md` açık takip 7 madde 12):** okuma 600/dk, taslak
+     kaydı 300/dk, çalışma silme 30/dk, hesap silme 5/saat ölçülmüş değil,
+     istemci sıklığının üstüne konmuş emniyet payları. Canlıda 429 sayıları ve
+     meşru kullanıcıların sınıra çarpıp çarpmadığı izlenir, değerler buna göre
+     ayarlanır; taslak kaydının fail-open kararı da yeniden değerlendirilir.
 - **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
   takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
   1. **HSTS ve başlıkların canlıda doğrulanması.** Ön yüz CSP, tıklama tuzağı

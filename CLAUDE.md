@@ -786,6 +786,18 @@ liste):
      ölçülmedi); alan adı belli olunca `NEXT_PUBLIC_SITE_URL` verilir
      (paylaşım önizlemesi ve site haritası bu adresi kullanır); canlıda Safari
      ile üretim adresinde kontrol yapılır (ders 39).
+  12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (02.10.2026):**
+     değerler (okuma 600/dk, taslak kaydı 300/dk, çalışma silme 30/dk, hesap
+     silme 5/saat; ayrıntı `backend/README.md` → "Hız sınırı kapsam
+     envanteri") ölçülmüş üretim verisi değil, istemcinin istek sıklığının
+     (kesim yoklaması 1,5 sn, checkout 5 sn, otomatik kayıt 1,5 sn gecikmeli)
+     üstüne konmuş emniyet payları. Canlıda gerçek kullanıcı trafiğiyle
+     bakılır: 429 sayıları (Sentry/günlük), meşru kullanıcının sınıra çarpıp
+     çarpmadığı, çarpıyorsa hangi uçta; gerekirse gevşetilir, gereksiz bol
+     kalan değerler sıkılaştırılır. Taslak kaydının fail-open kararı
+     (`limit_project_write`) da bu turda gözden geçirilir. Aynı bakışta
+     Next vekili arkasında kovaların doğru kullanıcıya bağlandığı
+     (`TRUSTED_PROXY_IPS`, açık takip 3) doğrulanır.
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 
