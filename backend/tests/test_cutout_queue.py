@@ -364,3 +364,62 @@ async def test_healthy_queue_is_never_reported(queue, caplog):
     with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
         assert await queue.report_unhealthy(stats, "test") is False
     assert not caplog.records
+
+
+# --- "Tıkalı" = İLERLEME yok; uzun ama ilerleyen kuyruk tıkalı değildir (PR #46 incelemesi, M1) ---
+
+
+async def test_long_but_progressing_queue_is_not_stalled(queue):
+    # Tek işçi ~12 sn/iş keser; 10+ iş birikince en eski iş 120 sn'yi aşar. Sistem
+    # normal çalışıyor, "tıkalı" denmemeli (alarm yorgunluğu ve Sentry gürültüsü).
+    user = uuid.uuid4()
+    await queue.heartbeat("isci")
+    for _ in range(3):
+        await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    await queue.claim("isci")  # işçi hâlâ iş alıyor: ilerleme var
+    for key in [k async for k in queue._redis().scan_iter(match=queue._key("job", "*"))]:
+        await queue._redis().hset(key, "enqueued_at", repr(time.time() - 300))
+
+    stats = await queue.stats()
+
+    assert stats.oldest_waiting_seconds > QUEUE_STALL_SECONDS  # bekleme uzun...
+    assert stats.status == "ok"  # ...ama ilerleme var
+    assert stats.seconds_without_progress < 5
+
+
+async def test_waiting_jobs_with_no_claim_for_too_long_is_stalled(queue):
+    user = uuid.uuid4()
+    await queue.heartbeat("takilmis")
+    await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    for key in [k async for k in queue._redis().scan_iter(match=queue._key("job", "*"))]:
+        await queue._redis().hset(key, "enqueued_at", repr(time.time() - 400))
+    # Son iş alımı eşikten uzun süre önce: işçi canlı ama ilerlemiyor.
+    await queue._redis().set(queue._key("last-claim"), repr(time.time() - (QUEUE_STALL_SECONDS + 60)))
+
+    stats = await queue.stats()
+
+    assert stats.status == "stalled"
+    assert stats.seconds_without_progress > QUEUE_STALL_SECONDS
+
+
+async def test_first_job_after_a_long_idle_period_is_not_stalled(queue):
+    # Saatlerce boşta kalmış işçi, gelen ilk işi saniyeler içinde alır. Son alım
+    # saatler önce olsa da bekleme sayacı işin GELİŞİNDEN başlar: yalancı alarm yok.
+    await queue.heartbeat("isci")
+    await queue._redis().set(queue._key("last-claim"), repr(time.time() - 2 * 3600))
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"x")
+
+    stats = await queue.stats()
+
+    assert stats.status == "ok"
+    assert stats.seconds_without_progress < 5
+
+
+async def test_claiming_a_job_records_progress(queue):
+    await queue.heartbeat("isci")
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"x")
+    assert await queue._redis().get(queue._key("last-claim")) is None
+
+    await queue.claim("isci")
+
+    assert time.time() - float(await queue._redis().get(queue._key("last-claim"))) < 5

@@ -57,3 +57,23 @@ def test_owned_local_redis_is_flushed():
 def test_remote_redis_is_never_flushed_even_with_the_flag():
     # Adres kontrolü bağlanmadan ÖNCE: uzak sunucuya bağlantı bile açılmaz.
     assert flush_owned_test_redis("redis://uzak-sunucu.example.com:6379/0", {OWNED_FLAG: "1"}) is False
+
+
+def test_only_the_urls_database_is_flushed_not_the_whole_server():
+    # PR #46 incelemesi (M3): FLUSHALL aynı sunucudaki DİĞER veritabanlarını da silerdi.
+    url_db0 = settings.redis_url
+    url_db1 = url_db0.rsplit("/", 1)[0] + "/1"
+    db0, db1 = sync_redis.Redis.from_url(url_db0), sync_redis.Redis.from_url(url_db1)
+    key = f"test-flush-{uuid.uuid4()}"
+    try:
+        db0.set(key, "0", ex=60)
+        db1.set(key, "1", ex=60)
+
+        assert flush_owned_test_redis(url_db0, {OWNED_FLAG: "1"}) is True
+
+        assert db0.exists(key) == 0  # URL'in veritabanı temizlendi
+        assert db1.exists(key) == 1  # diğer veritabanına dokunulmadı
+    finally:
+        db1.delete(key)
+        db0.close()
+        db1.close()

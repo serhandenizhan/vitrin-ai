@@ -391,15 +391,19 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
 - **İşçi sağlığı (02.10.2026):** `GET /api/admin/cutout-queue` (yalnız yönetici)
   canlı işçi sayısını, bekleyen ve işlenen işi ve en eski bekleyen işin yaşını
   verir. `status`: `ok`; `no_worker` (canlı işçi yok — kuyruk boş olsa bile
-  sıradaki müşteri bekler); `stalled` (işçi var ama en eski iş
-  `QUEUE_STALL_SECONDS`=120 sn'den uzun bekliyor); `unavailable` (Redis'e
+  sıradaki müşteri bekler); `stalled` (işçi var, kuyrukta iş var ama
+  `QUEUE_STALL_SECONDS`=120 sn'den uzun süredir HİÇ iş alınmadı: ölçüt BEKLEME
+  değil İLERLEME eksikliğidir. Tek işçi ~12 sn/iş keser, 10+ iş birikince en eski iş
+  120 sn'yi aşar ama sistem sağlıklıdır; bu `ok` sayılır. İşçi her iş alışında
+  `<önek>:last-claim` yazar; sayaç son alımdan ya da en eski işin gelişinden —
+  hangisi sonraysa — başlar, böylece saatlerce boşta kalmış işçiye gelen ilk iş
+  yalancı alarm üretmez. PR #46 incelemesi, M1); `unavailable` (Redis'e
   ulaşılamadı; uç 5xx değil bunu döner). "Canlı" = `worker:<işçi>` nabız
   anahtarı var (`recover_stale`'in ölü tanımıyla aynı). İşçi kimlikleri ayrıca
   `<önek>:workers` sıralı kümesinde kayıtlıdır ki sayım için tüm anahtar
   uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te).
   **Uyarı:** sağlıksız durum `error` seviyesinde günlüğe yazılır (Sentry DSN'i
-  verilmişse olay olarak da gider) ve dört yerden kontrol edilir: iş kuyruğa
-  girince (müşteri o an bekliyor), **API sürecinin kendi periyodik gözlemcisi**
+  verilmişse olay olarak da gider) ve üç yerden kontrol edilir: **API sürecinin kendi periyodik gözlemcisi**
   (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS`, varsayılan 60 sn, 0 = kapalı; ilk
   kontrol bir aralık SONRA, API ile işçi birlikte açılınca işçiye süre
   tanınır), `python -m app.services.billing.maintenance` her turunda ve
@@ -407,7 +411,11 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
   değildir. Birden fazla API süreci aynı Redis sayacını paylaşır, yani aynı
   sorun yine 10 dakikada bir (`ALERT_COOLDOWN_SECONDS`) yazılır. Gözlem
   (`observe_queue_health`) hiçbir istekte, bakım turunda ya da API yaşam
-  döngüsünde hata üretmez; Redis'e ulaşılamazsa `warning` yazar.
+  döngüsünde hata üretmez; Redis'e ulaşılamazsa `warning` yazar. Yükleme sıcak yolunda
+  ayrıca gözlem YAPILMAZ (60 sn'lik gözlemci yeterli; her yüklemeye Redis gidiş-dönüşü
+  eklemezdik). `VITRIN_START_WORKER=0` ile işçi bilerek kapatılınca `execute.sh` ve
+  `execute-supabase.sh` gözlemciyi de kapatır (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS=0`),
+  yerelde beklenen durum için alarm yazılmaz.
 
 **Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
 başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);

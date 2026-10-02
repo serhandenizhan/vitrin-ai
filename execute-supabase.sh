@@ -140,6 +140,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# İşçi bilerek kapalıysa (VITRIN_START_WORKER=0) API'nin kuyruk gözlemcisi de kapanır:
+# beklenen bir durumda her 10 dakikada "işçi yok" alarmı yazılmasın (PR #46 incelemesi, M4).
+if [ "${VITRIN_START_WORKER:-1}" = "0" ]; then
+  export CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS=0
+fi
+
 (
   cd "$BACKEND_DIR"
   "$VENV_DIR/bin/uvicorn" app.main:app --reload --port "$BACKEND_PORT"

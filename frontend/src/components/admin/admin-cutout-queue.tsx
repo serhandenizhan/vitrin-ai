@@ -52,7 +52,7 @@ const VIEWS: Record<CutoutQueueStatus, View> = {
     tone: "warn",
     title: "Kuyruk tıkalı görünüyor",
     detail: (h) =>
-      `İşçi çalışıyor ama en eski iş ${formatWait(h.oldest_waiting_seconds ?? 0)} bekliyor (eşik ${formatWait(h.stall_threshold_seconds)}).`,
+      `İşçi çalışıyor ama kuyrukta iş varken ${formatWait(h.seconds_without_progress ?? 0)}'dir hiçbir iş alınmadı (eşik ${formatWait(h.stall_threshold_seconds)}).`,
   },
   unavailable: {
     tone: "bad",

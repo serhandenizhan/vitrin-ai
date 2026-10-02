@@ -23,7 +23,6 @@ from app.services.cutout_queue import (
     QUEUED,
     CutoutQueue,
     QueueFull,
-    observe_queue_health,
 )
 from app.services.storage import (
     R2ConfigurationError,
@@ -168,9 +167,6 @@ async def remove_background(
         with anyio.CancelScope(shield=True):
             await quota.resolve(reservation.id, False)
         raise (_queue_busy() if isinstance(exc, QueueFull) else _queue_unavailable()) from exc
-    # Müşteri tam şu an sırada bekliyor; işçi çalışmıyorsa hiçbir yerde
-    # görünmüyordu. Yanıtı ASLA etkilemez (`observe_queue_health` fırlatmaz).
-    await observe_queue_health(queue, "yükleme")
     return JSONResponse({"job_id": str(request_id), "status": QUEUED}, status_code=202)
 
 

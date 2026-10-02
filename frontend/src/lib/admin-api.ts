@@ -144,6 +144,8 @@ export type CutoutQueueHealth = {
   queued?: number;
   processing?: number;
   oldest_waiting_seconds?: number | null;
+  /** Kuyrukta iş varken işçilerin iş almadığı süre; `stalled` kararı bundan verilir. */
+  seconds_without_progress?: number | null;
   max_queued?: number;
   stall_threshold_seconds: number;
 };

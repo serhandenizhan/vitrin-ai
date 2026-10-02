@@ -637,8 +637,9 @@ async def cutout_queue_health(queue: CutoutQueue = Depends(get_cutout_queue)):
     """Kesim kuyruğunun ve işçilerin sağlığı (Faz 7 kapanış denetimi).
 
     İşçi çalışmıyorsa kesimler sessizce sırada bekler; bu uç o durumu görünür
-    kılar. `status`: `ok` | `no_worker` (canlı işçi yok) | `stalled` (işçi var
-    ama en eski iş eşikten uzun süredir bekliyor) | `unavailable` (Redis'e
+    kılar. `status`: `ok` | `no_worker` (canlı işçi yok) | `stalled` (işçi var,
+    kuyrukta iş var ama eşikten uzun süredir HİÇ iş alınmadı; uzun ama
+    ilerleyen kuyruk `ok`'tur) | `unavailable` (Redis'e
     ulaşılamadı — bu durumda kesim zaten çalışmaz). Redis arızası 5xx değil
     `unavailable` olarak döner: arızanın kendisini göstermek bu ucun işi.
     Sağlıksız durum ayrıca `error` seviyesinde günlüğe yazılır.
@@ -656,6 +657,11 @@ async def cutout_queue_health(queue: CutoutQueue = Depends(get_cutout_queue)):
         "processing": stats.processing,
         "oldest_waiting_seconds": (
             None if stats.oldest_waiting_seconds is None else round(stats.oldest_waiting_seconds)
+        ),
+        "seconds_without_progress": (
+            None
+            if stats.seconds_without_progress is None
+            else round(stats.seconds_without_progress)
         ),
         "max_queued": queue.max_jobs,
         "stall_threshold_seconds": QUEUE_STALL_SECONDS,

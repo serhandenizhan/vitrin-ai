@@ -66,7 +66,7 @@ test("işçi yokken kırmızı uyarı gösterir", async ({ page }) => {
 });
 
 test("kuyruk tıkalıyken bekleme süresini gösterir", async ({ page }) => {
-  await panelAc(page, { ...SAGLIKLI, status: "stalled", oldest_waiting_seconds: 185 });
+  await panelAc(page, { ...SAGLIKLI, status: "stalled", oldest_waiting_seconds: 400, seconds_without_progress: 185 });
 
   const kart = page.getByRole("region", { name: "Kesim kuyruğu" });
   await expect(kart.getByRole("alert")).toContainText("3 dk 5 sn");

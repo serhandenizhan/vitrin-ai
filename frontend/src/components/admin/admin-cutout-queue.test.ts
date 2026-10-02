@@ -80,13 +80,15 @@ describe("AdminCutoutQueue — durumlar", () => {
     expect(screen.getByText("Canlı işçi").nextSibling?.textContent).toBe("0");
   });
 
-  it("tıkalı kuyrukta bekleme süresini ve eşiği gösteriyor", async () => {
-    mockQueue(health({ status: "stalled", oldest_waiting_seconds: 185 }));
+  it("tıkalı kuyrukta ilerlemesizlik süresini ve eşiği gösteriyor", async () => {
+    mockQueue(health({ status: "stalled", oldest_waiting_seconds: 400, seconds_without_progress: 185 }));
     render(createElement(AdminCutoutQueue));
     await flush();
 
     expect(screen.getByText("Kuyruk tıkalı görünüyor")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("3 dk 5 sn");
+    // Gösterilen, en eski işin bekleme süresi (400 sn) DEĞİL, ilerlemesizlik süresi (185 sn).
+    expect(screen.getByRole("alert").textContent).toContain("3 dk 5 sn'dir hiçbir iş alınmadı");
+    expect(screen.getByRole("alert").textContent).not.toContain("6 dk");
     expect(screen.getByRole("alert").textContent).toContain("eşik 2 dk");
   });
 

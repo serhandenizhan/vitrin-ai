@@ -1222,7 +1222,7 @@ seçimi yalnızca gösterim — sayfa elle açılsa da veri gelmez.
   (`components/admin/admin-cutout-queue.tsx`, vekil `app/api/admin/cutout-queue`,
   backend `GET /api/admin/cutout-queue`). Kesim işçisi çalışmıyorsa müşteriler
   hata görmez, sırada bekler; kart bunu yöneticiye gösterir: `ok` (yeşil),
-  `stalled` (sarı, bekleme süresi ve eşik), `no_worker` ve `unavailable`
+  `stalled` (sarı, ilerlemesizlik süresi ve eşik), `no_worker` ve `unavailable`
   (kırmızı; `unavailable`'da sayaç gösterilmez çünkü backend göndermiyor, eksik
   veri "0" gibi görünmesin). İstatistik yüklemesinden BAĞIMSIZ yüklenir (biri
   hata verirse diğeri çalışır) ve 30 sn'de bir kendini yeniler; yenilemede

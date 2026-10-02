@@ -13,6 +13,7 @@ ANAHTARLAR (`<p>` = önek, testlerde her test kendi önekini kullanır):
   <p>:workers              bilinen işçi kimlikleri (sıralı küme; yalnız SCAN'siz sayım
                             için kayıt — canlılığı `worker:<işçi>` anahtarı belirler)
   <p>:alert:<durum>         uyarı sıklık sınırı (aynı sorun için 10 dk'da bir günlük)
+  <p>:last-claim            son iş alımının zamanı (ilerleme işareti, `stats()` "tıkalı" kararı için)
   <p>:job:<iş>              iş kaydı (hash): durum, kullanıcı, kredi ayırması…
   <p>:photo:<iş>            özgün fotoğraf baytları — en fazla PHOTO_TTL
   <p>:result:<iş>           teslim için kısa süre saklanan PNG
@@ -54,10 +55,14 @@ JOB_TTL_SECONDS = 30 * 60
 #: 24 saatlik idempotency kopyası kullanılır.
 RESULT_TTL_SECONDS = 10 * 60
 
-#: En eski bekleyen iş bu süreden uzun beklediyse işçi "takılmış" sayılır. Bir
-#: kesim ~15 sn (ilk istekte model yüklemesiyle ~35 sn) sürer; 2 dk, normal bir
-#: yoğunluğu değil, tıkanmayı yakalar.
+#: Kuyrukta iş beklerken işçi bu süre boyunca HİÇ iş almadıysa "takılmış" sayılır.
+#: Ölçüt BEKLEME süresi değil İLERLEME eksikliğidir: tek işçi ~12 sn/iş keser,
+#: 10+ iş birikince en eski iş 120 sn'yi aşar ama sistem sağlıklıdır (PR #46
+#: incelemesi, M1). Bir kesim ~15 sn (ilk istekte model yüklemesiyle ~35 sn) sürer;
+#: 2 dk, normal bir işi değil, duran bir işçiyi yakalar.
 QUEUE_STALL_SECONDS = 120
+#: Son iş alımı zamanının saklanma süresi (yalnız "ilerleme var mı" sorusu için).
+LAST_CLAIM_TTL_SECONDS = 3600
 #: Aynı sorun için günlüğe/Sentry'ye en sık bu aralıkla yazılır.
 ALERT_COOLDOWN_SECONDS = 10 * 60
 #: İşçi kayıt kümesinde nabzı bu süredir görülmeyen kimlik silinir.
@@ -93,17 +98,21 @@ class QueueStats:
     queued: int
     processing: int
     oldest_waiting_seconds: float | None
+    #: Kuyrukta iş varken işçilerin iş almadığı süre: son iş alımından ya da en
+    #: eski bekleyen işin gelişinden (hangisi SONRAYSA) bu yana geçen saniye.
+    #: Kuyruk boşsa None. "Tıkalı" kararı bunun üzerinden verilir.
+    seconds_without_progress: float | None = None
 
     @property
     def status(self) -> str:
         """`no_worker`: canlı işçi yok (kuyruk boş olsa bile sıradaki müşteri bekler).
-        `stalled`: işçi var ama en eski iş eşikten uzun süredir bekliyor.
-        `ok`: aksi hâlde."""
+        `stalled`: işçi var, kuyrukta iş var ama eşikten uzun süredir HİÇ iş alınmadı.
+        Uzun ama ilerleyen bir kuyruk `ok`'tur. `ok`: aksi hâlde."""
         if self.workers == 0:
             return "no_worker"
         if (
-            self.oldest_waiting_seconds is not None
-            and self.oldest_waiting_seconds > QUEUE_STALL_SECONDS
+            self.seconds_without_progress is not None
+            and self.seconds_without_progress > QUEUE_STALL_SECONDS
         ):
             return "stalled"
         return "ok"
@@ -314,11 +323,17 @@ class CutoutQueue:
             pipe.llen(self._key("queue"))
             # Kuyruğun SAĞ ucu bir sonraki alınacak, yani en eski bekleyen iştir.
             pipe.lindex(self._key("queue"), -1)
+            pipe.get(self._key("last-claim"))
             for worker in known:
                 pipe.exists(self._key("worker", worker))
                 pipe.llen(self._key("processing", worker))
             results = await pipe.execute()
-        queued, oldest_id, rest = int(results[0]), results[1], results[2:]
+        queued, oldest_id, last_claim_raw, rest = (
+            int(results[0]),
+            results[1],
+            results[2],
+            results[3:],
+        )
         workers = sum(int(rest[i]) for i in range(0, len(rest), 2))
         processing = sum(int(rest[i]) for i in range(1, len(rest), 2))
         oldest_age = None
@@ -326,7 +341,17 @@ class CutoutQueue:
             enqueued_at = await redis.hget(self._key("job", _text(oldest_id)), "enqueued_at")
             if enqueued_at is not None:
                 oldest_age = max(0.0, time.time() - float(_text(enqueued_at)))
-        return QueueStats(workers, queued, processing, oldest_age)
+        without_progress = None
+        if queued > 0 and oldest_age is not None:
+            # Sayaç, son iş alımından ya da en eski işin gelişinden (hangisi daha
+            # SONRAYSA) başlar: saatlerce boşta kalmış bir işçiye gelen ilk iş,
+            # "son alım saatler önce" diye yalancı alarm üretmez.
+            now = time.time()
+            reference = now - oldest_age
+            if last_claim_raw is not None:
+                reference = max(reference, float(_text(last_claim_raw)))
+            without_progress = max(0.0, now - reference)
+        return QueueStats(workers, queued, processing, oldest_age, without_progress)
 
     async def report_unhealthy(self, stats: QueueStats, where: str) -> bool:
         """Sağlıksız bir durumu `error` seviyesinde günlüğe yazar (Sentry DSN'i
@@ -342,13 +367,14 @@ class CutoutQueue:
             return False
         logger.error(
             "Kesim kuyruğu sağlıksız (%s): durum=%s canlı_işçi=%d bekleyen=%d "
-            "işlenen=%d en_eski_bekleyen_sn=%s",
+            "işlenen=%d en_eski_bekleyen_sn=%s ilerlemesiz_sn=%s",
             where,
             status,
             stats.workers,
             stats.queued,
             stats.processing,
             "-" if stats.oldest_waiting_seconds is None else f"{stats.oldest_waiting_seconds:.0f}",
+            "-" if stats.seconds_without_progress is None else f"{stats.seconds_without_progress:.0f}",
         )
         return True
 
@@ -361,6 +387,8 @@ class CutoutQueue:
         if raw_id is None:
             return None
         job_id = _text(raw_id)
+        # İlerleme işareti: işçi iş alıyor (bkz. `QUEUE_STALL_SECONDS`).
+        await redis.set(self._key("last-claim"), repr(time.time()), ex=LAST_CLAIM_TTL_SECONDS)
         try:
             job_key = self._key("job", job_id)
             pipe = redis.pipeline(transaction=True)
