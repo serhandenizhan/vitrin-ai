@@ -40,12 +40,15 @@ def test_not_found_response_has_headers(client):
     _assert_has_security_headers(response)
 
 
-def test_auth_rejection_has_headers(client):
+def test_auth_rejection_has_headers(client, tokens):
     # Oturumsuz istek, route'a varmadan kimlik katmanında/bağımlılıkta reddedilir;
     # inner katmanların ürettiği hata yanıtı da başlığı taşımalı.
+    # `tokens`: Supabase'i yapılandırır. Onsuz sonuç ortama bağlı olur: yerelde
+    # `.env` varken 401, CI'da (`.env` yok) 503 "kimlik doğrulama yapılandırılmamış"
+    # döner ve test sahte bir şey sınardı (CLAUDE.md: CI testleri `.env`'siz koşar).
     response = client.get("/api/projects")
 
-    assert response.status_code in (401, 403)
+    assert response.status_code == 401
     _assert_has_security_headers(response)
 
 
