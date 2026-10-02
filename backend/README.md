@@ -900,6 +900,17 @@ kaynak tüketimini sınırlayan beş katman var:
    MAX_CONCURRENT_INFERENCES` olur; kalıcı, süreçler-arası bir sınır için
    Celery/RQ + Redis kuyruğuna geçmek gerekir (bu PR'ın kapsamı dışında).
 
+### Faz 7'de kalan backend işleri (Serhan, 01.10.2026 kapanış denetimi)
+
+Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık takip 11. (1) **Hız sınırı
+kapsamı:** `GET/PATCH/DELETE /api/projects...` ve `DELETE /api/account`
+sınırlayıcısız; her ucun bir hız sınırı sınıfına atandığını doğrulayan envanter
+testi yazılacak (IDOR paketinin kardeşi). (2) **İşçi sağlığı:** işçi nabzı
+(`worker:<id>`) yalnız yetim iş kurtarmada okunuyor; canlı işçi sayısı, kuyruk
+uzunluğu ve en eski bekleyen işin yaşını veren bir yönetici ucu ve işçi yokken
+uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları:** `nosniff` ve
+`Cross-Origin-Resource-Policy`; ZAP backend taraması tekrarlanacak.
+
 ## Ödemeler ve kredi (Faz 5)
 
 Kurulum, tüm açılış kapıları ve operasyon prosedürleri:

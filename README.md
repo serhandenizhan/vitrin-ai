@@ -58,7 +58,7 @@ sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
 | 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
-| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 backend (Serhan) tamam: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP) — ön yüz E2E ve görsel optimizasyonu (Kaan) sürüyor |
+| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 yapılanlar: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP), Playwright E2E, sayfa ağırlığı ve tembel yükleme. **Kalan (01.10.2026 denetimi):** hız sınırı envanteri, işçi sağlığı görünürlüğü, güvenlik başlıkları (CSP vb.), ZAP ön yüz taraması, zemin değişimi performansı ve E2E'nin eksik akışları — sahipleri `ROADMAP.md` Faz 7 "kapanış denetimi" |
 | 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 
@@ -97,7 +97,7 @@ Hepsi bu depoda ölçülmüş gerçek değerlerdir; tahmin yoktur.
 | Yükleme sınırı | 20 MB, 40 megapiksel |
 | Eşzamanlılık | Kesimler kuyrukta sıraya girer, ayrı işçide işlenir (tek işçide 4 eşzamanlı istemci: 8/8 başarılı, 0 red) |
 | Responsive | 320–1920 px arası yatay taşma yok; 32 px altında dokunma hedefi yok |
-| Testler | backend **587** (pytest + gerçek PostgreSQL/Redis) · frontend **460** (Vitest) |
+| Testler | backend **587** (pytest + gerçek PostgreSQL/Redis) · frontend **498** (Vitest) |
 | Kompozisyon çıktısı | 2000×2000 · 1240×1754 · 1080×1080 · 1080×1920 · 1080×1350 |
 
 RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölçümleri
@@ -190,7 +190,7 @@ için geçici bir R2 nesnesi olarak saklanmadan kredi tüketilmez, bu yüzden
 
 ```bash
 backend/scripts/test.sh          # 587 test — ayrı test Postgres'i (5434) ve Redis'i (6380) kendisi açar; Docker ister
-cd frontend && npm test          # 480 test
+cd frontend && npm test          # 498 test
 cd frontend && npm run kontrol   # lint + test + build
 ```
 
@@ -204,7 +204,11 @@ veritabanında başka bir test oturumu koşuyorsa hiçbir şeye dokunmadan durur
 **CI (Faz 7):** her PR'da ve `main`'e her push'ta GitHub Actions backend
 testlerini (servis olarak Postgres + Redis), frontend lint/test/build'i ve
 bağımlılık güvenlik taramasını (`pip-audit`, `npm audit`) koşar; tarama
-ayrıca haftada bir kendiliğinden çalışır. Tanım: `.github/workflows/ci.yml`.
+ayrıca haftada bir kendiliğinden çalışır. Ayrı bir iş olarak Playwright E2E
+testleri de koşar (hermetik; `main` için zorunlu kontrol DEĞİL). Üç iş
+(backend, frontend, bağımlılık taraması) yeşil olmadan `main`'e birleştirilemez;
+bu yüzden yeni yayımlanan bir açık, kapatılana kadar bütün PR'ları durdurur.
+Tanım: `.github/workflows/ci.yml`.
 
 ## Depo yapısı
 
