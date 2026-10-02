@@ -1,6 +1,6 @@
 /**
  * Sitenin dis adresi (paylasim onizlemesi, site haritasi). Alan adi henuz
- * yok (kok CLAUDE.md, acik takip 2): `NEXT_PUBLIC_SITE_URL` verilmezse
+ * yok (ROADMAP.md bolum 7, acik takip 2): `NEXT_PUBLIC_SITE_URL` verilmezse
  * Vercel'in adresi, o da yoksa yerel adres kullanilir. Canlida alan adi
  * belli olunca `.env`e yazilir.
  */

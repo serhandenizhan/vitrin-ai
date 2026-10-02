@@ -120,8 +120,8 @@ RAM ve süre ölçümlerinin geçmişi `ROADMAP.md` bölüm 2'de, arayüz ölç�
 
 ## Mimari kararlar
 
-Bu kararlar tartışılıp kapatıldı; gerekçeleri `ROADMAP.md` ve `CLAUDE.md`
-içinde ayrıntılı.
+Bu kararlar tartışılıp kapatıldı; gerekçeleri `ROADMAP.md`, `CLAUDE.md` ve
+`docs/lessons.md` içinde ayrıntılı.
 
 - **AI modeli BiRefNet, yalnızca orijinal MIT ağırlıklarıyla.** BRIA'nın "RMBG"
   ağırlıkları aynı mimariyi kullanıyor ama ticari kullanıma kapalı; bu alanda
@@ -176,7 +176,7 @@ yerelde yönetici yapar).
 VS Code backend ve kesim işçisi görevleri, ortak R2 bucket'ındaki canlı zemin
 dosyalarını korumak için `R2_SHARED_WITH_PRODUCTION=true` ile açılır.
 Gerçek (production) veritabanına bağlanan `./execute-supabase.sh` de var
-(bkz. kök `CLAUDE.md` → "Sistemi çalıştırma").
+(bkz. `docs/gelistirme-ortami.md` → "Sistemi çalıştırma").
 
 **Ortam değişkenleri.** Giriş yapabilmek için `frontend/.env.local` içine
 Supabase proje adresi ve publishable anahtarı, `backend/.env` içine Supabase
@@ -216,7 +216,7 @@ Tanım: `.github/workflows/ci.yml`.
 backend/     FastAPI uygulaması, AI inference, ödeme servisleri, migration'lar
 frontend/    Next.js arayüzü, kompozisyon stüdyosu, katalog editörü
 mobile/      React Native uygulaması (Faz 8)
-docs/        Ödeme runbook'u, tasarım kayıtları, araştırma notları
+docs/        Ödeme runbook'u, dersler, backend/ön yüz/geliştirme ortamı kararları, araştırma notları
 ```
 
 ## Dokümantasyon
@@ -224,7 +224,11 @@ docs/        Ödeme runbook'u, tasarım kayıtları, araştırma notları
 | Dosya | İçerik |
 | --- | --- |
 | [`ROADMAP.md`](ROADMAP.md) | Fazlar, teknoloji kararlarının gerekçeleri, ölçüm geçmişi |
-| [`CLAUDE.md`](CLAUDE.md) | Geliştirme rehberi, kalıcı kurallar, çıkarılan dersler |
+| [`CLAUDE.md`](CLAUDE.md) | Kısa geliştirme rehberi: kalıcı kurallar, dersler (tek satır) ve "şunu yapmadan önce şunu oku" belge haritası |
+| [`docs/lessons.md`](docs/lessons.md) | Kilitli kararların gerekçesi ve derslerin tam olay hikâyeleri |
+| [`docs/backend-kurallar.md`](docs/backend-kurallar.md) | Teknoloji yığını ve backend kuralları (ödeme erişimi, admin, hız sınırı, migration, kesim kuyruğu, CI) |
+| [`docs/frontend-kararlar.md`](docs/frontend-kararlar.md) | Açılış vitrini, tasarım dili ve stüdyo düzeni (kilitli ön yüz kararları) |
+| [`docs/gelistirme-ortami.md`](docs/gelistirme-ortami.md) | Sistemi yerelde çalıştırma, test, `.env`, platform tuzakları |
 | [`SECURITY.md`](SECURITY.md) | Katman katman güvenlik standartları ve launch kontrol listesi |
 | [`docs/billing-runbook.md`](docs/billing-runbook.md) | Ödeme kurulumu, işletim, kurtarma, zorunlu kabul testleri, maliyet modeli ve açılış kapıları |
 | [`backend/README.md`](backend/README.md) | API, ortam değişkenleri, kimlik doğrulama, kota sözleşmesi |

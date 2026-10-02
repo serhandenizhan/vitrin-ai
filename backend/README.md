@@ -311,7 +311,7 @@ değiştirilmiş dosya, eksik tetikleyici, eksik satır — dördü de çıkış
   kaldı); yetki sayısı 424'ten 421'e indi (ilk taslaktaki "iki satır"
   beklentisi eksikti: `authenticated` da açıktı).
 
-**Açık (Faz 7.5, kök `CLAUDE.md` açık takip maddesi 8):** günlük otomatik
+**Açık (Faz 7.5, `ROADMAP.md` bölüm 7, açık takip maddesi 8):** günlük otomatik
 çalıştırma, ayrı özel R2 bucket'ına yükleme ve saklama süresi.
 
 ### Kesim kuyruğu (Faz 7, 27.09.2026)
@@ -428,7 +428,7 @@ başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);
 kesimler sırayla ~11,7 sn'de bir, sıra dahil ortalama 38,5 sn; kesim sürerken
 `/api/health` p95 13 ms, `/api/projects` p95 29 ms. **2 işçi bu makinede
 ÖLÇÜLMEDİ:** 16 GB'lık Mac'te iki model kopyası belleği tüketip sistemi
-kilitledi (kök `CLAUDE.md` ders 31); ölçüm canlı sunucuda (açık takip maddesi 7).
+kilitledi (kök `CLAUDE.md` ders 31); ölçüm canlı sunucuda (`ROADMAP.md` bölüm 7, açık takip 7).
 
 **Bellek sıkışınca boştaki işçi yavaş uyanır (27.09.2026, Serhan'ın tarayıcı
 denemesi):** iki fotoğraf aynı anda gönderilince ilki 43 sn, ikincisi 55 sn
@@ -439,7 +439,7 @@ işçinin model ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Gerçe
 **9,3 / 9,1 sn** (RSS 5,14 GB'a döndü). **Canlıya etkisi:** sunucu modeli
 bellekte tutacak kadar RAM'e sahip olmalı (takas tercihen kapalı); yoksa her
 boşta kalıştan sonraki ilk müşteri ~20 sn fazladan bekler. Canlı ölçüm
-listesinde (açık takip maddesi 7).
+listesinde (`ROADMAP.md` bölüm 7, açık takip 7).
 
 **Yeniden ölçüm (02.10.2026, Serhan'ın Mac'i, 16 GB; `load_test.py`, 1 işçi,
 3,6 MB fotoğraf) — Mac bellek sıkışıklığı maddesi KAPANDI:** ısınma kesimi
@@ -451,7 +451,7 @@ ucuz kaldı (fark ~3 sn). **Çıkarım:** sıkışıklık makinenin o anki belle
 durumuna bağlıydı, kodda ya da Docker ayarında kalıcı bir sorun yok (Docker'ın
 sanal makinesi 4 GB ayrılmış, ~1,2 GB kullanıyordu). Model bellek açlığında
 yine yavaşlayabilir; `VITRIN_START_WORKER=0` ve takas izleme önerisi geçerli.
-Canlı sunucuda aynı ölçüm hâlâ Faz 7.5'te (açık takip 7, madde 8).
+Canlı sunucuda aynı ölçüm hâlâ Faz 7.5'te (`ROADMAP.md` bölüm 7, açık takip 7, madde 8).
 
 ### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
 
@@ -672,8 +672,7 @@ select id from auth.users where email = '<e-posta>';
 
 **Yerelde çalıştırırken dikkat:** bu SQL, `auth.users`'ın gerçek verileri
 tuttuğu veritabanına karşı çalıştırılmalı. `./execute.sh` ile yerel Docker
-Postgres kullanılıyorsa `auth.users` boş bir uyumluluk şimidir (bkz. kök
-`CLAUDE.md` → "Sistemi çalıştırma" → "İkinci betik") — gerçek Supabase
+Postgres kullanılıyorsa `auth.users` boş bir uyumluluk şimidir (bkz. `docs/gelistirme-ortami.md` → "Sistemi çalıştırma" → "İkinci betik") — gerçek Supabase
 girişleriyle hiç ilişkili değildir ve admin/abonelik verisi orada oluşmaz.
 Yerelde bu SQL'e gerek yok: `./execute.sh` her açılışta gerçek kullanıcıları
 yerel `auth.users`'a aktarır (`scripts/sync_local_auth.py`, `billing_signup`
@@ -973,7 +972,7 @@ kaynak tüketimini sınırlayan beş katman var:
 
 ### Faz 7'de kalan backend işleri (Serhan, 01.10.2026 kapanış denetimi)
 
-Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık takip 11. (1) **Hız sınırı
+Ayrıntı ve kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 11. (1) **Hız sınırı
 kapsamı — ✅ (02.10.2026):** bkz. "Hız sınırı kapsam envanteri" altında. (2) **İşçi sağlığı — ✅ (02.10.2026):** bkz. "Kesim kuyruğu" → "İşçi sağlığı". (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`
 (`app/middleware/security_headers.py`) her HTTP yanıtına `X-Content-Type-Options:
 nosniff` ve `Cross-Origin-Resource-Policy: same-origin` ekler. En dış katmandır
