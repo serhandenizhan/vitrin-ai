@@ -338,7 +338,8 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   26.09.2026** — `pip-audit` + `npm audit` CI'da her PR'da ve haftada bir), güvenlik
   başlıkları (CSP, `frame-ancestors`, `nosniff`, `Permissions-Policy`,
   `Referrer-Policy`, COOP/CORP — **01.10.2026'da Faz 7.5'ten Faz 7'ye çekildi**,
-  sahipleri kök `CLAUDE.md` açık takip 11 ve 12), her uç noktanın hız sınırı
+  sahipleri kök `CLAUDE.md` açık takip 11 ve 12; **backend `nosniff` + CORP
+  02.10.2026'da eklendi**, ön yüz başlıkları sürüyor), her uç noktanın hız sınırı
   sınıfına atandığını doğrulayan envanter testi; HTTPS/HSTS son kontrol Faz 7.5;
   yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
   (Faz 7.5 — canlıya çıkış)

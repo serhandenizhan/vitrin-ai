@@ -20,6 +20,7 @@ from app.core.monitoring import init_error_tracking
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
 from app.middleware.early_auth import EarlyAuthenticationMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
 from app.services.rate_limit import RequestRateLimiter
@@ -126,6 +127,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Expected-User-Id", "Idempotency-Key"],
     max_age=600,
 )
+# Güvenlik başlıkları CORS'un da DIŞINDA (en son eklenen): iç katmanların
+# ürettiği hata yanıtları ve CORS ön kontrolü de başlığı taşısın.
+app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(remove_background_router)
 app.include_router(backgrounds_router)
 app.include_router(health_router)

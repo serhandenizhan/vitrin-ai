@@ -668,10 +668,11 @@ Biri bitince buradan SİLİNİR.
    okuyan bir yönetici ucu (`ADMIN` sınıfı, `test_idor.py`'ye eklenir) ve işçi
    yokken uyarı (günlük/Sentry). Admin panelinde kart istenirse Kaan ekler.
 4. **Mac bellek sıkışıklığı** — yukarıdaki açık takip 9 (aynı iş, aynı sahip).
-5. **Backend güvenlik başlıkları** (`X-Content-Type-Options: nosniff`,
-   `Cross-Origin-Resource-Policy`; ZAP'in backend taramasındaki iki eksik).
-   Eklendikten sonra backend ZAP taraması tekrarlanıp iki eksiğin kapandığı
-   görülür. Ön yüz başlıkları Kaan'ın (açık takip 12).
+5. **Backend ZAP taramasının tekrarı.** Backend güvenlik başlıkları
+   (`nosniff`, CORP) 02.10.2026'da eklendi (`app/middleware/security_headers.py`);
+   gerçek süreçte `curl` ile doğrulandı, ZAP'la tekrar taranması kaldı (ön yüz
+   oturumlu taramayla — madde 2 — aynı oturumda yapılır). Ön yüz başlıkları
+   Kaan'ın (açık takip 12).
 
 ### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
 

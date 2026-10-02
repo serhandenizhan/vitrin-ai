@@ -908,8 +908,15 @@ sınırlayıcısız; her ucun bir hız sınırı sınıfına atandığını doğ
 testi yazılacak (IDOR paketinin kardeşi). (2) **İşçi sağlığı:** işçi nabzı
 (`worker:<id>`) yalnız yetim iş kurtarmada okunuyor; canlı işçi sayısı, kuyruk
 uzunluğu ve en eski bekleyen işin yaşını veren bir yönetici ucu ve işçi yokken
-uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları:** `nosniff` ve
-`Cross-Origin-Resource-Policy`; ZAP backend taraması tekrarlanacak.
+uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`
+(`app/middleware/security_headers.py`) her HTTP yanıtına `X-Content-Type-Options:
+nosniff` ve `Cross-Origin-Resource-Policy: same-origin` ekler. En dış katmandır
+(CORS'un da dışında), bu yüzden iç katmanların 401/413/429 yanıtları ve CORS ön
+kontrolü de başlığı taşır; testi (`tests/test_security_headers.py`) bağlantı
+kaldırılınca 5 test kırmızı yanarak doğrulandı. CORP yalnız `no-cors` istekleri
+keser, izinli origin'in CORS'lu okumasını etkilemez. CSP/`X-Frame-Options` bir
+JSON API'sinde anlamsız olduğu için eklenmedi. Kalan: ZAP backend taraması
+tekrarlanacak.
 
 ## Ödemeler ve kredi (Faz 5)
 

@@ -1146,8 +1146,10 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     sağlığı görünürlüğü — işçi nabzı yalnız yetim iş kurtarmada okunuyor, işçi
     ölürse hiçbir yerde görünmüyor: yönetici ucu (canlı işçi, kuyruk uzunluğu,
     en eski bekleyen işin yaşı) + işçi yokken uyarı; (4) Mac bellek sıkışıklığı
-    (açık takip 9); (5) backend güvenlik başlıkları (`nosniff`, CORP) ve ZAP
-    backend taramasının tekrarı.
+    (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
+    (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
+    kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı); ZAP backend
+    taramasının tekrarı kaldı (madde 2'yle aynı oturumda).
   - **Kaan:** (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
