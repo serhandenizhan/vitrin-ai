@@ -1155,8 +1155,9 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     gözlemcisiyle — bakım cron'una bağlı değil —, her bakım turunda ve yönetici
     ucu çağrılınca; aynı sorun 10 dk'da bir) + admin panelinde Genel bakışın
     en üstünde "Kesim kuyruğu" kartı (30 sn'de bir yenilenir; ön yüz kodu
-    `components/admin/admin-cutout-queue.tsx`); (4) Mac bellek sıkışıklığı
-    (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
+    `components/admin/admin-cutout-queue.tsx`); (4) ~~Mac bellek sıkışıklığı~~ ✅
+    (02.10.2026: boşta kalmış işçiyle ilk kesim 12,3 sn, 27.09'daki 30,1 sn
+    tekrarlanmadı; ayrıntı `backend/README.md` → "Kesim kuyruğu"); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
     kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı; ZAP backend taraması
     tekrarlandı, iki eksik başlık kuralı artık PASS).

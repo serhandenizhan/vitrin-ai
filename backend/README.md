@@ -427,6 +427,18 @@ bellekte tutacak kadar RAM'e sahip olmalı (takas tercihen kapalı); yoksa her
 boşta kalıştan sonraki ilk müşteri ~20 sn fazladan bekler. Canlı ölçüm
 listesinde (açık takip maddesi 7).
 
+**Yeniden ölçüm (02.10.2026, Serhan'ın Mac'i, 16 GB; `load_test.py`, 1 işçi,
+3,6 MB fotoğraf) — Mac bellek sıkışıklığı maddesi KAPANDI:** ısınma kesimi
+12,5 sn; işçi 5 dk boşta bırakıldı (RSS 89 MB'a düştü, yani model yine diske
+atıldı); **boşta kalıştan sonraki ilk kesim 12,3 sn**, ardından 9,3 sn. 27.09'daki
+30,1 sn tekrarlanmadı: o gün takas 15,5/16 GB doluydu, bu ölçümde takas
+başlangıçta ~3 MB / 1 GB idi, model yüklenince 4-7 GB'a çıktı ama geri okuma
+ucuz kaldı (fark ~3 sn). **Çıkarım:** sıkışıklık makinenin o anki bellek
+durumuna bağlıydı, kodda ya da Docker ayarında kalıcı bir sorun yok (Docker'ın
+sanal makinesi 4 GB ayrılmış, ~1,2 GB kullanıyordu). Model bellek açlığında
+yine yavaşlayabilir; `VITRIN_START_WORKER=0` ve takas izleme önerisi geçerli.
+Canlı sunucuda aynı ölçüm hâlâ Faz 7.5'te (açık takip 7, madde 8).
+
 ### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
 
 Yerelde, gerçek model + Postgres + Redis + gerçek JWT doğrulamasıyla. Depolama
