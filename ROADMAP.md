@@ -1162,6 +1162,17 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
     kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı; ZAP backend taraması
     tekrarlandı, iki eksik başlık kuralı artık PASS).
+    **Kaan'ın incelemesi (03.10.2026, PR #46):** Windows'ta tam paketler, E2E ve
+    admin kartına tarayıcıda bakıldı; kod incelemesi 10 bulgu verdi, hepsi
+    doğrulanıp Serhan'ın onayıyla aynı PR'da düzeltildi (`4d4d355`): ilerleme
+    işareti iş alımında değil BİTİŞİNDE (yeniden kuyruğa konma döngüsü tıkanmayı
+    gizliyordu), kaydı silinmiş bekleyen iş en az `JOB_TTL` yaşında (30 dk'yı aşan
+    tıkanmada uyarı susuyordu), kayıt kümesinde olmayan canlı işçi de sayılır,
+    hesap silme sınırı e-posta onayından SONRA, iptal uçları satın almadan ayrı
+    kova (`limit_checkout_cancel`), geçersiz oturumda Redis kapalıyken de 401,
+    admin kartında geç gelen eski yanıt yeni sonucu ezmez. Yeni testlerin 12'si
+    eski kodda kırmızı (ayrıntı `CLAUDE.md` ders 44, `backend/README.md` →
+    "Kesim kuyruğu").
   - **Kaan** (Serhan'a sorulacak noktalar kök `CLAUDE.md` açık takip 12'nin
     başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
