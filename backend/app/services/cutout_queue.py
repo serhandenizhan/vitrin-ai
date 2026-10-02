@@ -109,6 +109,34 @@ class QueueStats:
         return "ok"
 
 
+async def observe_queue_health(queue, where: str) -> bool:
+    """Kuyruğun sağlığını gözler; sağlıksızsa `error` yazar, sağlıksızsa True döner.
+
+    HİÇBİR ZAMAN fırlatmaz: bu bir gözlem, yükleme isteğini, bakım turunu ya da
+    API'nin yaşam döngüsünü düşürmemeli. Redis'e ulaşılamıyorsa `warning` yazılır
+    (Sentry olayı değil: Redis arızası zaten başka yerlerde 5xx üretir, her
+    dakika yinelenen bir olay selini istemeyiz) ve True döner.
+    """
+    try:
+        stats = await queue.stats()
+        await queue.report_unhealthy(stats, where)
+        return stats.status != "ok"
+    except Exception:  # noqa: BLE001 — gözlem, çağıranı düşürmemeli
+        logger.warning("Kesim kuyruğu sağlığı okunamadı (%s)", where, exc_info=True)
+        return True
+
+
+async def watch_queue_health(queue, interval_seconds: float) -> None:
+    """`interval_seconds`'ta bir `observe_queue_health` çalıştırır; iptal edilene dek.
+
+    İlk kontrol bir aralık SONRA yapılır: API ile işçi aynı anda açılıyorsa
+    (execute.sh) işçinin modeli yüklemesi ve ilk nabzı atması için süre tanınır.
+    """
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await observe_queue_health(queue, "api")
+
+
 class QueueFull(Exception):
     """Kuyruk üst sınırda — fotoğraflar Redis belleğinde beklediği için sınırsız olamaz."""
 

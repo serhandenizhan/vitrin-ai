@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +13,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.support import router as support_router
 from app.api.routes.cmyk import router as cmyk_router
-from app.api.routes.remove_background import ROUTE_PATH
+from app.api.routes.remove_background import ROUTE_PATH, get_cutout_queue
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
 from app.core.db import engine
@@ -23,6 +24,7 @@ from app.middleware.early_auth import EarlyAuthenticationMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
+from app.services.cutout_queue import watch_queue_health
 from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
 from app.services.billing.limits import (
@@ -40,9 +42,19 @@ from app.services.billing.limits import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Kesim işçisi yok/takılmışsa kullanıcılar sessizce sırada bekler; bu
+    # gözlemci bunu bakım işinin cron'una BAĞLI olmadan fark eder (0 = kapalı).
+    watcher = None
+    interval = settings.cutout_health_check_interval_seconds
+    if interval > 0:
+        watcher = asyncio.create_task(watch_queue_health(get_cutout_queue(), interval))
     # Uygulama kapanırken process başına tek olan async engine'in connection
     # pool'unu düzgünce serbest bırak (bkz. app/core/db.py).
     yield
+    if watcher is not None:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
     await engine.dispose()
     await upload_ip_limiter.aclose()
     await upload_user_limiter.aclose()

@@ -1149,7 +1149,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     sağlığı görünürlüğü~~ ✅ (02.10.2026): `GET /api/admin/cutout-queue` (canlı
     işçi, kuyruk, işlenen, en eski bekleyenin yaşı; durum `ok`/`no_worker`/
     `stalled`/`unavailable`) + işçi yokken ya da kuyruk 2 dk'dan uzun
-    tıkalıyken `error` günlüğü (yükleme anında, her bakım turunda ve yönetici
+    tıkalıyken `error` günlüğü (yükleme anında, API'nin 60 sn'lik kendi
+    gözlemcisiyle — bakım cron'una bağlı değil —, her bakım turunda ve yönetici
     ucu çağrılınca; aynı sorun 10 dk'da bir). Admin paneline kart eklemek
     Kaan'ın isteğe bağlı işi; (4) Mac bellek sıkışıklığı
     (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅

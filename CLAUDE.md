@@ -255,7 +255,9 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   `backend/ruff.toml`, 27.09.2026). Yerelde aynısı: `cd backend && .venv/bin/ruff check app tests scripts alembic`.
   **Backend testleri tek komutla: `backend/scripts/test.sh`** (ayrı compose
   projesinde kendi Postgres'i 5434 + Redis'i 6380; argümanlar pytest'e geçer,
-  çıkış kodu pytest'inki). Düz `pytest` `execute.sh`'ın geliştirme
+  çıkış kodu pytest'inki; test Redis'ini her oturum başında temizler — yalnız
+  kendi Redis'inde, `VITRIN_TEST_REDIS_OWNED=1`, kilit alındıktan sonra, bkz.
+  `backend/README.md` → "Testler"). Düz `pytest` `execute.sh`'ın geliştirme
   veritabanında (yerel + 5432 + `vitrin_ai`) hiçbir şeye dokunmadan durur
   (`VITRIN_ALLOW_DEV_DB_RESET=1` ile bilerek geçilir); aynı test
   veritabanında ikinci bir oturum da kilit alamayıp durur (ders 34).
@@ -575,9 +577,8 @@ Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
 
 `provider_actions` kuyruğunu (hesap silme, abonelik iptali, dunning e-postası,
 depolama temizliği) işleyen tek şey `python -m app.services.billing.maintenance`.
-**02.10.2026'dan beri aynı tur kesim işçisinin sağlığını da kontrol eder** (işçi
-yok/takılmışsa `error` günlüğü); bakım işi çalışmazsa bu periyodik alarm da
-susar (yükleme anındaki ve yönetici ucundaki kontroller etkilenmez).
+Aynı tur kesim işçisinin sağlığını da gözler, ama "işçi yok" alarmı bu işe
+BAĞLI DEĞİL: API sürecinin kendi periyodik gözlemcisi var (02.10.2026).
 Bir servis olarak kurulu değil; 19.09.2026'da test hesabının silinmesi elle
 çalıştırılana kadar "sırada" kaldı. **Canlıda periyodik çalıştırılmazsa
 (systemd timer / cron) hiçbir silme talebi, iptal ya da ödeme bildirimi

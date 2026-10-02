@@ -14,6 +14,9 @@ from urllib.parse import urlsplit
 # gerçek projeye gönderilirdi. Ortam değişkeni `.env`'den önce gelir ve
 # ayarlar bu satırdan SONRA ilk kez okunur (aşağıdaki `app.*` içe aktarmaları).
 os.environ["SENTRY_DSN"] = ""
+# API'nin kesim kuyruğu gözlemcisi testlerde kapalı: kendi arka plan görevini
+# başlatmasın (açık olduğunu sınayan test ayarı kendisi geçici açar).
+os.environ["CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS"] = "0"
 
 import jwt
 import pytest
@@ -31,6 +34,7 @@ from app.models.admin_user import AdminUser
 from app.models.background import Background  # noqa: F401 - Base.metadata'ya kaydolması için
 from app.models.project import Project  # noqa: F401 - Base.metadata'ya kaydolması için
 from app.models.user_consent import UserConsent  # noqa: F401 - Base.metadata'ya kaydolması için
+from tests.redis_safety import flush_owned_test_redis
 from tests.db_safety import (
     AUTH_SCHEMA_COMMENT_SQL,
     UnsafeTestDatabaseError,
@@ -89,6 +93,13 @@ async def _apply_migrations():
     if not locked:
         await lock_connection.close()
         pytest.exit(concurrent_session_message(), returncode=3)
+
+    # Test Redis'inde önceki oturumdan kalan sayaçlar (yükleme hız sınırı)
+    # aynı sabit kullanıcıyla koşan testleri 429'a düşürüyordu. Kilit alındıktan
+    # SONRA temizlenir: ikinci bir oturum buraya gelemeden yukarıda durur, yani
+    # birincinin Redis'i ayağının altından silinmez. Yalnız `test.sh`'nin kendi
+    # Redis'inde (bayrak), bkz. tests/redis_safety.py.
+    flush_owned_test_redis(settings.redis_url, os.environ)
 
     # Testler gerçek Alembic migration'larına karşı çalışır (Base.metadata.create_all
     # DEĞİL) — migration dosyasındaki bir hata bu sayede testlerde de yakalanır.

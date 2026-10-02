@@ -16,7 +16,15 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.services.billing.db import one
-from app.services.cutout_queue import DONE, FAILED, PROCESSING, QUEUED, CutoutQueue, QueueFull
+from app.services.cutout_queue import (
+    DONE,
+    FAILED,
+    PROCESSING,
+    QUEUED,
+    CutoutQueue,
+    QueueFull,
+    observe_queue_health,
+)
 from app.services.storage import (
     R2ConfigurationError,
     R2StorageService,
@@ -47,19 +55,6 @@ _queue = CutoutQueue(
 
 def get_cutout_queue() -> CutoutQueue:
     return _queue
-
-
-async def _report_if_unhealthy(queue: CutoutQueue) -> None:
-    """İş kuyruğa girdikten sonra işçi yoksa/takılmışsa günlüğe `error` yazar.
-
-    Müşteri tam şu an sırada bekliyor; işçi hiç çalışmıyorsa hiçbir yerde
-    görünmüyordu. Yanıtı ASLA etkilemez: iş zaten kuyrukta, bu yalnız bir
-    gözlem. Aynı durum 10 dakikada bir yazılır (`report_unhealthy`).
-    """
-    try:
-        await queue.report_unhealthy(await queue.stats(), "yükleme")
-    except Exception:  # noqa: BLE001 — gözlem, isteği düşürmemeli
-        logger.warning("Kesim kuyruğu sağlığı okunamadı", exc_info=True)
 
 
 @router.post(ROUTE_PATH)
@@ -173,7 +168,9 @@ async def remove_background(
         with anyio.CancelScope(shield=True):
             await quota.resolve(reservation.id, False)
         raise (_queue_busy() if isinstance(exc, QueueFull) else _queue_unavailable()) from exc
-    await _report_if_unhealthy(queue)
+    # Müşteri tam şu an sırada bekliyor; işçi çalışmıyorsa hiçbir yerde
+    # görünmüyordu. Yanıtı ASLA etkilemez (`observe_queue_health` fırlatmaz).
+    await observe_queue_health(queue, "yükleme")
     return JSONResponse({"job_id": str(request_id), "status": QUEUED}, status_code=202)
 
 

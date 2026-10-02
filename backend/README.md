@@ -57,6 +57,13 @@ de güvenle koşar. Değiştirmek için: `VITRIN_TEST_DB_PORT`,
 `VITRIN_TEST_REDIS_PORT`, `VITRIN_TEST_PROJECT`, `VITRIN_VENV_DIR` (ders 11).
 Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
 `VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
+**Test Redis'i her oturum başında temizlenir** (02.10.2026): önceki oturumdan
+kalan yükleme hız sınırı sayaçları, aynı sabit kullanıcıyla koşan testleri
+arka arkaya koşularda 429'a düşürüyordu. Temizlik yalnız `test.sh`'nin KENDİ
+Redis'inde yapılır (betik `VITRIN_TEST_REDIS_OWNED=1` verir; `tests/redis_safety.py`),
+oturum kilidi alındıktan SONRA (ikinci bir oturum birincinin Redis'ini silemez),
+ve yalnız yerel adreste. Düz `pytest` bayrak vermez, bu yüzden geliştirme
+Redis'indeki bekleyen kesim işlerine ve fotoğraflara dokunmaz.
 Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
 Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
 `.venv\Scripts\pytest.exe`'yi de bulur). Betik adresleri `localhost` değil
@@ -391,12 +398,16 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
   `<önek>:workers` sıralı kümesinde kayıtlıdır ki sayım için tüm anahtar
   uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te).
   **Uyarı:** sağlıksız durum `error` seviyesinde günlüğe yazılır (Sentry DSN'i
-  verilmişse olay olarak da gider) ve üç yerden kontrol edilir: iş kuyruğa
-  girince (müşteri o an bekliyor), `python -m app.services.billing.maintenance`
-  her turunda (kimse yükleme yapmasa da fark edilir; bakım işi canlıda
-  periyodik çalışmalı, açık takip 4) ve yönetici ucu çağrılınca. Aynı durum
-  10 dakikada bir yazılır (`ALERT_COOLDOWN_SECONDS`). Gözlem hiçbir istekte ya
-  da bakım turunda hata üretmez.
+  verilmişse olay olarak da gider) ve dört yerden kontrol edilir: iş kuyruğa
+  girince (müşteri o an bekliyor), **API sürecinin kendi periyodik gözlemcisi**
+  (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS`, varsayılan 60 sn, 0 = kapalı; ilk
+  kontrol bir aralık SONRA, API ile işçi birlikte açılınca işçiye süre
+  tanınır), `python -m app.services.billing.maintenance` her turunda ve
+  yönetici ucu çağrılınca. Periyodik kontrol bakım işinin cron'una BAĞLI
+  değildir. Birden fazla API süreci aynı Redis sayacını paylaşır, yani aynı
+  sorun yine 10 dakikada bir (`ALERT_COOLDOWN_SECONDS`) yazılır. Gözlem
+  (`observe_queue_health`) hiçbir istekte, bakım turunda ya da API yaşam
+  döngüsünde hata üretmez; Redis'e ulaşılamazsa `warning` yazar.
 
 **Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
 başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);

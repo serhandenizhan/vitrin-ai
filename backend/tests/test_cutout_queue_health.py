@@ -15,8 +15,13 @@ from unittest.mock import AsyncMock
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from app.services.billing.maintenance import check_cutout_queue
-from app.services.cutout_queue import QUEUE_STALL_SECONDS, CutoutQueue, job_id_for
+from app.services.cutout_queue import (
+    QUEUE_STALL_SECONDS,
+    CutoutQueue,
+    job_id_for,
+    observe_queue_health,
+    watch_queue_health,
+)
 from tests.test_idor import client
 
 URL = "/api/admin/cutout-queue"
@@ -102,30 +107,30 @@ async def own_queue():
     await queue.aclose()
 
 
-async def test_maintenance_check_flags_a_queue_without_workers(own_queue, caplog):
+async def test_observer_flags_a_queue_without_workers(own_queue, caplog):
     with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
-        unhealthy = await check_cutout_queue(own_queue)
+        unhealthy = await observe_queue_health(own_queue, "bakım")
 
     assert unhealthy is True
     assert any("bakım" in r.getMessage() for r in caplog.records)
 
 
-async def test_maintenance_check_is_quiet_when_a_worker_is_alive(own_queue, caplog):
+async def test_observer_is_quiet_when_a_worker_is_alive(own_queue, caplog):
     await own_queue.heartbeat("isci")
 
     with caplog.at_level("ERROR"):
-        unhealthy = await check_cutout_queue(own_queue)
+        unhealthy = await observe_queue_health(own_queue, "bakım")
 
     assert unhealthy is False
     assert not caplog.records
 
 
-async def test_maintenance_check_never_raises_on_a_redis_outage(own_queue, monkeypatch, caplog):
+async def test_observer_never_raises_on_a_redis_outage(own_queue, monkeypatch, caplog):
     monkeypatch.setattr(own_queue, "stats", AsyncMock(side_effect=RedisConnectionError("kapalı")))
 
     # Bakım turunu (ödeme işleri) gözlem hatası yüzünden düşürmemeli.
-    with caplog.at_level("ERROR"):
-        assert await check_cutout_queue(own_queue) is True
+    with caplog.at_level("WARNING"):
+        assert await observe_queue_health(own_queue, "bakım") is True
     assert any("okunamadı" in r.getMessage() for r in caplog.records)
 
 
@@ -144,13 +149,13 @@ async def test_maintenance_entrypoint_runs_the_queue_check_after_billing_work(mo
     async def fake_maintenance(db, provider, storage):
         order.append("bakım")
 
-    async def fake_check(queue):
+    async def fake_check(queue, where):
         order.append("kuyruk")
         return False
 
     monkeypatch.setattr(module, "_session_factory", lambda: fake_session())
     monkeypatch.setattr(module, "maintenance", fake_maintenance)
-    monkeypatch.setattr(module, "check_cutout_queue", fake_check)
+    monkeypatch.setattr(module, "observe_queue_health", fake_check)
     monkeypatch.setattr(module, "get_provider", lambda: None)
     monkeypatch.setattr(module, "get_storage_service", lambda: None)
     monkeypatch.setattr(module, "engine", SimpleNamespace(dispose=AsyncMock()))
@@ -158,3 +163,83 @@ async def test_maintenance_entrypoint_runs_the_queue_check_after_billing_work(mo
     await module.main()
 
     assert order == ["bakım", "kuyruk"]
+
+
+# --- API'nin kendi periyodik gözlemcisi (bakım cron'una bağımlı olmamak için) ---
+
+
+class _CountingQueue:
+    def __init__(self):
+        self.stats_calls = 0
+
+    async def stats(self):
+        self.stats_calls += 1
+        return SimpleNamespace(status="ok")
+
+    async def report_unhealthy(self, stats, where):
+        return False
+
+
+async def test_watcher_observes_repeatedly_but_not_immediately():
+    import asyncio
+
+    queue = _CountingQueue()
+    task = asyncio.create_task(watch_queue_health(queue, 0.1))
+    await asyncio.sleep(0.03)
+    # İlk kontrol bir aralık SONRA: API ile işçi birlikte açılıyorsa işçiye süre tanınır.
+    assert queue.stats_calls == 0
+    await asyncio.sleep(0.4)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    assert queue.stats_calls >= 2
+
+
+async def test_watcher_survives_observation_failures():
+    import asyncio
+
+    class _Broken(_CountingQueue):
+        async def stats(self):
+            self.stats_calls += 1
+            raise RedisConnectionError("kapalı")
+
+    queue = _Broken()
+    task = asyncio.create_task(watch_queue_health(queue, 0.05))
+    await asyncio.sleep(0.3)
+    still_running = not task.done()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    # Redis hatası gözlemciyi öldürmemeli; sonraki turda yeniden dener.
+    assert still_running and queue.stats_calls >= 2
+
+
+def test_app_lifespan_starts_and_stops_the_watcher_only_when_enabled(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import main as main_module
+
+    events: list[str] = []
+
+    async def fake_watch(queue, interval):
+        import asyncio
+
+        events.append(f"başladı:{interval}")
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            events.append("durdu")
+            raise
+
+    monkeypatch.setattr(main_module, "watch_queue_health", fake_watch)
+
+    monkeypatch.setattr(main_module.settings, "cutout_health_check_interval_seconds", 7)
+    with TestClient(main_module.app):
+        pass
+    assert events == ["başladı:7", "durdu"]
+
+    events.clear()
+    monkeypatch.setattr(main_module.settings, "cutout_health_check_interval_seconds", 0)
+    with TestClient(main_module.app):
+        pass
+    assert events == []
