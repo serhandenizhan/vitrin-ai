@@ -52,7 +52,7 @@ const VIEWS: Record<CutoutQueueStatus, View> = {
     tone: "warn",
     title: "Kuyruk tıkalı görünüyor",
     detail: (h) =>
-      `İşçi çalışıyor ama kuyrukta iş varken ${formatWait(h.seconds_without_progress ?? 0)}'dir hiçbir iş alınmadı (eşik ${formatWait(h.stall_threshold_seconds)}).`,
+      `İşçi çalışıyor ama kuyrukta iş varken ${formatWait(h.seconds_without_progress ?? 0)}'dir hiçbir iş tamamlanmadı (eşik ${formatWait(h.stall_threshold_seconds)}).`,
   },
   unavailable: {
     tone: "bad",
@@ -91,10 +91,18 @@ export function AdminCutoutQueue() {
 
   useEffect(() => {
     let cancelled = false;
+    // Yenileme yanıtı beklemeden 30 sn'de bir başlar; yavaş kalan ESKİ bir
+    // yanıt, ondan sonra başlamış bir isteğin sonucunu ezmemeli (ders 21 ve
+    // PR #25'teki `mutationVersionRef` ile aynı yarış). Her istek bir sıra
+    // numarası alır, yalnız uygulanmış olandan YENİ olan uygulanır.
+    let requested = 0;
+    let applied = 0;
 
     async function load() {
+      const sequence = ++requested;
       const result = await adminFetch<CutoutQueueHealth>("/api/admin/cutout-queue");
-      if (cancelled) return;
+      if (cancelled || sequence < applied) return;
+      applied = sequence;
       // Tanımadığımız bir durum (backend'e yeni bir durum eklendi ya da yanıt
       // bozuk) kartı ya da paneli çökertmez; başarısız okuma sayılır.
       const error = result.ok

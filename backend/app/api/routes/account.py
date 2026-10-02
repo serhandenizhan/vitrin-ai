@@ -33,11 +33,7 @@ def same_email(left: str, right: str) -> bool:
     )
 
 
-@router.delete(
-    "/api/account",
-    status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(limit_account_delete)],
-)
+@router.delete("/api/account", status_code=status.HTTP_202_ACCEPTED)
 async def delete_account(
     confirmation: AccountDeletionConfirmation,
     user: CurrentUser = Depends(get_current_user),
@@ -52,6 +48,8 @@ async def delete_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hesabı silmek için oturumdaki e-posta adresini doğru yazın.",
         )
+    # Hız sınırı onaydan SONRA: yanlış yazılan onay hakkı tüketmesin.
+    await limit_account_delete(user)
 
     try:
         admin.ensure_configured()

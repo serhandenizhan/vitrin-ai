@@ -638,7 +638,7 @@ async def cutout_queue_health(queue: CutoutQueue = Depends(get_cutout_queue)):
 
     İşçi çalışmıyorsa kesimler sessizce sırada bekler; bu uç o durumu görünür
     kılar. `status`: `ok` | `no_worker` (canlı işçi yok) | `stalled` (işçi var,
-    kuyrukta iş var ama eşikten uzun süredir HİÇ iş alınmadı; uzun ama
+    kuyrukta iş var ama eşikten uzun süredir HİÇBİR iş tamamlanmadı; uzun ama
     ilerleyen kuyruk `ok`'tur) | `unavailable` (Redis'e
     ulaşılamadı — bu durumda kesim zaten çalışmaz). Redis arızası 5xx değil
     `unavailable` olarak döner: arızanın kendisini göstermek bu ucun işi.

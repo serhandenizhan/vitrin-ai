@@ -96,8 +96,10 @@ class EarlyAuthenticationMiddleware:
             try:
                 retry_after = await self._unauthenticated_retry_after(scope)
             except RedisError:
-                await self._limiter_unavailable(scope, receive, send)
-                return
+                # İstek zaten 401 ile reddedilecek ve gövde okunmayacak; sayacın
+                # sorulamaması 503'e çevrilirse gerçek sebep (oturum geçersiz)
+                # gizlenir ve vekil giriş penceresini açmaz (PR #46 kod incelemesi).
+                retry_after = None
             if retry_after is not None:
                 await self._error(
                     scope,

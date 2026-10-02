@@ -87,7 +87,7 @@ describe("AdminCutoutQueue — durumlar", () => {
 
     expect(screen.getByText("Kuyruk tıkalı görünüyor")).toBeTruthy();
     // Gösterilen, en eski işin bekleme süresi (400 sn) DEĞİL, ilerlemesizlik süresi (185 sn).
-    expect(screen.getByRole("alert").textContent).toContain("3 dk 5 sn'dir hiçbir iş alınmadı");
+    expect(screen.getByRole("alert").textContent).toContain("3 dk 5 sn'dir hiçbir iş tamamlanmadı");
     expect(screen.getByRole("alert").textContent).not.toContain("6 dk");
     expect(screen.getByRole("alert").textContent).toContain("eşik 2 dk");
   });
@@ -175,6 +175,36 @@ describe("AdminCutoutQueue — periyodik yenileme", () => {
 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByText("Canlı işçi").nextSibling?.textContent).toBe("3");
+  });
+
+  it("geç gelen ESKİ yanıt, sonra başlamış isteğin sonucunu ezmiyor", async () => {
+    // İlk istek yavaş: yenileme aralığından SONRA döner. O arada ikinci istek
+    // başlar ve hemen döner. Eski yanıt geldiğinde ekran yeni durumda kalmalı.
+    let resolveSlow: (response: Response) => void = () => {};
+    const slow = new Promise<Response>((resolve) => {
+      resolveSlow = resolve;
+    });
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        return call === 1 ? slow : health({ workers: 2 });
+      }),
+    );
+    render(createElement(AdminCutoutQueue));
+    await flush();
+
+    await act(async () => vi.advanceTimersByTimeAsync(QUEUE_REFRESH_MS));
+    await flush();
+    expect(screen.getByText("Kesim işçisi çalışıyor")).toBeTruthy();
+
+    resolveSlow(health({ status: "no_worker", workers: 0 }));
+    await flush();
+
+    expect(screen.getByText("Kesim işçisi çalışıyor")).toBeTruthy();
+    expect(screen.queryByText("Kesim işçisi çalışmıyor")).toBeNull();
+    expect(screen.getByText("Canlı işçi").nextSibling?.textContent).toBe("2");
   });
 
   it("kapanınca yoklamayı durduruyor", async () => {

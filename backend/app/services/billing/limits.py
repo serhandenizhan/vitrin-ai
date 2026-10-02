@@ -29,6 +29,10 @@ from app.services.billing.errors import billing_error
 logger = logging.getLogger(__name__)
 
 checkout_limiter = RequestRateLimiter(10, 60, redis_url=settings.redis_url)
+#: Bekleyen ödeme oturumunu ya da aboneliği İPTAL etme. Satın almayla aynı kovayı
+#: paylaşsaydı birkaç kez ödeme deneyen kullanıcı iptal edemezdi (PR #46 kod
+#: incelemesi). Yön FAIL-CLOSED — bkz. `limit_checkout_cancel`.
+checkout_cancel_limiter = RequestRateLimiter(10, 60, redis_url=settings.redis_url)
 public_limiter = RequestRateLimiter(600, 60, redis_url=settings.redis_url)
 #: Faz 6 admin panelinin MUTASYON uçları (yükleme, kredi, silme, rol değişikliği).
 #: Okuma uçları bu kovayı kullanmaz; onlar `limit_scoped` ile fail-open.
@@ -75,6 +79,17 @@ async def _retry_or_closed(limiter: RequestRateLimiter, key: str) -> int | None:
         ) from exc
 
 
+async def _enforce_closed(limiter: RequestRateLimiter, key: str, message: str) -> None:
+    """FAIL-CLOSED bir sınırı uygular: Redis yoksa 503, sınır doluysa 429.
+
+    Bütün kapalı yönlü sınırlar bu tek yoldan geçer; arıza yönü, hata kodu ve
+    günlük biçimi uçlar arasında ayrışamasın (PR #46 kod incelemesi).
+    """
+    retry = await _retry_or_closed(limiter, key)
+    if retry:
+        raise billing_error("rate_limited", message, 429, retry)
+
+
 def client_ip(request: Request) -> str:
     """Hız sınırı kovasının anahtarı olacak gerçek istemci adresi.
 
@@ -106,11 +121,24 @@ def client_ip(request: Request) -> str:
 
 
 async def limit_checkout(user: CurrentUser = Depends(get_current_user)):
-    retry = await _retry_or_closed(checkout_limiter, "billing:checkout:" + str(user.id))
-    if retry:
-        raise billing_error(
-            "rate_limited", "Çok fazla satın alma isteği. Biraz bekleyin.", 429, retry
-        )
+    await _enforce_closed(
+        checkout_limiter,
+        "billing:checkout:" + str(user.id),
+        "Çok fazla satın alma isteği. Biraz bekleyin.",
+    )
+
+
+async def limit_checkout_cancel(user: CurrentUser = Depends(get_current_user)):
+    """Ödeme oturumu / abonelik iptali — **fail-closed**, ama satın almadan AYRI kova.
+
+    İptal sağlayıcıya (iyzico) istek atar; sağlayıcı yüzeyleri kapalı yönlüdür.
+    Kova ayrı: satın alma denemeleri iptal hakkını tüketmemeli.
+    """
+    await _enforce_closed(
+        checkout_cancel_limiter,
+        "billing:checkout-cancel:" + str(user.id),
+        "Çok fazla iptal isteği. Biraz bekleyin.",
+    )
 
 
 async def limit_admin(admin: CurrentUser = Depends(get_current_user)):
@@ -122,11 +150,11 @@ async def limit_admin(admin: CurrentUser = Depends(get_current_user)):
     demek olurdu. Panelin OKUMA uçları aynı gerekçeyle ters yöne kuruldu
     (`limit_scoped`, fail-open): orada kaybedilen şey yalnızca görünürlük.
     """
-    retry = await _retry_or_closed(admin_limiter, "billing:admin:" + str(admin.id))
-    if retry:
-        raise billing_error(
-            "rate_limited", "Çok fazla yönetici isteği. Biraz bekleyin.", 429, retry
-        )
+    await _enforce_closed(
+        admin_limiter,
+        "billing:admin:" + str(admin.id),
+        "Çok fazla yönetici isteği. Biraz bekleyin.",
+    )
 
 
 async def limit_cmyk(user: CurrentUser = Depends(get_current_user)):
@@ -158,11 +186,9 @@ async def limit_cmyk(user: CurrentUser = Depends(get_current_user)):
 
 
 async def limit_public(request: Request):
-    retry = await _retry_or_closed(public_limiter, "billing:public:" + client_ip(request))
-    if retry:
-        raise billing_error(
-            "rate_limited", "Çok fazla istek. Biraz bekleyin.", 429, retry
-        )
+    await _enforce_closed(
+        public_limiter, "billing:public:" + client_ip(request), "Çok fazla istek. Biraz bekleyin."
+    )
 
 
 async def limit_scoped(
@@ -222,17 +248,23 @@ async def limit_project_write(request: Request, user: CurrentUser = Depends(get_
 
 async def limit_user_delete(user: CurrentUser = Depends(get_current_user)):
     """Çalışma silme — **fail-closed**: silme geri alınamaz ve R2'ye de istek atar."""
-    retry = await _retry_or_closed(user_delete_limiter, "billing:delete:" + str(user.id))
-    if retry:
-        raise billing_error(
-            "rate_limited", "Çok fazla silme isteği. Biraz bekleyin.", 429, retry
-        )
+    await _enforce_closed(
+        user_delete_limiter,
+        "billing:delete:" + str(user.id),
+        "Çok fazla silme isteği. Biraz bekleyin.",
+    )
 
 
-async def limit_account_delete(user: CurrentUser = Depends(get_current_user)):
-    """Hesap silme — **fail-closed**: geri alınamaz, Supabase yönetici API'sini tetikler."""
-    retry = await _retry_or_closed(account_delete_limiter, "billing:account-delete:" + str(user.id))
-    if retry:
-        raise billing_error(
-            "rate_limited", "Çok fazla hesap silme isteği. Daha sonra tekrar deneyin.", 429, retry
-        )
+async def limit_account_delete(user: CurrentUser) -> None:
+    """Hesap silme — **fail-closed**: geri alınamaz, Supabase yönetici API'sini tetikler.
+
+    Bağımlılık DEĞİL, uç içinde e-posta onayı doğrulandıktan SONRA çağrılır:
+    önce çağrılınca yanlış yazılan her onay saatlik 5 hakkı tüketiyor, doğru
+    yazan kullanıcı bir saat hesabını silemiyordu (PR #46 kod incelemesi).
+    Yanlış onay hiçbir şeyi tetiklemediği için sınırsız kalması zararsız.
+    """
+    await _enforce_closed(
+        account_delete_limiter,
+        "billing:account-delete:" + str(user.id),
+        "Çok fazla hesap silme isteği. Daha sonra tekrar deneyin.",
+    )

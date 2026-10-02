@@ -97,10 +97,14 @@ EXEMPT = {
 }
 
 #: Gövde doğrulaması sınırdan ÖNCE çalışan (uç içi çağrı) uçlar için geçerli gövde.
+#: Değer, isteği yapan yöneticinin kimliğini alan bir fonksiyon.
 BODIES = {
-    ("POST", "/api/support-requests"): {
+    ("POST", "/api/support-requests"): lambda _: {
         "json": {"kind": "issue", "message": "Bu bir deneme mesajıdır."}
     },
+    # Hesap silmede sınır e-posta onayından SONRA sorulur (yanlış onay hakkı
+    # tüketmesin); onay oturumdaki e-postayla aynı olmalı.
+    ("DELETE", "/api/account"): lambda user_id: {"json": {"email": f"{user_id}@test.example"}},
 }
 
 CLASSES = [CLOSED, OPEN, UPLOAD, set(EXEMPT)]
@@ -136,47 +140,53 @@ def test_every_route_has_exactly_one_rate_limit_class():
 
 
 @pytest.fixture
-async def admin_headers(tokens, create_user, grant_admin):
+async def admin_user(create_user, grant_admin):
     # Yönetici her oturumlu ve yönetici ucundan geçer; böylece yetki kapısı
     # 403'ü sınır sonucunu gölgelemez.
     admin = await create_user()
     await grant_admin(admin)
-    return tokens.headers(admin)
+    return admin
 
 
-async def _call(client, route, headers):
+@pytest.fixture
+def admin_headers(tokens, admin_user):
+    return tokens.headers(admin_user)
+
+
+async def _call(client, route, headers, user_id):
     method, path = route
     url = _fill_path(path, _openapi_routes()[route])
-    return await client.request(method, url, headers=headers, **BODIES.get(route, {}))
+    body = BODIES[route](user_id) if route in BODIES else {}
+    return await client.request(method, url, headers=headers, **body)
 
 
 @pytest.mark.parametrize("method,path", LIMITED)
 async def test_route_returns_429_when_limit_is_exhausted(
-    client, admin_headers, monkeypatch, method, path
+    client, admin_headers, admin_user, monkeypatch, method, path
 ):
     _patch_every_limiter(monkeypatch, AsyncMock(return_value=7))
 
-    response = await _call(client, (method, path), admin_headers)
+    response = await _call(client, (method, path), admin_headers, admin_user)
 
     assert response.status_code == 429, (method, path, response.status_code, response.text)
 
 
 @pytest.mark.parametrize("method,path", sorted(EXEMPT))
-async def test_exempt_route_ignores_the_limiter(client, admin_headers, monkeypatch, method, path):
+async def test_exempt_route_ignores_the_limiter(client, admin_headers, admin_user, monkeypatch, method, path):
     _patch_every_limiter(monkeypatch, AsyncMock(return_value=7))
 
-    response = await _call(client, (method, path), admin_headers)
+    response = await _call(client, (method, path), admin_headers, admin_user)
 
     assert response.status_code != 429, (method, path)
 
 
 @pytest.mark.parametrize("method,path", sorted(CLOSED))
 async def test_closed_route_returns_503_when_redis_is_down(
-    client, admin_headers, monkeypatch, method, path
+    client, admin_headers, admin_user, monkeypatch, method, path
 ):
     _patch_every_limiter(monkeypatch, AsyncMock(side_effect=RedisError("kapalı")))
 
-    response = await _call(client, (method, path), admin_headers)
+    response = await _call(client, (method, path), admin_headers, admin_user)
 
     assert response.status_code == 503, (method, path, response.status_code, response.text)
     assert "rate_limit_unavailable" in response.text, (method, path, response.text)
@@ -184,25 +194,62 @@ async def test_closed_route_returns_503_when_redis_is_down(
 
 @pytest.mark.parametrize("method,path", sorted(UPLOAD))
 async def test_upload_route_returns_503_when_redis_is_down(
-    client, admin_headers, monkeypatch, method, path
+    client, admin_headers, admin_user, monkeypatch, method, path
 ):
     # Yükleme sınırı yönü KAPALI: sayaç sorulamıyorsa gövde okunmadan reddedilir.
     # Eskiden yakalanmamış RedisError ham bir 500'e dönüşüyordu.
     _patch_every_limiter(monkeypatch, AsyncMock(side_effect=RedisError("kapalı")))
 
-    response = await _call(client, (method, path), admin_headers)
+    response = await _call(client, (method, path), admin_headers, admin_user)
 
     assert response.status_code == 503, (method, path, response.status_code, response.text)
 
 
 @pytest.mark.parametrize("method,path", sorted(OPEN))
 async def test_open_route_passes_when_redis_is_down(
-    client, admin_headers, monkeypatch, method, path
+    client, admin_headers, admin_user, monkeypatch, method, path
 ):
     _patch_every_limiter(monkeypatch, AsyncMock(side_effect=RedisError("kapalı")))
 
-    response = await _call(client, (method, path), admin_headers)
+    response = await _call(client, (method, path), admin_headers, admin_user)
 
     # Uç kendi işini yapar (200/404/…); sınırlayıcı yüzünden reddedilmez.
     assert response.status_code != 429, (method, path, response.text)
     assert "rate_limit_unavailable" not in response.text, (method, path, response.text)
+
+
+CANCEL_ROUTES = [
+    ("POST", "/api/subscriptions/cancel"),
+    ("POST", "/api/subscriptions/checkout/{session_id}/cancel"),
+]
+
+
+@pytest.mark.parametrize("method,path", CANCEL_ROUTES)
+async def test_cancel_does_not_share_the_purchase_bucket(
+    client, admin_headers, admin_user, monkeypatch, method, path
+):
+    # Satın alma kovası dolu (kullanıcı birkaç kez ödeme denedi): iptal yine de
+    # yapılabilmeli. Eskiden iki iptal ucu da `limit_checkout`'u paylaşıyordu.
+    from app.services.billing import limits
+
+    monkeypatch.setattr(limits.checkout_limiter, "retry_after", AsyncMock(return_value=7))
+    monkeypatch.setattr(limits.checkout_cancel_limiter, "retry_after", AsyncMock(return_value=None))
+
+    response = await _call(client, (method, path), admin_headers, admin_user)
+
+    assert response.status_code != 429, (method, path, response.text)
+
+
+@pytest.mark.parametrize("method,path", CANCEL_ROUTES)
+async def test_cancel_bucket_itself_is_enforced(
+    client, admin_headers, admin_user, monkeypatch, method, path
+):
+    # Kabul yolunun karşılığı: iptalin KENDİ kovası doluysa 429 (ders 15).
+    from app.services.billing import limits
+
+    monkeypatch.setattr(limits.checkout_limiter, "retry_after", AsyncMock(return_value=None))
+    monkeypatch.setattr(limits.checkout_cancel_limiter, "retry_after", AsyncMock(return_value=7))
+
+    response = await _call(client, (method, path), admin_headers, admin_user)
+
+    assert response.status_code == 429, (method, path, response.text)

@@ -392,16 +392,22 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
   canlı işçi sayısını, bekleyen ve işlenen işi ve en eski bekleyen işin yaşını
   verir. `status`: `ok`; `no_worker` (canlı işçi yok — kuyruk boş olsa bile
   sıradaki müşteri bekler); `stalled` (işçi var, kuyrukta iş var ama
-  `QUEUE_STALL_SECONDS`=120 sn'den uzun süredir HİÇ iş alınmadı: ölçüt BEKLEME
-  değil İLERLEME eksikliğidir. Tek işçi ~12 sn/iş keser, 10+ iş birikince en eski iş
-  120 sn'yi aşar ama sistem sağlıklıdır; bu `ok` sayılır. İşçi her iş alışında
-  `<önek>:last-claim` yazar; sayaç son alımdan ya da en eski işin gelişinden —
-  hangisi sonraysa — başlar, böylece saatlerce boşta kalmış işçiye gelen ilk iş
-  yalancı alarm üretmez. PR #46 incelemesi, M1); `unavailable` (Redis'e
+  `QUEUE_STALL_SECONDS`=120 sn'den uzun süredir HİÇBİR iş tamamlanmadı: ölçüt
+  BEKLEME değil İLERLEME eksikliğidir. Tek işçi ~12 sn/iş keser, 10+ iş birikince en
+  eski iş 120 sn'yi aşar ama sistem sağlıklıdır; bu `ok` sayılır. Her biten iş
+  (başarılı ya da başarısız) `<önek>:last-progress` yazar; sayaç son bitişten ya da en
+  eski işin gelişinden — hangisi sonraysa — başlar, böylece saatlerce boşta kalmış
+  işçiye gelen ilk iş yalancı alarm üretmez. İşaret iş ALIMINDA değil BİTİŞİNDE
+  yazılır: altyapı hatasıyla durmadan yeniden kuyruğa konup tekrar alınan bir iş
+  ilerleme sayılmaz. En eski işin kaydı (`JOB_TTL`, 30 dk) silinmişse iş en az o
+  kadar beklemiş sayılır, tıkanma 30 dk'yı aşınca uyarı susmaz. PR #46 incelemesi
+  M1 ve Kaan'ın kod incelemesi, 03.10.2026); `unavailable` (Redis'e
   ulaşılamadı; uç 5xx değil bunu döner). "Canlı" = `worker:<işçi>` nabız
   anahtarı var (`recover_stale`'in ölü tanımıyla aynı). İşçi kimlikleri ayrıca
   `<önek>:workers` sıralı kümesinde kayıtlıdır ki sayım için tüm anahtar
-  uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te).
+  uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te). Kümede canlı işçi
+  yoksa — kümeye hiç yazmamış eski sürümlü bir işçi olabilir — bir kez SCAN ile
+  `worker:*` aranır; sağlıklı sistemde bu yol çalışmaz.
   **Uyarı:** sağlıksız durum `error` seviyesinde günlüğe yazılır (Sentry DSN'i
   verilmişse olay olarak da gider) ve üç yerden kontrol edilir: **API sürecinin kendi periyodik gözlemcisi**
   (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS`, varsayılan 60 sn, 0 = kapalı; ilk

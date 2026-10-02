@@ -34,6 +34,7 @@ from app.services.billing.limits import (
     limit_admin,
     limit_admin_read,
     limit_checkout,
+    limit_checkout_cancel,
     limit_public,
     limit_user_read,
 )
@@ -192,7 +193,8 @@ async def checkout_status(
 
 
 @router.post(
-    "/api/subscriptions/checkout/{session_id}/cancel", dependencies=[Depends(limit_checkout)]
+    "/api/subscriptions/checkout/{session_id}/cancel",
+    dependencies=[Depends(limit_checkout_cancel)],
 )
 async def cancel_checkout(
     session_id: uuid.UUID,
@@ -313,7 +315,9 @@ async def callback(
 
 
 @router.post(
-    "/api/subscriptions/cancel", status_code=202, dependencies=[Depends(limit_checkout)]
+    "/api/subscriptions/cancel",
+    status_code=202,
+    dependencies=[Depends(limit_checkout_cancel)],
 )
 async def cancel(
     payload: ActionRequest,

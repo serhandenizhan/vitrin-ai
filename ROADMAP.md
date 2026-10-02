@@ -1151,7 +1151,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     sağlığı görünürlüğü~~ ✅ (02.10.2026): `GET /api/admin/cutout-queue` (canlı
     işçi, kuyruk, işlenen, en eski bekleyenin yaşı; durum `ok`/`no_worker`/
     `stalled`/`unavailable`) + işçi yokken ya da kuyrukta iş varken 2 dk'dan
-    uzun süredir HİÇ iş alınmadıysa (ilerleme eksikliği; uzun ama ilerleyen
+    uzun süredir HİÇBİR iş tamamlanmadıysa (ilerleme eksikliği; uzun ama ilerleyen
     kuyruk tıkalı sayılmaz) `error` günlüğü (API'nin 60 sn'lik kendi
     gözlemcisiyle — bakım cron'una bağlı değil —, her bakım turunda ve yönetici
     ucu çağrılınca; aynı sorun 10 dk'da bir) + admin panelinde Genel bakışın
