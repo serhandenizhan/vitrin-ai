@@ -238,6 +238,37 @@ describe("GET vekilleri", () => {
     expect(unknown.get("page")).toBe("1");
   });
 
+  it("kuyruk sağlığı: backend'in ucuna gidiyor, gövdeyi olduğu gibi ve önbelleksiz iletiyor", async () => {
+    const health = { status: "no_worker", workers: 0, queued: 2, stall_threshold_seconds: 120 };
+    const sent = captureBackend(200, health);
+    const { GET } = await import("./cutout-queue/route");
+
+    const response = await GET();
+
+    expect(sent[0].url.endsWith("/api/admin/cutout-queue")).toBe(true);
+    expect(sent[0].method).toBe("GET");
+    expect(await response.json()).toEqual(health);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("kuyruk sağlığı: oturum yoksa 401, backend'e gitmeden", async () => {
+    auth.token = null;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { GET } = await import("./cutout-queue/route");
+
+    const response = await GET();
+
+    expect(response.status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("kuyruk sağlığı: backend'in 403'ünü iletiyor (yetki backend'de)", async () => {
+    captureBackend(403, { detail: "Bu işlem için yönetici yetkisi gerekiyor." });
+    const { GET } = await import("./cutout-queue/route");
+
+    expect((await GET()).status).toBe(403);
+  });
+
   it("backend'in 403'ünü olduğu gibi iletiyor (yetki backend'de)", async () => {
     captureBackend(403, { detail: "Bu işlem için yönetici yetkisi gerekiyor." });
     const { GET } = await import("./stats/route");

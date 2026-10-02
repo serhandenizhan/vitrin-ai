@@ -1114,7 +1114,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
-  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
+  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test; 02.10.2026'da kuyruk kartının 4 senaryosu eklendi, `playwright test --list` 108 test listeler), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (02.10.2026: kuyruk kartı için 4 senaryo × 2 proje = 8 test eklendi, atlanmaz: 108 listelenir) (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
   - **E2E — ilk tur (30.09.2026, Kaan; kalan maddeler aynı gün kapandı, yukarıdaki satır):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Bu turda açık görünen CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme sonradan yapıldı** (`e2e/cikti.spec.ts`, CI işi "Frontend E2E (Playwright)").
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
@@ -1151,8 +1151,9 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     `stalled`/`unavailable`) + işçi yokken ya da kuyruk 2 dk'dan uzun
     tıkalıyken `error` günlüğü (yükleme anında, API'nin 60 sn'lik kendi
     gözlemcisiyle — bakım cron'una bağlı değil —, her bakım turunda ve yönetici
-    ucu çağrılınca; aynı sorun 10 dk'da bir). Admin paneline kart eklemek
-    Kaan'ın isteğe bağlı işi; (4) Mac bellek sıkışıklığı
+    ucu çağrılınca; aynı sorun 10 dk'da bir) + admin panelinde Genel bakışın
+    en üstünde "Kesim kuyruğu" kartı (30 sn'de bir yenilenir; ön yüz kodu
+    `components/admin/admin-cutout-queue.tsx`); (4) Mac bellek sıkışıklığı
     (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
     kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı); ZAP backend

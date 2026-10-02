@@ -42,6 +42,17 @@ const stats = {
   operations: { open_alerts: 0, open_actions: 0, open_storage_jobs: 0 },
 };
 
+/** Genel bakıştaki kuyruk kartının isteği (02.10.2026): sağlıklı, sakin bir yanıt. */
+const queueHealth = {
+  status: "ok",
+  workers: 1,
+  queued: 0,
+  processing: 0,
+  oldest_waiting_seconds: null,
+  max_queued: 50,
+  stall_threshold_seconds: 120,
+};
+
 beforeEach(() => {
   workspace.user = { id: "u-admin" };
   workspace.openSignIn.mockReset();
@@ -72,7 +83,13 @@ describe("AdminPanel — yetki ekranları (yalnız gösterim; yetki backend'de)"
   });
 
   it("yöneticiye genel bakışı açıyor", async () => {
-    mockFetch((url) => (url === "/api/admin/me" ? Response.json({ is_admin: true }) : Response.json(stats)));
+    mockFetch((url) =>
+      url === "/api/admin/me"
+        ? Response.json({ is_admin: true })
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : Response.json(stats),
+    );
     render(createElement(AdminPanel));
 
     // Baslik hem gorunen `figcaption`da hem ekran okuyucu tablosunda; grafik
@@ -86,9 +103,11 @@ describe("AdminPanel — yetki ekranları (yalnız gösterim; yetki backend'de)"
     mockFetch((url) =>
       url === "/api/admin/me"
         ? Response.json({ is_admin: true })
-        : url.startsWith("/api/admin/stats")
-          ? Response.json(stats)
-          : Response.json({ users: [], page: 1, per_page: 25 }),
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : url.startsWith("/api/admin/stats")
+            ? Response.json(stats)
+            : Response.json({ users: [], page: 1, per_page: 25 }),
     );
     render(createElement(AdminPanel));
     fireEvent.click(await screen.findByRole("tab", { name: /Kullanıcılar/ }));
@@ -274,9 +293,11 @@ describe("Zeminler sekmesi (Faz 6, Kaan)", () => {
     const calls = mockFetch((url, init) =>
       url === "/api/admin/me"
         ? Response.json({ is_admin: true })
-        : url.startsWith("/api/admin/stats")
-          ? Response.json(stats)
-          : handler(url, init),
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : url.startsWith("/api/admin/stats")
+            ? Response.json(stats)
+            : handler(url, init),
     );
     render(createElement(AdminPanel));
     fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));
@@ -356,9 +377,11 @@ describe("Günlük sekmesi (19.09.2026)", () => {
     const calls = mockFetch((url, init) =>
       url === "/api/admin/me"
         ? Response.json({ is_admin: true })
-        : url.startsWith("/api/admin/stats")
-          ? Response.json(stats)
-          : handler(url, init),
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : url.startsWith("/api/admin/stats")
+            ? Response.json(stats)
+            : handler(url, init),
     );
     render(createElement(AdminPanel));
     fireEvent.click(await screen.findByRole("tab", { name: /Günlük/ }));
@@ -478,9 +501,11 @@ describe("Zeminler — kategori ve yayın süzgeçleri (19.09.2026)", () => {
     mockFetch((url) =>
       url === "/api/admin/me"
         ? Response.json({ is_admin: true })
-        : url.startsWith("/api/admin/stats")
-          ? Response.json(stats)
-          : Response.json([row(SADE, true), row(DOKU, false)]),
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : url.startsWith("/api/admin/stats")
+            ? Response.json(stats)
+            : Response.json([row(SADE, true), row(DOKU, false)]),
     );
     render(createElement(AdminPanel));
     fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));
@@ -539,9 +564,11 @@ describe("Zeminler — paket, yayın durumu ve silme (19.09.2026)", () => {
     const calls = mockFetch((url, init) =>
       url === "/api/admin/me"
         ? Response.json({ is_admin: true })
-        : url.startsWith("/api/admin/stats")
-          ? Response.json(stats)
-          : handler(url, init),
+        : url === "/api/admin/cutout-queue"
+          ? Response.json(queueHealth)
+          : url.startsWith("/api/admin/stats")
+            ? Response.json(stats)
+            : handler(url, init),
     );
     render(createElement(AdminPanel));
     fireEvent.click(await screen.findByRole("tab", { name: /Zeminler/ }));

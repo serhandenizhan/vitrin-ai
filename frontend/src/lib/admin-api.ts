@@ -129,6 +129,25 @@ export type AdminStats = {
   operations: { open_alerts: number; open_actions: number; open_storage_jobs: number };
 };
 
+/**
+ * Kesim kuyruğu sağlığı (`GET /api/admin/cutout-queue`, 02.10.2026). Durumlar
+ * backend'den birebir alındı (`QueueStats.status` + Redis arızasında
+ * `unavailable`; `backend/app/services/cutout_queue.py`, ders 19):
+ * `no_worker` canlı işçi yok, `stalled` işçi var ama en eski iş eşikten uzun
+ * bekliyor. `unavailable` yanıtında sayaçlar YOKTUR, yalnız eşik gelir.
+ */
+export type CutoutQueueStatus = "ok" | "no_worker" | "stalled" | "unavailable";
+
+export type CutoutQueueHealth = {
+  status: CutoutQueueStatus;
+  workers?: number;
+  queued?: number;
+  processing?: number;
+  oldest_waiting_seconds?: number | null;
+  max_queued?: number;
+  stall_threshold_seconds: number;
+};
+
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 /** Başarılı backend yanıtını önbelleğe alınmadan aynen iletir. */
