@@ -91,7 +91,7 @@ yeni ödemelerin sorgulanmasını engellemez. Redis görüntü yükleme ve billi
 **Redis kapalıyken (02.10.2026):** admin faturalama YAZMA uçları (iade, itiraz, fatura,
 plan, askıya alma, çözme/yeniden deneme) hız sınırı fail-closed olduğu için `503
 rate_limit_unavailable` döner; Redis dönene kadar bu işlemler yapılamaz (acil bir iade
-gerekiyorsa önce Redis'i ayağa kaldırın). Okuma uçları ve bakım/webhook kuyrukları etkilenmez.
+gerekiyorsa önce Redis'i ayağa kaldırın). Gelen webhook'lar ve ödeme geri dönüşü de (eskiden beri fail-closed) 503 alır; iyzico yeniden dener. PostgreSQL'deki bakım/webhook işleme kuyrukları ve okuma uçları etkilenmez.
 
 `GET /api/admin/billing/operations` açık alarmları, bekleyen aksiyonları ve çalışma
 zamanlarını verir. Harici izleme şu koşullarda operatöre bildirim göndermeli:
