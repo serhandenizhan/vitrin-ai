@@ -334,7 +334,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   okunan kayıt düzenlenemez, eylem türü sabit listeyle sınırlıdır ve kullanıcı
   e-postaları `auth.users`'tan değil Supabase yönetici API'sinden gelir;
   destek formunda kullanıcı başına hız sınırı
-- **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit (**yapıldı,
+- **Faz 7:** Penetrasyon testi / güvenlik taraması (**OWASP ZAP dinamik taraması yapıldı, 27.09 ve 02.10.2026**: backend aktif taramaları ve ön yüz oturumlu aktif+pasif tarama, aktif bulgu yok; kit `backend/scripts/zap/`), dependency audit (**yapıldı,
   26.09.2026** — `pip-audit` + `npm audit` CI'da her PR'da ve haftada bir), güvenlik
   başlıkları (CSP, `frame-ancestors`, `nosniff`, `Permissions-Policy`,
   `Referrer-Policy`, COOP/CORP — **01.10.2026'da Faz 7.5'ten Faz 7'ye çekildi**,

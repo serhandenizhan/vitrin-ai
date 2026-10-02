@@ -58,7 +58,7 @@ sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 | 4 | Veritabanı, hesaplar, sunucuda geçmiş | ✅ |
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
 | 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
-| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 yapılanlar: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP), Playwright E2E, sayfa ağırlığı ve tembel yükleme. **Kalan (01.10.2026 denetimi):** hız sınırı envanteri, işçi sağlığı görünürlüğü, güvenlik başlıkları (CSP vb.), ZAP ön yüz taraması, zemin değişimi performansı ve E2E'nin eksik akışları — sahipleri `ROADMAP.md` Faz 7 "kapanış denetimi" |
+| 7 | Test, optimizasyon, sağlamlaştırma | 🔄 yapılanlar: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP), Playwright E2E, sayfa ağırlığı ve tembel yükleme. **Kalan (01.10.2026 denetimi):** güvenlik başlıkları (CSP vb.; backend başlıkları, hız sınırı envanteri, işçi sağlığı ve ZAP taramaları 02.10.2026'da bitti), zemin değişimi performansı ve E2E'nin eksik akışları — sahipleri `ROADMAP.md` Faz 7 "kapanış denetimi" |
 | 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 

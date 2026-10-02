@@ -73,6 +73,8 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 
 41. **Ders — "hangi uçlar korumasız" sorusunu belgeden değil, davranıştan sorun; ve `monkeypatch` bir ÖRNEĞİ taklit ederse sınıf düzeyindeki taklit gölgelenir** (02.10.2026, Faz 7 hız sınırı envanteri). Belge "yalnız `projects` ve `account` sınırsız" diyordu; bütün sınırlayıcılar "doldu" döndürülüp her uca istek atılınca ek olarak ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve **admin iade/itiraz/fatura/plan yazma uçları** da sınırsız çıktı (taramayı yapan elle yazılmış listeydi). Aynı test iki başka şey ortaya çıkardı: yükleme middleware'leri Redis düşünce ham 500 veriyordu, ve üç eski test `monkeypatch.setattr(örnek, "retry_after", ...)` ile bağlı metodu örnek özniteliği olarak bırakıp sınıfa uygulanan taklidimi gölgeliyordu — test tek başına yeşil, tam pakette kırmızıydı. **Kural: bir kapsam envanteri tanımı değil davranışı sınar (mekanizmadan bağımsız); bir sınıfı taklit etmek yerine canlı örnekleri taklit edin; yeni test hem tek başına hem tam pakette koşulur.**
 
+42. **Ders — bir güvenlik taramasının "bitti" demesi tamamlandığı anlamına gelmez; "oturumlu" olduğunu da veritabanı izinden değil, sınanabilir bir kontrolle kanıtlayın** (02.10.2026, Faz 7 ZAP turu). İki ayrı yerde yanıltıldık. (a) ZAP üç denemede de "bitmiş" gibi çıktı verdi; oysa aracın günlüğünde `Max retries exceeded ... localhost` vardı ve rapor dosyası hiç yazılmamıştı: x86 ZAP imajı ARM Mac'te emülasyonla Firefox'u başlatamayıp (AJAX örümceği, sonra aktif taramanın DOM-XSS kuralı) ZAP'in kendisini düşürüyordu. İlk tahmin "Docker belleği" idi (yalnız 4 GB'tı, iki ZAP'i birlikte koşturmuştuk); tek konteynerle de çöküşün sürmesi bunu çürüttü. (b) Taramanın çerezle oturumlu koştuğunu ispatlamak için veritabanında iz aradık: sıfır çıktı, ama bu çerezin işlemediğini göstermiyordu, çünkü ZAP'in karıştırdığı geçersiz UUID/gövde işleyiciden ÖNCE reddediliyordu. Doğru ölçüt, ZAP'in kendi `requestor` işiyle yönetici-özel bir uca çerezle istek atmak: yönetici 200, kullanıcı 403, çerezsiz 401, ve bilerek yanlış beklentiyle bir KONTROL koşusu uyarı vermeli. **Kural: bir tarama aracının başarılı sayılması için raporun var olduğuna ve aracın "succeeded" dediğine bakılır; kimlik kapsamı pozitif ve negatif kontrolle ölçülür. Hız sınırlayıcılar tarama örneğinde kapatılır (yoksa 429 işleyicilere ulaşmayı keser) ve bu sınır raporda açıkça yazılır.**
+
 ## Proje genel bakış
 
 Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hedeftir). Kullanıcılar bir ürün fotoğrafı yükler (yüzük, kolye vb.); AI ürün sınırını yüksek hassasiyetle tespit eder ve arka planı kaldırarak şeffaf arka planlı bir kesim bırakır. Ardından kullanıcılar bu kesimi birçok özel arka plan tasarımından birinin üzerine yerleştirir, ölçeklendirebilir, döndürebilir ve yeniden konumlandırabilir. Tam fazlı plan ve teknoloji kararları için `ROADMAP.md` dosyasına bakın.
@@ -638,7 +640,7 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      Burada kalan: canlıda HSTS, başlıkların canlı adreste ZAP pasif taramasıyla
      doğrulanması ve başlıklar oturunca CI'a ZAP pasif taraması
      (`zaproxy/action-baseline`).
-  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+  2. **Canlıda tarama** (yerel kit: `backend/scripts/zap/README.md`): test/staging ortamı kurulunca ZAP pasif taraması
      canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
      ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
      R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
@@ -664,17 +666,7 @@ Kod, PR'lar ve ROADMAP taranınca çıkan, **Faz 7 kapanmadan bitmesi gereken**
 işler; dağılım Serhan'ın onayıyla (`ROADMAP.md` Faz 7 → "kapanış denetimi").
 Biri bitince buradan SİLİNİR.
 
-2. **ZAP ön yüz OTURUMLU taraması.** Backend iki oturumlu tarama aldı, ön yüz
-   almadı. Kaan'ın `frontend/e2e/oturum.ts` sahte oturum çerezi kullanılabilir
-   (gerçek Supabase'e dokunmadan). Sonuç ROADMAP "Dinamik tarama"ya yazılır.
-   R2/Supabase yönetici API'sine dayanan uçların taraması staging gerektirir →
-   Faz 7.5 (değişmedi).
 4. **Mac bellek sıkışıklığı** — yukarıdaki açık takip 9 (aynı iş, aynı sahip).
-5. **Backend ZAP taramasının tekrarı.** Backend güvenlik başlıkları
-   (`nosniff`, CORP) 02.10.2026'da eklendi (`app/middleware/security_headers.py`);
-   gerçek süreçte `curl` ile doğrulandı, ZAP'la tekrar taranması kaldı (ön yüz
-   oturumlu taramayla — madde 2 — aynı oturumda yapılır). Ön yüz başlıkları
-   Kaan'ın (açık takip 12).
 
 ### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
 

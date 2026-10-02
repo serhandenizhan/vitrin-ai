@@ -1144,8 +1144,10 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     sınıflandırıldı ve bağlandı, `test_rate_limit_coverage.py` her ucu limit
     dolu / Redis düştü durumunda sınar (sınır geri alınınca 37 test kırmızı);
     yükleme middleware'lerinin ve fail-closed bağımlılıkların Redis arızası
-    ham 500 yerine temiz 503 oldu; (2) ZAP'ın ön yüz OTURUMLU
-    taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) ~~işçi
+    ham 500 yerine temiz 503 oldu; (2) ~~ZAP'ın ön yüz OTURUMLU
+    taraması~~ ✅ (02.10.2026, aşağıda "Dinamik tarama" → "İkinci tur"; Kaan'ın
+    `e2e/oturum.ts` çerezi yerine yerel sahte JWKS ile, kit
+    `backend/scripts/zap/`); (3) ~~işçi
     sağlığı görünürlüğü~~ ✅ (02.10.2026): `GET /api/admin/cutout-queue` (canlı
     işçi, kuyruk, işlenen, en eski bekleyenin yaşı; durum `ok`/`no_worker`/
     `stalled`/`unavailable`) + işçi yokken ya da kuyruk 2 dk'dan uzun
@@ -1156,8 +1158,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     `components/admin/admin-cutout-queue.tsx`); (4) Mac bellek sıkışıklığı
     (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
-    kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı); ZAP backend
-    taramasının tekrarı kaldı (madde 2'yle aynı oturumda).
+    kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı; ZAP backend taraması
+    tekrarlandı, iki eksik başlık kuralı artık PASS).
   - **Kaan:** (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
@@ -1380,6 +1382,30 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   password when changing password", "Secure password change" ve "Secure email
   change" Serhan tarafından 27.09.2026'da açıldı. **Kalan:** güvenlik başlıkları
   Faz 7'ye çekildi (01.10.2026, sahipleri "kapanış denetimi"); canlıda HSTS Faz 7.5.
+  **Dinamik tarama — ikinci tur ✅ (02.10.2026, Serhan):** yöntem ve kit
+  `backend/scripts/zap/` (hermetik: sahte JWKS, tarama için ayrı veritabanı,
+  gerçek R2/Supabase/iyzico'ya hiç gidilmez). **Backend** (OpenAPI, aktif; anonim,
+  normal kullanıcı, yönetici): 118 kontrol geçti, FAIL 0; 27.09'da uyarı veren
+  `X-Content-Type-Options` ve CORP (Spectre izolasyonu) kuralları artık PASS; tek
+  uyarı yöneticide `/api/admin/users` 503'ü (`SUPABASE_SECRET_KEY` bilerek
+  boş: beklenen). **Ön yüz oturumlu** (kullanıcı ve yönetici çerezi, aktif +
+  pasif): 407 URL (sayfa örümceği + `/api/*` vekilleri için üretilen OpenAPI),
+  **enjeksiyon/XSS/yol geçişi/SSRF vb. aktif bulgu YOK.** Pasif bulgular: CSP,
+  tıklama tuzağı koruması, `nosniff`, `X-Powered-By` eksik/sızıntı (Kaan'ın K2
+  işi, `CLAUDE.md` açık takip 12), "HTTP Only Site" (yerel düz HTTP; HSTS Faz
+  7.5) ve "Anti-CSRF token yok" (`/destek` yedek formu: JS yokken POST'u sayfa
+  yeniden çiziyor, durum değiştirmiyor; oturum çerezi `SameSite=Lax`, geri
+  alınamaz işlemlerde Origin kontrolü var → gerçek açık değil). **Oturumlu
+  olduğu ölçülerek doğrulandı:** yönetici-özel `/api/admin/stats` çerezle
+  yönetici 200, kullanıcı 403, çerezsiz 401 (kontrol deneyi yanlış beklentide
+  uyarı verdi). **Sınırlar (dürüst):** (1) tarama örneğinde hız sınırlayıcılar
+  kapalı (yoksa yazma uçları 429'a boğulur; sınırların kendisi
+  `test_rate_limit_coverage.py`'de); (2) aktif DOM-XSS kuralı (40026) ve AJAX
+  örümceği kapalı: x86 ZAP imajı ARM Mac'te emülasyonla Firefox'u başlatamayıp
+  ZAP'i düşürüyor (günlükte "bitti" görünüp rapor yazılmıyor; Linux/x86'da
+  açılabilir); (3) R2, Supabase yönetici API'si ve iyzico'ya dayanan uçların içi
+  taranmadı (kopuk) → staging, Faz 7.5; (4) dinamik tarama yerel ve test
+  verisiyle; canlıda ayrıca yapılır.
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),

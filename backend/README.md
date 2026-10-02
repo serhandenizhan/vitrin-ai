@@ -955,8 +955,9 @@ nosniff` ve `Cross-Origin-Resource-Policy: same-origin` ekler. En dış katmand�
 kontrolü de başlığı taşır; testi (`tests/test_security_headers.py`) bağlantı
 kaldırılınca 5 test kırmızı yanarak doğrulandı. CORP yalnız `no-cors` istekleri
 keser, izinli origin'in CORS'lu okumasını etkilemez. CSP/`X-Frame-Options` bir
-JSON API'sinde anlamsız olduğu için eklenmedi. Kalan: ZAP backend taraması
-tekrarlanacak.
+JSON API'sinde anlamsız olduğu için eklenmedi. **ZAP backend taraması
+tekrarlandı (02.10.2026): bu iki başlık kuralı artık PASS.** Dinamik tarama
+kiti ve yöntem: `scripts/zap/README.md`.
 
 ## Ödemeler ve kredi (Faz 5)
 
