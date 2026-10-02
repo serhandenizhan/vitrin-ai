@@ -103,6 +103,7 @@ ADMIN = {
     ("POST", "/api/admin/billing/actions/{action_id}/resolve"),
     ("POST", "/api/admin/billing/actions/{action_id}/retry"),
     ("GET", "/api/admin/billing/operations"),
+    ("GET", "/api/admin/cutout-queue"),
     ("POST", "/api/admin/credits/{grant_id}/revoke"),
     ("PATCH", "/api/admin/plans/{plan_id}"),
     ("POST", "/api/admin/plans/{plan_id}/versions"),

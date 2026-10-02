@@ -41,9 +41,20 @@ class FakeCutoutQueue:
         self.results: dict[tuple, bytes] = {}
         self.max_jobs = 0 if full else 50
         self.fail_enqueue = fail_enqueue
+        self.health_reports: list[str] = []
+        self.stats_error: Exception | None = None
 
     async def queued_count(self) -> int:
         return len(self.enqueued)
+
+    async def stats(self):
+        if self.stats_error:
+            raise self.stats_error
+        return "istatistik"
+
+    async def report_unhealthy(self, stats, where):
+        self.health_reports.append(where)
+        return False
 
     async def get_job(self, user_id, request_id):
         return self.jobs.get((str(user_id), str(request_id)))
@@ -810,3 +821,27 @@ def test_missing_result_storage_stops_the_job_before_inference():
     # Güvenli tekrar: hiç kredi tüketilmedi, istemci yeni anahtara geçebilir.
     assert response.json()["detail"]["retry_safe"] is True
     assert fake_queue.received_content is None and quota.resolved == []
+
+
+def test_accepted_upload_reports_queue_health_after_enqueue():
+    # İşçi hiç çalışmıyorsa müşteri sırada bekler ve hiçbir yerde görünmez;
+    # kuyruğa girişte sağlık gözlenir (sağlıksızsa günlüğe error yazılır).
+    fake = FakeCutoutQueue()
+    client = _client_with_fake_queue(fake)
+
+    response = client.post("/api/remove-background", files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")})
+
+    assert response.status_code == 202
+    assert fake.health_reports == ["yükleme"]
+
+
+def test_queue_health_failure_never_breaks_an_accepted_upload():
+    fake = FakeCutoutQueue()
+    fake.stats_error = RuntimeError("Redis gitti")
+    client = _client_with_fake_queue(fake)
+
+    response = client.post("/api/remove-background", files={"file": ("a.jpg", _jpeg_bytes(), "image/jpeg")})
+
+    # İş zaten kuyrukta; gözlem hatası müşteriye yansımaz.
+    assert response.status_code == 202
+    assert fake.received_content is not None

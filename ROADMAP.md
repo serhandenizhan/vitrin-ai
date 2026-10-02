@@ -1145,10 +1145,13 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     dolu / Redis düştü durumunda sınar (sınır geri alınınca 37 test kırmızı);
     yükleme middleware'lerinin ve fail-closed bağımlılıkların Redis arızası
     ham 500 yerine temiz 503 oldu; (2) ZAP'ın ön yüz OTURUMLU
-    taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) işçi
-    sağlığı görünürlüğü — işçi nabzı yalnız yetim iş kurtarmada okunuyor, işçi
-    ölürse hiçbir yerde görünmüyor: yönetici ucu (canlı işçi, kuyruk uzunluğu,
-    en eski bekleyen işin yaşı) + işçi yokken uyarı; (4) Mac bellek sıkışıklığı
+    taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) ~~işçi
+    sağlığı görünürlüğü~~ ✅ (02.10.2026): `GET /api/admin/cutout-queue` (canlı
+    işçi, kuyruk, işlenen, en eski bekleyenin yaşı; durum `ok`/`no_worker`/
+    `stalled`/`unavailable`) + işçi yokken ya da kuyruk 2 dk'dan uzun
+    tıkalıyken `error` günlüğü (yükleme anında, her bakım turunda ve yönetici
+    ucu çağrılınca; aynı sorun 10 dk'da bir). Admin paneline kart eklemek
+    Kaan'ın isteğe bağlı işi; (4) Mac bellek sıkışıklığı
     (açık takip 9); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
     kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı); ZAP backend

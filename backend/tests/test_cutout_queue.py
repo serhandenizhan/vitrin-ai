@@ -5,6 +5,7 @@ aynı Redis'i kullanan geliştirme ortamına dokunmaz.
 """
 
 import asyncio
+import time
 import uuid
 from urllib.parse import urlsplit
 
@@ -18,6 +19,7 @@ from app.services.cutout_queue import (
     FAILED,
     PHOTO_TTL_SECONDS,
     PROCESSING,
+    QUEUE_STALL_SECONDS,
     QUEUED,
     CutoutQueue,
     QueueFull,
@@ -272,3 +274,93 @@ async def test_forget_clears_a_failed_job(queue):
     await queue.fail("isci-a", job.job_id, "processing_failed", retry_safe=True)
     await queue.forget(user, request)
     assert await queue.get_job(user, request) is None
+
+
+# --- İşçi sağlığı görünürlüğü (Faz 7 kapanış denetimi, S3) -------------------
+
+
+async def test_stats_of_an_idle_queue_without_workers_report_no_worker(queue):
+    stats = await queue.stats()
+
+    assert (stats.workers, stats.queued, stats.processing) == (0, 0, 0)
+    assert stats.oldest_waiting_seconds is None
+    # Kuyruk boşken bile işçi yoksa durum "ok" değildir: sıradaki müşteri bekler.
+    assert stats.status == "no_worker"
+
+
+async def test_stats_count_workers_queue_and_running_jobs(queue):
+    user = uuid.uuid4()
+    await queue.heartbeat("isci-1")
+    await queue.heartbeat("isci-2")
+    for _ in range(3):
+        await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    await queue.claim("isci-1")
+
+    stats = await queue.stats()
+
+    assert stats.workers == 2
+    assert stats.queued == 2
+    assert stats.processing == 1
+    assert stats.oldest_waiting_seconds is not None and stats.oldest_waiting_seconds < 5
+    assert stats.status == "ok"
+
+
+async def test_a_worker_with_a_cut_heartbeat_is_not_counted_alive(queue):
+    # Sayım, `recover_stale`'in "ölü" tanımıyla aynı olmalı: nabız anahtarı yok = ölü.
+    await queue.heartbeat("canli")
+    await queue.heartbeat("olu")
+    await queue._redis().delete(queue._key("worker", "olu"))
+
+    assert (await queue.stats()).workers == 1
+
+
+async def test_oldest_waiting_is_the_job_that_will_be_claimed_next(queue):
+    user = uuid.uuid4()
+    first, second = uuid.uuid4(), uuid.uuid4()
+    await queue.heartbeat("isci")
+    await queue.enqueue(user, first, None, b"1")
+    await queue.enqueue(user, second, None, b"2")
+    # İlk işin eklenme anını 90 sn geriye al: bekleyenlerin en eskisi o.
+    await queue._redis().hset(
+        queue._key("job", job_id_for(user, first)), "enqueued_at", repr(time.time() - 90)
+    )
+
+    stats = await queue.stats()
+
+    assert 85 < stats.oldest_waiting_seconds < 100
+
+
+async def test_live_worker_that_stopped_consuming_is_reported_stalled(queue):
+    user, request = uuid.uuid4(), uuid.uuid4()
+    await queue.heartbeat("takilmis-isci")  # nabız var ama iş almıyor
+    await queue.enqueue(user, request, None, b"x")
+    await queue._redis().hset(
+        queue._key("job", job_id_for(user, request)),
+        "enqueued_at",
+        repr(time.time() - (QUEUE_STALL_SECONDS + 30)),
+    )
+
+    assert (await queue.stats()).status == "stalled"
+
+
+async def test_unhealthy_report_is_logged_once_per_cooldown(queue, caplog):
+    stats = await queue.stats()  # işçi yok
+    assert stats.status == "no_worker"
+
+    with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
+        first = await queue.report_unhealthy(stats, "test")
+        second = await queue.report_unhealthy(stats, "test")
+
+    assert (first, second) == (True, False)
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert len(errors) == 1
+    assert "no_worker" in errors[0].getMessage()
+
+
+async def test_healthy_queue_is_never_reported(queue, caplog):
+    await queue.heartbeat("isci")
+    stats = await queue.stats()
+
+    with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
+        assert await queue.report_unhealthy(stats, "test") is False
+    assert not caplog.records

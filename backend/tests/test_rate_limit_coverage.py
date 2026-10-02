@@ -74,6 +74,7 @@ OPEN = {
     ("GET", "/api/admin/audit"),
     ("GET", "/api/admin/backgrounds"),
     ("GET", "/api/admin/billing/operations"),
+    ("GET", "/api/admin/cutout-queue"),
     ("GET", "/api/admin/stats"),
     ("GET", "/api/admin/users"),
     ("GET", "/api/admin/users/{user_id}"),

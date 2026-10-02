@@ -13,19 +13,23 @@ E-POSTALAR: `auth.users` doğrudan sorgulanmıyor; Supabase'in kendi yönetici
 API'si kullanılıyor (gerekçe `app/services/supabase_admin.py` modül açıklaması).
 """
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.account import same_email
 from app.core.auth import CurrentUser, get_current_user, require_admin
+from app.api.routes.remove_background import get_cutout_queue
 from app.core.db import get_db_session
 from app.services import admin_audit
 from app.services.billing.db import enqueue, execute, many, one
 from app.services.billing.errors import billing_error
-from app.services.billing.limits import limit_admin, limit_scoped
+from app.services.billing.limits import limit_admin, limit_admin_read, limit_scoped
+from app.services.cutout_queue import QUEUE_STALL_SECONDS, CutoutQueue
 from app.services.supabase_admin import (
     SupabaseAdminConfigurationError,
     SupabaseAdminError,
@@ -34,6 +38,7 @@ from app.services.supabase_admin import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class StrictModel(BaseModel):
@@ -621,6 +626,39 @@ async def audit_log(
             }
             for row in rows
         ],
+    }
+
+
+@router.get(
+    "/api/admin/cutout-queue",
+    dependencies=[Depends(require_admin), Depends(limit_admin_read)],
+)
+async def cutout_queue_health(queue: CutoutQueue = Depends(get_cutout_queue)):
+    """Kesim kuyruğunun ve işçilerin sağlığı (Faz 7 kapanış denetimi).
+
+    İşçi çalışmıyorsa kesimler sessizce sırada bekler; bu uç o durumu görünür
+    kılar. `status`: `ok` | `no_worker` (canlı işçi yok) | `stalled` (işçi var
+    ama en eski iş eşikten uzun süredir bekliyor) | `unavailable` (Redis'e
+    ulaşılamadı — bu durumda kesim zaten çalışmaz). Redis arızası 5xx değil
+    `unavailable` olarak döner: arızanın kendisini göstermek bu ucun işi.
+    Sağlıksız durum ayrıca `error` seviyesinde günlüğe yazılır.
+    """
+    try:
+        stats = await queue.stats()
+        await queue.report_unhealthy(stats, "yönetici")
+    except RedisError:
+        logger.error("Kesim kuyruğu sağlığı okunamadı: Redis'e ulaşılamıyor")
+        return {"status": "unavailable", "stall_threshold_seconds": QUEUE_STALL_SECONDS}
+    return {
+        "status": stats.status,
+        "workers": stats.workers,
+        "queued": stats.queued,
+        "processing": stats.processing,
+        "oldest_waiting_seconds": (
+            None if stats.oldest_waiting_seconds is None else round(stats.oldest_waiting_seconds)
+        ),
+        "max_queued": queue.max_jobs,
+        "stall_threshold_seconds": QUEUE_STALL_SECONDS,
     }
 
 

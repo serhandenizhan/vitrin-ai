@@ -1,6 +1,7 @@
 """systemd timer tarafından çağrılan sınırlı, tekrar çalıştırılabilir bakım turu."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
@@ -21,6 +22,10 @@ from app.services.billing.checkout import expire_checkouts
 from app.services.billing.payments import verify_checkout, apply_subscription
 from app.services.billing.actions import claim_action, run_action, run_storage_job
 from app.services.storage import get_storage_service
+from app.core.config import settings
+from app.services.cutout_queue import CutoutQueue
+
+logger = logging.getLogger(__name__)
 
 
 async def process_webhook(db, provider):
@@ -366,11 +371,35 @@ async def maintenance(db, provider, storage):
     await db.commit()
 
 
+async def check_cutout_queue(queue: CutoutQueue) -> bool:
+    """Kesim kuyruğunun sağlığını kontrol eder; sağlıksızsa günlüğe `error` yazar.
+
+    Bu iş her turda çalıştığı için, hiç kimse yükleme yapmasa ve yönetici
+    paneline bakmasa bile "işçi çalışmıyor" fark edilir. Bakım turunu ASLA
+    düşürmez: Redis'e ulaşılamıyorsa bunu da günlüğe yazar. Kuyruk sağlıksızsa
+    True döner.
+    """
+    try:
+        stats = await queue.stats()
+        await queue.report_unhealthy(stats, "bakım")
+        return stats.status != "ok"
+    except Exception:  # noqa: BLE001 — gözlem, bakım turunu düşürmemeli
+        logger.exception("Kesim kuyruğu sağlığı okunamadı (Redis?)")
+        return True
+
+
 async def main():
+    queue = CutoutQueue(
+        settings.redis_url,
+        prefix=settings.cutout_queue_prefix,
+        max_jobs=settings.cutout_queue_max_jobs,
+    )
     try:
         async with _session_factory() as db:
             await maintenance(db, get_provider(), get_storage_service())
+        await check_cutout_queue(queue)
     finally:
+        await queue.aclose()
         await engine.dispose()
 
 

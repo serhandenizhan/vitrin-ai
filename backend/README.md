@@ -381,6 +381,22 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
 - **Başlatma:** `./execute.sh`, `./execute-supabase.sh` ve VS Code görevi
   işçiyi de açar (`VITRIN_START_WORKER=0` ile kapatılır). İşçi çalışmıyorsa
   kesimler sırada bekler.
+- **İşçi sağlığı (02.10.2026):** `GET /api/admin/cutout-queue` (yalnız yönetici)
+  canlı işçi sayısını, bekleyen ve işlenen işi ve en eski bekleyen işin yaşını
+  verir. `status`: `ok`; `no_worker` (canlı işçi yok — kuyruk boş olsa bile
+  sıradaki müşteri bekler); `stalled` (işçi var ama en eski iş
+  `QUEUE_STALL_SECONDS`=120 sn'den uzun bekliyor); `unavailable` (Redis'e
+  ulaşılamadı; uç 5xx değil bunu döner). "Canlı" = `worker:<işçi>` nabız
+  anahtarı var (`recover_stale`'in ölü tanımıyla aynı). İşçi kimlikleri ayrıca
+  `<önek>:workers` sıralı kümesinde kayıtlıdır ki sayım için tüm anahtar
+  uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te).
+  **Uyarı:** sağlıksız durum `error` seviyesinde günlüğe yazılır (Sentry DSN'i
+  verilmişse olay olarak da gider) ve üç yerden kontrol edilir: iş kuyruğa
+  girince (müşteri o an bekliyor), `python -m app.services.billing.maintenance`
+  her turunda (kimse yükleme yapmasa da fark edilir; bakım işi canlıda
+  periyodik çalışmalı, açık takip 4) ve yönetici ucu çağrılınca. Aynı durum
+  10 dakikada bir yazılır (`ALERT_COOLDOWN_SECONDS`). Gözlem hiçbir istekte ya
+  da bakım turunda hata üretmez.
 
 **Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
 başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);
@@ -921,10 +937,7 @@ kaynak tüketimini sınırlayan beş katman var:
 ### Faz 7'de kalan backend işleri (Serhan, 01.10.2026 kapanış denetimi)
 
 Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık takip 11. (1) **Hız sınırı
-kapsamı — ✅ (02.10.2026):** bkz. "Hız sınırı kapsam envanteri" altında. (2) **İşçi sağlığı:** işçi nabzı
-(`worker:<id>`) yalnız yetim iş kurtarmada okunuyor; canlı işçi sayısı, kuyruk
-uzunluğu ve en eski bekleyen işin yaşını veren bir yönetici ucu ve işçi yokken
-uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`
+kapsamı — ✅ (02.10.2026):** bkz. "Hız sınırı kapsam envanteri" altında. (2) **İşçi sağlığı — ✅ (02.10.2026):** bkz. "Kesim kuyruğu" → "İşçi sağlığı". (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`
 (`app/middleware/security_headers.py`) her HTTP yanıtına `X-Content-Type-Options:
 nosniff` ve `Cross-Origin-Resource-Policy: same-origin` ekler. En dış katmandır
 (CORS'un da dışında), bu yüzden iç katmanların 401/413/429 yanıtları ve CORS ön
