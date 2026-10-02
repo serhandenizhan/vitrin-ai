@@ -1161,7 +1161,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
     kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı; ZAP backend taraması
     tekrarlandı, iki eksik başlık kuralı artık PASS).
-  - **Kaan:** (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
+  - **Kaan** (Serhan'a sorulacak noktalar kök `CLAUDE.md` açık takip 12'nin
+    başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
     çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları

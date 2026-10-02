@@ -204,6 +204,18 @@ export async function runCutout(options: CutoutOptions): Promise<CutoutResult> {
           consecutiveErrors = 0;
           continue;
         }
+        if (polled.status === 429) {
+          // Backend okuma sinirini (kullanici basina 600/dk, 02.10.2026) asan bir
+          // yoklama, sunucuda SUREN ve kredisi ayrilmis bir isi basarisiz yapmamali.
+          // `Retry-After` kadar bekleyip AYNI anahtarla yoklamaya devam edilir;
+          // ardisik 429'lar sinirsiz surmez, mesaj kullaniciya gosterilir (anahtar
+          // korunur: tekrar denenirse is sonucu ayni anahtarla alinir).
+          const error = await errorFrom(polled);
+          consecutiveErrors += 1;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_POLL_ERRORS) throw error;
+          await sleep(retryDelay(polled));
+          continue;
+        }
         if (polled.status === 503) {
           const error = await errorFrom(polled);
           if (error.code === "queue_unavailable") {
