@@ -71,6 +71,8 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 39. **Ders — bir tarayıcıda "düzeltildi" demeden önce O tarayıcının MOTORUYLA ölç; ve geliştirme sunucusu üretimle aynı şey değildir** (30.09.2026, Serhan'ın Safari şikâyeti). Ana sayfadaki stüdyo turu Serhan'ın Safari'sinde boş görünüyordu; Chrome'da hep düzgündü. İki tur "düzelttim" denip yine bozuk çıktı, çünkü Chrome'da bakılıyordu. Playwright'ın WebKit'i kurulunca (`npx playwright install webkit`, geçici bir klasörde) sorun orada da yeniden üretilemedi; asıl ayırt edici deney, AYNI kodu üretim derlemesiyle (`npm run build && next start -p 3012`) Serhan'a açmaktı: üretimde her şey doğruydu, sorun yalnız geliştirme sunucusundaydı. **Kural: "Safari'de bozuk" gibi bir bildirimde önce (1) o motorda ölç, (2) olmuyorsa dev/üretim farkını dene; üretim düzgünse ziyaretçiyi etkileyen bir hata yoktur ve geliştirme sunucusunun tarayıcı tuhaflığına saatler harcanmaz.** Bu sırada iki savunma önlemi alındı ve kalıcı: (a) konteyner sorgu birimleri (`cqw`/`cqh`) yerine düz yüzde + `aspect-ratio`; (b) sayfa yenilenince en üste dön (`ScrollTopOnReload`).
 40. **Ders — içeriği ölçen sayı, ölçüldüğü koşulun dışına taşınmaz: "makinede 60 fps" telefonda 60 fps değildir.** Vitrin optimizasyonunda her ölçüm M4'te yapıldı. Telefon için işlemci yavaşlatılıp ağ kısıtlandı (LCP 916 → 848 ms, açılışa kadar inen JS 280 → 285 KB) ama ekran kartı taklit edilemedi; bu yüzden 3D yakınlaşma telefonda ayrı, daha düşük kaliteyle çalışır (`compact`) ve gerçek cihaz testi Faz 7.5 listesindedir. **Kural: bir performans sayısı yazılırken hangi donanımda ölçüldüğü de yazılır.**
 
+41. **Ders — "hangi uçlar korumasız" sorusunu belgeden değil, davranıştan sorun; ve `monkeypatch` bir ÖRNEĞİ taklit ederse sınıf düzeyindeki taklit gölgelenir** (02.10.2026, Faz 7 hız sınırı envanteri). Belge "yalnız `projects` ve `account` sınırsız" diyordu; bütün sınırlayıcılar "doldu" döndürülüp her uca istek atılınca ek olarak ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve **admin iade/itiraz/fatura/plan yazma uçları** da sınırsız çıktı (taramayı yapan elle yazılmış listeydi). Aynı test iki başka şey ortaya çıkardı: yükleme middleware'leri Redis düşünce ham 500 veriyordu, ve üç eski test `monkeypatch.setattr(örnek, "retry_after", ...)` ile bağlı metodu örnek özniteliği olarak bırakıp sınıfa uygulanan taklidimi gölgeliyordu — test tek başına yeşil, tam pakette kırmızıydı. **Kural: bir kapsam envanteri tanımı değil davranışı sınar (mekanizmadan bağımsız); bir sınıfı taklit etmek yerine canlı örnekleri taklit edin; yeni test hem tek başına hem tam pakette koşulur.**
+
 ## Proje genel bakış
 
 Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hedeftir). Kullanıcılar bir ürün fotoğrafı yükler (yüzük, kolye vb.); AI ürün sınırını yüksek hassasiyetle tespit eder ve arka planı kaldırarak şeffaf arka planlı bir kesim bırakır. Ardından kullanıcılar bu kesimi birçok özel arka plan tasarımından birinin üzerine yerleştirir, ölçeklendirebilir, döndürebilir ve yeniden konumlandırabilir. Tam fazlı plan ve teknoloji kararları için `ROADMAP.md` dosyasına bakın.
@@ -218,7 +220,17 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   değil (erişim kuralı 1) ve sınırlayıcının altyapı arızası, Next vekilinin
   bütün 5xx'leri "200 + boş liste"ye çevirmesi yüzünden kullanıcının gözünde
   93 zeminlik kütüphaneyi yok ediyordu. Her iki yön de test edilmiş durumda;
-  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. Destek formu
+  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. **Kapsam (02.10.2026):**
+  OpenAPI'deki HER uç `backend/tests/test_rate_limit_coverage.py`'de `CLOSED`/`OPEN`/
+  `UPLOAD`/`EXEMPT` sınıflarından birine atanır (sınıfsız yeni uç kırmızı yakar) ve test
+  davranışı sınar: limit doluyken 429, Redis düşünce CLOSED 503 / OPEN sınırsız geçer.
+  Çalışma okuma/abonelik/geçmiş/kesim yoklaması `limit_user_read` (fail-open, 600/dk),
+  taslak otomatik kaydı `limit_project_write` (fail-open: Redis arızasında kapatmak
+  kullanıcının stüdyodaki düzenlemesini kaybettirirdi), çalışma silme `limit_user_delete`
+  ve hesap silme `limit_account_delete` (fail-closed, saatte 5), admin faturalama yazma
+  uçları `limit_admin` (fail-closed; 02.10.2026'ya kadar sınırsızdı). Fail-closed artık
+  hep temiz 503 `rate_limit_unavailable` verir (eskiden yakalanmamış `RedisError` → 500).
+  Destek formu
   (`POST /api/support-requests`, saatte 5/kullanıcı) da fail-open: Redis'in
   düştüğü an kullanıcının sorun bildirmek isteyeceği andır. **CMYK dönüşümü**
   (Next `/api/cmyk`, 27.09.2026'ya kadar oturumsuz ve sınırsızdı — /cso
@@ -647,15 +659,6 @@ Kod, PR'lar ve ROADMAP taranınca çıkan, **Faz 7 kapanmadan bitmesi gereken**
 işler; dağılım Serhan'ın onayıyla (`ROADMAP.md` Faz 7 → "kapanış denetimi").
 Biri bitince buradan SİLİNİR.
 
-1. **Hız sınırı kapsamı + envanter testi.** `GET/PATCH/DELETE /api/projects...`
-   ve `DELETE /api/account` için sınırlayıcı yok (yalnız `POST /api/projects`
-   `PROTECTED_UPLOADS` ile, kesim yüklemesi ayrıca korunuyor). Her uç için yön
-   bilinçli seçilir (okuma fail-open, yazma/silme fail-closed — bkz. "Hız sınırı
-   Redis arızasında…" maddesi) ve `test_idor.py`'nin yaptığı gibi her ucun bir
-   hız sınırı sınıfına atandığını doğrulayan bir envanter testi yazılır
-   (sınıflandırılmamış yeni uç kırmızı yakar). Bitince `SECURITY.md` bölüm 9
-   "Rate limiting tüm public endpoint'lerde aktif" işaretlenir. Kabul: yeni test
-   sınır kaldırılınca kırmızı yanar (ders 15).
 2. **ZAP ön yüz OTURUMLU taraması.** Backend iki oturumlu tarama aldı, ön yüz
    almadı. Kaan'ın `frontend/e2e/oturum.ts` sahte oturum çerezi kullanılabilir
    (gerçek Supabase'e dokunmadan). Sonuç ROADMAP "Dinamik tarama"ya yazılır.

@@ -351,7 +351,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Tüm secrets `.env`'den production secrets manager'a taşındı
 - [ ] `DEBUG=False`, stack trace'ler kullanıcıya gösterilmiyor
 - [ ] HTTPS zorunlu, HSTS aktif; güvenlik başlıkları (CSP vb.) Faz 7'de eklendi ve canlı adreste doğrulandı
-- [ ] Rate limiting tüm public endpoint'lerde aktif — **açık (01.10.2026 taraması):** `GET/PATCH/DELETE /api/projects...` ve `DELETE /api/account` sınırlayıcısız; envanter testiyle kapatılacak (kök `CLAUDE.md` açık takip 11, Serhan)
+- [x] Rate limiting tüm uç noktalarda aktif — **kapandı (02.10.2026):** her uç `tests/test_rate_limit_coverage.py`'de bir sınıfa atanır ve limit-dolu / Redis-düştü davranışı sınanır; 01.10.2026 taramasında bulunan `projects`/`account` boşluğuna ek olarak ödeme geçmişi, abonelik okuma, kesim yoklaması ve admin faturalama yazma uçları da kapatıldı. Yeni uç sınıfsız eklenemez
 - [ ] CORS sadece bilinen origin'lere izin veriyor
 - [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
 - [ ] Redis diske yazmıyor (RDB/AOF kapalı) — KVKK metni özgün fotoğrafın diske yazılmadığını söylüyor. API her kuyruğa koymadan önce `CONFIG GET` ile doğruluyor ve açıksa ya da `CONFIG` yasak olduğu için doğrulanamıyorsa fotoğrafı almıyor (fail-closed); `CONFIG GET`'e izin vermeyen yönetilen bir Redis bu yüzden kesim kuyruğuyla çalışmaz (`CLAUDE.md` ders 33, açık takip maddesi 7)

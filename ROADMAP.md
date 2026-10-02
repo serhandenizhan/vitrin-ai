@@ -1138,10 +1138,13 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   dağılımı Serhan onayladı (rol dayanağı: bölüm 5). **Bu maddeler bitmeden Faz 7
   kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık
   takip 11 (Serhan) ve 12 (Kaan).
-  - **Serhan:** (1) hız sınırı kapsamı — `GET/PATCH/DELETE /api/projects...` ve
-    `DELETE /api/account` sınırlayıcısız (yalnız `POST /api/projects` ve kesim
-    korunuyor); her uç için yön kararı + "her uç bir hız sınırı sınıfına atanmış"
-    envanter testi (`test_idor.py`'nin kardeşi); (2) ZAP'ın ön yüz OTURUMLU
+  - **Serhan:** (1) ~~hız sınırı kapsamı~~ ✅ (02.10.2026): `projects`/`account`
+    dışında ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve admin
+    faturalama yazma uçları da sınırsız çıktı (davranış taramasıyla); hepsi
+    sınıflandırıldı ve bağlandı, `test_rate_limit_coverage.py` her ucu limit
+    dolu / Redis düştü durumunda sınar (sınır geri alınınca 37 test kırmızı);
+    yükleme middleware'lerinin ve fail-closed bağımlılıkların Redis arızası
+    ham 500 yerine temiz 503 oldu; (2) ZAP'ın ön yüz OTURUMLU
     taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) işçi
     sağlığı görünürlüğü — işçi nabzı yalnız yetim iş kurtarmada okunuyor, işçi
     ölürse hiçbir yerde görünmüyor: yönetici ucu (canlı işçi, kuyruk uzunluğu,

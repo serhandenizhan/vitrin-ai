@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, get_current_user
+from app.services.billing.limits import limit_account_delete
 from app.services.storage import R2StorageService, get_storage_service
 from app.services.supabase_admin import (
     SupabaseAdminConfigurationError,
@@ -32,7 +33,11 @@ def same_email(left: str, right: str) -> bool:
     )
 
 
-@router.delete("/api/account", status_code=status.HTTP_202_ACCEPTED)
+@router.delete(
+    "/api/account",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(limit_account_delete)],
+)
 async def delete_account(
     confirmation: AccountDeletionConfirmation,
     user: CurrentUser = Depends(get_current_user),

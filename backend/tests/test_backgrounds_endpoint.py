@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from botocore.exceptions import ClientError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from fastapi.testclient import TestClient
@@ -217,7 +218,9 @@ async def test_upload_rate_limit_is_fail_closed(db_session, admin_headers, monke
         headers=admin_headers,
     )
 
-    assert response.status_code == 500
+    # Fail-closed: yön aynı, yanıt artık yakalanmamış 500 değil temiz 503.
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "rate_limit_unavailable"
     storage_mock.upload.assert_not_called()
 
 
@@ -429,7 +432,7 @@ async def test_list_backgrounds_survives_a_redis_outage(db_session, monkeypatch)
     assert [item["id"] for item in response.json()] == [str(active.id)]
 
 
-async def test_checkout_rate_limit_stays_fail_closed_on_a_redis_outage():
+async def test_checkout_rate_limit_stays_fail_closed_on_a_redis_outage(monkeypatch):
     # Karşı taraf bilinçli olarak AKSİ yönde: parayla ilgili yüzeyde sınırın
     # sessizce kalkması, Redis arızasında sınırsız checkout denemesi demek
     # olurdu. Bu yüzden `limit_checkout` fail-CLOSED kalıyor; ayrım
@@ -437,14 +440,15 @@ async def test_checkout_rate_limit_stays_fail_closed_on_a_redis_outage():
     async def _redis_down(_key: str):
         raise RedisConnectionError("Redis kapalı")
 
-    original = limits.checkout_limiter.retry_after
-    limits.checkout_limiter.retry_after = _redis_down
-    try:
-        user = CurrentUser(id=uuid.uuid4(), email="kuyumcu@example.com", session_id=None)
-        with pytest.raises(RedisConnectionError):
-            await limits.limit_checkout(user)
-    finally:
-        limits.checkout_limiter.retry_after = original
+    # `monkeypatch` geri alınır; eskiden elle atanan örnek özniteliği testten
+    # sonra kalıp sınıf düzeyindeki taklitleri gölgeliyordu.
+    monkeypatch.setattr(limits.checkout_limiter, "retry_after", _redis_down)
+    user = CurrentUser(id=uuid.uuid4(), email="kuyumcu@example.com", session_id=None)
+    with pytest.raises(HTTPException) as caught:
+        await limits.limit_checkout(user)
+    # Fail-closed: istek reddedilir (sınır sessizce kalkmaz); yanıt temiz 503.
+    assert caught.value.status_code == 503
+    assert caught.value.detail["code"] == "rate_limit_unavailable"
 
 
 async def test_admin_list_requires_admin(db_session, tokens, create_user):

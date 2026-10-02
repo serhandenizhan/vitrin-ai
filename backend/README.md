@@ -146,6 +146,24 @@ imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit edil
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
 `set local role` ile taklit ediyor (`tests/test_rls.py`).
 
+### Hız sınırı kapsam envanteri (`tests/test_rate_limit_coverage.py`, Faz 7)
+
+IDOR paketinin kardeşi: OpenAPI'deki her uç `CLOSED` (Redis düşünce 503),
+`OPEN` (Redis düşünce sınırsız geçer), `UPLOAD` (sınır middleware'de, gövde
+okunmadan; Redis düşünce 503) ya da gerekçesiyle `EXEMPT` sınıfından BİRİNE
+atanır; sınıfsız yeni uç testi kırmızı yakar. Test tanımı değil davranışı
+sınar: bütün sınırlayıcıların `retry_after`'ı "doldu" döndürülür ve her
+sınırlı uç gerçek bir istekte 429 vermelidir; sonra Redis hatası verilir ve
+yön doğrulanır. Mekanizma (bağımlılık, uç içi çağrı, middleware) fark etmez.
+Yeni uç eklerken: önce yönü seç (korunan şey para/geri alınamaz işlem/yönetici
+yazması ise CLOSED; okuma, taslak kaydı, destek formu gibi "kaybedilen şey
+ürünün kendisi" ise OPEN), sonra `app/services/billing/limits.py`'deki uygun
+bağımlılığı `dependencies=[...]` ile ekle. Bağımlılıklar gövde doğrulamasından
+ÖNCE çalışır (uç içi `limit_scoped` sonradan; o durumda testin `BODIES`'ine
+geçerli gövde verilir). **Tuzak:** taklit sınıfa değil canlı örneklere uygulanır
+(`_patch_every_limiter`); `monkeypatch.setattr(örnek, ...)` geri alırken örnek
+özniteliği bırakıp sınıf düzeyindeki taklidi gölgeler.
+
 ### Yetkilendirme ve IDOR paketi (`tests/test_idor.py`, Faz 7)
 
 Her uç dört sınıftan TAM OLARAK birine atanır: `PUBLIC`, `SESSION` (yalnız
@@ -903,9 +921,7 @@ kaynak tüketimini sınırlayan beş katman var:
 ### Faz 7'de kalan backend işleri (Serhan, 01.10.2026 kapanış denetimi)
 
 Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık takip 11. (1) **Hız sınırı
-kapsamı:** `GET/PATCH/DELETE /api/projects...` ve `DELETE /api/account`
-sınırlayıcısız; her ucun bir hız sınırı sınıfına atandığını doğrulayan envanter
-testi yazılacak (IDOR paketinin kardeşi). (2) **İşçi sağlığı:** işçi nabzı
+kapsamı — ✅ (02.10.2026):** bkz. "Hız sınırı kapsam envanteri" altında. (2) **İşçi sağlığı:** işçi nabzı
 (`worker:<id>`) yalnız yetim iş kurtarmada okunuyor; canlı işçi sayısı, kuyruk
 uzunluğu ve en eski bekleyen işin yaşını veren bir yönetici ucu ve işçi yokken
 uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`

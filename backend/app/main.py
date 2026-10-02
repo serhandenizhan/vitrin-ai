@@ -26,11 +26,15 @@ from app.services.concurrency import InferenceCapacityLimiter
 from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
 from app.services.billing.limits import (
+    account_delete_limiter,
     admin_limiter,
     checkout_limiter,
     cmyk_limiter,
+    project_write_limiter,
     public_limiter,
     support_limiter,
+    user_delete_limiter,
+    user_read_limiter,
 )
 
 
@@ -47,6 +51,10 @@ async def lifespan(app: FastAPI):
     await admin_limiter.aclose()
     await support_limiter.aclose()
     await cmyk_limiter.aclose()
+    await user_read_limiter.aclose()
+    await project_write_limiter.aclose()
+    await user_delete_limiter.aclose()
+    await account_delete_limiter.aclose()
 
 
 # Hata izleme uygulama kurulmadan ÖNCE başlatılır: SDK'nın FastAPI/Starlette
