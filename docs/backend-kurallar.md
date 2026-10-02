@@ -83,6 +83,49 @@
   (kullanıcı işlemleri kendi tablolarında). Üstte "Admin · Serhan | Kaan"
   anahtarı (`?actor=`, süzme sunucuda); anahtarda yalnız AD yazar
   (`user_metadata.first_name`, yalnız gösterim), e-posta yazmaz.
+- **Vitrin AI (Faz 7.2, PLANLI — henüz kod yok; 02.10.2026 kararları, ayrıntı `ROADMAP.md`
+  Faz 7.2).** Üretim hattı kuralları, kod yazılırken uyulacak:
+  (1) *Sahne bir veritabanı kaydıdır* (ürün türü, ad, önizleme, prompt şablonu, tür
+  kalıcı|dönemsel, tema etiketi, tarih aralığı, cinsiyet, üretim modu, kredi maliyeti, durum
+  taslak→test→yayında); tablo ve RLS **aynı migration'da**. Sahne listesini kullanıcıya
+  sunan uç yalnız `yayında` ve tarihi geçerli (Europe/Istanbul) kayıtları döner;
+  tür bayrağı kapalıysa o türün sahneleri hiç dönmez.
+  (2) *Prompt sürümlenir:* düzenleme yeni sürümdür (eski silinmez), her üretim kaydı hangi
+  sürümle yapıldığını yazar, yayındaki sahnenin prompt'u değişince sahne `test`e döner.
+  Prompt şablonu kullanıcıya hiç gönderilmez ve kullanıcı girdisi prompt'a birleştirilmez.
+  (3) *Kredi Faz 5 mantığıyla:* aynı bakiye, sahnedeki `kredi maliyeti` kadar rezervasyon,
+  teknik hatada iade; **ilk üretim kredi düşer, ikinci deneme ücretsizdir** ve "beğenmedim"
+  iadesi sayılmaz. **İdempotency anahtarı İŞİ tanımlar** (ders 24, 32): ürün + sahne +
+  *girişin kendisi*; aynı ürün + sahneyi sonradan yeniden üretmek yeni bir girişle yeni
+  iş olur. Tek rezervasyon = sağlayıcıya tek çağrı:
+  **işçide sağlayıcı çağrısı için yeniden deneme YOKTUR** (02.10.2026). Çağrıdan ÖNCE iş
+  "çağrı başladı" diye yazılır; zaman aşımı, ağ kopması ya da işçi çökmesinde iş başarısız
+  sayılır ve kredi iade edilir (ders 32: "iade edildi" demeden önce iadenin bu çağrıda
+  yapıldığını kanıtla). Yeniden başlayan işçi "çağrı başladı ama sonuç yok" işini yeniden
+  ÇAĞIRMAZ. Test: çağrı sırasında işçi öldürülür, sağlayıcıya tek çağrı gittiği ve kredinin
+  iade edildiği kanıtlanır. Çalınmış kartla alınan kredi (chargeback) bilinçli kabul edilmiş
+  bir risktir (Faz 5 itiraz akışı hesabı askıya alır; yeni hesap bekletilmez).
+  (4) *Yalnız ücretli plan:* Deneme planı sunucuda reddedilir (arayüz kilidi
+  yetkilendirme sayılmaz); admin panelinde **tek açma/kapama bayrağı** vardır —
+  kapalıyken yeni üretim başlamaz ve kredi düşmez, mevcut işler biter; **canlıya çıkarken
+  varsayılan KAPALI**. Günlük bütçe tavanı YOK (Serhan kararı).
+  (5) *Hız sınırı sınıfı `CLOSED`* (para harcayan, geri alınamaz): her yeni uç
+  `tests/test_rate_limit_coverage.py` ve `tests/test_idor.py`'de bir sınıfa atanır;
+  `OWNED` uçlar için "başkası 404 + kaynak değişmez, sahibi başarılı" testi yazılır.
+  (6) *İki sonuç, biri silinir:* ikinci denemede kullanıcı seçer, seçilmeyen silinir; 7 gün
+  seçmezse SON üretilen kalır (süre ayarlanabilir). Silme çok adımlı dış yazmadır: hata
+  yolu önceki yazmaları geri almalı, "ikinci adım patladı" için ayrı test (ders 25).
+  (7) *Üretim kaydı eklemeye açıktır* (kim, ürün, zaman, sahne, prompt sürümü, etiket kapatıldı
+  mı, **sağlayıcıdan gelen/hesaplanan maliyet** — fiyat artışında gerçek ortalama maliyet
+  görünsün diye; fiyat artışı için ek koruma yok, sahnedeki kredi maliyeti artırılır): DB trigger'ı `UPDATE`/`DELETE`'i reddeder (`admin_audit_log` deseni); **hesap
+  silinince kullanıcı kimliği anonimleştirilir, kayıt kalır** — Faz 7 hesap silme akışıyla
+  çakışmadığı testle kanıtlanır (Auth silindikten sonra çökmeyen kayıt).
+  (8) *Sağlayıcı soyutlaması:* model/sağlayıcı sunucu ayarıyla değişir; seçim API
+  testinden sonra yapılır (`ROADMAP.md` Faz 7.2). Sağlayıcıya **yalnız kesim** gider;
+  anahtar yalnız `.env`'de. Kesim modelindeki "kalite bozulmaz" ilkesi burada
+  "ürün sadakati önceliklidir" olarak geçerlidir: sadakat testini geçmeyen tür/sahne
+  yayına girmez. **Üretim modu** alanı vardır (`yeniden çiz` | `hibrit`); ilk sürümde
+  hepsi `yeniden çiz`.
 - **Uygulanmış bir migration yerinde düzenlenmez.** Production'daki Alembic o
   revizyonu `alembic_version`'da gördüğü için dosyayı bir daha çalıştırmaz;
   değişiklik yerelde görünür, production'da sessizce hiç uygulanmaz. Şema
