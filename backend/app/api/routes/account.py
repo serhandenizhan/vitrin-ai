@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, get_current_user
+from app.services.billing.limits import limit_account_delete
 from app.services.storage import R2StorageService, get_storage_service
 from app.services.supabase_admin import (
     SupabaseAdminConfigurationError,
@@ -47,6 +48,8 @@ async def delete_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hesabı silmek için oturumdaki e-posta adresini doğru yazın.",
         )
+    # Hız sınırı onaydan SONRA: yanlış yazılan onay hakkı tüketmesin.
+    await limit_account_delete(user)
 
     try:
         admin.ensure_configured()

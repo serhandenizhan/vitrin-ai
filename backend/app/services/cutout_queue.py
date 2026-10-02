@@ -10,6 +10,11 @@ ANAHTARLAR (`<p>` = önek, testlerde her test kendi önekini kullanır):
   <p>:queue                 bekleyen iş kimlikleri (LPUSH ekler, işçi sağdan alır)
   <p>:processing:<işçi>     o işçinin elindeki işler (BLMOVE ile atomik geçiş)
   <p>:worker:<işçi>         işçinin nabzı (kısa TTL); yoksa işçi ölü sayılır
+  <p>:workers              bilinen işçi kimlikleri (sıralı küme; yalnız SCAN'siz sayım
+                            için kayıt — canlılığı `worker:<işçi>` anahtarı belirler)
+  <p>:alert:<durum>         uyarı sıklık sınırı (aynı sorun için 10 dk'da bir günlük)
+  <p>:last-progress         son TAMAMLANAN işin zamanı (başarılı ya da başarısız; `stats()`
+                            "tıkalı" kararı için ilerleme işareti)
   <p>:job:<iş>              iş kaydı (hash): durum, kullanıcı, kredi ayırması…
   <p>:photo:<iş>            özgün fotoğraf baytları — en fazla PHOTO_TTL
   <p>:result:<iş>           teslim için kısa süre saklanan PNG
@@ -51,6 +56,22 @@ JOB_TTL_SECONDS = 30 * 60
 #: 24 saatlik idempotency kopyası kullanılır.
 RESULT_TTL_SECONDS = 10 * 60
 
+#: Kuyrukta iş beklerken bu süre boyunca HİÇBİR iş TAMAMLANMADIYSA "takılmış" sayılır.
+#: Ölçüt BEKLEME süresi değil İLERLEME eksikliğidir: tek işçi ~12 sn/iş keser,
+#: 10+ iş birikince en eski iş 120 sn'yi aşar ama sistem sağlıklıdır (PR #46
+#: incelemesi, M1). Bir kesim ~15 sn (ilk istekte model yüklemesiyle ~35 sn) sürer;
+#: 2 dk, normal bir işi değil, duran bir işçiyi yakalar.
+#: İlerleme = iş ALIMI değil iş BİTİŞİ (`complete`/`fail`): altyapı hatasıyla
+#: durmadan yeniden kuyruğa konup tekrar alınan bir iş, alım sayılsaydı kuyruğu
+#: sağlıklı gösterirdi (PR #46 kod incelemesi, Kaan, 03.10.2026).
+QUEUE_STALL_SECONDS = 120
+#: Son tamamlanan iş zamanının saklanma süresi (yalnız "ilerleme var mı" sorusu için).
+LAST_PROGRESS_TTL_SECONDS = 3600
+#: Aynı sorun için günlüğe/Sentry'ye en sık bu aralıkla yazılır.
+ALERT_COOLDOWN_SECONDS = 10 * 60
+#: İşçi kayıt kümesinde nabzı bu süredir görülmeyen kimlik silinir.
+WORKER_REGISTRY_TTL_SECONDS = 60 * 60
+
 QUEUED = "queued"
 PROCESSING = "processing"
 DONE = "done"
@@ -60,6 +81,16 @@ FAILED = "failed"
 #: KEYS: kuyruk, fotoğraf, iş kaydı. ARGV: üst sınır, fotoğraf, fotoğraf
 #: TTL'i, kayıt TTL'i, iş kimliği, kullanıcı, anahtar, ayırma, eklenme anı.
 #: Kuyruk doluysa hiçbir şey yazmadan 0 döner.
+#: KEYS: kuyruk. ARGV: iş kaydı anahtar öneki (`<p>:job:`).
+#: Bir sonraki alınacak (en eski) işin kimliğini ve eklenme anını TEK gidiş-
+#: dönüşte verir; ayrı `LINDEX` + `HGET` üçüncü bir gidiş-dönüş demekti.
+#: İş kaydının süresi dolmuşsa eklenme anı boş (nil) döner.
+_OLDEST_SCRIPT = """
+local id = redis.call('LINDEX', KEYS[1], -1)
+if not id then return false end
+return {id, redis.call('HGET', ARGV[1] .. id, 'enqueued_at') or false}
+"""
+
 _ENQUEUE_SCRIPT = """
 if redis.call('LLEN', KEYS[1]) >= tonumber(ARGV[1]) then
   return 0
@@ -71,6 +102,62 @@ redis.call('EXPIRE', KEYS[3], ARGV[4])
 redis.call('LPUSH', KEYS[1], ARGV[5])
 return 1
 """
+
+
+@dataclass(frozen=True)
+class QueueStats:
+    """Kuyruğun anlık görünümü (yönetici ucu ve uyarılar için)."""
+
+    workers: int
+    queued: int
+    processing: int
+    oldest_waiting_seconds: float | None
+    #: Kuyrukta iş varken işçilerin iş almadığı süre: son iş alımından ya da en
+    #: eski bekleyen işin gelişinden (hangisi SONRAYSA) bu yana geçen saniye.
+    #: Kuyruk boşsa None. "Tıkalı" kararı bunun üzerinden verilir.
+    seconds_without_progress: float | None = None
+
+    @property
+    def status(self) -> str:
+        """`no_worker`: canlı işçi yok (kuyruk boş olsa bile sıradaki müşteri bekler).
+        `stalled`: işçi var, kuyrukta iş var ama eşikten uzun süredir HİÇ iş alınmadı.
+        Uzun ama ilerleyen bir kuyruk `ok`'tur. `ok`: aksi hâlde."""
+        if self.workers == 0:
+            return "no_worker"
+        if (
+            self.seconds_without_progress is not None
+            and self.seconds_without_progress > QUEUE_STALL_SECONDS
+        ):
+            return "stalled"
+        return "ok"
+
+
+async def observe_queue_health(queue, where: str) -> bool:
+    """Kuyruğun sağlığını gözler; sağlıksızsa `error` yazar, sağlıksızsa True döner.
+
+    HİÇBİR ZAMAN fırlatmaz: bu bir gözlem, yükleme isteğini, bakım turunu ya da
+    API'nin yaşam döngüsünü düşürmemeli. Redis'e ulaşılamıyorsa `warning` yazılır
+    (Sentry olayı değil: Redis arızası zaten başka yerlerde 5xx üretir, her
+    dakika yinelenen bir olay selini istemeyiz) ve True döner.
+    """
+    try:
+        stats = await queue.stats()
+        await queue.report_unhealthy(stats, where)
+        return stats.status != "ok"
+    except Exception:  # noqa: BLE001 — gözlem, çağıranı düşürmemeli
+        logger.warning("Kesim kuyruğu sağlığı okunamadı (%s)", where, exc_info=True)
+        return True
+
+
+async def watch_queue_health(queue, interval_seconds: float) -> None:
+    """`interval_seconds`'ta bir `observe_queue_health` çalıştırır; iptal edilene dek.
+
+    İlk kontrol bir aralık SONRA yapılır: API ile işçi aynı anda açılıyorsa
+    (execute.sh) işçinin modeli yüklemesi ve ilk nabzı atması için süre tanınır.
+    """
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await observe_queue_health(queue, "api")
 
 
 class QueueFull(Exception):
@@ -225,7 +312,106 @@ class CutoutQueue:
     # -- işçi tarafı ------------------------------------------------------
 
     async def heartbeat(self, worker_id: str, ttl_seconds: int = 30) -> None:
-        await self._redis().set(self._key("worker", worker_id), "1", ex=ttl_seconds)
+        now = time.time()
+        async with self._redis().pipeline(transaction=False) as pipe:
+            pipe.set(self._key("worker", worker_id), "1", ex=ttl_seconds)
+            # Kayıt kümesi yalnız "hangi işçi kimlikleri var" listesidir; böylece
+            # sayım için tüm anahtar uzayında SCAN gerekmez (hız sınırı sayaçları
+            # de aynı Redis'te ve binlerce olabilir).
+            pipe.zadd(self._key("workers"), {worker_id: now})
+            pipe.zremrangebyscore(
+                self._key("workers"), "-inf", now - WORKER_REGISTRY_TTL_SECONDS
+            )
+            await pipe.execute()
+
+    async def stats(self) -> QueueStats:
+        """Canlı işçi sayısı, kuyruk uzunluğu, işlenen iş ve en eski bekleyenin yaşı.
+
+        "Canlı", `recover_stale`'in tanımıyla AYNI: `worker:<işçi>` nabız
+        anahtarı var. Kayıt kümesindeki ama nabzı kesilmiş işçi sayılmaz; yine de
+        elindeki işler `processing`'e dahildir (kurtarma bekliyor).
+        """
+        redis = self._redis()
+        known = [_text(w) for w in await redis.zrange(self._key("workers"), 0, -1)]
+        async with redis.pipeline(transaction=False) as pipe:
+            pipe.llen(self._key("queue"))
+            # Kuyruğun SAĞ ucu bir sonraki alınacak, yani en eski bekleyen iştir.
+            pipe.eval(_OLDEST_SCRIPT, 1, self._key("queue"), self._key("job", ""))
+            pipe.get(self._key("last-progress"))
+            for worker in known:
+                pipe.exists(self._key("worker", worker))
+                pipe.llen(self._key("processing", worker))
+            results = await pipe.execute()
+        queued, oldest, last_progress_raw, rest = (
+            int(results[0]),
+            results[1],
+            results[2],
+            results[3:],
+        )
+        workers = sum(int(rest[i]) for i in range(0, len(rest), 2))
+        processing = sum(int(rest[i]) for i in range(1, len(rest), 2))
+        if workers == 0:
+            # Kayıt kümesi bu sürümden beri tutuluyor: kümeye hiç yazmamış (eski
+            # sürümle çalışan) bir işçi sayılmazsa, iş yaparken "işçi yok" alarmı
+            # verilir. Seyrek yol olduğu için `recover_stale` ile aynı yöntemle
+            # (SCAN) bakılır; canlı işçisi kayıtlı sağlıklı sistemde hiç çalışmaz.
+            unregistered = []
+            async for raw_key in redis.scan_iter(match=self._key("worker", "*")):
+                worker = _text(raw_key).rsplit(":", 1)[-1]
+                if worker not in known:
+                    unregistered.append(worker)
+            if unregistered:
+                workers = len(unregistered)
+                async with redis.pipeline(transaction=False) as pipe:
+                    for worker in unregistered:
+                        pipe.llen(self._key("processing", worker))
+                    processing += sum(int(n) for n in await pipe.execute())
+        oldest_age = None
+        if oldest:
+            enqueued_at = oldest[1]
+            if enqueued_at is not None:
+                oldest_age = max(0.0, time.time() - float(_text(enqueued_at)))
+            else:
+                # Sırada bir iş var ama kaydının süresi dolmuş: iş en az kaydın
+                # ömrü kadar beklemiştir. Yaşı "bilinmiyor" saymak, tıkanma 30 dk'yı
+                # aşınca durumu `stalled`'dan `ok`'a döndürüp uyarıyı susturuyordu.
+                oldest_age = float(JOB_TTL_SECONDS)
+        without_progress = None
+        if queued > 0 and oldest_age is not None:
+            # Sayaç, son tamamlanan işten ya da en eski işin gelişinden (hangisi
+            # daha SONRAYSA) başlar: saatlerce boşta kalmış bir işçiye gelen ilk
+            # iş, "son bitiş saatler önce" diye yalancı alarm üretmez.
+            now = time.time()
+            reference = now - oldest_age
+            if last_progress_raw is not None:
+                reference = max(reference, float(_text(last_progress_raw)))
+            without_progress = max(0.0, now - reference)
+        return QueueStats(workers, queued, processing, oldest_age, without_progress)
+
+    async def report_unhealthy(self, stats: QueueStats, where: str) -> bool:
+        """Sağlıksız bir durumu `error` seviyesinde günlüğe yazar (Sentry DSN'i
+        verilmişse olay olarak da gider; SDK'nın günlük entegrasyonu `error`'ı
+        yakalar). Aynı durum için 10 dakikada bir; sağlıklıysa hiçbir şey yazmaz.
+        Yazıldıysa True döner."""
+        status = stats.status
+        if status == "ok":
+            return False
+        if not await self._redis().set(
+            self._key("alert", status), "1", nx=True, ex=ALERT_COOLDOWN_SECONDS
+        ):
+            return False
+        logger.error(
+            "Kesim kuyruğu sağlıksız (%s): durum=%s canlı_işçi=%d bekleyen=%d "
+            "işlenen=%d en_eski_bekleyen_sn=%s ilerlemesiz_sn=%s",
+            where,
+            status,
+            stats.workers,
+            stats.queued,
+            stats.processing,
+            "-" if stats.oldest_waiting_seconds is None else f"{stats.oldest_waiting_seconds:.0f}",
+            "-" if stats.seconds_without_progress is None else f"{stats.seconds_without_progress:.0f}",
+        )
+        return True
 
     async def claim(self, worker_id: str, timeout_seconds: float = 1.0) -> ClaimedJob | None:
         redis = self._redis()
@@ -279,6 +465,7 @@ class CutoutQueue:
         pipe.delete(self._key("photo", job_id))
         if worker_id:
             pipe.lrem(self._key("processing", worker_id), 0, job_id)
+        self._mark_progress(pipe)
         await pipe.execute()
 
     async def fail(self, worker_id: str | None, job_id: str, code: str, *, retry_safe: bool) -> None:
@@ -291,7 +478,13 @@ class CutoutQueue:
         pipe.delete(self._key("photo", job_id))
         if worker_id:
             pipe.lrem(self._key("processing", worker_id), 0, job_id)
+        self._mark_progress(pipe)
         await pipe.execute()
+
+    def _mark_progress(self, pipe) -> None:
+        """İlerleme işareti: bir iş BİTTİ (bkz. `QUEUE_STALL_SECONDS`). Bitişin
+        kendi işlemine eklenir, ayrı bir gidiş-dönüş gerektirmez."""
+        pipe.set(self._key("last-progress"), repr(time.time()), ex=LAST_PROGRESS_TTL_SECONDS)
 
     async def requeue(self, worker_id: str, job_id: str) -> bool:
         """Beklenmedik işçi hatasından sonra işi aynı kimlikle yeniden sıraya koyar."""

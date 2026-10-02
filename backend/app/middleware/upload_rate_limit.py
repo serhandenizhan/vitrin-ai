@@ -2,6 +2,7 @@
 
 import json
 
+from redis.exceptions import RedisError
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.middleware.early_auth import PROTECTED_UPLOADS
@@ -33,23 +34,32 @@ class UploadRateLimitMiddleware:
         client = scope.get("client")
         client_ip = client[0] if client else "unknown"
         key = f"ip:{client_ip}"
-        retry_after = await self.limiter.retry_after(key)
+        try:
+            retry_after = await self.limiter.retry_after(key)
+        except RedisError:
+            # FAIL-CLOSED: sayaç sorulamıyorsa gövde okunmadan reddedilir.
+            await self._send_json(
+                send, 503, "Şu anda bu işlem yapılamıyor; birazdan tekrar deneyin.", None
+            )
+            return
         if retry_after is None:
             await self.app(scope, receive, send)
             return
 
-        body = json.dumps(
-            {"detail": "Çok fazla istek gönderildi; lütfen daha sonra tekrar deneyin."},
-            ensure_ascii=False,
-        ).encode("utf-8")
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 429,
-                "headers": [
-                    (b"content-type", b"application/json; charset=utf-8"),
-                    (b"retry-after", str(retry_after).encode("ascii")),
-                ],
-            }
+        await self._send_json(
+            send,
+            429,
+            "Çok fazla istek gönderildi; lütfen daha sonra tekrar deneyin.",
+            retry_after,
         )
+
+    @staticmethod
+    async def _send_json(
+        send: Send, status_code: int, detail: str, retry_after: int | None
+    ) -> None:
+        body = json.dumps({"detail": detail}, ensure_ascii=False).encode("utf-8")
+        headers = [(b"content-type", b"application/json; charset=utf-8")]
+        if retry_after is not None:
+            headers.append((b"retry-after", str(retry_after).encode("ascii")))
+        await send({"type": "http.response.start", "status": status_code, "headers": headers})
         await send({"type": "http.response.body", "body": body})

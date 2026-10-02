@@ -52,6 +52,11 @@ from app.validation.upload import UploadValidationError, validate_upload
 
 from app.services.billing.entitlements import locked_subscription, background_tier
 from app.services.billing.actions import prune_projects
+from app.services.billing.limits import (
+    limit_project_write,
+    limit_user_delete,
+    limit_user_read,
+)
 from app.services.billing.provider import get_provider
 from app.models.background import Background
 
@@ -294,7 +299,7 @@ async def create_project(
     return _serialize(project, storage)
 
 
-@router.get("/api/projects")
+@router.get("/api/projects", dependencies=[Depends(limit_user_read)])
 async def list_projects(
     limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
     cursor: str | None = Query(None, min_length=1, max_length=512),
@@ -318,7 +323,7 @@ async def list_projects(
     }
 
 
-@router.get("/api/projects/{project_id}")
+@router.get("/api/projects/{project_id}", dependencies=[Depends(limit_user_read)])
 async def get_project(
     project_id: uuid.UUID,
     user: CurrentUser = Depends(get_current_user),
@@ -329,7 +334,7 @@ async def get_project(
     return _serialize(project, storage)
 
 
-@router.patch("/api/projects/{project_id}")
+@router.patch("/api/projects/{project_id}", dependencies=[Depends(limit_project_write)])
 async def update_project_status(
     project_id: uuid.UUID,
     # Iki alan da istege bagli: gonderilmeyen alan DEGISMEZ. Yeniden
@@ -409,7 +414,11 @@ async def update_project_status(
     return _serialize(project, storage)
 
 
-@router.delete("/api/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/api/projects/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(limit_user_delete)],
+)
 async def delete_project(
     project_id: uuid.UUID,
     expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
@@ -426,7 +435,11 @@ async def delete_project(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.delete("/api/projects", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/api/projects",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(limit_user_delete)],
+)
 async def delete_all_projects(
     expected_user_id: uuid.UUID | None = Header(None, alias="X-Expected-User-Id"),
     user: CurrentUser = Depends(get_current_user),

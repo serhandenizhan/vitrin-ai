@@ -61,3 +61,6 @@ docs/superpowers/
 
 # Playwright MCP ekran görüntüleri ve günlükleri
 .playwright-mcp/
+
+# ZAP tarama kiti: üretilen anahtar, oturum çerezleri ve raporlar (backend/scripts/zap/README.md)
+backend/scripts/zap/.work/

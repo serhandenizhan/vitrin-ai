@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +13,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.support import router as support_router
 from app.api.routes.cmyk import router as cmyk_router
-from app.api.routes.remove_background import ROUTE_PATH
+from app.api.routes.remove_background import ROUTE_PATH, get_cutout_queue
 from app.api.routes.remove_background import router as remove_background_router
 from app.core.config import settings
 from app.core.db import engine
@@ -20,24 +21,40 @@ from app.core.monitoring import init_error_tracking
 from app.middleware.admission_limiter import EndpointAdmissionLimiterMiddleware
 from app.middleware.body_size_limit import BodySizeLimitMiddleware
 from app.middleware.early_auth import EarlyAuthenticationMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.upload_rate_limit import UploadRateLimitMiddleware
 from app.services.concurrency import InferenceCapacityLimiter
+from app.services.cutout_queue import watch_queue_health
 from app.services.rate_limit import RequestRateLimiter
 from app.services.storage import R2ConfigurationError
 from app.services.billing.limits import (
+    account_delete_limiter,
     admin_limiter,
     checkout_limiter,
     cmyk_limiter,
+    project_write_limiter,
     public_limiter,
     support_limiter,
+    user_delete_limiter,
+    user_read_limiter,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Kesim işçisi yok/takılmışsa kullanıcılar sessizce sırada bekler; bu
+    # gözlemci bunu bakım işinin cron'una BAĞLI olmadan fark eder (0 = kapalı).
+    watcher = None
+    interval = settings.cutout_health_check_interval_seconds
+    if interval > 0:
+        watcher = asyncio.create_task(watch_queue_health(get_cutout_queue(), interval))
     # Uygulama kapanırken process başına tek olan async engine'in connection
     # pool'unu düzgünce serbest bırak (bkz. app/core/db.py).
     yield
+    if watcher is not None:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
     await engine.dispose()
     await upload_ip_limiter.aclose()
     await upload_user_limiter.aclose()
@@ -46,6 +63,10 @@ async def lifespan(app: FastAPI):
     await admin_limiter.aclose()
     await support_limiter.aclose()
     await cmyk_limiter.aclose()
+    await user_read_limiter.aclose()
+    await project_write_limiter.aclose()
+    await user_delete_limiter.aclose()
+    await account_delete_limiter.aclose()
 
 
 # Hata izleme uygulama kurulmadan ÖNCE başlatılır: SDK'nın FastAPI/Starlette
@@ -126,6 +147,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Expected-User-Id", "Idempotency-Key"],
     max_age=600,
 )
+# Güvenlik başlıkları CORS'un da DIŞINDA (en son eklenen): iç katmanların
+# ürettiği hata yanıtları ve CORS ön kontrolü de başlığı taşısın.
+app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(remove_background_router)
 app.include_router(backgrounds_router)
 app.include_router(health_router)

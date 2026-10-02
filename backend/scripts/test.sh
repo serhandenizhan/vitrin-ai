@@ -78,6 +78,10 @@ fi
 # localhost 2,05 sn / 127.0.0.1 0,03 sn). macOS/Linux'ta fark yok.
 export DATABASE_URL="postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@127.0.0.1:${TEST_DB_PORT}/${DB_NAME}"
 export REDIS_URL="redis://127.0.0.1:${TEST_REDIS_PORT}/0"
+# Bu Redis bu betiğin KENDİ compose projesinin: test oturumu başında içindekileri
+# (önceki oturumdan kalan hız sınırı sayaçları) temizlemesine izin verilir.
+# Geliştirme Redis'inde bu bayrak yoktur, o yüzden düz `pytest` ona dokunmaz.
+export VITRIN_TEST_REDIS_OWNED=1
 
 cd "$BACKEND_DIR"
 exec "$PYTEST" "$@"

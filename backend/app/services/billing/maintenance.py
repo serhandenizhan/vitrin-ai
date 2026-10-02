@@ -21,6 +21,8 @@ from app.services.billing.checkout import expire_checkouts
 from app.services.billing.payments import verify_checkout, apply_subscription
 from app.services.billing.actions import claim_action, run_action, run_storage_job
 from app.services.storage import get_storage_service
+from app.core.config import settings
+from app.services.cutout_queue import CutoutQueue, observe_queue_health
 
 
 async def process_webhook(db, provider):
@@ -367,10 +369,18 @@ async def maintenance(db, provider, storage):
 
 
 async def main():
+    queue = CutoutQueue(
+        settings.redis_url,
+        prefix=settings.cutout_queue_prefix,
+        max_jobs=settings.cutout_queue_max_jobs,
+    )
     try:
         async with _session_factory() as db:
             await maintenance(db, get_provider(), get_storage_service())
+        # Gözlem bakım turunu düşürmez (`observe_queue_health` fırlatmaz).
+        await observe_queue_health(queue, "bakım")
     finally:
+        await queue.aclose()
         await engine.dispose()
 
 

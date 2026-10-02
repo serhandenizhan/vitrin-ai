@@ -57,6 +57,13 @@ de güvenle koşar. Değiştirmek için: `VITRIN_TEST_DB_PORT`,
 `VITRIN_TEST_REDIS_PORT`, `VITRIN_TEST_PROJECT`, `VITRIN_VENV_DIR` (ders 11).
 Paralel worktree'lerde her biri kendi portu ve proje adıyla koşar, örn.
 `VITRIN_TEST_DB_PORT=5435 VITRIN_TEST_REDIS_PORT=6381 VITRIN_TEST_PROJECT=vitrin-ai-test-2 backend/scripts/test.sh`.
+**Test Redis'i her oturum başında temizlenir** (02.10.2026): önceki oturumdan
+kalan yükleme hız sınırı sayaçları, aynı sabit kullanıcıyla koşan testleri
+arka arkaya koşularda 429'a düşürüyordu. Temizlik yalnız `test.sh`'nin KENDİ
+Redis'inde yapılır (betik `VITRIN_TEST_REDIS_OWNED=1` verir; `tests/redis_safety.py`),
+oturum kilidi alındıktan SONRA (ikinci bir oturum birincinin Redis'ini silemez),
+ve yalnız yerel adreste. Düz `pytest` bayrak vermez, bu yüzden geliştirme
+Redis'indeki bekleyen kesim işlerine ve fotoğraflara dokunmaz.
 Docker ister (yedek testleri de Docker'da `pg_dump` koşar). Windows'ta Git
 Bash ya da WSL'den çalıştırılır (betik Windows sanal ortamındaki
 `.venv\Scripts\pytest.exe`'yi de bulur). Betik adresleri `localhost` değil
@@ -145,6 +152,24 @@ Kimlik doğrulama testleri gerçek bir Supabase'e gitmiyor: test anahtarıyla
 imzalanmış token'lar üretiliyor ve yalnızca JWKS indirme adımı taklit ediliyor
 (`tests/conftest.py` → `tokens`). RLS testleri `anon`/`authenticated` rollerini
 `set local role` ile taklit ediyor (`tests/test_rls.py`).
+
+### Hız sınırı kapsam envanteri (`tests/test_rate_limit_coverage.py`, Faz 7)
+
+IDOR paketinin kardeşi: OpenAPI'deki her uç `CLOSED` (Redis düşünce 503),
+`OPEN` (Redis düşünce sınırsız geçer), `UPLOAD` (sınır middleware'de, gövde
+okunmadan; Redis düşünce 503) ya da gerekçesiyle `EXEMPT` sınıfından BİRİNE
+atanır; sınıfsız yeni uç testi kırmızı yakar. Test tanımı değil davranışı
+sınar: bütün sınırlayıcıların `retry_after`'ı "doldu" döndürülür ve her
+sınırlı uç gerçek bir istekte 429 vermelidir; sonra Redis hatası verilir ve
+yön doğrulanır. Mekanizma (bağımlılık, uç içi çağrı, middleware) fark etmez.
+Yeni uç eklerken: önce yönü seç (korunan şey para/geri alınamaz işlem/yönetici
+yazması ise CLOSED; okuma, taslak kaydı, destek formu gibi "kaybedilen şey
+ürünün kendisi" ise OPEN), sonra `app/services/billing/limits.py`'deki uygun
+bağımlılığı `dependencies=[...]` ile ekle. Bağımlılıklar gövde doğrulamasından
+ÖNCE çalışır (uç içi `limit_scoped` sonradan; o durumda testin `BODIES`'ine
+geçerli gövde verilir). **Tuzak:** taklit sınıfa değil canlı örneklere uygulanır
+(`_patch_every_limiter`); `monkeypatch.setattr(örnek, ...)` geri alırken örnek
+özniteliği bırakıp sınıf düzeyindeki taklidi gölgeler.
 
 ### Yetkilendirme ve IDOR paketi (`tests/test_idor.py`, Faz 7)
 
@@ -363,6 +388,40 @@ silmemek için `R2_SHARED_WITH_PRODUCTION=true` ile başlar.
 - **Başlatma:** `./execute.sh`, `./execute-supabase.sh` ve VS Code görevi
   işçiyi de açar (`VITRIN_START_WORKER=0` ile kapatılır). İşçi çalışmıyorsa
   kesimler sırada bekler.
+- **İşçi sağlığı (02.10.2026):** `GET /api/admin/cutout-queue` (yalnız yönetici)
+  canlı işçi sayısını, bekleyen ve işlenen işi ve en eski bekleyen işin yaşını
+  verir. `status`: `ok`; `no_worker` (canlı işçi yok — kuyruk boş olsa bile
+  sıradaki müşteri bekler); `stalled` (işçi var, kuyrukta iş var ama
+  `QUEUE_STALL_SECONDS`=120 sn'den uzun süredir HİÇBİR iş tamamlanmadı: ölçüt
+  BEKLEME değil İLERLEME eksikliğidir. Tek işçi ~12 sn/iş keser, 10+ iş birikince en
+  eski iş 120 sn'yi aşar ama sistem sağlıklıdır; bu `ok` sayılır. Her biten iş
+  (başarılı ya da başarısız) `<önek>:last-progress` yazar; sayaç son bitişten ya da en
+  eski işin gelişinden — hangisi sonraysa — başlar, böylece saatlerce boşta kalmış
+  işçiye gelen ilk iş yalancı alarm üretmez. İşaret iş ALIMINDA değil BİTİŞİNDE
+  yazılır: altyapı hatasıyla durmadan yeniden kuyruğa konup tekrar alınan bir iş
+  ilerleme sayılmaz. En eski işin kaydı (`JOB_TTL`, 30 dk) silinmişse iş en az o
+  kadar beklemiş sayılır, tıkanma 30 dk'yı aşınca uyarı susmaz. PR #46 incelemesi
+  M1 ve Kaan'ın kod incelemesi, 03.10.2026); `unavailable` (Redis'e
+  ulaşılamadı; uç 5xx değil bunu döner). "Canlı" = `worker:<işçi>` nabız
+  anahtarı var (`recover_stale`'in ölü tanımıyla aynı). İşçi kimlikleri ayrıca
+  `<önek>:workers` sıralı kümesinde kayıtlıdır ki sayım için tüm anahtar
+  uzayında SCAN gerekmesin (hız sınırı sayaçları aynı Redis'te). Kümede canlı işçi
+  yoksa — kümeye hiç yazmamış eski sürümlü bir işçi olabilir — bir kez SCAN ile
+  `worker:*` aranır; sağlıklı sistemde bu yol çalışmaz.
+  **Uyarı:** sağlıksız durum `error` seviyesinde günlüğe yazılır (Sentry DSN'i
+  verilmişse olay olarak da gider) ve üç yerden kontrol edilir: **API sürecinin kendi periyodik gözlemcisi**
+  (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS`, varsayılan 60 sn, 0 = kapalı; ilk
+  kontrol bir aralık SONRA, API ile işçi birlikte açılınca işçiye süre
+  tanınır), `python -m app.services.billing.maintenance` her turunda ve
+  yönetici ucu çağrılınca. Periyodik kontrol bakım işinin cron'una BAĞLI
+  değildir. Birden fazla API süreci aynı Redis sayacını paylaşır, yani aynı
+  sorun yine 10 dakikada bir (`ALERT_COOLDOWN_SECONDS`) yazılır. Gözlem
+  (`observe_queue_health`) hiçbir istekte, bakım turunda ya da API yaşam
+  döngüsünde hata üretmez; Redis'e ulaşılamazsa `warning` yazar. Yükleme sıcak yolunda
+  ayrıca gözlem YAPILMAZ (60 sn'lik gözlemci yeterli; her yüklemeye Redis gidiş-dönüşü
+  eklemezdik). `VITRIN_START_WORKER=0` ile işçi bilerek kapatılınca `execute.sh` ve
+  `execute-supabase.sh` gözlemciyi de kapatır (`CUTOUT_HEALTH_CHECK_INTERVAL_SECONDS=0`),
+  yerelde beklenen durum için alarm yazılmaz.
 
 **Ölçüm (27.09.2026, tek işçi, 832×1248 foto, 4 istemci × 2 istek):** 8/8
 başarılı, **0 × 429** (kuyruktan önce aynı senaryoda 6/8 reddediliyordu);
@@ -381,6 +440,18 @@ işçinin model ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Gerçe
 bellekte tutacak kadar RAM'e sahip olmalı (takas tercihen kapalı); yoksa her
 boşta kalıştan sonraki ilk müşteri ~20 sn fazladan bekler. Canlı ölçüm
 listesinde (açık takip maddesi 7).
+
+**Yeniden ölçüm (02.10.2026, Serhan'ın Mac'i, 16 GB; `load_test.py`, 1 işçi,
+3,6 MB fotoğraf) — Mac bellek sıkışıklığı maddesi KAPANDI:** ısınma kesimi
+12,5 sn; işçi 5 dk boşta bırakıldı (RSS 89 MB'a düştü, yani model yine diske
+atıldı); **boşta kalıştan sonraki ilk kesim 12,3 sn**, ardından 9,3 sn. 27.09'daki
+30,1 sn tekrarlanmadı: o gün takas 15,5/16 GB doluydu, bu ölçümde takas
+başlangıçta ~3 MB / 1 GB idi, model yüklenince 4-7 GB'a çıktı ama geri okuma
+ucuz kaldı (fark ~3 sn). **Çıkarım:** sıkışıklık makinenin o anki bellek
+durumuna bağlıydı, kodda ya da Docker ayarında kalıcı bir sorun yok (Docker'ın
+sanal makinesi 4 GB ayrılmış, ~1,2 GB kullanıyordu). Model bellek açlığında
+yine yavaşlayabilir; `VITRIN_START_WORKER=0` ve takas izleme önerisi geçerli.
+Canlı sunucuda aynı ölçüm hâlâ Faz 7.5'te (açık takip 7, madde 8).
 
 ### Yük testi (`scripts/load_test.py`, Faz 7, 26.09.2026)
 
@@ -903,13 +974,16 @@ kaynak tüketimini sınırlayan beş katman var:
 ### Faz 7'de kalan backend işleri (Serhan, 01.10.2026 kapanış denetimi)
 
 Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık takip 11. (1) **Hız sınırı
-kapsamı:** `GET/PATCH/DELETE /api/projects...` ve `DELETE /api/account`
-sınırlayıcısız; her ucun bir hız sınırı sınıfına atandığını doğrulayan envanter
-testi yazılacak (IDOR paketinin kardeşi). (2) **İşçi sağlığı:** işçi nabzı
-(`worker:<id>`) yalnız yetim iş kurtarmada okunuyor; canlı işçi sayısı, kuyruk
-uzunluğu ve en eski bekleyen işin yaşını veren bir yönetici ucu ve işçi yokken
-uyarı eklenecek (bkz. "Kesim kuyruğu"). (3) **Backend başlıkları:** `nosniff` ve
-`Cross-Origin-Resource-Policy`; ZAP backend taraması tekrarlanacak.
+kapsamı — ✅ (02.10.2026):** bkz. "Hız sınırı kapsam envanteri" altında. (2) **İşçi sağlığı — ✅ (02.10.2026):** bkz. "Kesim kuyruğu" → "İşçi sağlığı". (3) **Backend başlıkları — ✅ (02.10.2026):** `SecurityHeadersMiddleware`
+(`app/middleware/security_headers.py`) her HTTP yanıtına `X-Content-Type-Options:
+nosniff` ve `Cross-Origin-Resource-Policy: same-origin` ekler. En dış katmandır
+(CORS'un da dışında), bu yüzden iç katmanların 401/413/429 yanıtları ve CORS ön
+kontrolü de başlığı taşır; testi (`tests/test_security_headers.py`) bağlantı
+kaldırılınca 5 test kırmızı yanarak doğrulandı. CORP yalnız `no-cors` istekleri
+keser, izinli origin'in CORS'lu okumasını etkilemez. CSP/`X-Frame-Options` bir
+JSON API'sinde anlamsız olduğu için eklenmedi. **ZAP backend taraması
+tekrarlandı (02.10.2026): bu iki başlık kuralı artık PASS.** Dinamik tarama
+kiti ve yöntem: `scripts/zap/README.md`.
 
 ## Ödemeler ve kredi (Faz 5)
 

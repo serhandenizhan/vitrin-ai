@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     # açık olan işçi (execute.sh) onun işlerini almasın. API ve işçi AYNI
     # öneki kullanmalı, yoksa işler hiç işlenmez.
     cutout_queue_prefix: str = "cutout"
+    # API sürecinin kesim kuyruğu sağlığını kontrol etme sıklığı (sn). İşçi
+    # yok/takılmışsa `error` günlüğü yazılır (bkz. `observe_queue_health`).
+    # 0 = kapalı. Bakım işinin cron'una bağımlı OLMAMASI için API'de de var;
+    # birden fazla API süreci aynı Redis sayacını paylaştığından aynı sorun
+    # yine 10 dakikada bir yazılır.
+    cutout_health_check_interval_seconds: int = Field(default=60, ge=0)
     # 40 megapiksel: yaygın telefon kameralarının (ör. 48MP ana sensör, sıkıştırma
     # sonrası tipik olarak daha düşük efektif çözünürlük) üstünde, ama decompression-
     # bomb tarzı (küçük byte, devasa piksel sayımı) bir görüntüyü reddetmeye yetecek

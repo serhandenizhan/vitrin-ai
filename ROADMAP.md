@@ -1114,7 +1114,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 
 - Backend: yük testi, model hız optimizasyonu (ONNX/TensorRT), hata izleme (Sentry)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
-  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
+  - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test; 02.10.2026'da kuyruk kartının 4 senaryosu eklendi, `playwright test --list` 108 test listeler), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (02.10.2026: kuyruk kartı için 4 senaryo × 2 proje = 8 test eklendi, atlanmaz: 108 listelenir) (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
   - **E2E — ilk tur (30.09.2026, Kaan; kalan maddeler aynı gün kapandı, yukarıdaki satır):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Bu turda açık görünen CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme sonradan yapıldı** (`e2e/cikti.spec.ts`, CI işi "Frontend E2E (Playwright)").
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
@@ -1138,17 +1138,43 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   dağılımı Serhan onayladı (rol dayanağı: bölüm 5). **Bu maddeler bitmeden Faz 7
   kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık
   takip 11 (Serhan) ve 12 (Kaan).
-  - **Serhan:** (1) hız sınırı kapsamı — `GET/PATCH/DELETE /api/projects...` ve
-    `DELETE /api/account` sınırlayıcısız (yalnız `POST /api/projects` ve kesim
-    korunuyor); her uç için yön kararı + "her uç bir hız sınırı sınıfına atanmış"
-    envanter testi (`test_idor.py`'nin kardeşi); (2) ZAP'ın ön yüz OTURUMLU
-    taraması (Kaan'ın `e2e/oturum.ts` sahte oturum çerezi yardımıyla); (3) işçi
-    sağlığı görünürlüğü — işçi nabzı yalnız yetim iş kurtarmada okunuyor, işçi
-    ölürse hiçbir yerde görünmüyor: yönetici ucu (canlı işçi, kuyruk uzunluğu,
-    en eski bekleyen işin yaşı) + işçi yokken uyarı; (4) Mac bellek sıkışıklığı
-    (açık takip 9); (5) backend güvenlik başlıkları (`nosniff`, CORP) ve ZAP
-    backend taramasının tekrarı.
-  - **Kaan:** (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
+  - **Serhan:** (1) ~~hız sınırı kapsamı~~ ✅ (02.10.2026): `projects`/`account`
+    dışında ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve admin
+    faturalama yazma uçları da sınırsız çıktı (davranış taramasıyla); hepsi
+    sınıflandırıldı ve bağlandı, `test_rate_limit_coverage.py` her ucu limit
+    dolu / Redis düştü durumunda sınar (sınır geri alınınca 37 test kırmızı);
+    yükleme middleware'lerinin ve fail-closed bağımlılıkların Redis arızası
+    ham 500 yerine temiz 503 oldu; (2) ~~ZAP'ın ön yüz OTURUMLU
+    taraması~~ ✅ (02.10.2026, aşağıda "Dinamik tarama" → "İkinci tur"; Kaan'ın
+    `e2e/oturum.ts` çerezi yerine yerel sahte JWKS ile, kit
+    `backend/scripts/zap/`); (3) ~~işçi
+    sağlığı görünürlüğü~~ ✅ (02.10.2026): `GET /api/admin/cutout-queue` (canlı
+    işçi, kuyruk, işlenen, en eski bekleyenin yaşı; durum `ok`/`no_worker`/
+    `stalled`/`unavailable`) + işçi yokken ya da kuyrukta iş varken 2 dk'dan
+    uzun süredir HİÇBİR iş tamamlanmadıysa (ilerleme eksikliği; uzun ama ilerleyen
+    kuyruk tıkalı sayılmaz) `error` günlüğü (API'nin 60 sn'lik kendi
+    gözlemcisiyle — bakım cron'una bağlı değil —, her bakım turunda ve yönetici
+    ucu çağrılınca; aynı sorun 10 dk'da bir) + admin panelinde Genel bakışın
+    en üstünde "Kesim kuyruğu" kartı (30 sn'de bir yenilenir; ön yüz kodu
+    `components/admin/admin-cutout-queue.tsx`); (4) ~~Mac bellek sıkışıklığı~~ ✅
+    (02.10.2026: boşta kalmış işçiyle ilk kesim 12,3 sn, 27.09'daki 30,1 sn
+    tekrarlanmadı; ayrıntı `backend/README.md` → "Kesim kuyruğu"); (5) ~~backend güvenlik başlıkları (`nosniff`, CORP)~~ ✅
+    (02.10.2026, `app/middleware/security_headers.py`; tüm yanıtlarda, CORS ön
+    kontrolü ve 401/404 dahil — gerçek süreçte doğrulandı; ZAP backend taraması
+    tekrarlandı, iki eksik başlık kuralı artık PASS).
+    **Kaan'ın incelemesi (03.10.2026, PR #46):** Windows'ta tam paketler, E2E ve
+    admin kartına tarayıcıda bakıldı; kod incelemesi 10 bulgu verdi, hepsi
+    doğrulanıp Serhan'ın onayıyla aynı PR'da düzeltildi (`4d4d355`): ilerleme
+    işareti iş alımında değil BİTİŞİNDE (yeniden kuyruğa konma döngüsü tıkanmayı
+    gizliyordu), kaydı silinmiş bekleyen iş en az `JOB_TTL` yaşında (30 dk'yı aşan
+    tıkanmada uyarı susuyordu), kayıt kümesinde olmayan canlı işçi de sayılır,
+    hesap silme sınırı e-posta onayından SONRA, iptal uçları satın almadan ayrı
+    kova (`limit_checkout_cancel`), geçersiz oturumda Redis kapalıyken de 401,
+    admin kartında geç gelen eski yanıt yeni sonucu ezmez. Yeni testlerin 12'si
+    eski kodda kırmızı (ayrıntı `CLAUDE.md` ders 44, `backend/README.md` →
+    "Kesim kuyruğu").
+  - **Kaan** (Serhan'a sorulacak noktalar kök `CLAUDE.md` açık takip 12'nin
+    başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
     çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları
@@ -1370,6 +1396,30 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   password when changing password", "Secure password change" ve "Secure email
   change" Serhan tarafından 27.09.2026'da açıldı. **Kalan:** güvenlik başlıkları
   Faz 7'ye çekildi (01.10.2026, sahipleri "kapanış denetimi"); canlıda HSTS Faz 7.5.
+  **Dinamik tarama — ikinci tur ✅ (02.10.2026, Serhan):** yöntem ve kit
+  `backend/scripts/zap/` (hermetik: sahte JWKS, tarama için ayrı veritabanı,
+  gerçek R2/Supabase/iyzico'ya hiç gidilmez). **Backend** (OpenAPI, aktif; anonim,
+  normal kullanıcı, yönetici): 118 kontrol geçti, FAIL 0; 27.09'da uyarı veren
+  `X-Content-Type-Options` ve CORP (Spectre izolasyonu) kuralları artık PASS; tek
+  uyarı yöneticide `/api/admin/users` 503'ü (`SUPABASE_SECRET_KEY` bilerek
+  boş: beklenen). **Ön yüz oturumlu** (kullanıcı ve yönetici çerezi, aktif +
+  pasif): 407 URL (sayfa örümceği + `/api/*` vekilleri için üretilen OpenAPI),
+  **enjeksiyon/XSS/yol geçişi/SSRF vb. aktif bulgu YOK.** Pasif bulgular: CSP,
+  tıklama tuzağı koruması, `nosniff`, `X-Powered-By` eksik/sızıntı (Kaan'ın K2
+  işi, `CLAUDE.md` açık takip 12), "HTTP Only Site" (yerel düz HTTP; HSTS Faz
+  7.5) ve "Anti-CSRF token yok" (`/destek` yedek formu: JS yokken POST'u sayfa
+  yeniden çiziyor, durum değiştirmiyor; oturum çerezi `SameSite=Lax`, geri
+  alınamaz işlemlerde Origin kontrolü var → gerçek açık değil). **Oturumlu
+  olduğu ölçülerek doğrulandı:** yönetici-özel `/api/admin/stats` çerezle
+  yönetici 200, kullanıcı 403, çerezsiz 401 (kontrol deneyi yanlış beklentide
+  uyarı verdi). **Sınırlar (dürüst):** (1) tarama örneğinde hız sınırlayıcılar
+  kapalı (yoksa yazma uçları 429'a boğulur; sınırların kendisi
+  `test_rate_limit_coverage.py`'de); (2) aktif DOM-XSS kuralı (40026) ve AJAX
+  örümceği kapalı: x86 ZAP imajı ARM Mac'te emülasyonla Firefox'u başlatamayıp
+  ZAP'i düşürüyor (günlükte "bitti" görünüp rapor yazılmıyor; Linux/x86'da
+  açılabilir); (3) R2, Supabase yönetici API'si ve iyzico'ya dayanan uçların içi
+  taranmadı (kopuk) → staging, Faz 7.5; (4) dinamik tarama yerel ve test
+  verisiyle; canlıda ayrıca yapılır.
 - **Sistematik IDOR/yetki paketi — ✅ (26.09.2026).** `backend/tests/test_idor.py`:
   45 ucun her biri dört erişim sınıfından birine atanıyor (sınıflandırılmamış
   yeni uç testi kırmızı yakar), 22 admin ucu üç yoldan (401/403/kabul),
@@ -1577,6 +1627,12 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      `NEXT_PUBLIC_SITE_URL` verilir (paylaşım önizlemesi ve site haritası bu
      adresi kullanır); canlıda Safari ile ÜRETİM adresinde kontrol yapılır
      (geliştirme sunucusu üretimle aynı şey değildir, kök `CLAUDE.md` ders 39).
+  12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (Faz 7'den,
+     02.10.2026; kök `CLAUDE.md` açık takip 7 madde 12):** okuma 600/dk, taslak
+     kaydı 300/dk, çalışma silme 30/dk, hesap silme 5/saat ölçülmüş değil,
+     istemci sıklığının üstüne konmuş emniyet payları. Canlıda 429 sayıları ve
+     meşru kullanıcıların sınıra çarpıp çarpmadığı izlenir, değerler buna göre
+     ayarlanır; taslak kaydının fail-open kararı da yeniden değerlendirilir.
 - **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
   takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
   1. **HSTS ve başlıkların canlıda doğrulanması.** Ön yüz CSP, tıklama tuzağı

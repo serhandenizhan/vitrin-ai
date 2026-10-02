@@ -5,6 +5,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Header
 from app.services.billing.usage import UsageQuota, get_usage_quota
 from app.services.billing.errors import billing_error
+from app.services.billing.limits import limit_user_read
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
@@ -15,7 +16,14 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.db import get_db_session
 from app.services.billing.db import one
-from app.services.cutout_queue import DONE, FAILED, PROCESSING, QUEUED, CutoutQueue, QueueFull
+from app.services.cutout_queue import (
+    DONE,
+    FAILED,
+    PROCESSING,
+    QUEUED,
+    CutoutQueue,
+    QueueFull,
+)
 from app.services.storage import (
     R2ConfigurationError,
     R2StorageService,
@@ -162,7 +170,7 @@ async def remove_background(
     return JSONResponse({"job_id": str(request_id), "status": QUEUED}, status_code=202)
 
 
-@router.get(ROUTE_PATH + "/jobs/{request_id}")
+@router.get(ROUTE_PATH + "/jobs/{request_id}", dependencies=[Depends(limit_user_read)])
 async def cutout_job(
     request_id: uuid.UUID,
     _user: CurrentUser = Depends(get_current_user),

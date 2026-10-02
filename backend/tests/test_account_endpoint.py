@@ -5,6 +5,7 @@ yapılandırma eksikken hiçbir şey silinmiyor, R2 hatasında hesap kalıyor.
 """
 
 import uuid
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.main import app
+from app.services.billing import limits
 from app.services import storage as storage_module
 from app.services import supabase_admin as admin_module
 from app.services.storage import R2StorageService, get_storage_service
@@ -62,6 +64,14 @@ def _client(storage: FakeStorage, admin: FakeAdmin, signed_in: bool = True) -> T
             id=USER_ID, email="test@test.example", session_id=None
         )
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _no_account_delete_throttle(monkeypatch):
+    # Bu dosyadaki bütün testler AYNI sabit kullanıcıyla gerçek Redis'e vuruyor;
+    # hesap silme sınırı (saatte 5) onları keserdi. Sınırın kendisi
+    # `test_rate_limit_coverage.py`'de sınanıyor.
+    monkeypatch.setattr(limits.account_delete_limiter, "retry_after", AsyncMock(return_value=None))
 
 
 def teardown_function():
@@ -140,6 +150,32 @@ def test_requires_matching_email_confirmation(payload):
     assert response.status_code in (400, 422)
     assert storage.deleted_prefixes == []
     assert admin.deleted_users == []
+
+
+def test_wrong_confirmation_does_not_use_up_the_delete_limit(monkeypatch):
+    # Sınır onaydan ÖNCE sorulunca yanlış yazılan her onay saatlik 5 hakkı
+    # tüketiyordu; doğru yazan kullanıcı bir saat hesabını silemiyordu.
+    retry_after = AsyncMock(return_value=None)
+    monkeypatch.setattr(limits.account_delete_limiter, "retry_after", retry_after)
+    client = _client(FakeStorage(), FakeAdmin())
+
+    for _ in range(6):
+        response = client.request("DELETE", "/api/account", json={"email": "yanlis@test.example"})
+        assert response.status_code == 400
+
+    assert retry_after.await_count == 0
+
+
+def test_correct_confirmation_is_still_rate_limited(monkeypatch):
+    # Kabul yolu da ayrı sınanır (ders 15): doğru onayla sınır gerçekten sorulur.
+    monkeypatch.setattr(limits.account_delete_limiter, "retry_after", AsyncMock(return_value=30))
+    storage, admin = FakeStorage(), FakeAdmin()
+    client = _client(storage, admin)
+
+    response = client.request("DELETE", "/api/account", json={"email": "test@test.example"})
+
+    assert response.status_code == 429
+    assert storage.deleted_prefixes == [] and admin.deleted_users == []
 
 
 # --- R2StorageService.delete_prefix -----------------------------------------

@@ -188,6 +188,39 @@ describe("runCutout", () => {
     expect(env.renewKey).toHaveBeenCalledTimes(3);
   });
 
+  it("yoklamada 429 gelirse isi hataya cevirmez: Retry-After kadar bekler, ayni anahtarla yoklamaya devam eder", async () => {
+    // Backend okuma sinirini 02.10.2026'da koydu (kullanici basina 600/dk). Yoklama
+    // sirasinda bir 429, sunucuda suren ve kredisi ayrilmis bir isi ekranda
+    // "basarisiz" gostermemeli.
+    const env = setup([queued(), failure("rate_limited", false, 429, "5"), queued(), png()]);
+    const started = Date.now();
+    const result = await settle(runCutout({ file, ...env }));
+
+    expect(result.blob.size).toBe(4);
+    expect(env.calls.filter((call) => call.url === "/api/remove-background")).toHaveLength(1);
+    expect(env.calls.slice(1).map((call) => call.url)).toEqual([
+      "/api/remove-background/jobs/anahtar-0",
+      "/api/remove-background/jobs/anahtar-0",
+      "/api/remove-background/jobs/anahtar-0",
+    ]);
+    // Retry-After'a (5 sn) uyuldu: en az o kadar sure gecti.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(5000);
+    expect(env.renewKey).not.toHaveBeenCalled();
+  });
+
+  it("surekli 429'da isi anlasilir mesajla durdurur ama anahtari ve krediyi korur", async () => {
+    const env = setup([queued(), ...Array.from({ length: 5 }, () => failure("rate_limited", false, 429, "1"))]);
+    const error = await settle(runCutout({ file, ...env })).catch((e) => e);
+
+    expect(error).toBeInstanceOf(CutoutError);
+    expect(error.code).toBe("rate_limited");
+    expect(error.message).toBe("hata: rate_limited");
+    // Ilk 429'da vazgecmez: bes ardisik yoklama denenir (1 yukleme + 5 yoklama).
+    expect(env.calls).toHaveLength(6);
+    expect(env.calls.filter((call) => call.url === "/api/remove-background")).toHaveLength(1);
+    expect(env.renewKey).not.toHaveBeenCalled();
+  });
+
   it("kisa ag kesintilerini tolere eder, surekli kopuklukta durur", async () => {
     const blip = setup([queued(), new TypeError("ag"), new TypeError("ag"), png()]);
     await expect(settle(runCutout({ file, ...blip }))).resolves.toMatchObject({ mocked: false });

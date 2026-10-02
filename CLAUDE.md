@@ -71,6 +71,12 @@ Bu proje, aynı iki kişi (Serhan, Kaan) tarafından daha önce bir kez baştan 
 39. **Ders — bir tarayıcıda "düzeltildi" demeden önce O tarayıcının MOTORUYLA ölç; ve geliştirme sunucusu üretimle aynı şey değildir** (30.09.2026, Serhan'ın Safari şikâyeti). Ana sayfadaki stüdyo turu Serhan'ın Safari'sinde boş görünüyordu; Chrome'da hep düzgündü. İki tur "düzelttim" denip yine bozuk çıktı, çünkü Chrome'da bakılıyordu. Playwright'ın WebKit'i kurulunca (`npx playwright install webkit`, geçici bir klasörde) sorun orada da yeniden üretilemedi; asıl ayırt edici deney, AYNI kodu üretim derlemesiyle (`npm run build && next start -p 3012`) Serhan'a açmaktı: üretimde her şey doğruydu, sorun yalnız geliştirme sunucusundaydı. **Kural: "Safari'de bozuk" gibi bir bildirimde önce (1) o motorda ölç, (2) olmuyorsa dev/üretim farkını dene; üretim düzgünse ziyaretçiyi etkileyen bir hata yoktur ve geliştirme sunucusunun tarayıcı tuhaflığına saatler harcanmaz.** Bu sırada iki savunma önlemi alındı ve kalıcı: (a) konteyner sorgu birimleri (`cqw`/`cqh`) yerine düz yüzde + `aspect-ratio`; (b) sayfa yenilenince en üste dön (`ScrollTopOnReload`).
 40. **Ders — içeriği ölçen sayı, ölçüldüğü koşulun dışına taşınmaz: "makinede 60 fps" telefonda 60 fps değildir.** Vitrin optimizasyonunda her ölçüm M4'te yapıldı. Telefon için işlemci yavaşlatılıp ağ kısıtlandı (LCP 916 → 848 ms, açılışa kadar inen JS 280 → 285 KB) ama ekran kartı taklit edilemedi; bu yüzden 3D yakınlaşma telefonda ayrı, daha düşük kaliteyle çalışır (`compact`) ve gerçek cihaz testi Faz 7.5 listesindedir. **Kural: bir performans sayısı yazılırken hangi donanımda ölçüldüğü de yazılır.**
 
+41. **Ders — "hangi uçlar korumasız" sorusunu belgeden değil, davranıştan sorun; ve `monkeypatch` bir ÖRNEĞİ taklit ederse sınıf düzeyindeki taklit gölgelenir** (02.10.2026, Faz 7 hız sınırı envanteri). Belge "yalnız `projects` ve `account` sınırsız" diyordu; bütün sınırlayıcılar "doldu" döndürülüp her uca istek atılınca ek olarak ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve **admin iade/itiraz/fatura/plan yazma uçları** da sınırsız çıktı (taramayı yapan elle yazılmış listeydi). Aynı test iki başka şey ortaya çıkardı: yükleme middleware'leri Redis düşünce ham 500 veriyordu, ve üç eski test `monkeypatch.setattr(örnek, "retry_after", ...)` ile bağlı metodu örnek özniteliği olarak bırakıp sınıfa uygulanan taklidimi gölgeliyordu — test tek başına yeşil, tam pakette kırmızıydı. **Kural: bir kapsam envanteri tanımı değil davranışı sınar (mekanizmadan bağımsız); bir sınıfı taklit etmek yerine canlı örnekleri taklit edin; yeni test hem tek başına hem tam pakette koşulur.**
+
+42. **Ders — bir güvenlik taramasının "bitti" demesi tamamlandığı anlamına gelmez; "oturumlu" olduğunu da veritabanı izinden değil, sınanabilir bir kontrolle kanıtlayın** (02.10.2026, Faz 7 ZAP turu). İki ayrı yerde yanıltıldık. (a) ZAP üç denemede de "bitmiş" gibi çıktı verdi; oysa aracın günlüğünde `Max retries exceeded ... localhost` vardı ve rapor dosyası hiç yazılmamıştı: x86 ZAP imajı ARM Mac'te emülasyonla Firefox'u başlatamayıp (AJAX örümceği, sonra aktif taramanın DOM-XSS kuralı) ZAP'in kendisini düşürüyordu. İlk tahmin "Docker belleği" idi (yalnız 4 GB'tı, iki ZAP'i birlikte koşturmuştuk); tek konteynerle de çöküşün sürmesi bunu çürüttü. (b) Taramanın çerezle oturumlu koştuğunu ispatlamak için veritabanında iz aradık: sıfır çıktı, ama bu çerezin işlemediğini göstermiyordu, çünkü ZAP'in karıştırdığı geçersiz UUID/gövde işleyiciden ÖNCE reddediliyordu. Doğru ölçüt, ZAP'in kendi `requestor` işiyle yönetici-özel bir uca çerezle istek atmak: yönetici 200, kullanıcı 403, çerezsiz 401, ve bilerek yanlış beklentiyle bir KONTROL koşusu uyarı vermeli. **Kural: bir tarama aracının başarılı sayılması için raporun var olduğuna ve aracın "succeeded" dediğine bakılır; kimlik kapsamı pozitif ve negatif kontrolle ölçülür. Hız sınırlayıcılar tarama örneğinde kapatılır (yoksa 429 işleyicilere ulaşmayı keser) ve bu sınır raporda açıkça yazılır.**
+
+44. **Ders — bir alarm eşiği, NORMAL yük altında yalancı alarm vermediği ölçülmeden konmaz; "tıkalı" bir bekleme süresi değil, bir İLERLEME eksikliğidir** (02.10.2026, PR #46 incelemesi M1). Kesim kuyruğunun `stalled` durumu "en eski bekleyen iş 120 sn'den uzun bekliyor" diye tanımlanmıştı. Tek işçi ~12 sn/iş kestiği (aynı PR'ın kendi ölçümü) için kuyrukta 10+ iş birikince en eski iş 120 sn'yi aşıyor ve sistem tamamen sağlıklıyken panelde "Kuyruk tıkalı görünüyor" ve Sentry'de `error` çıkıyordu; gerçek bir tıkanma da aynı kanaldaki gürültüye karışacaktı. Eşiği ölçtüğümüz süre ile (12 sn) kuyruk derinliğini (50'ye kadar) karşılaştırmamıştık. Düzeltme: işçi her iş alışında bir ilerleme işareti yazar; "tıkalı" = kuyrukta iş var, işçi canlı ama eşikten uzun süredir hiç iş alınmadı (sayaç son alımdan ya da en eski işin gelişinden, hangisi sonraysa başlar, böylece saatlerce boşta kalmış işçiye gelen ilk iş yalancı alarm vermez). Tek bir testin bunu kanıtlaması için üç ayrı mutasyon gerekti. **Kural: bir alarm koşulu yazılırken "sistem NORMAL ama yoğunken bu koşul doğru olur mu?" sorusu ölçülür; durma/takılma gibi bir durum, bekleme süresi gibi yük ile büyüyen bir değer yerine ilerleme eksikliği gibi yükten bağımsız bir işaretle tanımlanır.** (İncelemenin M2 iddiası — yeniden kuyruğa konan işin yaşının düşük görünmesi — kodla ve bir deneyle çürütüldü: bağımsız doğrulama bu yüzden yapılır.) **İkinci tur (03.10.2026, Kaan'ın kod incelemesi):** ilerleme işareti İŞ ALIMINDA yazılıyordu; altyapı hatasıyla durmadan yeniden kuyruğa konup tekrar alınan bir iş, hiçbir iş bitmediği hâlde kuyruğu sağlıklı gösteriyordu. Ayrıca tıkanma 30 dk'yı aşınca en eski işin kaydı (`JOB_TTL`) siliniyor, yaş "bilinmiyor" sayılıyor ve durum `stalled`'dan `ok`'a dönüp uyarı susuyordu. Artık ilerleme = iş BİTİŞİ (`complete`/`fail`, `<önek>:last-progress`), kaydı silinmiş bekleyen iş en az `JOB_TTL` yaşında sayılır, kayıt kümesinde olmayan canlı işçi de (eski sürüm) SCAN ile bulunur. **Ek kural: bir "ilerleme" işareti, işin BAŞLADIĞI yerde değil BİTTİĞİ yerde yazılır — başlayıp bitmeyen bir döngü de başlangıç üretir.**
+
 ## Proje genel bakış
 
 Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hedeftir). Kullanıcılar bir ürün fotoğrafı yükler (yüzük, kolye vb.); AI ürün sınırını yüksek hassasiyetle tespit eder ve arka planı kaldırarak şeffaf arka planlı bir kesim bırakır. Ardından kullanıcılar bu kesimi birçok özel arka plan tasarımından birinin üzerine yerleştirir, ölçeklendirebilir, döndürebilir ve yeniden konumlandırabilir. Tam fazlı plan ve teknoloji kararları için `ROADMAP.md` dosyasına bakın.
@@ -91,7 +97,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
 
 ## Teknoloji yığını (tam gerekçe için ROADMAP.md bölüm 3'e bakın)
 
-- **Backend:** Python, FastAPI, Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`). **Kesim kuyruğu (Faz 7, 27.09.2026):** arka plan kaldırma API'de değil ayrı bir işçide (`python -m app.workers.cutout`); API işi Redis kuyruğuna koyar (`app/services/cutout_queue.py`), istemci `GET /api/remove-background/jobs/{id}` ile yoklar. Celery/RQ yerine kendi küçük kuyruğumuz — gerekçe `backend/README.md` → "Kesim kuyruğu". **İşçi çalışmıyorsa kesimler sırada bekler**; `execute.sh` ve VS Code görevi işçiyi açar. Özgün fotoğraf Redis'te en fazla 15 dk durur (KVKK metninde yazılı). **Redis diske yazmamalı (RDB/AOF kapalı):** `docker-compose.yml` Redis'i `--save "" --appendonly no` ve bellekte `/data` (tmpfs) ile açar; API her kuyruğa koymadan önce bunu doğrular ve açıksa fotoğrafı almaz (`CutoutQueue.ensure_ephemeral`, ders 33). Kaan'ın Windows'taki `redis-windows`'u da aynı argümanlarla başlatılmalı, yoksa kesimler 503 `queue_unavailable` alır.
+- **Backend:** Python, FastAPI, Redis. Redis, Faz 4 kapanışında dağıtık yükleme hız sınırlaması için öne çekilip kuruldu (`backend/app/services/rate_limit.py`). **Kesim kuyruğu (Faz 7, 27.09.2026):** arka plan kaldırma API'de değil ayrı bir işçide (`python -m app.workers.cutout`); API işi Redis kuyruğuna koyar (`app/services/cutout_queue.py`), istemci `GET /api/remove-background/jobs/{id}` ile yoklar. Celery/RQ yerine kendi küçük kuyruğumuz — gerekçe `backend/README.md` → "Kesim kuyruğu". **İşçi çalışmıyorsa kesimler sırada bekler** (02.10.2026'dan beri görünür: `GET /api/admin/cutout-queue` ve `error` günlüğü/Sentry, bkz. `backend/README.md` → "Kesim kuyruğu" → "İşçi sağlığı"); `execute.sh` ve VS Code görevi işçiyi açar. Özgün fotoğraf Redis'te en fazla 15 dk durur (KVKK metninde yazılı). **Redis diske yazmamalı (RDB/AOF kapalı):** `docker-compose.yml` Redis'i `--save "" --appendonly no` ve bellekte `/data` (tmpfs) ile açar; API her kuyruğa koymadan önce bunu doğrular ve açıksa fotoğrafı almaz (`CutoutQueue.ensure_ephemeral`, ders 33). Kaan'ın Windows'taki `redis-windows`'u da aynı argümanlarla başlatılmalı, yoksa kesimler 503 `queue_unavailable` alır.
 - **AI modeli:** BiRefNet — sadece orijinal `ZhengPeng7/BiRefNet` MIT lisanslı ağırlıkları kullanın. BRIA'nın "RMBG" ağırlıklarını asla kullanmayın (aynı mimari, ancak bu ağırlıklar ticari değildir). Üretim modeli doğrudan `birefnet-general` — `-lite` ve `u2net` önceki iterasyonda elendi.
 - **Veritabanı:** PostgreSQL (production'da Supabase — aynı proje, DB ve Auth ayrılmıyor)
 - **Nesne depolama:** Cloudflare R2 (S3 uyumlu), public-read değil, presigned URL ile erişim
@@ -122,6 +128,7 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   backend `retry_safe` dediğinde geçer; başka her durumda (ağ koptu, iş sürüyor,
   sonuç artık saklanmıyor) anahtar korunur. **Faz 7'den beri** API krediyi yalnız AYIRIR ve işi kuyruğa koyar; sonucu R2'ye saklamak ve krediyi tüketmek/iade etmek işçinin işidir (`app/workers/cutout.py`). **Bir iş birden fazla kez işlenebilir** (işçi kredi tükettikten sonra ölürse iş kurtarılır): işçi her işe başlarken ayırmanın durumuna bakar; `retry_safe` YALNIZCA kredi gerçekten iade edildiyse yazılır, ayırma zaten tüketilmişse iş başarılı sayılır ve saklanan sonuç teslim edilir (ders 32). Ön yüz (`lib/cutout-job.ts`) kredisi iade edilmiş GEÇİCİ hataları kullanıcıya göstermeden yeni anahtarla sessizce bir kez daha dener.
 - **Admin paneli (Faz 6):** backend uçları `backend/app/api/routes/admin.py`,
+  **Genel bakışın en üstünde "Kesim kuyruğu" kartı** (02.10.2026): işçi çalışmıyorsa/kuyruk tıkalıysa gösterir, istatistik yüklemesinden bağımsız ve 30 sn'de bir yenilenir; `GET /api/admin/cutout-queue` vekili, `components/admin/admin-cutout-queue.tsx`,
   şema migration `0007`. **Beş kural:** (1) *admin'in verdiği kredi dönem
   kotasını BÜYÜTMEZ* — `quota_snapshot` değişmez bir kanıt kaydıdır; bonus
   krediler `credit_grants` tablosunda durur, yalnız dönem kotası tükendiğinde
@@ -218,8 +225,21 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   değil (erişim kuralı 1) ve sınırlayıcının altyapı arızası, Next vekilinin
   bütün 5xx'leri "200 + boş liste"ye çevirmesi yüzünden kullanıcının gözünde
   93 zeminlik kütüphaneyi yok ediyordu. Her iki yön de test edilmiş durumda;
-  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. Destek formu
-  (`POST /api/support-requests`, saatte 5/kullanıcı) da fail-open: Redis'in
+  yeni bir uç noktaya sınır eklerken bu ayrım bilinçli olarak seçilir. **Kapsam (02.10.2026):**
+  OpenAPI'deki HER uç `backend/tests/test_rate_limit_coverage.py`'de `CLOSED`/`OPEN`/
+  `UPLOAD`/`EXEMPT` sınıflarından birine atanır (sınıfsız yeni uç kırmızı yakar) ve test
+  davranışı sınar: limit doluyken 429, Redis düşünce CLOSED 503 / OPEN sınırsız geçer.
+  Çalışma okuma/abonelik/geçmiş/kesim yoklaması `limit_user_read` (fail-open, 600/dk),
+  taslak otomatik kaydı `limit_project_write` (fail-open: Redis arızasında kapatmak
+  kullanıcının stüdyodaki düzenlemesini kaybettirirdi), çalışma silme `limit_user_delete`
+  ve hesap silme `limit_account_delete` (fail-closed, saatte 5; bağımlılık DEĞİL, e-posta
+  onayı doğrulandıktan SONRA çağrılır — önce sorulunca yanlış yazılan onay hakkı tüketip
+  kullanıcıyı bir saat kilitliyordu), ödeme oturumu ve abonelik iptali
+  `limit_checkout_cancel` (fail-closed, 10/dk, satın almadan AYRI kova — aynı kovada
+  birkaç ödeme denemesi iptali engelliyordu; 03.10.2026, PR #46 kod incelemesi), admin faturalama yazma
+  uçları `limit_admin` (fail-closed; 02.10.2026'ya kadar sınırsızdı). Fail-closed artık
+  hep temiz 503 `rate_limit_unavailable` verir (eskiden yakalanmamış `RedisError` → 500).
+  **Ön yüzde 429 (02.10.2026 kontrolü):** vekil (`lib/backend-proxy.ts`) 429/503'ü Türkçe mesaj ve `Retry-After`'la aynen aktarır; hesap silme, abonelik iptali, destek formu ve çalışma listesi bunu gösterir. **Kesim yoklaması** 429'u ARTIK hataya çevirmez: `Retry-After` kadar bekleyip aynı anahtarla sürer, 5 ardışık 429'da mesajla durur (anahtar ve kredi korunur). Otomatik kayıt 429'da genel "kaydedilemedi" bandını gösterir (mesaj 429'a özgü değil; 300/dk sınırı normal kullanımda tetiklenmez). Destek formu  (`POST /api/support-requests`, saatte 5/kullanıcı) da fail-open: Redis'in
   düştüğü an kullanıcının sorun bildirmek isteyeceği andır. **CMYK dönüşümü**
   (Next `/api/cmyk`, 27.09.2026'ya kadar oturumsuz ve sınırsızdı — /cso
   incelemesi) gövdeyi okumadan önce backend'e sorar (`POST /api/cmyk/permit`:
@@ -243,7 +263,9 @@ Kuyumcular için AI destekli bir web uygulaması (mobil uygulama uzun vadeli hed
   `backend/ruff.toml`, 27.09.2026). Yerelde aynısı: `cd backend && .venv/bin/ruff check app tests scripts alembic`.
   **Backend testleri tek komutla: `backend/scripts/test.sh`** (ayrı compose
   projesinde kendi Postgres'i 5434 + Redis'i 6380; argümanlar pytest'e geçer,
-  çıkış kodu pytest'inki). Düz `pytest` `execute.sh`'ın geliştirme
+  çıkış kodu pytest'inki; test Redis'ini her oturum başında temizler — yalnız
+  kendi Redis'inde, `VITRIN_TEST_REDIS_OWNED=1`, kilit alındıktan sonra, bkz.
+  `backend/README.md` → "Testler"). Düz `pytest` `execute.sh`'ın geliştirme
   veritabanında (yerel + 5432 + `vitrin_ai`) hiçbir şeye dokunmadan durur
   (`VITRIN_ALLOW_DEV_DB_RESET=1` ile bilerek geçilir); aynı test
   veritabanında ikinci bir oturum da kilit alamayıp durur (ders 34).
@@ -331,8 +353,8 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - Tarayıcı FastAPI'ye doğrudan bağlanmaz, istek `frontend/src/app/api/remove-background/route.ts` vekilinden geçer. Vekil ayrıca Windows'ta boş gelen `.heic` content-type'ını uzantıdan düzeltir ve backend'in 413/503 yanıtlarını kullanıcı diline çevirir.
 - **Hesaplar (Faz 4):** `frontend/.env.local`'e `NEXT_PUBLIC_SUPABASE_URL` ve `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` yazılmalı; boşsa site açılır ama giriş yapılamaz. **Arka plan kaldırma giriş ister** (ürün kararı, demo modunda da). Vekil oturumu gövdeyi okumadan önce kontrol ediyor. Supabase panelinde gereken ayarlar: Redirect URLs'te `http://localhost:3000/auth/callback` (sıfırlama bağlantısı `?next=` eklediği için yerelde `http://localhost:3000/**`), parola kuralı (en az 8, küçük + büyük harf + rakam + **sembol** — Dashboard'daki gerçek ayar "...and symbols (recommended)", bkz. ders 19), e-posta bağlantı süresi. Ayrıntı: `frontend/README.md` → "Hesaplar".
 - **Geçmiş çalışmalar sunucuda:** `work-history.ts` artık `/api/projects` vekillerine gidiyor; kayıtlı sonuç görseli `/api/projects/[id]/result` üzerinden aynı kökenden veriliyor (R2 CORS'a bağlı değil, tuval kirlenmiyor). **Faz 5'ten beri R2 zorunlu:** arka plan kaldırma başarılı sonucu idempotency için geçici bir R2 nesnesi olarak saklamadan krediyi tüketmiyor; R2 yapılandırılmamışsa kesim hiç başlamaz ve `503 result_storage_unavailable` döner (eskiden bu cümle "kesim ve indirme akışı etkilenmez" diyordu). Yalnız arayüzü denemek için `USE_MOCK_BACKEND=true`.
-- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: Faz 7'den beri API süreci modeli hiç yüklemiyor (kesim ayrı işçide); işçinin sağlığı bu uçtan görünmez — işçi çalışmıyorsa kesimler sırada bekler (canlıda servis olarak izlenmesi açık takip maddesi 7'de). `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
-- **Frontend testleri:** `cd frontend && npm test` (Vitest, 498 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, stüdyonun masaüstü aşamalı akışı ve yalnız açılışta çıkan perde (matchMedia taklidiyle), zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri (kategori + yayın durumu), stüdyoda ilk döndürmede ürün boyutunun değişmemesi, zemin favorileri ile gölge boyutu/yoğunluğu ve yansıma mesafesi, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali, kesim işinin anahtarının ekranın ortak anahtarından ayrı tutulması (Kaan'ın PR #30 incelemesi), admin listesi/mutasyon yarışı (PR #25 incelemesi: mutasyondan önce başlayan periyodik GET'in yeni durumu geri alamaması — ilk testin tek bir mikro görev turu beklediği için yanlışlıkla düzeltmesiz de yeşil geçtiği fark edildi, birden fazla tur beklenecek şekilde güçlendirildi) ve yönetici ekleme/çıkarma için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Bileşen testleri Faz 7'de Kaan tarafından genişletildi (30.09.2026). **E2E (Playwright, 30.09.2026, Kaan):** `cd frontend && npm run e2e` (`e2e/`, masaüstü + 375 px telefon projesi); gerçek Supabase hesabı GEREKTİRMEZ: girişsiz akışlar (sayfalar, 404, oturum koruması, vekil uçların 401'i, giriş penceresi, yükleme reddi) olduğu gibi, OTURUMLU akışlar (hesap menüsü, çıkış, çalışmalar listesi ve liste hatası, yükleme → kesim → stüdyo, kesim hatası) `e2e/oturum.ts`'teki sahte oturum çerezi + taklit `/api/*` yanıtlarıyla sınanır. Giriş formu GÖNDERİLMEZ, production Supabase'e istek gitmez. **Sınır:** bunlar ARAYÜZÜN oturumlu davranışını sınar; Supabase entegrasyonunu, JWT doğrulamasını ve IDOR'u değil (onlar backend testlerinde gerçek tokenlarla). Taklit yanıt biçimi vekilin ürettiği camelCase'tir (`WorkRecord`), backend'inki değil. Adres `E2E_BASE_URL` ile değişir; sunucu açıksa onu kullanır. stüdyonun aşama içi araçları masaüstünde sınanır (`e2e/studyo.spec.ts`: biçim/zemin seçimi, 90° döndürme, aşamalar arası gezinme, PNG/JPEG indirmenin gerçek dosya imzası, otomatik taslak kaydı; tuval durumu TÜM Konva katmanlarının özetiyle ölçülür, ders 26). CMYK, WhatsApp, çoklu boyut indirme, logo ve etiket de sınanır (`e2e/cikti.spec.ts`); görsel ağırlık bütçesi `e2e/agirlik.spec.ts`'te. **CI'da ayrı bir iş olarak koşar** ("Frontend E2E (Playwright)"): hermetik (sahte Supabase, ulaşılamaz backend; `NEXT_PUBLIC_SUPABASE_URL` derlemeye sahte değerle verilir) ve **ZORUNLU KONTROL DEĞİL** — "protect main" kural setine eklemek Serhan'ın kararı; eklenirse iş adı değişmemeli. Üst çubuktaki "Giriş yap" düğmesi telefonda yalnız ikon olduğu için `aria-label` taşır (E2E bunu bulup eklettirdi; testler adına göre seçer).
+- **Backend'de `GET /api/health` var** (`backend/app/api/routes/health.py`, diğer tüm uç noktalarla aynı `/api` öneki altında) — `{"status": "ok"}` döner. Bilinçli olarak sadece süreç canlılığını doğrular, model yüklü mü diye bakmaz: Faz 7'den beri API süreci modeli hiç yüklemiyor (kesim ayrı işçide); işçinin sağlığı bu uçtan görünmez; onun için yönetici ucu `GET /api/admin/cutout-queue` var (canlı işçi, kuyruk uzunluğu, en eski bekleyenin yaşı; işçi yokken `error` günlüğü). İşçi çalışmıyorsa kesimler sırada bekler (canlıda servis olarak izlenmesi açık takip maddesi 7'de). `backend/Dockerfile`'da bu uç noktaya bağlı bir `HEALTHCHECK` var. Arayüzde bu endpoint'i kullanan bir "servis ayakta mı" göstergesi henüz yok — istenirse eklenebilir.
+- **Frontend testleri:** `cd frontend && npm test` (Vitest, 516 test). Kapsam; stüdyonun üç adımı, A4 varsayılanı, zeminin esnetilmeden kırpılması, biçim yönüne göre zemin süzme, yansıma yerleşimi, zemin kategorileri ve baskıya önerilmeyen zeminde CMYK onayı, yükleme kısıtları, arka plan kaldırma/zemin/proje/hesap vekilleri (oturum zorunluluğu dahil), CMYK yükleme limitleri, imzalı URL yenileme zamanlaması, kompozisyon geometrisi, logo/etiket yerleşimi, parola kuralı, profil doğrulaması, açık yönlendirme koruması ile kayıt formu, cursor geçmişi, yasal sürüm/yayın koruması, editör (pazaryeri, WhatsApp paylaşımı, logo reddi), açılıştaki önce/sonra ve Faz 5 incelemesinde eklenen idempotency anahtarı davranışı, stüdyonun masaüstü aşamalı akışı ve yalnız açılışta çıkan perde (matchMedia taklidiyle), zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri (kategori + yayın durumu), stüdyoda ilk döndürmede ürün boyutunun değişmemesi, zemin favorileri ile gölge boyutu/yoğunluğu ve yansıma mesafesi, oturum düşünce zemin listesinin boşalmaması, hesap silmede Origin kontrolü ile bekleyen checkout'un iptali, kesim işinin anahtarının ekranın ortak anahtarından ayrı tutulması (Kaan'ın PR #30 incelemesi), admin listesi/mutasyon yarışı (PR #25 incelemesi: mutasyondan önce başlayan periyodik GET'in yeni durumu geri alamaması — ilk testin tek bir mikro görev turu beklediği için yanlışlıkla düzeltmesiz de yeşil geçtiği fark edildi, birden fazla tur beklenecek şekilde güçlendirildi) ve yönetici ekleme/çıkarma için React bileşen testlerini içerir. **Tuzak:** Konva, "tainted" tuvalde `toDataURL` hatasını fırlatmıyor, yakalayıp boş string döndürüyor — boş sonuç hata olarak ele alınmazsa PNG düğmesi sessizce hiçbir şey yapmaz (tarayıcıda ölçüldü). Bileşen testleri Faz 7'de Kaan tarafından genişletildi (30.09.2026). **E2E (Playwright, 30.09.2026, Kaan):** `cd frontend && npm run e2e` (`e2e/`, masaüstü + 375 px telefon projesi); gerçek Supabase hesabı GEREKTİRMEZ: girişsiz akışlar (sayfalar, 404, oturum koruması, vekil uçların 401'i, giriş penceresi, yükleme reddi) olduğu gibi, OTURUMLU akışlar (hesap menüsü, çıkış, çalışmalar listesi ve liste hatası, yükleme → kesim → stüdyo, kesim hatası) `e2e/oturum.ts`'teki sahte oturum çerezi + taklit `/api/*` yanıtlarıyla sınanır. Giriş formu GÖNDERİLMEZ, production Supabase'e istek gitmez. **Sınır:** bunlar ARAYÜZÜN oturumlu davranışını sınar; Supabase entegrasyonunu, JWT doğrulamasını ve IDOR'u değil (onlar backend testlerinde gerçek tokenlarla). Taklit yanıt biçimi vekilin ürettiği camelCase'tir (`WorkRecord`), backend'inki değil. Adres `E2E_BASE_URL` ile değişir; sunucu açıksa onu kullanır. stüdyonun aşama içi araçları masaüstünde sınanır (`e2e/studyo.spec.ts`: biçim/zemin seçimi, 90° döndürme, aşamalar arası gezinme, PNG/JPEG indirmenin gerçek dosya imzası, otomatik taslak kaydı; tuval durumu TÜM Konva katmanlarının özetiyle ölçülür, ders 26). CMYK, WhatsApp, çoklu boyut indirme, logo ve etiket de sınanır (`e2e/cikti.spec.ts`); görsel ağırlık bütçesi `e2e/agirlik.spec.ts`'te. **CI'da ayrı bir iş olarak koşar** ("Frontend E2E (Playwright)"): hermetik (sahte Supabase, ulaşılamaz backend; `NEXT_PUBLIC_SUPABASE_URL` derlemeye sahte değerle verilir) ve **ZORUNLU KONTROL DEĞİL** — "protect main" kural setine eklemek Serhan'ın kararı; eklenirse iş adı değişmemeli. Üst çubuktaki "Giriş yap" düğmesi telefonda yalnız ikon olduğu için `aria-label` taşır (E2E bunu bulup eklettirdi; testler adına göre seçer).
 - **Sayfa ağırlığı (Faz 7, 28.09.2026, Kaan):** `SiteShell` her sayfada çizildiği için oraya doğrudan içe aktarılan her bileşenin kodu BÜTÜN sayfalara iner. Stüdyo bu yüzden `components/composer/studio-host.tsx` üzerinden `next/dynamic` ile yalnız açılınca yükleniyor (ölçüm: sayfa başına ilk JS ~1050 → ~940 KB, gzip ~305 → ~275 KB; kalan kısım React çatısı + her sayfada gereken Supabase istemcisi). **Kural: kabuğa yalnız kapalıyken de gereken şey konur; tam ekran/katman bileşenleri (stüdyo gibi) açılınca yüklenir.** Ölçüm Next 16'da `next build` boyut yazmadığı için üretim sunucusunda (`next start`) sayfanın indirdiği dosyalar toplanarak yapıldı. Yüklenen fotoğraf ise **bilinçli olarak sıkıştırılmaz** — model girdisi özgün dosyadır (ROADMAP bölüm 2, WhatsApp sıkıştırması dersi). **Windows tuzağı:** proje OneDrive altında olduğu için `next start` açıkken ya da hemen ardından `next build` `.next` içinde `EPERM` verebilir; önce sunucu (portun sahibi süreç) kapatılır, gerekirse `.next` silinip yeniden derlenir.
 - **Zemin kütüphanesi (öne alınan iş, 17.09.2026):** 93 zemin `backend/scripts/upload_backgrounds.py` ile R2 + `backgrounds` tablosuna "basic" olarak yüklendi; betik yükleme ucuyla aynı kontrolleri yapıp zemini aynı çözünürlükte JPEG %92'ye çevirir ve 480 px önizleme (`backgrounds/thumbs/<id>.jpg`) üretir. **Veritabanı yapısı bilinçli olarak değişmedi** (Kaan: "karışıklık olur"): kategori ve baskı uyarısı `frontend/src/lib/background-catalog.ts`'te (betikle üretilir, elle düzenlenmez), zemin kimliğine göre; katalogda olmayan zemin "Sade" sayılır. 4 kategori (`lib/background-categories.ts`): Sade, Doku & desen, Doğal & çiçekli, Lüks & koyu. Düşük çözünürlüklü 4 ChatGPT zemininde CMYK düğmesi önce "Bu görsel baskıya önerilmiyor. Yine de onaylıyor musunuz?" diye sorar — kontrol yalnız arayüzde, `/api/cmyk` hangi zeminin kullanıldığını bilmez. **Tuzak (PR #18'de KAPATILDI):** Faz 5'in hız sınırlayıcısı Redis ister ve Redis yoksa `GET /api/backgrounds` 500 veriyordu; vekil bütün 5xx'leri "200 + boş liste"ye çevirdiği için stüdyo sessizce gradyan yer tutuculara düşüyordu. Artık zemin listelemenin hız sınırı **fail-open** (para/webhook yüzeyleri fail-closed kaldı, bkz. yukarıdaki hız sınırı maddesi): Redis kapalıyken de 93 zemin dönüyor, yalnızca bir uyarı log'lanıyor. **Sıra (19.09.2026, Serhan):** kategori içinde zeminler DÜZDEN KARMAŞIĞA; sıra `frontend/src/lib/background-order.ts`'te, `backend/scripts/rank_backgrounds.py` R2'deki önizlemelerin kenar şiddetini ölçerek üretir (salt okuma, DB yapısı değişmedi). Yeni zemin yüklenince betik yeniden çalıştırılır; sırada olmayan zemin kategorisinin sonuna düşer. Arayüz de "kütüphane hazırlanıyor" ile "yüklenemedi"yi ayırıyor ve tekrar deneme sunuyor. Zeminler yine görünmüyorsa sıradaki şüpheli Redis değil, **R2 ayarları ya da CORS kuralı**. Yerelde Redis: `Yeni klasör\araclar\redis\` (redis-windows 8.10.1, kurulumsuz), `.claude/launch.json`'daki `redis` kaydı; backend'den önce başlatılır.
 - **Stüdyo ve katalog düzenlemeleri (öne alınan iş, 17.09.2026, Kaan):** stüdyo **A4 ile açılır**, "Kare 2000×2000" kaldırıldı (beyaz zeminli Pazaryeri duruyor). Düzenleme **üç adım**: 1 Boyut ve zemin → 2 Ürün (yerleşim, parlaklık/kontrast/doygunluk, gölge, yansıma) → 3 Bitir (logo, etiket, indirme, CMYK, WhatsApp). Zemin artık **esnetilmiyor**, biçimi ortadan kırparak kaplıyor (`coverCrop`); fotoğraf/desenli zeminler yalnızca biçimin yönüne (dikey/yatay; kare = yatay) uyuyorsa listelenir, **Sade her biçimde** (`fitsOrientation`; yön katalogda, yükleme betiği ölçülerden üretir). "Işık havuzu" kaldırıldı, yerine **yansıma** (ayrı Konva katmanında `destination-in` ile silikleşen ayna kopya). **Gölge güçlendirildi** (`SHADOW` 50/34/%55): eski değer Konva'da ölçüldü, açık zeminde ~27/255, koyu zeminde ~0 koyulaşma veriyordu — önbellek teşhisi ölçümle çürütüldü, sebep zayıf değerlerdi. Katalog PNG yerine **JPEG + baskıya uygun CMYK** ve **logo** (stüdyoyla aynı depolama; `lib/print-download.ts`, `lib/logo-image.ts` ortak). Sol panelden eski çalışma ana sayfa dışındaki sayfalarda açılmıyordu: bekleyen çalışma `sessionStorage`'a yazılıp ana sayfaya gidiliyor (sağlayıcı her sayfada yeniden kuruluyor, bellek yetmez).
@@ -563,6 +585,8 @@ Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
 
 `provider_actions` kuyruğunu (hesap silme, abonelik iptali, dunning e-postası,
 depolama temizliği) işleyen tek şey `python -m app.services.billing.maintenance`.
+Aynı tur kesim işçisinin sağlığını da gözler, ama "işçi yok" alarmı bu işe
+BAĞLI DEĞİL: API sürecinin kendi periyodik gözlemcisi var (02.10.2026).
 Bir servis olarak kurulu değil; 19.09.2026'da test hesabının silinmesi elle
 çalıştırılana kadar "sırada" kaldı. **Canlıda periyodik çalıştırılmazsa
 (systemd timer / cron) hiçbir silme talebi, iptal ya da ödeme bildirimi
@@ -621,7 +645,7 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      Burada kalan: canlıda HSTS, başlıkların canlı adreste ZAP pasif taramasıyla
      doğrulanması ve başlıklar oturunca CI'a ZAP pasif taraması
      (`zaproxy/action-baseline`).
-  2. **Canlıda tarama:** test/staging ortamı kurulunca ZAP pasif taraması
+  2. **Canlıda tarama** (yerel kit: `backend/scripts/zap/README.md`): test/staging ortamı kurulunca ZAP pasif taraması
      canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
      ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
      R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
@@ -647,35 +671,42 @@ Kod, PR'lar ve ROADMAP taranınca çıkan, **Faz 7 kapanmadan bitmesi gereken**
 işler; dağılım Serhan'ın onayıyla (`ROADMAP.md` Faz 7 → "kapanış denetimi").
 Biri bitince buradan SİLİNİR.
 
-1. **Hız sınırı kapsamı + envanter testi.** `GET/PATCH/DELETE /api/projects...`
-   ve `DELETE /api/account` için sınırlayıcı yok (yalnız `POST /api/projects`
-   `PROTECTED_UPLOADS` ile, kesim yüklemesi ayrıca korunuyor). Her uç için yön
-   bilinçli seçilir (okuma fail-open, yazma/silme fail-closed — bkz. "Hız sınırı
-   Redis arızasında…" maddesi) ve `test_idor.py`'nin yaptığı gibi her ucun bir
-   hız sınırı sınıfına atandığını doğrulayan bir envanter testi yazılır
-   (sınıflandırılmamış yeni uç kırmızı yakar). Bitince `SECURITY.md` bölüm 9
-   "Rate limiting tüm public endpoint'lerde aktif" işaretlenir. Kabul: yeni test
-   sınır kaldırılınca kırmızı yanar (ders 15).
-2. **ZAP ön yüz OTURUMLU taraması.** Backend iki oturumlu tarama aldı, ön yüz
-   almadı. Kaan'ın `frontend/e2e/oturum.ts` sahte oturum çerezi kullanılabilir
-   (gerçek Supabase'e dokunmadan). Sonuç ROADMAP "Dinamik tarama"ya yazılır.
-   R2/Supabase yönetici API'sine dayanan uçların taraması staging gerektirir →
-   Faz 7.5 (değişmedi).
-3. **İşçi sağlığı görünürlüğü.** `worker:<id>` nabzı (TTL 30 sn) yalnız
-   `recover_stale`'de okunuyor; işçi çalışmıyorsa `/api/health`, admin paneli ya
-   da herhangi bir alarm bunu göstermez, kullanıcılar sessizce sırada bekler.
-   Yapılacak: canlı işçi sayısı, kuyruk uzunluğu ve en eski bekleyen işin yaşını
-   okuyan bir yönetici ucu (`ADMIN` sınıfı, `test_idor.py`'ye eklenir) ve işçi
-   yokken uyarı (günlük/Sentry). Admin panelinde kart istenirse Kaan ekler.
-4. **Mac bellek sıkışıklığı** — yukarıdaki açık takip 9 (aynı iş, aynı sahip).
-5. **Backend güvenlik başlıkları** (`X-Content-Type-Options: nosniff`,
-   `Cross-Origin-Resource-Policy`; ZAP'in backend taramasındaki iki eksik).
-   Eklendikten sonra backend ZAP taraması tekrarlanıp iki eksiğin kapandığı
-   görülür. Ön yüz başlıkları Kaan'ın (açık takip 12).
+**Serhan'ın Faz 7 kapanış işleri bitti (02.10.2026).** Faz 7 yalnız Kaan'ın
+(açık takip 12) kalan işleriyle kapanır.
 
 ### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
 
 Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
+
+> **Kaan'ın Claude Code oturumu için (Serhan'ın talimatı, 02.10.2026):** aşağıdaki
+> işler ön yüz kodudur ve Kaan'ındır, ama şu noktalarda **Serhan'a SORULMADAN
+> ilerlenmez** — ilgili adıma gelince durup Kaan'a "bunu Serhan'a sor" de
+> (varsayım yapma, kendin karar verme):
+>
+> - **K2 (ön yüz başlıkları):** (a) CSP kaynak listesine **backend/altyapıya ait**
+>   bir alan adı girecekse (R2 bucket adresi, Supabase proje adresi, hata izleme
+>   sağlayıcısı/Sentry adresi, canlı alan adı): bunlar Serhan'ın altyapı
+>   alanıdır; değeri kodda/`.env`'de bulabiliyorsan kullan, bulamıyor ya da
+>   tanıyamıyorsan Serhan'a sor. (b) Report-Only ihlal listesinde tanımadığın
+>   bir kaynak çıkarsa. (c) **Zorlayıcı kipe geçmeden önce** (yanlış bir CSP
+>   canlıda zeminleri/stüdyoyu sessizce bozar). HSTS ve canlı başlık doğrulaması
+>   Faz 7.5'te Serhan'ındır; yapma.
+> - **K3 (E2E testleri):** (a) **vitrin 3D yakınlaşma**: WebGL yokken ve "hareketi
+>   azalt"ta ekranda tam olarak ne görünmesi gerektiği Serhan'ın tasarımıdır
+>   (özellik onun: `CLAUDE.md` "Açılış vitrini"). Önce kodu ve ilgili belgeyi
+>   oku; davranış belirsiz ya da kodla belge çelişiyorsa Serhan'a sor, testi
+>   tahminle yazma. (b) Ödeme, kuyruk ve admin testlerindeki **taklit yanıtlar
+>   backend'in GERÇEK gövde biçimini taşımalı** (ders 22): biçimden emin
+>   değilsen `backend/app/api/routes/*.py` ve `backend/tests/`'e bak, hâlâ
+>   belirsizse Serhan'a sor. (c) **Gerçek Supabase + gerçek backend'e karşı**
+>   uçtan uca test staging ister (Faz 7.5, Serhan'ın); başlama.
+> - **K1 (zemin takılması):** ön yüz içinde kalır. Sunucu tarafında (R2, yükleme
+>   betiği, `backgrounds` tablosu) orta boy zemin üretme fikri çıkarsa Serhan'a
+>   sor (ders 24, 25 ve migration kuralı).
+> - **Genel:** işin içinde `backend/`, bir migration, R2 yapılandırması, hız
+>   sınırı ya da kimlik doğrulama dosyasında değişiklik gerekirse (ya da 429/503
+>   gibi backend yanıt davranışlarını değiştirmek isteyen bir şey çıkarsa) önce
+>   Serhan'a sor.
 
 1. **Stüdyoda zemin değişiminde kalan takılma.** Zemin görselleri tam
    çözünürlükle (3508×2480) her karede iki kez çiziliyor (zemin seçimi 60–70
@@ -701,32 +732,6 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
    hesap silme, vitrin 3D yakınlaşma (WebGL yok ve "hareketi azalt" dalları).
    Gerçek Supabase + gerçek backend ile uçtan uca test staging gerektirir →
    Faz 7.5.
-
-### 9. Serhan'ın Mac'inde bellek sıkışıklığı — sahibi: Serhan (27.09.2026'da bulundu, yarın bakılacak)
-
-Kesim kuyruğu denemesinde iki fotoğraftan ilki 43 sn sürdü (normali ~12 sn).
-Ölçümle bulunan sebep kod değil makine: 16 GB'lık Mac'te **takas (swap)
-15,5 / 16 GB doluydu** ve macOS, boşta bekleyen kesim işçisinin model
-ağırlıklarını diske atmıştı (işçi RSS 0,02 GB). Boşta kalıştan sonraki ilk
-kesim 30,1 sn, hemen ardından gelenler 9,3 / 9,1 sn ölçüldü (ayrıntı
-`backend/README.md` → "Kesim kuyruğu"). `./execute.sh` artık açılışta işçiyi
-başlattığı için model (~5 GB) sürekli bellekte duruyor; makine sıkışınca
-hem kesimler hem bilgisayar yavaşlıyor (dün gece iki model aynı anda
-çalışınca makine kilitlenmişti — ders 31).
-
-**Bakılacaklar:**
-1. **Docker Desktop → Settings → Resources → Memory:** Docker'ın Linux sanal
-   makinesine ayrılan bellek. Postgres + Redis için 2–4 GB yeter; fazlası Mac'ten
-   sürekli eksilir. Değer düşürülüp Docker yeniden başlatılır.
-2. `sysctl vm.swapusage` ve Etkinlik Monitörü → Bellek: `execute.sh` açıkken en
-   çok bellek kullananlar (Chrome sekmeleri, VS Code eklentileri, Docker).
-3. Kesim denenmeyecek günlerde `VITRIN_START_WORKER=0 ./execute.sh` (işçi ve
-   model hiç açılmaz; kesimler sırada bekler).
-4. Düzeltmeden sonra ölçüm: işçi birkaç dakika boşta kaldıktan sonra bir
-   kesim yapılır; ~12 sn civarındaysa sorun kapanmıştır ve bu madde silinir.
-
-Bu, yerel geliştirme ortamının sorunu; canlı sunucudaki karşılığı açık takip
-maddesi 7'nin 8. alt maddesi (modelin bellekte kalması).
 
 ### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
 
@@ -782,6 +787,18 @@ liste):
      ölçülmedi); alan adı belli olunca `NEXT_PUBLIC_SITE_URL` verilir
      (paylaşım önizlemesi ve site haritası bu adresi kullanır); canlıda Safari
      ile üretim adresinde kontrol yapılır (ders 39).
+  12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (02.10.2026):**
+     değerler (okuma 600/dk, taslak kaydı 300/dk, çalışma silme 30/dk, hesap
+     silme 5/saat; ayrıntı `backend/README.md` → "Hız sınırı kapsam
+     envanteri") ölçülmüş üretim verisi değil, istemcinin istek sıklığının
+     (kesim yoklaması 1,5 sn, checkout 5 sn, otomatik kayıt 1,5 sn gecikmeli)
+     üstüne konmuş emniyet payları. Canlıda gerçek kullanıcı trafiğiyle
+     bakılır: 429 sayıları (Sentry/günlük), meşru kullanıcının sınıra çarpıp
+     çarpmadığı, çarpıyorsa hangi uçta; gerekirse gevşetilir, gereksiz bol
+     kalan değerler sıkılaştırılır. Taslak kaydının fail-open kararı
+     (`limit_project_write`) da bu turda gözden geçirilir. Aynı bakışta
+     Next vekili arkasında kovaların doğru kullanıcıya bağlandığı
+     (`TRUSTED_PROXY_IPS`, açık takip 3) doğrulanır.
 
 ### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
 

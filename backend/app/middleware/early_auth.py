@@ -7,6 +7,7 @@ from typing import Any
 
 import jwt
 from fastapi.concurrency import run_in_threadpool
+from redis.exceptions import RedisError
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core import auth as auth_module
@@ -92,7 +93,13 @@ class EarlyAuthenticationMiddleware:
             )
             return
         except jwt.PyJWTError:
-            retry_after = await self._unauthenticated_retry_after(scope)
+            try:
+                retry_after = await self._unauthenticated_retry_after(scope)
+            except RedisError:
+                # İstek zaten 401 ile reddedilecek ve gövde okunmayacak; sayacın
+                # sorulamaması 503'e çevrilirse gerçek sebep (oturum geçersiz)
+                # gizlenir ve vekil giriş penceresini açmaz (PR #46 kod incelemesi).
+                retry_after = None
             if retry_after is not None:
                 await self._error(
                     scope,
@@ -111,7 +118,11 @@ class EarlyAuthenticationMiddleware:
         if not await self._project_user_matches(scope, receive, send, user):
             return
         if self.user_limiter is not None:
-            retry_after = await self.user_limiter.retry_after(f"user:{user.id}")
+            try:
+                retry_after = await self.user_limiter.retry_after(f"user:{user.id}")
+            except RedisError:
+                await self._limiter_unavailable(scope, receive, send)
+                return
             if retry_after is not None:
                 await self._error(
                     scope,
@@ -124,6 +135,18 @@ class EarlyAuthenticationMiddleware:
                 return
         scope.setdefault("state", {})["current_user"] = user
         await self.app(scope, receive, send)
+
+    async def _limiter_unavailable(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # FAIL-CLOSED (bkz. `app/services/billing/limits.py`): sayaç sorulamıyorsa
+        # yükleme gövdesi okunmadan reddedilir. Eskiden yakalanmamış RedisError
+        # ham bir 500'e dönüşüyordu; yön aynı, yanıt anlaşılır.
+        await self._error(
+            scope,
+            receive,
+            send,
+            503,
+            "Şu anda bu işlem yapılamıyor; birazdan tekrar deneyin.",
+        )
 
     async def _unauthenticated_retry_after(self, scope: Scope) -> int | None:
         if self.unauthenticated_limiter is None:

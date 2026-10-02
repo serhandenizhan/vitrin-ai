@@ -334,11 +334,12 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   okunan kayıt düzenlenemez, eylem türü sabit listeyle sınırlıdır ve kullanıcı
   e-postaları `auth.users`'tan değil Supabase yönetici API'sinden gelir;
   destek formunda kullanıcı başına hız sınırı
-- **Faz 7:** Penetrasyon testi / güvenlik taraması, dependency audit (**yapıldı,
+- **Faz 7:** Penetrasyon testi / güvenlik taraması (**OWASP ZAP dinamik taraması yapıldı, 27.09 ve 02.10.2026**: backend aktif taramaları ve ön yüz oturumlu aktif+pasif tarama, aktif bulgu yok; kit `backend/scripts/zap/`), dependency audit (**yapıldı,
   26.09.2026** — `pip-audit` + `npm audit` CI'da her PR'da ve haftada bir), güvenlik
   başlıkları (CSP, `frame-ancestors`, `nosniff`, `Permissions-Policy`,
   `Referrer-Policy`, COOP/CORP — **01.10.2026'da Faz 7.5'ten Faz 7'ye çekildi**,
-  sahipleri kök `CLAUDE.md` açık takip 11 ve 12), her uç noktanın hız sınırı
+  sahipleri kök `CLAUDE.md` açık takip 11 ve 12; **backend `nosniff` + CORP
+  02.10.2026'da eklendi**, ön yüz başlıkları sürüyor), her uç noktanın hız sınırı
   sınıfına atandığını doğrulayan envanter testi; HTTPS/HSTS son kontrol Faz 7.5;
   yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
   (Faz 7.5 — canlıya çıkış)
@@ -350,7 +351,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Tüm secrets `.env`'den production secrets manager'a taşındı
 - [ ] `DEBUG=False`, stack trace'ler kullanıcıya gösterilmiyor
 - [ ] HTTPS zorunlu, HSTS aktif; güvenlik başlıkları (CSP vb.) Faz 7'de eklendi ve canlı adreste doğrulandı
-- [ ] Rate limiting tüm public endpoint'lerde aktif — **açık (01.10.2026 taraması):** `GET/PATCH/DELETE /api/projects...` ve `DELETE /api/account` sınırlayıcısız; envanter testiyle kapatılacak (kök `CLAUDE.md` açık takip 11, Serhan)
+- [x] Rate limiting tüm uç noktalarda aktif — **kapandı (02.10.2026):** her uç `tests/test_rate_limit_coverage.py`'de bir sınıfa atanır ve limit-dolu / Redis-düştü davranışı sınanır; 01.10.2026 taramasında bulunan `projects`/`account` boşluğuna ek olarak ödeme geçmişi, abonelik okuma, kesim yoklaması ve admin faturalama yazma uçları da kapatıldı. Yeni uç sınıfsız eklenemez
 - [ ] CORS sadece bilinen origin'lere izin veriyor
 - [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
 - [ ] Redis diske yazmıyor (RDB/AOF kapalı) — KVKK metni özgün fotoğrafın diske yazılmadığını söylüyor. API her kuyruğa koymadan önce `CONFIG GET` ile doğruluyor ve açıksa ya da `CONFIG` yasak olduğu için doğrulanamıyorsa fotoğrafı almıyor (fail-closed); `CONFIG GET`'e izin vermeyen yönetilen bir Redis bu yüzden kesim kuyruğuyla çalışmaz (`CLAUDE.md` ders 33, açık takip maddesi 7)

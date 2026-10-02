@@ -147,3 +147,50 @@ async def test_verified_user_rate_limit_runs_before_body(monkeypatch, redis_clie
     assert statuses == [200, 429]
     assert receive_calls == 1
     await limiter.aclose()
+
+
+class _BrokenLimiter:
+    async def retry_after(self, _key):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        raise RedisConnectionError("Redis kapalı")
+
+
+def test_invalid_token_is_401_even_when_the_limiter_is_down(monkeypatch):
+    # Geçersiz oturumlu istek zaten reddedilecek; sayacın sorulamaması 503'e
+    # çevrilirse gerçek sebep gizlenir ve vekil giriş penceresini açmaz.
+    def reject(_):
+        raise jwt.InvalidTokenError("suresi dolmus")
+
+    monkeypatch.setattr(settings, "supabase_url", "https://test.supabase.co")
+    monkeypatch.setattr(auth_module, "verify_access_token", reject)
+    receive_calls = 0
+    sent = []
+
+    async def receive():
+        nonlocal receive_calls
+        receive_calls += 1
+        return {"type": "http.request", "body": b"govde", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    middleware = EarlyAuthenticationMiddleware(
+        _body_consuming_app, unauthenticated_limiter=_BrokenLimiter()
+    )
+    asyncio.run(
+        middleware(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/api/remove-background",
+                "headers": [(b"authorization", b"Bearer gecersiz")],
+                "client": ("203.0.113.5", 1234),
+            },
+            receive,
+            send,
+        )
+    )
+
+    assert sent[0]["status"] == 401
+    assert receive_calls == 0

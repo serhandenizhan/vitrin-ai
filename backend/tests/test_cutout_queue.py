@@ -5,6 +5,7 @@ aynı Redis'i kullanan geliştirme ortamına dokunmaz.
 """
 
 import asyncio
+import time
 import uuid
 from urllib.parse import urlsplit
 
@@ -18,6 +19,7 @@ from app.services.cutout_queue import (
     FAILED,
     PHOTO_TTL_SECONDS,
     PROCESSING,
+    QUEUE_STALL_SECONDS,
     QUEUED,
     CutoutQueue,
     QueueFull,
@@ -272,3 +274,223 @@ async def test_forget_clears_a_failed_job(queue):
     await queue.fail("isci-a", job.job_id, "processing_failed", retry_safe=True)
     await queue.forget(user, request)
     assert await queue.get_job(user, request) is None
+
+
+# --- İşçi sağlığı görünürlüğü (Faz 7 kapanış denetimi, S3) -------------------
+
+
+async def test_stats_of_an_idle_queue_without_workers_report_no_worker(queue):
+    stats = await queue.stats()
+
+    assert (stats.workers, stats.queued, stats.processing) == (0, 0, 0)
+    assert stats.oldest_waiting_seconds is None
+    # Kuyruk boşken bile işçi yoksa durum "ok" değildir: sıradaki müşteri bekler.
+    assert stats.status == "no_worker"
+
+
+async def test_stats_count_workers_queue_and_running_jobs(queue):
+    user = uuid.uuid4()
+    await queue.heartbeat("isci-1")
+    await queue.heartbeat("isci-2")
+    for _ in range(3):
+        await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    await queue.claim("isci-1")
+
+    stats = await queue.stats()
+
+    assert stats.workers == 2
+    assert stats.queued == 2
+    assert stats.processing == 1
+    assert stats.oldest_waiting_seconds is not None and stats.oldest_waiting_seconds < 5
+    assert stats.status == "ok"
+
+
+async def test_a_worker_with_a_cut_heartbeat_is_not_counted_alive(queue):
+    # Sayım, `recover_stale`'in "ölü" tanımıyla aynı olmalı: nabız anahtarı yok = ölü.
+    await queue.heartbeat("canli")
+    await queue.heartbeat("olu")
+    await queue._redis().delete(queue._key("worker", "olu"))
+
+    assert (await queue.stats()).workers == 1
+
+
+async def test_oldest_waiting_is_the_job_that_will_be_claimed_next(queue):
+    user = uuid.uuid4()
+    first, second = uuid.uuid4(), uuid.uuid4()
+    await queue.heartbeat("isci")
+    await queue.enqueue(user, first, None, b"1")
+    await queue.enqueue(user, second, None, b"2")
+    # İlk işin eklenme anını 90 sn geriye al: bekleyenlerin en eskisi o.
+    await queue._redis().hset(
+        queue._key("job", job_id_for(user, first)), "enqueued_at", repr(time.time() - 90)
+    )
+
+    stats = await queue.stats()
+
+    assert 85 < stats.oldest_waiting_seconds < 100
+
+
+async def test_live_worker_that_stopped_consuming_is_reported_stalled(queue):
+    user, request = uuid.uuid4(), uuid.uuid4()
+    await queue.heartbeat("takilmis-isci")  # nabız var ama iş almıyor
+    await queue.enqueue(user, request, None, b"x")
+    await queue._redis().hset(
+        queue._key("job", job_id_for(user, request)),
+        "enqueued_at",
+        repr(time.time() - (QUEUE_STALL_SECONDS + 30)),
+    )
+
+    assert (await queue.stats()).status == "stalled"
+
+
+async def test_unhealthy_report_is_logged_once_per_cooldown(queue, caplog):
+    stats = await queue.stats()  # işçi yok
+    assert stats.status == "no_worker"
+
+    with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
+        first = await queue.report_unhealthy(stats, "test")
+        second = await queue.report_unhealthy(stats, "test")
+
+    assert (first, second) == (True, False)
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert len(errors) == 1
+    assert "no_worker" in errors[0].getMessage()
+
+
+async def test_healthy_queue_is_never_reported(queue, caplog):
+    await queue.heartbeat("isci")
+    stats = await queue.stats()
+
+    with caplog.at_level("ERROR", logger="vitrin.cutout-queue"):
+        assert await queue.report_unhealthy(stats, "test") is False
+    assert not caplog.records
+
+
+# --- "Tıkalı" = İLERLEME yok; uzun ama ilerleyen kuyruk tıkalı değildir (PR #46 incelemesi, M1) ---
+
+
+async def test_long_but_progressing_queue_is_not_stalled(queue):
+    # Tek işçi ~12 sn/iş keser; 10+ iş birikince en eski iş 120 sn'yi aşar. Sistem
+    # normal çalışıyor, "tıkalı" denmemeli (alarm yorgunluğu ve Sentry gürültüsü).
+    user = uuid.uuid4()
+    await queue.heartbeat("isci")
+    for _ in range(3):
+        await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    job = await queue.claim("isci")
+    await queue.complete("isci", job.job_id, b"png", None)  # işler bitiyor: ilerleme var
+    for key in [k async for k in queue._redis().scan_iter(match=queue._key("job", "*"))]:
+        await queue._redis().hset(key, "enqueued_at", repr(time.time() - 300))
+
+    stats = await queue.stats()
+
+    assert stats.oldest_waiting_seconds > QUEUE_STALL_SECONDS  # bekleme uzun...
+    assert stats.status == "ok"  # ...ama ilerleme var
+    assert stats.seconds_without_progress < 5
+
+
+async def test_waiting_jobs_with_no_claim_for_too_long_is_stalled(queue):
+    user = uuid.uuid4()
+    await queue.heartbeat("takilmis")
+    await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    for key in [k async for k in queue._redis().scan_iter(match=queue._key("job", "*"))]:
+        await queue._redis().hset(key, "enqueued_at", repr(time.time() - 400))
+    # Son tamamlanan iş eşikten uzun süre önce: işçi canlı ama ilerlemiyor.
+    await queue._redis().set(
+        queue._key("last-progress"), repr(time.time() - (QUEUE_STALL_SECONDS + 60))
+    )
+
+    stats = await queue.stats()
+
+    assert stats.status == "stalled"
+    assert stats.seconds_without_progress > QUEUE_STALL_SECONDS
+
+
+async def test_first_job_after_a_long_idle_period_is_not_stalled(queue):
+    # Saatlerce boşta kalmış işçi, gelen ilk işi saniyeler içinde alır. Son bitiş
+    # saatler önce olsa da bekleme sayacı işin GELİŞİNDEN başlar: yalancı alarm yok.
+    await queue.heartbeat("isci")
+    await queue._redis().set(queue._key("last-progress"), repr(time.time() - 2 * 3600))
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"x")
+
+    stats = await queue.stats()
+
+    assert stats.status == "ok"
+    assert stats.seconds_without_progress < 5
+
+
+async def test_finishing_a_job_records_progress_claiming_does_not(queue):
+    # İlerleme = iş BİTİŞİ. Alım tek başına ilerleme değildir (bkz. aşağıdaki
+    # yeniden kuyruğa konma döngüsü testi).
+    await queue.heartbeat("isci")
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"x")
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"y")
+
+    first = await queue.claim("isci")
+    assert await queue._redis().get(queue._key("last-progress")) is None
+
+    await queue.complete("isci", first.job_id, b"png", None)
+    done_at = float(await queue._redis().get(queue._key("last-progress")))
+    assert time.time() - done_at < 5
+
+    await queue._redis().delete(queue._key("last-progress"))
+    second = await queue.claim("isci")
+    await queue.fail("isci", second.job_id, "inference_failed", retry_safe=True)
+    # Başarısız biten iş de ilerlemedir: kuyruk akıyor.
+    assert time.time() - float(await queue._redis().get(queue._key("last-progress"))) < 5
+
+
+async def test_job_requeued_over_and_over_is_reported_stalled(queue):
+    # Altyapı hatasında işçi işi aynı kimlikle yeniden kuyruğa koyar ve hemen tekrar
+    # alır (`app/workers/cutout.py` tüketici döngüsü). Alım ilerleme sayılsaydı bu
+    # döngü kuyruğu sonsuza dek "sağlıklı" gösterirdi (PR #46 kod incelemesi).
+    user = uuid.uuid4()
+    await queue.heartbeat("isci")
+    await queue.enqueue(user, uuid.uuid4(), None, b"x")
+    await queue.enqueue(user, uuid.uuid4(), None, b"y")
+    for key in [k async for k in queue._redis().scan_iter(match=queue._key("job", "*"))]:
+        await queue._redis().hset(key, "enqueued_at", repr(time.time() - (QUEUE_STALL_SECONDS + 60)))
+
+    for _ in range(3):
+        job = await queue.claim("isci")
+        assert await queue.requeue("isci", job.job_id)
+
+    stats = await queue.stats()
+    assert stats.status == "stalled"
+    assert stats.seconds_without_progress > QUEUE_STALL_SECONDS
+
+
+async def test_queue_stuck_longer_than_the_job_record_lifetime_stays_stalled(queue):
+    # İş kaydı JOB_TTL (30 dk) sonra silinir; kimliği kuyrukta kalır. Yaş
+    # "bilinmiyor" sayılınca durum `stalled`'dan `ok`'a dönüp uyarı susuyordu.
+    user, request = uuid.uuid4(), uuid.uuid4()
+    await queue.heartbeat("takilmis")
+    await queue.enqueue(user, request, None, b"x")
+    await queue._redis().delete(queue._key("job", job_id_for(user, request)))
+
+    stats = await queue.stats()
+
+    assert stats.queued == 1
+    assert stats.status == "stalled"
+    assert stats.oldest_waiting_seconds >= cutout_queue.JOB_TTL_SECONDS
+
+
+async def test_worker_missing_from_the_registry_is_still_counted_alive(queue):
+    # Kayıt kümesi bu sürümle geldi: kümeye hiç yazmamış (eski sürümle çalışan)
+    # canlı bir işçi "işçi yok" alarmı üretmemeli; elindeki iş de sayılmalı.
+    await queue._redis().set(queue._key("worker", "eski-surum"), "1", ex=30)
+    await queue.enqueue(uuid.uuid4(), uuid.uuid4(), None, b"x")
+    await queue.claim("eski-surum")
+
+    stats = await queue.stats()
+
+    assert stats.workers == 1
+    assert stats.processing == 1
+    assert stats.status == "ok"
+
+
+async def test_registered_dead_worker_does_not_hide_a_live_unregistered_one(queue):
+    await queue.heartbeat("olu")
+    await queue._redis().delete(queue._key("worker", "olu"))
+    await queue._redis().set(queue._key("worker", "eski-surum"), "1", ex=30)
+
+    assert (await queue.stats()).workers == 1

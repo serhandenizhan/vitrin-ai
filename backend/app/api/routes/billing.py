@@ -30,7 +30,14 @@ from app.services.billing.entitlements import (
 from app.services.billing.payments import verify_checkout
 from app.services.billing.actions import suspend, finish_refund, stale_reference
 
-from app.services.billing.limits import limit_checkout, limit_public
+from app.services.billing.limits import (
+    limit_admin,
+    limit_admin_read,
+    limit_checkout,
+    limit_checkout_cancel,
+    limit_public,
+    limit_user_read,
+)
 
 router = APIRouter()
 
@@ -103,7 +110,7 @@ async def sales_documents():
     return documents()
 
 
-@router.get("/api/subscriptions/me")
+@router.get("/api/subscriptions/me", dependencies=[Depends(limit_user_read)])
 async def subscription_me(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
@@ -160,7 +167,9 @@ async def checkout(
         )
 
 
-@router.get("/api/subscriptions/checkout/{session_id}")
+@router.get(
+    "/api/subscriptions/checkout/{session_id}", dependencies=[Depends(limit_user_read)]
+)
 async def checkout_status(
     session_id: uuid.UUID,
     user: CurrentUser = Depends(get_current_user),
@@ -183,7 +192,10 @@ async def checkout_status(
     return result
 
 
-@router.post("/api/subscriptions/checkout/{session_id}/cancel")
+@router.post(
+    "/api/subscriptions/checkout/{session_id}/cancel",
+    dependencies=[Depends(limit_checkout_cancel)],
+)
 async def cancel_checkout(
     session_id: uuid.UUID,
     user: CurrentUser = Depends(get_current_user),
@@ -302,7 +314,11 @@ async def callback(
     )
 
 
-@router.post("/api/subscriptions/cancel", status_code=202)
+@router.post(
+    "/api/subscriptions/cancel",
+    status_code=202,
+    dependencies=[Depends(limit_checkout_cancel)],
+)
 async def cancel(
     payload: ActionRequest,
     user: CurrentUser = Depends(get_current_user),
@@ -328,7 +344,7 @@ async def cancel(
     return {"action_id": action["id"], "status": action["status"]}
 
 
-@router.get("/api/billing/history")
+@router.get("/api/billing/history", dependencies=[Depends(limit_user_read)])
 async def history(
     limit: int = Query(20, ge=1, le=100),
     before: uuid.UUID | None = None,
@@ -396,7 +412,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db_session)):
 
 @router.post(
     "/api/admin/plans/{plan_id}/versions",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
     status_code=201,
 )
 async def publish(
@@ -476,7 +492,10 @@ class PlanPatch(StrictModel):
     active: bool
 
 
-@router.patch("/api/admin/plans/{plan_id}", dependencies=[Depends(require_admin)])
+@router.patch(
+    "/api/admin/plans/{plan_id}",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
+)
 async def patch_plan(
     plan_id: str, payload: PlanPatch, db: AsyncSession = Depends(get_db_session)
 ):
@@ -494,7 +513,7 @@ async def patch_plan(
 
 @router.post(
     "/api/admin/billing/{transaction_id}/refund",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
     status_code=202,
 )
 async def refund(
@@ -532,7 +551,7 @@ async def refund(
 
 @router.post(
     "/api/admin/subscriptions/{user_id}/suspend",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
     status_code=202,
 )
 async def suspend_subscription(
@@ -558,7 +577,8 @@ class Invoice(StrictModel):
 
 
 @router.patch(
-    "/api/admin/billing/{transaction_id}/invoice", dependencies=[Depends(require_admin)]
+    "/api/admin/billing/{transaction_id}/invoice",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
 )
 async def invoice(
     transaction_id: uuid.UUID,
@@ -586,7 +606,7 @@ class Dispute(StrictModel):
 
 @router.post(
     "/api/admin/billing/{transaction_id}/chargeback",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
 )
 async def chargeback(
     transaction_id: uuid.UUID,
@@ -633,7 +653,10 @@ async def chargeback(
     return {"status": payload.status}
 
 
-@router.get("/api/admin/billing/operations", dependencies=[Depends(require_admin)])
+@router.get(
+    "/api/admin/billing/operations",
+    dependencies=[Depends(require_admin), Depends(limit_admin_read)],
+)
 async def operations(db: AsyncSession = Depends(get_db_session)):
     return {
         "alerts": await many(
@@ -653,7 +676,10 @@ class RefundResolution(StrictModel):
     evidence_reference: str = Field(min_length=5, max_length=300)
 
 
-@router.post("/api/admin/billing/actions/{action_id}/resolve")
+@router.post(
+    "/api/admin/billing/actions/{action_id}/resolve",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
+)
 async def resolve_refund(
     action_id: uuid.UUID,
     payload: RefundResolution,
@@ -719,7 +745,10 @@ class RetryReview(StrictModel):
     evidence_reference: str = Field(min_length=5, max_length=300)
 
 
-@router.post("/api/admin/billing/actions/{action_id}/retry")
+@router.post(
+    "/api/admin/billing/actions/{action_id}/retry",
+    dependencies=[Depends(require_admin), Depends(limit_admin)],
+)
 async def retry_action(
     action_id: uuid.UUID,
     payload: RetryReview,

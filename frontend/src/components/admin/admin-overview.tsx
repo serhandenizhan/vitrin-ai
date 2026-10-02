@@ -16,6 +16,7 @@ import {
   formatNumber,
   subscriptionLabel,
 } from "@/components/admin/admin-client";
+import { AdminCutoutQueue } from "@/components/admin/admin-cutout-queue";
 import { DailyBars } from "@/components/admin/daily-bars";
 import { STATS_DAY_OPTIONS, type AdminStats } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,11 @@ export function AdminOverview() {
 
   return (
     <div>
+      {/* Kuyruk durumu istatistik yüklemesinden bağımsız ve en üstte: işçi
+          çalışmıyorsa yöneticinin ilk göreceği şey bu olmalı. */}
+      <div className="mb-6">
+        <AdminCutoutQueue />
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div role="group" aria-label="Zaman aralığı" className="glass-panel flex gap-1 rounded-full p-1">
           {STATS_DAY_OPTIONS.map((option) => (
