@@ -88,6 +88,10 @@ Kuyruklar PostgreSQL'de lease + SKIP LOCKED kullanır. Tek tur kuyruk başına e
 başarısız denemedir. Pending checkout/iade bağımlılığını beklemek bu bütçeyi
 tüketmez. Checkout probe zamanları ileri alınır; terk edilmiş eski tokenlar
 yeni ödemelerin sorgulanmasını engellemez. Redis görüntü yükleme ve billing hız sınırı içindir.
+**Redis kapalıyken (02.10.2026):** admin faturalama YAZMA uçları (iade, itiraz, fatura,
+plan, askıya alma, çözme/yeniden deneme) hız sınırı fail-closed olduğu için `503
+rate_limit_unavailable` döner; Redis dönene kadar bu işlemler yapılamaz (acil bir iade
+gerekiyorsa önce Redis'i ayağa kaldırın). Okuma uçları ve bakım/webhook kuyrukları etkilenmez.
 
 `GET /api/admin/billing/operations` açık alarmları, bekleyen aksiyonları ve çalışma
 zamanlarını verir. Harici izleme şu koşullarda operatöre bildirim göndermeli:
