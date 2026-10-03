@@ -203,8 +203,8 @@ veritabanında başka bir test oturumu koşuyorsa hiçbir şeye dokunmadan durur
 
 **CI (Faz 7):** her PR'da ve `main`'e her push'ta GitHub Actions backend
 testlerini (servis olarak Postgres + Redis), frontend lint/test/build'i ve
-bağımlılık güvenlik taramasını (`pip-audit`, `npm audit`) koşar; tarama
-ayrıca haftada bir kendiliğinden çalışır. Ayrı bir iş olarak Playwright E2E
+bağımlılık güvenlik taramasını (`pip-audit`, `npm audit --omit=dev`) koşar; tarama
+ayrıca haftada bir kendiliğinden çalışır (geliştirme araçları dahil tarama bilgi amaçlıdır, engellemez). Ayrı bir iş olarak Playwright E2E
 testleri de koşar (hermetik; `main` için zorunlu kontrol DEĞİL). Üç iş
 (backend, frontend, bağımlılık taraması) yeşil olmadan `main`'e birleştirilemez;
 bu yüzden yeni yayımlanan bir açık, kapatılana kadar bütün PR'ları durdurur.

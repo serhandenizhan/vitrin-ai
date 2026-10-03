@@ -139,6 +139,14 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements-dev.txt
+      # Zorunlu kapı yalnız ÜRETİM bağımlılıklarını tarar: geliştirme araçlarındaki
+      # (shadcn CLI, eslint eklentisi) düzeltilmiş sürümü olmayan bir açık, ilgisiz
+      # bütün PR'ları durdurmasın (03.10.2026, braces GHSA-vfj7-8cjw-p6xm).
       - name: npm audit (frontend)
         working-directory: frontend
+        run: npm audit --omit=dev
+      # Geliştirme araçları dahil tarama engellemez, yalnız görünür kalır.
+      - name: npm audit (frontend, geliştirme araçları dahil, bilgi amaçlı)
+        working-directory: frontend
+        continue-on-error: true
         run: npm audit
