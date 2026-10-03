@@ -14,6 +14,7 @@ import { heroAsset } from "@/lib/hero-asset";
 import { closeSrc, HERO_SCENES } from "@/lib/hero-scenes";
 import gallery from "@/lib/home-gallery.json";
 import { cn } from "@/lib/utils";
+import { SlidingPill } from "@/components/marketing/sliding-pill";
 
 const GALLERY = gallery as Record<BackgroundCategory, string[]>;
 const RING = HERO_SCENES[0];
@@ -24,17 +25,22 @@ export function BackgroundsGallery() {
 
   return (
     <div className="mt-8 sm:mt-10">
-      <div role="tablist" aria-label="Zemin kategorileri" className="flex flex-wrap gap-2">
+      {/* Secili sekmenin vurgusu bir sekmeden otekine KAYAR (Kaan, 03.10.2026). */}
+      <div role="tablist" aria-label="Zemin kategorileri" className="group/pills relative flex flex-wrap gap-2">
+        <SlidingPill activeKey={category} className="bg-[#1a1917]" />
         {BACKGROUND_CATEGORIES.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
+            data-pill-key={item.id}
             aria-selected={category === item.id}
             onClick={() => setCategory(item.id)}
             className={cn(
-              "press h-10 rounded-full px-5 text-[0.9375rem] font-medium transition-colors",
-              category === item.id ? "bg-[#1a1917] text-[#f3f0eb]" : "bg-black/[0.05] text-[#1a1917] hover:bg-black/[0.09]",
+              "press relative z-10 h-10 rounded-full px-5 text-[0.9375rem] font-medium transition-colors duration-[560ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+              category === item.id
+                ? "bg-[#1a1917] text-[#f3f0eb] group-data-[pill=on]/pills:bg-transparent"
+                : "bg-black/[0.05] text-[#1a1917] hover:bg-black/[0.09]",
             )}
           >
             {item.label}

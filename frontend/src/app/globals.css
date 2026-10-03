@@ -1322,6 +1322,25 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   -webkit-backdrop-filter: blur(22px) saturate(200%) contrast(1.04);
 }
 
+/* Ana sayfada secili dugmenin altinda kayan vurgu (`marketing/sliding-pill.tsx`).
+   Egri ve sure stüdyodaki secim gecisleriyle (`.glass-lens`) ayni. */
+.sliding-pill {
+  transition:
+    transform 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    height 560ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-pill {
+    transition: none;
+  }
+}
+
+html.reduce-motion .sliding-pill {
+  transition: none;
+}
+
 /* Stüdyo turu cercevesinin en/boy orani: gecis yapilabilsin diye SAYI olarak
    tanimli (bkz. `.studio-tour-frame`). Katman disinda: @property genel kural. */
 @property --studio-tour-aspect {

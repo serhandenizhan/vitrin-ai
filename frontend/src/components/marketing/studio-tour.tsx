@@ -23,6 +23,7 @@ import { backdropSrc, backdropSwatchSrc, HERO_BACKDROPS, type HeroBackdrop } fro
 import { closeSrc, HERO_SCENES } from "@/lib/hero-scenes";
 import { OUTPUT_FORMATS, type OutputFormatName } from "@/lib/composition";
 import { cn } from "@/lib/utils";
+import { SlidingPill } from "@/components/marketing/sliding-pill";
 
 type FeatureId = "zemin" | "isik" | "marka" | "boyut" | "teslim";
 
@@ -92,18 +93,20 @@ export function StudioTour() {
           liste tek sutunda bir ekran boyu yer kapliyor, onizleme ekranin
           altinda kaliyordu ve bolum bos gorunuyordu (Serhan, Safari'de). */}
       <div className="md:hidden">
-        <div role="tablist" aria-label="Stüdyo özellikleri" className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div role="tablist" aria-label="Stüdyo özellikleri" className="group/pills relative -mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <SlidingPill activeKey={feature} className="bg-[#f3f0eb]" />
           {FEATURES.map((item) => (
             <button
               key={item.id}
               type="button"
               role="tab"
+              data-pill-key={item.id}
               aria-selected={item.id === feature}
               onClick={() => choose(item.id)}
               className={cn(
-                "press h-10 shrink-0 rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap ring-1 transition-colors",
+                "press relative z-10 h-10 shrink-0 rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap ring-1 transition-colors duration-[560ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
                 item.id === feature
-                  ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent"
+                  ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent group-data-[pill=on]/pills:bg-transparent"
                   : "bg-white/[0.04] text-[#f3f0eb]/75 ring-white/12",
               )}
             >
@@ -287,11 +290,14 @@ export function StudioTour() {
               <Toggle label="Yansıma" on={reflection} onChange={setReflection} />
             </>
           ) : null}
-          {feature === "boyut"
-            ? FORMATS.map((item) => (
-                <Toggle key={item.id} label={item.label} on={format === item.id} onChange={() => setFormat(item.id)} />
-              ))
-            : null}
+          {feature === "boyut" ? (
+            <div className="group/pills relative flex flex-wrap justify-center gap-2">
+              <SlidingPill activeKey={format} className="bg-[#f3f0eb]" />
+              {FORMATS.map((item) => (
+                <Toggle key={item.id} pillKey={item.id} label={item.label} on={format === item.id} onChange={() => setFormat(item.id)} />
+              ))}
+            </div>
+          ) : null}
           {feature === "marka" || feature === "teslim" ? (
             <p className="fine-print on-dark-muted">
               {feature === "marka" ? "Örnek logo ve etiket; stüdyoda kendi logonuzu yüklersiniz." : "Stüdyodan tek dokunuşla."}
@@ -303,15 +309,17 @@ export function StudioTour() {
   );
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (value: boolean) => void }) {
+/** `pillKey`: tekli secim satirinda kayan vurgunun (SlidingPill) hedefi. */
+function Toggle({ label, on, onChange, pillKey }: { label: string; on: boolean; onChange: (value: boolean) => void; pillKey?: string }) {
   return (
     <button
       type="button"
+      data-pill-key={pillKey}
       aria-pressed={on}
       onClick={() => onChange(!on)}
       className={cn(
-        "press h-10 rounded-full px-4 text-[0.875rem] font-medium ring-1 transition-colors",
-        on ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent" : "bg-white/[0.04] text-[#f3f0eb]/80 ring-white/12 hover:bg-white/10",
+        "press relative z-10 h-10 rounded-full px-4 text-[0.875rem] font-medium ring-1 transition-colors duration-[560ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+        on ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent group-data-[pill=on]/pills:bg-transparent" : "bg-white/[0.04] text-[#f3f0eb]/80 ring-white/12 hover:bg-white/10",
       )}
     >
       {label}
