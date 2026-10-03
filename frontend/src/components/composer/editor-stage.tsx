@@ -67,7 +67,13 @@ import { useLoadedImage } from "@/components/composer/use-loaded-image";
 import {
   BACKGROUND_FADE_CURRENT,
   BACKGROUND_FADE_GHOST,
+  EXPORT_CROP_ATTR,
+  EXPORT_IMAGE_ATTR,
 } from "@/components/composer/background-fade";
+import {
+  type DisplayBackground,
+  useDisplayBackground,
+} from "@/components/composer/use-display-background";
 
 export { OUTPUT_SIZE, STAGE_SIZE, FIT_MARGIN, fitTransform };
 export type { Transform };
@@ -111,6 +117,12 @@ export type EditorStageProps = {
    * inerdi (ders 23'un "yanlis cikti" sinifi).
    */
   onRenderReady?: (ready: boolean) => void;
+  /**
+   * Zemin ekranda tuval boyutuna (× dpr) küçültülmüş kopyayla çizilsin mi
+   * (varsayılan açık; use-display-background.ts). Çoklu boyut dışa aktarıcısı
+   * kapatır: o sahne hiç ekranda görünmüyor, yalnız dosya için kuruluyor.
+   */
+  downscaleBackground?: boolean;
 };
 
 /**
@@ -144,6 +156,7 @@ export function EditorStage({
   onStageReady,
   cleanView = false,
   onRenderReady,
+  downscaleBackground = true,
 }: EditorStageProps) {
   const beginInteraction = useCallback(
     () => onInteractionChange?.(true),
@@ -186,6 +199,19 @@ export function EditorStage({
     { keepPrevious: true },
   );
   const logoImage = useLoadedImage(logoUrl);
+  // Ekranda cizilen zemin: tuvalin piksel olcusune kucultulmus kopya (K1).
+  // Dosyaya giren zemin bu DEGIL, tam `backgroundImage` (swapToExportBackground).
+  const displayScale = displayWidth / stageWidth;
+  const displayHeight = stageHeight * displayScale;
+  const pixelRatio = Konva.pixelRatio || 1;
+  const displayBackground = useDisplayBackground(
+    backgroundImage,
+    stageWidth,
+    stageHeight,
+    displayWidth * pixelRatio,
+    displayHeight * pixelRatio,
+    downscaleBackground,
+  );
   const isRenderReady =
     Boolean(cutout) &&
     (background.type !== "server" || Boolean(backgroundImage)) &&
@@ -210,23 +236,33 @@ export function EditorStage({
    */
   const backgroundLayerRef = useRef<Konva.Layer | null>(null);
   const backgroundNodeRef = useRef<Konva.Image | null>(null);
-  const shownBackgroundRef = useRef<HTMLImageElement | null>(null);
+  // Gecis EKRANDA cizileni izler (kucuk kopya). Ayni zeminin kopyasi yeniden
+  // uretildiginde (pencere boyutu degisti) gecis oynamaz: `source` ayni.
+  const shownBackgroundRef = useRef<DisplayBackground | null>(null);
   useEffect(() => {
     const previous = shownBackgroundRef.current;
-    shownBackgroundRef.current = backgroundImage;
+    shownBackgroundRef.current = displayBackground;
     const layer = backgroundLayerRef.current;
     const node = backgroundNodeRef.current;
-    if (!previous || !backgroundImage || previous === backgroundImage || !layer || !node) return;
+    if (
+      !previous ||
+      !displayBackground ||
+      previous.source === displayBackground.source ||
+      !layer ||
+      !node
+    ) {
+      return;
+    }
     const reduceMotion =
       document.documentElement.classList.contains("reduce-motion") ||
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     if (reduceMotion) return;
 
     const ghost = new Konva.Image({
-      image: previous,
+      image: previous.image,
       width: stageWidth,
       height: stageHeight,
-      crop: coverCrop(previous.width, previous.height, stageWidth, stageHeight),
+      crop: previous.crop,
       name: BACKGROUND_FADE_GHOST,
       listening: false,
     });
@@ -246,7 +282,7 @@ export function EditorStage({
       node.opacity(1);
       ghost.destroy();
     };
-  }, [backgroundImage, stageWidth, stageHeight]);
+  }, [displayBackground, stageWidth, stageHeight]);
 
   /**
    * Etiketin yazi tipi sitenin kendisi (Inter). `next/font` aileye karma bir
@@ -337,9 +373,6 @@ export function EditorStage({
     node.scale({ x: 1, y: 1 });
     onLogoChange(logoSettingsFromBox(box, stageWidth, stageHeight));
   }, [onLogoChange, stageWidth, stageHeight]);
-
-  const displayScale = displayWidth / stageWidth;
-  const displayHeight = stageHeight * displayScale;
 
   // Sahne kucultulmus ciziliyor; cizgi ve tutamak olculeri bu olcege BOLUNUYOR
   // ki ekranda her zaman ayni kalinlikta gorunsunler. Bolunmezse tutamaklar
@@ -521,16 +554,19 @@ export function EditorStage({
       }}
     >
       <Layer listening={false} ref={backgroundLayerRef}>
-        {backgroundImage && backgroundCrop ? (
+        {backgroundImage && backgroundCrop && displayBackground ? (
           // `crop`: zemin ESNETILMEDEN bicimi kapliyor (lib/composition.ts
           // `coverCrop`). Onceden dogrudan sahne olcusune zorlaniyordu.
+          // Ekranda kucuk kopya cizilir; tam gorsel ve kirpmasi dugumde
+          // saklanir, disa aktarma onlara gecer (swapToExportBackground).
           <KonvaImage
             ref={backgroundNodeRef}
             name={BACKGROUND_FADE_CURRENT}
-            image={backgroundImage}
+            image={displayBackground.image}
             width={stageWidth}
             height={stageHeight}
-            crop={backgroundCrop}
+            crop={displayBackground.crop}
+            {...{ [EXPORT_IMAGE_ATTR]: backgroundImage, [EXPORT_CROP_ATTR]: backgroundCrop }}
           />
         ) : (
           <Rect

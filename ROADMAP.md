@@ -613,7 +613,10 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
    ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
    **Ad notu (02.10.2026):** uygulamanın adı artık "Vitrin"; "Vitrin AI" adı Faz 7.2'deki
    özelliğe ayrıldı. Filigranın metni (şu an "Vitrin AI") özellik adıyla karışabilir; karar
-   Faz 7.2'nin açık işlerinde (madde 7).
+   Faz 7.2'nin açık işlerinde (madde 7). **Karar (03.10.2026, Kaan + Serhan; PR #48
+   yorumu):** filigran YAZI değil, sayfanın görünen bir yerinde **şeffaf Vitrin logosu**
+   olacak; "Vitrin AI" adı yalnız Faz 7.2 özelliğinde kalır. Filigran henüz kodda yok
+   (03.10.2026'da `frontend/src`'de arandı).
 
 ### Faz 5 — Ödemeler ve kredi sistemi — Uygulandı; canlı açılış bekliyor (15.09.2026)
 
@@ -1017,8 +1020,8 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     (yalnız açılışta; aşama geçişi View Transitions + panel kayması olarak seçildi),
     adım düğmeleri gidilen adımın adını taşıyor, "Kısayollar" açılınca üst bar
     yazılarının kaybolması düzeltildi (kök `CLAUDE.md` ders 28).
-  - **Açık — Faz 7'ye aday performans işi:** zemin değiştirirken takılma
-    ölçüldü (aşağıdaki Faz 7 maddesine bakın).
+  - **Faz 7'ye aday performans işi:** zemin değiştirirken takılma
+    ölçüldü; Faz 7'de düzeltildi (03.10.2026, aşağıdaki Faz 7 maddesine bakın).
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -1117,6 +1120,31 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
   - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test; 02.10.2026'da kuyruk kartının 4 senaryosu eklendi, `playwright test --list` 108 test listeler), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (02.10.2026: kuyruk kartı için 4 senaryo × 2 proje = 8 test eklendi, atlanmaz: 108 listelenir) (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
   - **E2E — ilk tur (30.09.2026, Kaan; kalan maddeler aynı gün kapandı, yukarıdaki satır):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Bu turda açık görünen CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme sonradan yapıldı** (`e2e/cikti.spec.ts`, CI işi "Frontend E2E (Playwright)").
+  - **E2E — Faz 7 kapanış turu (03.10.2026, Kaan; açık takip 12 madde 3).** Yeni
+    dosyalar: `odeme.spec.ts` (paket seçimi → sözleşme onayı → `/odeme/{id}`,
+    sahte saatle 5 sn'lik yoklamada "doğrulandı"; devam eden satın almada
+    bağlantı; iptal hatasının yoklama turundan sonra da kalması — ders 21;
+    iptal başarısı; süresi dolmuş oturum), `admin.spec.ts` (yönetici olmayana
+    erişim uyarısı ve admin verisinin HİÇ istenmemesi; kullanıcı listesi,
+    e-postayla arama, ayrıntı; bonus kredi ve hatadan sonra AYNI işlem
+    anahtarı), `kesim-kuyrugu.spec.ts` (30 sn'yi aşan kuyrukta nötr cümle,
+    hata ve sıra bilgisi yok, iş bitince sonuç), `katalog.spec.ts` (boş
+    şablonda indirme kapalı; örnekle başlama, başlık; JPEG'in SOF başlığından
+    okunan 1240×1754 ölçüsü; CMYK'ya PNG gitmesi, hata ve başarı),
+    `hesap-silme.spec.ts` (e-posta onayı, 202 kabul mesajı, son yönetici 409,
+    vazgeç), `vitrin-3d.spec.ts` (WebGL yokken tuvalsiz statik kesim ve açık
+    panel; hareketi azalt'ta panelin 300 ms içinde açık olması, kapanışın
+    anında olması). **Taklit biçimi (ders 22):** ödeme ve admin vekilleri
+    başarılı yanıtı backend gövdesiyle AYNEN geçirir, hataları `{ error, code }`
+    yapar; taklitler buna göre ve backend'deki gerçek mesaj/kodlarla yazıldı.
+    Ortak taklitteki `/api/subscriptions/me` gövdesi backend'in hiç üretmediği
+    bir biçimdeydi (`{ plan_id, status, remaining }`), gerçek biçime çevrildi.
+    **Testlerin gücü (ders 15):** iptal hatasını yoklama state'ine yazan ve
+    hatadan sonra yeni anahtar üreten iki mutasyon ayrı ayrı kırmızı yaktı;
+    hareketi azalt testi animasyonlu kipte kırmızı yandı. Next'in sayfa
+    duyurucusu her sayfada BOŞ bir `role="alert"` taşır; "uyarı yok" ölçümü
+    yalnız içi dolu uyarıları sayar. Tam paket: 123 geçti, 19 atlandı (yalnız
+    masaüstü/telefon), üretim derlemesinde.
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
@@ -1174,10 +1202,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     eski kodda kırmızı (ayrıntı `docs/lessons.md` ders 44, `backend/README.md` →
     "Kesim kuyruğu").
   - **Kaan** (Serhan'a sorulacak noktalar `ROADMAP.md` bölüm 7, açık takip 12'nin
-    başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
+    başındaki nottadır; Kaan'ın Claude'u için): (1) ✅ (03.10.2026) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
-    çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları
+    çıktı kalitesi önce/sonra ölçülerek korunur); (2) → **Faz 7.5'e taşındı
+    (03.10.2026, Kaan + Serhan ortak kararı; açık takip 10 madde 7)** ön yüz güvenlik başlıkları
     — CSP, tıklama tuzağı koruması, `nosniff`, `Permissions-Policy`,
     `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. **CSP önerisi
     (Claude'dan; yöntemi Kaan seçer):** önce `Content-Security-Policy-Report-Only`
@@ -1187,16 +1216,21 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     görseller, Sentry DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI,
     `blob:`/`data:`) bu ihlallerden çıkarılır; ancak ondan sonra zorlayıcı
     kipe geçilir. Başlıkların geldiğini doğrulayan bir test eklenir ve
-    zorlayıcı CSP'nin E2E'yi bozmadığı görülür; (3) E2E'de testsiz
+    zorlayıcı CSP'nin E2E'yi bozmadığı görülür; (3) ✅ (03.10.2026) E2E'de testsiz
     akışlar — ödeme (`/paketler` → `/odeme/{id}` yoklaması), oturumlu admin
     paneli, kuyrukta bekleme mesajı, katalog editörü, hesap silme, vitrin 3D
-    (WebGL yok / hareketi azalt dalları).
+    (WebGL yok / hareketi azalt dalları). **Kaan'ın Faz 7 kapanış işleri bitti
+    (03.10.2026): (1) ✅, (2) Faz 7.5'e taşındı, (3) ✅.**
   - **Güvenlik başlıkları Faz 7.5'ten Faz 7'ye çekildi (Serhan'ın onayı,
     01.10.2026).** Aynı fazın içinde yer değişikliği, kapsam aşımı değil: HSTS
     dışındakilerin hiçbiri alan adına bağlı değil, şimdi eklenip test edilebilir
     ve CSP, token tarayıcıdan okunabildiği için XSS'e karşı asıl önlem. Faz
     7.5'te yalnız canlıda HSTS ve başlıkların canlı adreste ZAP pasif taramasıyla
-    doğrulanması kalır.
+    doğrulanması kalır. **Geri taşındı (03.10.2026, Kaan + Serhan'ın ortak kararı;
+    ön yüz başlıklarının tamamı):** backend başlıkları Faz 7'de bitti; ÖN YÜZ başlıkları Faz
+    7.5'e döndü, çünkü CSP iyzico ödeme formunun adreslerine (Serhan'dan) ve
+    nonce/`'unsafe-inline'` kararına bağlı çıktı. Ayrıntı bölüm 7, açık takip 10
+    madde 7. Faz 7'nin kapanışı artık bu işi beklemez.
   - **7.5'e bırakılanlar (değişmedi):** ZAP'ın R2 ve Supabase yönetici API'sine
     dayanan uçların içini taraması (canlı bağlantı ister) ve gerçek Supabase +
     gerçek backend ile uçtan uca E2E — ikisi de staging ortamı gerektirir.
@@ -1496,7 +1530,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   (kişisel veri; aydınlatma metni ve saklama süresiyle uyumlu olmalı) ve
   gerçekten neye ihtiyaç duyulduğu (destek talebinde "bu kullanıcı ne yaptı"
   sorusu mu, genel analitik mi). Şimdilik iş YOK, yalnız not.
-- **Stüdyoda zemin değiştirirken takılma — ÖLÇÜLDÜ, kısmen düzeltildi (19.09.2026).**
+- **Stüdyoda zemin değiştirirken takılma — ✅ düzeltildi (ilk kısım 19.09.2026, kalan kısım 03.10.2026, Kaan; açık takip 12 madde 1).**
   **Düzeltilen kısım:** aşama geçişlerinde tuval sütununun 520 ms'lik genişlik
   geçişi her karede tuvali yeniden boyutlandırıp Konva'yı yeniden çizdiriyordu
   (10–14 kez, her biri uzun kare); masaüstünde geçiş kaldırıldı, tuval tek
@@ -1520,6 +1554,34 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   (`createImageBitmap` + `resize*`, ya da `img.decode()` sonrası tek seferlik
   offscreen çizim), dışa aktarmada tam çözünürlüğe dönmek. Dışa aktarma
   kalitesini etkileyebileceği için ayrı ve ölçülerek yapılmalı.
+  **Kalan kısım düzeltildi (03.10.2026, Kaan):** zemin ekranda, tuvalde görünen
+  bölgesinin (`coverCrop`) tuvalin ekran pikseli (× dpr) ölçüsüne küçültülmüş
+  kopyasıyla çiziliyor (`components/composer/use-display-background.ts`);
+  dışa aktarma düğümde saklanan TAM çözünürlüklü SEÇİLİ zemine geçip öyle
+  çiziyor (`swapToExportBackground`, `background-fade.ts`). Çoklu boyut dışa
+  aktarıcısı (görünmez ikinci sahne) kopya kullanmıyor. Kopya hazırlanırken
+  önceki zeminin kopyası kalır; üretilemezse tam görsele düşülür, eski zemin
+  süresiz kalmaz (ders 23, testli). **Ölçüm** (Windows, Playwright Chromium
+  başsız, 1440×900, ÜRETİM derlemesi `next start`, 3508×2480 JPEG zeminler,
+  Long Animation Frame API; her koşul iki tur):
+  | | önce | sonra |
+  | --- | --- | --- |
+  | zemin seçimi (ikinci ve sonraki), en uzun kare, dpr 1 | 65–78 ms (Konva çizimi 38–47 ms) | 50 ms'yi aşan kare yok (bir turda betiksiz 52 ms) |
+  | aynısı, dpr 2 | 51–90 ms (Konva çizimi 41–58 ms) | 50 ms'yi aşan kare yok (bir turda betiksiz 50 ms) |
+  | stüdyodan sonra İLK sunucu zemini | 76–111 ms | 66–86 ms (kopya henüz yokken tam görsel bir kez çiziliyor, ~41–47 ms) |
+  **Ara bulgu:** ilk sürüm `createImageBitmap`'e `HTMLImageElement` veriyordu;
+  Chrome 8,7 MP'lik JPEG'i ANA iş parçacığında çözüp küçülttüğü için Konva
+  çiziminin yerine ~37 ms'lik yeni bir uzun kare çıktı (Long Animation Frame
+  dökümünde React zamanlayıcısının `MessagePort` görevi olarak). Görsel blob
+  olarak alınıp (`fetch`, tarayıcı önbelleğinden) `createImageBitmap(blob)`
+  ile çözülünce kayboldu. **CSP notu (madde 2 için):** bu `fetch` R2'ye gider;
+  CSP'nin `connect-src`'u R2 kökenini içermezse istek düşer ve kod yüklü
+  görselden kopya üretmeye geri döner (çalışır ama ~37 ms'lik kare geri gelir).
+  **Çıktı:** dışa aktarılan PNG önce/sonra dpr 1 ve 2'de **piksel piksel aynı**
+  (1240×1754, farklı piksel 0). Kontrol koşusu: tam çözünürlüğe geçiş adımı
+  kapatılınca aynı dosyanın piksellerinin %73–82'si değişiyor; yani
+  karşılaştırma bozulmayı yakalıyor ve çıktıyı koruyan şey bu adım. Ölçüm
+  M4/Safari'de ya da telefonda yapılmadı (ders 40).
 - **Admin panelinde ADA GÖRE arama — bilinçli olarak ertelendi (Serhan'ın
   sorusu üzerine karar, 17.09.2026).** Faz 6'da arama e-posta ve tam kullanıcı
   kimliğiyle sınırlı kaldı. Üç gerekçe:
@@ -1708,10 +1770,18 @@ davranışı Serhan'ın.
 6. **"İş = ürün + sahne" idempotency tanımı** aynı ürün + sahneyi sonradan
    yeniden üretmeyi engellememeli (yeni giriş = yeni anahtar; ders 24:
    girdinin kalıcı olarak tek olduğunu sor).
-7. **Ad çakışması:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (ayrıntı
-   Faz 5, madde 7); uygulama adı "Vitrin" olduğundan ve "Vitrin AI" bu özelliğe
-   ayrıldığından filigranın metni karışabilir — karar bekliyor.
-8. Kalıcı sahne sayısı büyürse ekran düzeni (kaydırma/kategori).
+7. ✅ **Ad çakışması — karar verildi (03.10.2026, Kaan + Serhan; PR #48 yorumu):**
+   Deneme planı filigranı "Vitrin AI" yazısı yerine sayfanın görünen bir yerinde
+   **şeffaf Vitrin logosu** olacak (ayrıntı Faz 5, madde 7).
+8. ✅ **Sahne listesi düzeni — karar verildi (03.10.2026, Kaan; PR #48 yorumu):**
+   şimdilik **kategorili**, sahne sayısı büyüyünce yeniden bakılır. Her türün üç
+   sütunu ekranda **Tek başına** (kutuda, serili, kartta) · **Dekorlu** (gül
+   yaprağı, kadife büst, mermer/çiçek, Kapalıçarşı sehpası) · **Üzerinde**
+   (parmakta, boyunda, kulakta, bilekte) başlıklarıyla gruplanır; ekranda
+   "Üzerinde · Parmakta" gibi görünür. "Diğer" türünde başlık yok, sahneler
+   düz listelenir. Bunun için sahne kaydına bir **kategori alanı** gerekiyor
+   (ör. `standalone | decorated | worn`, "Diğer" için boş); şema Serhan'ın,
+   PR #48 yorumunda istendi.
 9. Kullanıcıya gösterilen "yapay zekâ ile oluşturuldu" etiketinin görünümü ve
    görünmez işaretin yöntemi.
 
@@ -1851,7 +1921,9 @@ adı kararıdır** — aşağıdaki maddelerin çoğu ona bağlı.
      koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
      `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
      (01.10.2026, Serhan'ın onayı; sahipleri ROADMAP Faz 7 "kapanış denetimi")**
-     — alan adına bağlı değiller. Burada kalan: canlıda HSTS, başlıkların canlı
+     — alan adına bağlı değiller. **Ön yüz başlıkları 03.10.2026'da yeniden
+     Faz 7.5'e taşındı** (Kaan + Serhan'ın ortak kararı; iyzico ödeme formunun CSP adresleri
+     ve nonce kararı bekliyor — bölüm 7, açık takip 10 madde 7). Burada kalan: canlıda HSTS, başlıkların canlı
      adreste gerçekten geldiğinin ZAP pasif taramasıyla doğrulanması ve
      başlıklar oturunca CI'a ZAP pasif taraması (`zaproxy/action-baseline`)
      eklenmesi. (CSP önemli: oturum token'ı tarayıcıdan okunabildiği için
@@ -1922,6 +1994,41 @@ iş mantığını yeniden kullanır.
 - React Native + Expo'ya geçiş, web iş mantığını yeniden kullan
 - Kamera entegrasyonu: telefondan doğrudan çekim, canlı önizleme
 - Büyük bir faz — muhtemelen tek kişiye ait olmak yerine iki kişi arasında bölünecek
+- **Web sitesinin iPhone'da düzeltilecekleri — Faz 8'e bırakıldı (03.10.2026, Kaan'ın
+  kararı).** Kaan'ın telefon kontrolü ve WebKit ile iPhone 13 (390×664) / iPhone SE
+  (375×667) ölçümünden (Playwright `devices`, üretim derlemesi). Faz 7'de DEĞİŞİKLİK
+  YAPILMADI; sırası gelince yeniden ölçülerek ele alınır:
+  1. **Vitrin ilk ekranı (Serhan'ın kilitli tasarımı — değişiklik ona haber verilerek):**
+     kısa ekranda (SE) yüzüğün pırlantası "Nasıl çalıştığını görün" düğmesinin arkasında
+     kalıyor; 375×800'de sorun yok. Animasyon değişmeyecek, düğmeler değişecek (Kaan).
+     Öneriler: ikinci düğme yazı bağlantısı / iki düğme yan yana / kısa ekranda gizli.
+  2. **Katalogda "JPEG indir" telefonda inmiyor (Kaan bildirdi).** İki sebep: (a) SE'de
+     yapışkan sayfa önizlemesi (ekranın ~%47'si) düğmenin üstüne biniyor, dokunuş
+     önizlemeye gidiyor (ölçüldü); (b) indirme `await renderCatalog(...)` SONRASI
+     tetikleniyor — gerçek iOS Safari kullanıcı dokunuşundan sonra araya `await` girince
+     indirmeyi engelliyor (stüdyo bu yüzden senkron çiziyor; masaüstü WebKit'te indi, yani
+     yalnız gerçek iPhone'da doğrulanabilir). Önerilen: kısa ekranda önizlemeyi küçültmek;
+     render sonrası otomatik deneme + "Dosya hazır — kaydet" bağlantısı (yeni dokunuş).
+  3. **44 pt'nin altındaki dokunma hedefleri:** üst çubuk (panel, Menü 36×36; Giriş
+     40×36; Deneyin 36 yüksek), stüdyo üst barı (Geri, Kısayollar, Ana menü 28 yüksek),
+     zemin kategori sekmeleri ve favori yıldızı 28, katalog "Görseli kaldır" 24×24, vitrin
+     küçük resimleri 40×40, çekmece kapatma 36×36, alt bilgi bağlantıları ~28–32.
+  4. **Girişsiz kullanıcıda CMYK (TIFF / baskıya uygun JPEG) düğmeleri etkin** görünüyor,
+     basınca giriş isteniyor; önceden "giriş gerekir" demeli.
+  5. Kesik ölçülen "Özellik" (paketler tablosu) ve "1. adım:" yazıları büyük olasılıkla
+     `sr-only` (yanlış alarm); kontrol edilecek.
+  6. **Telefonda fotoğraf kesime gitmiyor (Kaan'ın iPhone denemesi, 03.10.2026):** gerçek
+     backend + işçi açıkken telefonda seçilen fotoğraf için backend'e hiç
+     `POST /api/remove-background` gelmedi (backend günlüğü; diğer uçlar 200), Next
+     sunucusunda hata yok. Aynı anda MASAÜSTÜNDE kesim uçtan uca çalıştı (yükleme →
+     yoklama 202 → 200). Yani sorun telefonda seçme/gönderme aşamasında; sebep (HEIC
+     seçimi, dosya girişi, vekilin isteği backend'e iletmeden reddetmesi) gerçek
+     iPhone'da tarayıcı konsoluyla ölçülerek bulunacak.
+  7. **Hesap silmenin kabul mesajı kırmızı hata kutusunda** (`account-panel.tsx`
+     `ErrorText`, `role="alert"`): backend silmeyi her zaman 202 ile kabul ettiği için her
+     başarılı talepte "Silme talebiniz alındı…" hata gibi görünüyor; nötr/yeşil durum
+     mesajı olmalı (E2E `hesap-silme.spec.ts` metni sınıyor, rolü değil).
+  Ölçülen iyi durum: iki modelde hiçbir sayfada yatay taşma yok.
 
 ## 5. Görev bölüşümü gerekçesi
 
@@ -2071,6 +2178,7 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
      `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
      (01.10.2026, Serhan'ın onayı)** — sahipleri aşağıdaki açık takip 11 ve 12.
+     **Ön yüz başlıkları 03.10.2026'da yeniden buraya taşındı** (madde 7).
      Burada kalan: canlıda HSTS, başlıkların canlı adreste ZAP pasif taramasıyla
      doğrulanması ve başlıklar oturunca CI'a ZAP pasif taraması
      (`zaproxy/action-baseline`).
@@ -2093,6 +2201,34 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
      Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
      27.09.2026'da eklendi.
+  7. **Ön yüz güvenlik başlıkları — sahibi Kaan (açık takip 12 madde 2'den,
+     03.10.2026'da Faz 7'den buraya taşındı; Kaan + Serhan'ın ortak kararı,
+     başlıkların TAMAMI).** 01.10.2026'da Serhan'ın onayıyla Faz 7.5'ten Faz 7'ye
+     çekilmişti; geri taşınma sebebi, CSP'nin iki kararının başka girdiye
+     bağlı çıkması: (a) **iyzico ödeme formu** `/odeme/{id}`'de `srcDoc`
+     iframe'inde çalışıyor (`components/checkout-page.tsx`) ve `srcDoc`
+     belgesi ana sayfanın CSP'sini MİRAS ALIR — iyzico'nun script/connect/
+     frame/img alan adları (sandbox ve canlı ayrı) CSP'ye girmezse ödeme formu
+     çalışmaz; adresler kodda yok, **Serhan'a sorulacak**, ve form yerelde
+     denenemiyor (checkout kapalı, merchant sandbox doğrulanmadı). (b) **Next'in
+     satır içi script'leri** için yöntem: nonce (`proxy.ts`'te istek başına;
+     enjekte script çalışmaz ama bugün statik olan sayfalar her istekte
+     sunucuda üretilir — etkisi ölçülmeli) ya da `'unsafe-inline'` (basit, ama
+     XSS korumasının çoğunu kaldırır); Claude'un önerisi nonce, yöntemi Kaan seçer.
+     İş tanımı (değişmedi): `next.config.ts` `headers()` ile CSP,
+     `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
+     `Referrer-Policy`, COOP/CORP (COOP ödeme pencerelerini kesmesin diye
+     `same-origin-allow-popups`), `poweredByHeader: false`. CSP sayfanın
+     yüklediği her kaynağı bilmeyi ister (Supabase, R2 imzalı görseller, Sentry
+     DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI, `blob:`/`data:`,
+     iyzico); önce yalnız raporlayan kipte (`Content-Security-Policy-Report-Only`)
+     açılıp ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri
+     taranır (sıra: Report-Only → ihlallerden kaynak listesi → zorlayıcı kip →
+     başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test
+     eklenir. **R2 notu (03.10.2026, K1'den):** stüdyo zemini küçük kopya için
+     R2'deki görseli `fetch` ile de alıyor; `connect-src` R2 kökenini içermeli
+     (yoksa sessizce yavaş yola düşer, bkz. Faz 7 "Stüdyoda zemin değiştirirken
+     takılma"). Backend başlıkları (`nosniff`, CORP) Faz 7'de bitti (Serhan).
 
 ### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
 
@@ -2100,30 +2236,13 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
 
 > **Kaan'ın Claude'u için:** Serhan'a SORULMADAN ilerlenmeyecek noktalar kök `CLAUDE.md` → "Ekip notları" bölümündedir; bu işlere başlamadan önce orayı okuyun.
 
-1. **Stüdyoda zemin değişiminde kalan takılma.** Zemin görselleri tam
-   çözünürlükle (3508×2480) her karede iki kez çiziliyor (zemin seçimi 60–70
-   ms'lik kare, ilk seçim ~390 ms; ölçüm `ROADMAP.md` Faz 7 "Stüdyoda zemin
-   değiştirirken takılma"). Önerilen: ekranda tuval boyutuna (× dpr)
-   küçültülmüş kopya, dışa aktarmada tam çözünürlük. **Çıktı kalitesine
-   dokunabildiği için ölçülerek yapılır:** dışa aktarılan dosya önce/sonra
-   piksel olarak karşılaştırılır; kare süresi aynı koşulda (dpr 1 ve 2, üretim
-   derlemesi — ders 30, 40) yeniden ölçülür.
-2. **Ön yüz güvenlik başlıkları** (`next.config.ts` `headers()`): CSP,
-   `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
-   `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. CSP sayfanın
-   yüklediği her kaynağı bilmeyi ister (Supabase, R2 imzalı görseller, Sentry
-   DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI, `blob:`/`data:`);
-   önce yalnız raporlayan kipte (`Content-Security-Policy-Report-Only`) açılıp
-   ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri taranması
-   önerilir (**Claude'ın önerisi, yöntemi Kaan seçer**; sıra: Report-Only →
-   ihlallerden kaynak listesi → zorlayıcı kip → başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test eklenir. Backend
-   başlıkları Serhan'ın (açık takip 11).
-3. **E2E'de testsiz akışlar** (`frontend/e2e/`): ödeme (`/paketler` →
-   `/odeme/{id}` yoklaması; ders 21), oturumlu admin paneli, kuyrukta bekleme
-   mesajı (~30 sn'den sonra nötr cümle; sahte zamanlayıcı), katalog editörü,
-   hesap silme, vitrin 3D yakınlaşma (WebGL yok ve "hareketi azalt" dalları).
-   Gerçek Supabase + gerçek backend ile uçtan uca test staging gerektirir →
-   Faz 7.5.
+**Kaan'ın Faz 7 kapanış işleri bitti (03.10.2026).** Madde 1 (zemin takılması)
+ve madde 3 (E2E'de testsiz akışlar) tamamlandı; ayrıntı ROADMAP Faz 7 "Stüdyoda
+zemin değiştirirken takılma" ve "E2E — Faz 7 kapanış turu". Gerçek Supabase +
+gerçek backend ile uçtan uca test staging gerektirir → Faz 7.5.
+
+2. **Ön yüz güvenlik başlıkları → Faz 7.5'e taşındı (03.10.2026, Kaan +
+   Serhan'ın ortak kararı).** Tam metin ve taşınma gerekçesi açık takip 10, madde 7'de.
 
 ### 13. Vitrin AI için hukukçu soruları — sahibi: Serhan + Kaan (02.10.2026)
 

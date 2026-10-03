@@ -124,7 +124,10 @@ varsa görünür). **Zeminler arası çapraz geçiş** (`editor-stage.tsx`, 0,42
 eski zemin geçici bir Konva düğümü olarak altta kalır. **Kural:** tuvale
 eklenen her animasyon dışa aktarmadan ÖNCE bitirilmeli — `renderStage`
 `finishBackgroundFade`'i çağırıyor, yoksa dosyaya iki zeminin karışımı girer
-(ders 23'ün "yanlış çıktı" sınıfı). **Tek satırlık menüler (Zemin, Boyut)
+(ders 23'ün "yanlış çıktı" sınıfı). **Zemin ekranda küçük kopyayla çizilir,
+dosyaya tam çözünürlükle girer** (03.10.2026, `use-display-background.ts`):
+`renderStage` `swapToExportBackground`'u da çağırıyor; çağrılmazsa indirilen
+zemin bulanıklaşır (ölçüldü, piksellerin %73–82'si değişiyor). **Tek satırlık menüler (Zemin, Boyut)
 ince kartla açılır** ve tuval aynı miktarda büyür (`.stage-fit-compact`);
 kategori sekmeleri kartın başlık satırında. Seçim geçişleri tek bir uzun eğriyle
 (`cubic-bezier(0.32, 0.72, 0, 1)`, 500–560 ms); seçili sekme/araç altında
@@ -162,7 +165,11 @@ eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
   listesi ve her türün sahneleri sunucudan gelir (kodda sabit değil); testi geçmemiş tür hiç görünmez.
 - **Sahne seçimi:** her türde kalıcı sahneler (başlangıçta 3) önizleme görseliyle durur; **dönemsel sahne**
   varsa listenin başında **rozetle** ve bitiş tarihiyle görünür ("Yılbaşı · 5 Ocak'a kadar"), bitişte
-  kendiliğinden kalkar. Kullanıcıya serbest metin kutusu verilmez (prompt sunucuda).
+  kendiliğinden kalkar. Kullanıcıya serbest metin kutusu verilmez (prompt sunucuda). **Kategorili liste
+  (Kaan, 03.10.2026):** sahneler üç başlık altında — **Tek başına** · **Dekorlu** · **Üzerinde** —
+  ekranda "Üzerinde · Parmakta" gibi; "Diğer" türünde başlık yok, düz liste. Kullanıcı mankenli (Üzerinde)
+  ya da mankensiz sahneyi kendisi seçer. Kategori sunucudaki sahne kaydından gelir (alan Serhan'da,
+  `ROADMAP.md` Faz 7.2 açık iş 8); sahne sayısı büyüyünce düzene yeniden bakılır.
 - **Üretim öncesi:** "1 kredi, 2 deneme" **yazılmaz**. Kredi düşeceği, krediye ait diğer her yerdeki gibi
   gösterilir. **İlk kullanımda** tam uyarı + onay kutusu; uyarı metni (Serhan'ın cümlesi, KİLİTLİ):
   *"Yapay zeka ürünü yeniden çizer. Taş, kesim ve ince ayrıntılar gerçek üründen farklı olabilir. Birebir
@@ -177,8 +184,9 @@ eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
 - **İndirme:** logo/etiket, çoklu boyut ve WhatsApp'ta paylaş çalışır; **CMYK baskı seçeneği Vitrin AI
   görselinde yoktur** (baskı yalnız stüdyo çıktısından). Birebir ana görsel her zaman stüdyodan çıkar.
 - **Dışarıdan görünmeyenler:** dosyadaki görünmez işaret ve üretim kaydı sunucu işidir; ön yüzde karşılığı yok.
-- **Açık:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (özellik adıyla karışabilir, karar bekliyor,
-  `ROADMAP.md` Faz 7.2 açık iş 7); kalıcı sahne sayısı büyürse sahne listesi düzeni.
+- **Deneme planı filigranı (karar 03.10.2026, Kaan + Serhan):** "Vitrin AI" yazısı değil, sayfanın görünen
+  bir yerinde **şeffaf Vitrin logosu**; "Vitrin AI" adı yalnız bu özellikte kalır (`ROADMAP.md` Faz 5 madde
+  7, Faz 7.2 açık iş 7). Filigran henüz kodda yok.
 
 ## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 

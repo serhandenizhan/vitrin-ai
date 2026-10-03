@@ -22,3 +22,40 @@ export function finishBackgroundFade(stage: Konva.Stage) {
   stage.find("." + BACKGROUND_FADE_GHOST).forEach((node) => node.destroy());
   stage.find("." + BACKGROUND_FADE_CURRENT).forEach((node) => node.opacity(1));
 }
+
+/**
+ * Zemin düğümünde saklanan TAM ÇÖZÜNÜRLÜKLÜ seçili zemin ve kırpması.
+ *
+ * Ekranda zeminin küçültülmüş kopyası çizilir (use-display-background.ts);
+ * dosyaya ise her zaman bu tam görsel girmeli. Düğüm özniteliği olarak
+ * duruyor çünkü dışa aktarma (`renderStage`) sahneye yalnız Konva üzerinden
+ * erişiyor.
+ */
+export const EXPORT_IMAGE_ATTR = "exportImage";
+export const EXPORT_CROP_ATTR = "exportCrop";
+
+/**
+ * Zemin düğümlerini dışa aktarma için tam çözünürlüklü seçili zemine geçirir;
+ * dönen fonksiyon ekran kopyasına geri döndürür (`finally` içinde çağrılır).
+ *
+ * Seçili zeminin küçük kopyası henüz hazır değilken ekranda ÖNCEKİ zeminin
+ * kopyası durabiliyor; buradaki geçiş bu durumda da dosyaya SEÇİLİ zemini
+ * sokar (ders 23).
+ */
+export function swapToExportBackground(stage: Konva.Stage): () => void {
+  const restores = stage.find("." + BACKGROUND_FADE_CURRENT).map((node) => {
+    const full = node.getAttr(EXPORT_IMAGE_ATTR) as CanvasImageSource | undefined;
+    const fullCrop = node.getAttr(EXPORT_CROP_ATTR) as { x: number; y: number; width: number; height: number } | undefined;
+    if (!full || !fullCrop) return () => {};
+    const image = node as Konva.Image;
+    const shown = image.image();
+    const shownCrop = image.crop();
+    image.image(full);
+    image.crop(fullCrop);
+    return () => {
+      image.image(shown);
+      image.crop(shownCrop);
+    };
+  });
+  return () => restores.forEach((restore) => restore());
+}
