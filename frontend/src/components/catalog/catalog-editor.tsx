@@ -151,6 +151,19 @@ export function CatalogEditor() {
 
   const logoPreview = useLogoBox(logoUrl, logoSettings, CATALOG_WIDTH, CATALOG_HEIGHT);
 
+  // Galeri <-> calisma alani gecisinde sayfa editorun BASINA getiriliyor
+  // (Kaan, 03.10.2026). "Ornek ile baslayin" galerinin en altinda; galeri
+  // calisma alanina donunce kaydirma yerinde kaliyor ve telefonda editorun
+  // ustu ekranin ~270 px yukarisinda, sayfa "en alttan aciliyor" gibi
+  // gorunuyordu (olculdu). Ust cubuk payi `html`in `scroll-padding-top`'unda.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const isWorkspace = templateName !== null;
+  const shownWorkspaceRef = useRef(isWorkspace);
+  useEffect(() => {
+    if (shownWorkspaceRef.current === isWorkspace) return;
+    shownWorkspaceRef.current = isWorkspace;
+    rootRef.current?.scrollIntoView({ block: "start" });
+  }, [isWorkspace]);
 
   // Olusturulan object URL'ler bilesen kaldirilirken serbest birakiliyor.
   const objectUrlRef = useRef<string[]>([]);
@@ -309,7 +322,7 @@ export function CatalogEditor() {
 
   if (!template) {
     return (
-      <div className="soft-enter">
+      <div ref={rootRef} className="soft-enter">
         <div className="grid grid-cols-2 gap-5 sm:gap-8 lg:grid-cols-3">
           {Object.values(TEMPLATES).map((option) => (
             <button
@@ -371,7 +384,7 @@ export function CatalogEditor() {
   const selected = selectedSlot !== null ? visibleSlots[selectedSlot] : null;
 
   return (
-    <div className="soft-enter flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    <div ref={rootRef} className="soft-enter flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       {/* Sayfa genis ekranda YAPISKAN: paneldeki alt ayarlar (logo, disa
           aktarma) duzenlenirken sayfa gorunur kaliyor (Kaan, 17.09.2026).
           Genislik ekran yuksekligine gore sinirli ki A4 ekrana sigsin. */}

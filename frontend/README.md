@@ -946,7 +946,10 @@ Ana sayfanın ilk ekranı: `marketing/hero.tsx` (sunucu bileşeni; başlık ve d
 
 Şablon galerisi → çalışma alanı. Üç şablon: İkili vitrin, Kapak, Üçlü ızgara.
 "Örnek ile başlayın" hazır bir sayfa açıyor — boş sayfayla karşılaşmak fikri
-anlatmıyor.
+anlatmıyor. **Galeri ↔ çalışma alanı geçişinde sayfa editörün başına
+kaydırılır** (03.10.2026, Kaan'ın telefon kontrolü): düğme galerinin en
+altında olduğu için kaydırma yerinde kalıyor, telefonda editörün üstü ekranın
+~270 px yukarısında açılıyordu (ölçüldü). Test: `e2e/katalog-kaydirma.spec.ts`.
 
 **Her şablon yalnızca KUTULARDAN oluşuyor** (`src/lib/catalog-templates.ts`),
 0–1 arası oranlarla. Önizleme bu oranları yüzdeye, dışa aktarma aynı oranları
