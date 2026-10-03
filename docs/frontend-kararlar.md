@@ -165,7 +165,11 @@ eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
   listesi ve her türün sahneleri sunucudan gelir (kodda sabit değil); testi geçmemiş tür hiç görünmez.
 - **Sahne seçimi:** her türde kalıcı sahneler (başlangıçta 3) önizleme görseliyle durur; **dönemsel sahne**
   varsa listenin başında **rozetle** ve bitiş tarihiyle görünür ("Yılbaşı · 5 Ocak'a kadar"), bitişte
-  kendiliğinden kalkar. Kullanıcıya serbest metin kutusu verilmez (prompt sunucuda).
+  kendiliğinden kalkar. Kullanıcıya serbest metin kutusu verilmez (prompt sunucuda). **Kategorili liste
+  (Kaan, 03.10.2026):** sahneler üç başlık altında — **Tek başına** · **Dekorlu** · **Üzerinde** —
+  ekranda "Üzerinde · Parmakta" gibi; "Diğer" türünde başlık yok, düz liste. Kullanıcı mankenli (Üzerinde)
+  ya da mankensiz sahneyi kendisi seçer. Kategori sunucudaki sahne kaydından gelir (alan Serhan'da,
+  `ROADMAP.md` Faz 7.2 açık iş 8); sahne sayısı büyüyünce düzene yeniden bakılır.
 - **Üretim öncesi:** "1 kredi, 2 deneme" **yazılmaz**. Kredi düşeceği, krediye ait diğer her yerdeki gibi
   gösterilir. **İlk kullanımda** tam uyarı + onay kutusu; uyarı metni (Serhan'ın cümlesi, KİLİTLİ):
   *"Yapay zeka ürünü yeniden çizer. Taş, kesim ve ince ayrıntılar gerçek üründen farklı olabilir. Birebir
@@ -180,8 +184,9 @@ eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
 - **İndirme:** logo/etiket, çoklu boyut ve WhatsApp'ta paylaş çalışır; **CMYK baskı seçeneği Vitrin AI
   görselinde yoktur** (baskı yalnız stüdyo çıktısından). Birebir ana görsel her zaman stüdyodan çıkar.
 - **Dışarıdan görünmeyenler:** dosyadaki görünmez işaret ve üretim kaydı sunucu işidir; ön yüzde karşılığı yok.
-- **Açık:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (özellik adıyla karışabilir, karar bekliyor,
-  `ROADMAP.md` Faz 7.2 açık iş 7); kalıcı sahne sayısı büyürse sahne listesi düzeni.
+- **Deneme planı filigranı (karar 03.10.2026, Kaan + Serhan):** "Vitrin AI" yazısı değil, sayfanın görünen
+  bir yerinde **şeffaf Vitrin logosu**; "Vitrin AI" adı yalnız bu özellikte kalır (`ROADMAP.md` Faz 5 madde
+  7, Faz 7.2 açık iş 7). Filigran henüz kodda yok.
 
 ## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 

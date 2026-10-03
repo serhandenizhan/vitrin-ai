@@ -613,7 +613,10 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
    ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
    **Ad notu (02.10.2026):** uygulamanın adı artık "Vitrin"; "Vitrin AI" adı Faz 7.2'deki
    özelliğe ayrıldı. Filigranın metni (şu an "Vitrin AI") özellik adıyla karışabilir; karar
-   Faz 7.2'nin açık işlerinde (madde 7).
+   Faz 7.2'nin açık işlerinde (madde 7). **Karar (03.10.2026, Kaan + Serhan; PR #48
+   yorumu):** filigran YAZI değil, sayfanın görünen bir yerinde **şeffaf Vitrin logosu**
+   olacak; "Vitrin AI" adı yalnız Faz 7.2 özelliğinde kalır. Filigran henüz kodda yok
+   (03.10.2026'da `frontend/src`'de arandı).
 
 ### Faz 5 — Ödemeler ve kredi sistemi — Uygulandı; canlı açılış bekliyor (15.09.2026)
 
@@ -1736,10 +1739,18 @@ davranışı Serhan'ın.
 6. **"İş = ürün + sahne" idempotency tanımı** aynı ürün + sahneyi sonradan
    yeniden üretmeyi engellememeli (yeni giriş = yeni anahtar; ders 24:
    girdinin kalıcı olarak tek olduğunu sor).
-7. **Ad çakışması:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (ayrıntı
-   Faz 5, madde 7); uygulama adı "Vitrin" olduğundan ve "Vitrin AI" bu özelliğe
-   ayrıldığından filigranın metni karışabilir — karar bekliyor.
-8. Kalıcı sahne sayısı büyürse ekran düzeni (kaydırma/kategori).
+7. ✅ **Ad çakışması — karar verildi (03.10.2026, Kaan + Serhan; PR #48 yorumu):**
+   Deneme planı filigranı "Vitrin AI" yazısı yerine sayfanın görünen bir yerinde
+   **şeffaf Vitrin logosu** olacak (ayrıntı Faz 5, madde 7).
+8. ✅ **Sahne listesi düzeni — karar verildi (03.10.2026, Kaan; PR #48 yorumu):**
+   şimdilik **kategorili**, sahne sayısı büyüyünce yeniden bakılır. Her türün üç
+   sütunu ekranda **Tek başına** (kutuda, serili, kartta) · **Dekorlu** (gül
+   yaprağı, kadife büst, mermer/çiçek, Kapalıçarşı sehpası) · **Üzerinde**
+   (parmakta, boyunda, kulakta, bilekte) başlıklarıyla gruplanır; ekranda
+   "Üzerinde · Parmakta" gibi görünür. "Diğer" türünde başlık yok, sahneler
+   düz listelenir. Bunun için sahne kaydına bir **kategori alanı** gerekiyor
+   (ör. `standalone | decorated | worn`, "Diğer" için boş); şema Serhan'ın,
+   PR #48 yorumunda istendi.
 9. Kullanıcıya gösterilen "yapay zekâ ile oluşturuldu" etiketinin görünümü ve
    görünmez işaretin yöntemi.
 
