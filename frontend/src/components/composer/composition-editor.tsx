@@ -50,7 +50,10 @@ import { StageCurtain } from "@/components/composer/stage-curtain";
 import { STAGE_VIEW_NAMES, runStageTransition } from "@/components/composer/stage-transition";
 import { STUDIO_STEPS } from "@/components/composer/studio-steps";
 import { ToolBar } from "@/components/composer/tool-bar";
-import { finishBackgroundFade } from "@/components/composer/background-fade";
+import {
+  finishBackgroundFade,
+  swapToExportBackground,
+} from "@/components/composer/background-fade";
 import {
   BackgroundPalette,
   CategoryTabs,
@@ -747,11 +750,15 @@ export function CompositionEditor({
       const previousWidth = stage.width();
       const previousHeight = stage.height();
       const previousScale = { x: stage.scaleX(), y: stage.scaleY() };
+      let restoreBackground = () => {};
 
       try {
         transformers.forEach((node) => node.hide());
         // Suren bir zemin gecisi dosyaya iki zeminin karisimini sokmasin.
         finishBackgroundFade(stage);
+        // Ekranda zeminin kucuk kopyasi ciziliyor; dosyaya TAM cozunurluklu
+        // SECILI zemin girer (use-display-background.ts, K1).
+        restoreBackground = swapToExportBackground(stage);
         stage.draw();
 
         // Sahne, disa aktarma suresince EKRAN olcusunden MANTIKSAL olcusune
@@ -785,6 +792,7 @@ export function CompositionEditor({
         }
         return dataUrl;
       } finally {
+        restoreBackground();
         stage.width(previousWidth);
         stage.height(previousHeight);
         stage.scale(previousScale);

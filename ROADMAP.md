@@ -1017,8 +1017,8 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     (yalnız açılışta; aşama geçişi View Transitions + panel kayması olarak seçildi),
     adım düğmeleri gidilen adımın adını taşıyor, "Kısayollar" açılınca üst bar
     yazılarının kaybolması düzeltildi (kök `CLAUDE.md` ders 28).
-  - **Açık — Faz 7'ye aday performans işi:** zemin değiştirirken takılma
-    ölçüldü (aşağıdaki Faz 7 maddesine bakın).
+  - **Faz 7'ye aday performans işi:** zemin değiştirirken takılma
+    ölçüldü; Faz 7'de düzeltildi (03.10.2026, aşağıdaki Faz 7 maddesine bakın).
 - **Kaan — baskı (CMYK) profili işi buraya alındı (kullanıcı kararı,
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
@@ -1174,7 +1174,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     eski kodda kırmızı (ayrıntı `docs/lessons.md` ders 44, `backend/README.md` →
     "Kesim kuyruğu").
   - **Kaan** (Serhan'a sorulacak noktalar `ROADMAP.md` bölüm 7, açık takip 12'nin
-    başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
+    başındaki nottadır; Kaan'ın Claude'u için): (1) ✅ (03.10.2026) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
     çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları
@@ -1496,7 +1496,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   (kişisel veri; aydınlatma metni ve saklama süresiyle uyumlu olmalı) ve
   gerçekten neye ihtiyaç duyulduğu (destek talebinde "bu kullanıcı ne yaptı"
   sorusu mu, genel analitik mi). Şimdilik iş YOK, yalnız not.
-- **Stüdyoda zemin değiştirirken takılma — ÖLÇÜLDÜ, kısmen düzeltildi (19.09.2026).**
+- **Stüdyoda zemin değiştirirken takılma — ✅ düzeltildi (ilk kısım 19.09.2026, kalan kısım 03.10.2026, Kaan; açık takip 12 madde 1).**
   **Düzeltilen kısım:** aşama geçişlerinde tuval sütununun 520 ms'lik genişlik
   geçişi her karede tuvali yeniden boyutlandırıp Konva'yı yeniden çizdiriyordu
   (10–14 kez, her biri uzun kare); masaüstünde geçiş kaldırıldı, tuval tek
@@ -1520,6 +1520,34 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   (`createImageBitmap` + `resize*`, ya da `img.decode()` sonrası tek seferlik
   offscreen çizim), dışa aktarmada tam çözünürlüğe dönmek. Dışa aktarma
   kalitesini etkileyebileceği için ayrı ve ölçülerek yapılmalı.
+  **Kalan kısım düzeltildi (03.10.2026, Kaan):** zemin ekranda, tuvalde görünen
+  bölgesinin (`coverCrop`) tuvalin ekran pikseli (× dpr) ölçüsüne küçültülmüş
+  kopyasıyla çiziliyor (`components/composer/use-display-background.ts`);
+  dışa aktarma düğümde saklanan TAM çözünürlüklü SEÇİLİ zemine geçip öyle
+  çiziyor (`swapToExportBackground`, `background-fade.ts`). Çoklu boyut dışa
+  aktarıcısı (görünmez ikinci sahne) kopya kullanmıyor. Kopya hazırlanırken
+  önceki zeminin kopyası kalır; üretilemezse tam görsele düşülür, eski zemin
+  süresiz kalmaz (ders 23, testli). **Ölçüm** (Windows, Playwright Chromium
+  başsız, 1440×900, ÜRETİM derlemesi `next start`, 3508×2480 JPEG zeminler,
+  Long Animation Frame API; her koşul iki tur):
+  | | önce | sonra |
+  | --- | --- | --- |
+  | zemin seçimi (ikinci ve sonraki), en uzun kare, dpr 1 | 65–78 ms (Konva çizimi 38–47 ms) | 50 ms'yi aşan kare yok (bir turda betiksiz 52 ms) |
+  | aynısı, dpr 2 | 51–90 ms (Konva çizimi 41–58 ms) | 50 ms'yi aşan kare yok (bir turda betiksiz 50 ms) |
+  | stüdyodan sonra İLK sunucu zemini | 76–111 ms | 66–86 ms (kopya henüz yokken tam görsel bir kez çiziliyor, ~41–47 ms) |
+  **Ara bulgu:** ilk sürüm `createImageBitmap`'e `HTMLImageElement` veriyordu;
+  Chrome 8,7 MP'lik JPEG'i ANA iş parçacığında çözüp küçülttüğü için Konva
+  çiziminin yerine ~37 ms'lik yeni bir uzun kare çıktı (Long Animation Frame
+  dökümünde React zamanlayıcısının `MessagePort` görevi olarak). Görsel blob
+  olarak alınıp (`fetch`, tarayıcı önbelleğinden) `createImageBitmap(blob)`
+  ile çözülünce kayboldu. **CSP notu (madde 2 için):** bu `fetch` R2'ye gider;
+  CSP'nin `connect-src`'u R2 kökenini içermezse istek düşer ve kod yüklü
+  görselden kopya üretmeye geri döner (çalışır ama ~37 ms'lik kare geri gelir).
+  **Çıktı:** dışa aktarılan PNG önce/sonra dpr 1 ve 2'de **piksel piksel aynı**
+  (1240×1754, farklı piksel 0). Kontrol koşusu: tam çözünürlüğe geçiş adımı
+  kapatılınca aynı dosyanın piksellerinin %73–82'si değişiyor; yani
+  karşılaştırma bozulmayı yakalıyor ve çıktıyı koruyan şey bu adım. Ölçüm
+  M4/Safari'de ya da telefonda yapılmadı (ders 40).
 - **Admin panelinde ADA GÖRE arama — bilinçli olarak ertelendi (Serhan'ın
   sorusu üzerine karar, 17.09.2026).** Faz 6'da arama e-posta ve tam kullanıcı
   kimliğiyle sınırlı kaldı. Üç gerekçe:
@@ -2100,14 +2128,6 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
 
 > **Kaan'ın Claude'u için:** Serhan'a SORULMADAN ilerlenmeyecek noktalar kök `CLAUDE.md` → "Ekip notları" bölümündedir; bu işlere başlamadan önce orayı okuyun.
 
-1. **Stüdyoda zemin değişiminde kalan takılma.** Zemin görselleri tam
-   çözünürlükle (3508×2480) her karede iki kez çiziliyor (zemin seçimi 60–70
-   ms'lik kare, ilk seçim ~390 ms; ölçüm `ROADMAP.md` Faz 7 "Stüdyoda zemin
-   değiştirirken takılma"). Önerilen: ekranda tuval boyutuna (× dpr)
-   küçültülmüş kopya, dışa aktarmada tam çözünürlük. **Çıktı kalitesine
-   dokunabildiği için ölçülerek yapılır:** dışa aktarılan dosya önce/sonra
-   piksel olarak karşılaştırılır; kare süresi aynı koşulda (dpr 1 ve 2, üretim
-   derlemesi — ders 30, 40) yeniden ölçülür.
 2. **Ön yüz güvenlik başlıkları** (`next.config.ts` `headers()`): CSP,
    `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
    `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. CSP sayfanın
@@ -2117,7 +2137,10 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
    ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri taranması
    önerilir (**Claude'ın önerisi, yöntemi Kaan seçer**; sıra: Report-Only →
    ihlallerden kaynak listesi → zorlayıcı kip → başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test eklenir. Backend
-   başlıkları Serhan'ın (açık takip 11).
+   başlıkları Serhan'ın (açık takip 11). **Not (03.10.2026, madde 1'in
+   düzeltmesinden):** stüdyo zemini küçük kopya için R2'deki görseli `fetch`
+   ile de alıyor; `connect-src` R2 kökenini içermeli (yoksa sessizce yavaş
+   yola düşer, bkz. Faz 7 "Stüdyoda zemin değiştirirken takılma").
 3. **E2E'de testsiz akışlar** (`frontend/e2e/`): ödeme (`/paketler` →
    `/odeme/{id}` yoklaması; ders 21), oturumlu admin paneli, kuyrukta bekleme
    mesajı (~30 sn'den sonra nötr cümle; sahte zamanlayıcı), katalog editörü,

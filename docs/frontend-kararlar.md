@@ -124,7 +124,10 @@ varsa görünür). **Zeminler arası çapraz geçiş** (`editor-stage.tsx`, 0,42
 eski zemin geçici bir Konva düğümü olarak altta kalır. **Kural:** tuvale
 eklenen her animasyon dışa aktarmadan ÖNCE bitirilmeli — `renderStage`
 `finishBackgroundFade`'i çağırıyor, yoksa dosyaya iki zeminin karışımı girer
-(ders 23'ün "yanlış çıktı" sınıfı). **Tek satırlık menüler (Zemin, Boyut)
+(ders 23'ün "yanlış çıktı" sınıfı). **Zemin ekranda küçük kopyayla çizilir,
+dosyaya tam çözünürlükle girer** (03.10.2026, `use-display-background.ts`):
+`renderStage` `swapToExportBackground`'u da çağırıyor; çağrılmazsa indirilen
+zemin bulanıklaşır (ölçüldü, piksellerin %73–82'si değişiyor). **Tek satırlık menüler (Zemin, Boyut)
 ince kartla açılır** ve tuval aynı miktarda büyür (`.stage-fit-compact`);
 kategori sekmeleri kartın başlık satırında. Seçim geçişleri tek bir uzun eğriyle
 (`cubic-bezier(0.32, 0.72, 0, 1)`, 500–560 ms); seçili sekme/araç altında

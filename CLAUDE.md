@@ -150,6 +150,7 @@ Web arayüzü, kullanıcının referans verdiği apple.com/tr ürün sayfaların
 42. **Tarama aracının** "bitti"sine değil raporun varlığına ve "succeeded"e bak; kimlik kapsamını pozitif+negatif kontrolle ölç; tarama örneğinde kapattığın sınırı raporda yaz.
 43. **Yeni backend testini** CI koşuluyla da yerelde bir kez koş: `SUPABASE_URL="" SUPABASE_SECRET_KEY="" R2_ACCOUNT_ID="" backend/scripts/test.sh <test>`; ortama bağlı sonuç bekleyen test `tokens` ile ortamı kendisi kurar.
 44. **Alarm eşiğini** NORMAL yük altında yalancı alarm vermediğini ölçmeden koyma; "tıkalı" bir bekleme süresi değil bir İLERLEME eksikliğidir, ilerleme işi BİTİŞİNDE işaretlenir.
+45. **Bir maliyeti kaldırınca** ölçümü tekrarla ve uzun karenin dökümüne bak (maliyet yer değiştirmiş olabilir); "iş parçacığı dışında" denen API'yi verilen girdiyle ölç (`createImageBitmap(img)` Chrome'da ana iş parçacığında çözer, blob vermek gerekir).
 
 ## Ekip notları: Kaan'ın Claude Code oturumu için (Serhan'ın talimatı, 02.10.2026)
 

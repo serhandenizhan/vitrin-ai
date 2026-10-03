@@ -443,6 +443,20 @@ küçült) parlak üst yarım küreli.
   Yüklenemeyen zemin (ders 23) `useLoadedImage`'den `null` döndüğü için geçiş
   hiç başlamaz. Test ortamındaki sahte sahnenin `find`'ı artık gerçek Konva
   gibi seçiciye göre dönüyor (önceden her seçiciye tutamak dönüyordu).
+- **Zeminin ekran kopyası** (`use-display-background.ts`, 03.10.2026, Kaan):
+  kütüphane zemini 3508×2480 ve tuval ~500 px; Konva her karede tam görseli
+  küçülterek çizdiği için her zemin seçimi 65–110 ms'lik bir kare üretiyordu.
+  Artık ekranda zeminin tuvalde görünen bölgesi, tuvalin ekran pikseli (× dpr)
+  ölçüsüne bir kez küçültülüp çiziliyor; görsel `fetch` + `createImageBitmap(blob)`
+  ile iş parçacığı dışında çözülüyor (`HTMLImageElement` verilince Chrome ana
+  iş parçacığında çözüyordu, ölçüldü). **Çıktı güvenliği:** dosyaya HER ZAMAN
+  tam çözünürlüklü SEÇİLİ zemin girer — düğümde saklanır, `renderStage`
+  `swapToExportBackground` ile ona geçip çizer ve geri döner; çoklu boyut
+  dışa aktarıcısı kopya kullanmaz. Kopya hazırlanırken önceki kopya durur;
+  üretilemezse tam görsele düşülür (ders 23). Dışa aktarılan PNG önce/sonra
+  piksel piksel aynı; ölçüm tablosu `ROADMAP.md` Faz 7 "Stüdyoda zemin
+  değiştirirken takılma". **Kural:** tuvale yeni bir zemin/görsel çizim yolu
+  eklenirse dışa aktarmanın tam çözünürlüğü kullandığı ayrıca doğrulanır.
 - 93 katalog zemininin renk/desen adı `src/lib/background-names.ts` içinde
   kimliğe bağlıdır; sunucu sırası değişse de isim değişmez.
 
@@ -523,7 +537,7 @@ senaryolarını da içerir: R2 imzalı URL yenilemesi, kullanıcının zemin se�
 liste yenilendikten sonra korunması ve dışa aktarma başarısız olduğunda sahnenin
 geri yüklenip hatanın kullanıcıya gösterilmesi.
 
-**516 test** (03.10.2026: kuyruk kartında geç gelen eski yanıtın yeni sonucu ezmemesi +1 test; 02.10.2026: yönetim paneli kuyruk kartı +12 bileşen ve +3 vekil testi, kesim yoklamasında 429 için +2 test, 498'den; 01.10.2026, `main`'de `npm test` ve CI ile sayıldı. Belgedeki önceki 480, Kaan'ın dalında PR #39/#40/#41 henüz birleşmeden sayılmıştı; `main`'de dönüm noktaları: #44 sonrası 478 → #39 482 (`studio-attach.test.ts`) → #40 489 (`faq-item.test.ts`, `upload-dropzone.test.ts`) → #42 491 (`studio-host.test.ts`) → #41 498 (`legal-texts.test.ts`). 30.09.2026: stüdyo kodunun yalnız açılınca yüklendiğini sınayan `studio-host.test.ts` ile 478'den; kalan krediye bonus kredilerin sayı olarak eklendiğini sınayan test — backend `bonus_credits`'i `{ available, expires_at }` döndürüyor, eski test sahte yanıtta sayı verdiği için ekrandaki "6[object Object]" görünmüyordu, `components/billing-panel.test.ts`; 29.09.2026'da 460 sayılmıştı; Redis yoklaması kesintisinde ikinci POST açılmasını engelleyen üç test eklendi; 28.09.2026: Kaan'ın PR #30 incelemesiyle kesim işinin anahtarını ekrandan ayıran `bindJobKey` testleri eklendi — `lib/cutout-job.test.ts`; 27.09.2026: /cso incelemesiyle CMYK oturum/hız sınırı, `lib/change-password.test.ts` ve OWASP ZAP bulgusuyla `lib/forms-post-method.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
+**528 test** (03.10.2026: zeminin ekran kopyası ve dışa aktarmada tam çözünürlüğe geçiş +12 test, 516'dan; aynı gün kuyruk kartında geç gelen eski yanıtın yeni sonucu ezmemesi +1 test; 02.10.2026: yönetim paneli kuyruk kartı +12 bileşen ve +3 vekil testi, kesim yoklamasında 429 için +2 test, 498'den; 01.10.2026, `main`'de `npm test` ve CI ile sayıldı. Belgedeki önceki 480, Kaan'ın dalında PR #39/#40/#41 henüz birleşmeden sayılmıştı; `main`'de dönüm noktaları: #44 sonrası 478 → #39 482 (`studio-attach.test.ts`) → #40 489 (`faq-item.test.ts`, `upload-dropzone.test.ts`) → #42 491 (`studio-host.test.ts`) → #41 498 (`legal-texts.test.ts`). 30.09.2026: stüdyo kodunun yalnız açılınca yüklendiğini sınayan `studio-host.test.ts` ile 478'den; kalan krediye bonus kredilerin sayı olarak eklendiğini sınayan test — backend `bonus_credits`'i `{ available, expires_at }` döndürüyor, eski test sahte yanıtta sayı verdiği için ekrandaki "6[object Object]" görünmüyordu, `components/billing-panel.test.ts`; 29.09.2026'da 460 sayılmıştı; Redis yoklaması kesintisinde ikinci POST açılmasını engelleyen üç test eklendi; 28.09.2026: Kaan'ın PR #30 incelemesiyle kesim işinin anahtarını ekrandan ayıran `bindJobKey` testleri eklendi — `lib/cutout-job.test.ts`; 27.09.2026: /cso incelemesiyle CMYK oturum/hız sınırı, `lib/change-password.test.ts` ve OWASP ZAP bulgusuyla `lib/forms-post-method.test.ts` eklendi; aynı gün kesim kuyruğu yoklama yardımcısı `lib/cutout-job.test.ts` ve `jobs/[id]` vekili eklendi; aynı gün hata izleme temizleyicileri ve gerçek SDK'dan geçen uçtan uca test eklendi —`src/lib/error-tracking.test.ts`; 21.09.2026: editör ayarlarının otomatik kaydı ve kapanışta hemen gönderilmesi, `mapTransformToStage`, "Önerilen" zemin sıralaması ve benzer renklerin geriye itilmesi, teşekkür kartı, indirmenin gizli tutamaçları geri getirmemesi; bülten; katalog renkleri, 6 şablon; stüdyo adımları, biçim yönü, yansıma; zemin kategorileri ve baskı uyarısı; indirme sonrası soru, serbest logo, kataloğa aktarma, 17.09.2026; PR #18 incelemesiyle: zemin yüklenemediğinde önceki zeminin gösterilmemesi ve "hazırlanıyor" ile "yüklenemedi" ayrımı; stüdyo odak döngüsü, Escape katman önceliği ve canlı Deneme kotası; PR #22 incelemesiyle: tamamlanmış çalışmanın taslak kaydıyla "Yarım kalan"a düşmemesi, Çalışmalarım'da ürün adını değiştirme ve vekilin yalnız adı iletmesi; 19.09.2026: stüdyonun aşamalı akışı, geçiş perdesi, zemin favorileri, gölge boyutu/yoğunluğu, yansıma mesafesi ve admin listesi/mutasyon yarışı; aynı gün ikinci tur: perdenin yalnız açılışta çıkması, zeminlerin düzden karmaşığa sırası, Çalışmalarım'da silme onayı, admin zemin süzgeçleri, Günlük sekmesi ve vekili, Admin anahtarı, varsayılan zeminin listenin ilki olması, aşama paneli değişince yeni düğüm kurulması, `useStageSize`'ın kapsayıcı değişince gözlemciyi taşıması; 20.09.2026: stüdyoda ilk döndürmede ürün boyutunun %100 kalması — sahte sahne artık kesim ölçüsünü de bildiriyor, yoksa yerleşim araçları testte hiç etkin olmuyordu).
 
 **Paylaşılan hook'lar (PR #18 incelemesi, 17.09.2026):** logo akışı (yükleme,
 renk çevirme, ayar, kaldırma) stüdyo ve katalogda ayrı ayrı yazılıydı; ikisi de
@@ -611,9 +625,10 @@ gerektirdiği için Faz 7.5'te. (2) **Ön yüz güvenlik başlıkları** (`next.
 (Claude'dan, yöntemi Kaan seçer):** önce `Report-Only` açılır, ÜRETİM
 derlemesinde (`next start`) sayfalar ve stüdyo akışı gezilip konsol ihlalleri
 toplanır, kaynak listesi bunlardan çıkarılır, sonra zorlayıcı kipe geçilir;
-başlıkların geldiğini doğrulayan test eklenir ve E2E'nin yeşil kaldığı görülür. (3) **Zemin değişiminde kalan
-takılma:** zemini ekranda tuval boyutuna küçültmek; dışa aktarma çıktısı
-önce/sonra piksel olarak karşılaştırılır (bkz. "Stüdyo düzeni" ve ROADMAP Faz 7).
+başlıkların geldiğini doğrulayan test eklenir ve E2E'nin yeşil kaldığı görülür;
+`connect-src` R2 kökenini içermeli (stüdyo zemini küçük kopya için `fetch` ile
+de alınıyor). (3) ✅ **Zemin değişiminde kalan takılma** (03.10.2026): bkz.
+"Stüdyo düzeni" → "Zeminin ekran kopyası".
 
 ## Sol panel: çalışmalarım ve ayarlar
 

@@ -161,6 +161,9 @@ export function MultiFormatExporter({
         onCutoutSize={() => {}}
         onStageReady={handleStageReady}
         cleanView
+        // Gorunmeyen sahne: ekran kopyasina gerek yok, zemin dogrudan tam
+        // cozunurlukte cizilir (dosya icin kuruluyor).
+        downscaleBackground={false}
         onRenderReady={setIsReady}
       />
     </div>
