@@ -45,3 +45,29 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 - **Görsel varlıklar betikle üretilir, elle değil:** `node scripts/prepare-photos.mjs` (gerçek ürün fotoğraflarını web için hazırlar; kaynak `frontend/photo-source/`), `python scripts/generate-mock-cutout.py` (demo modunun örnek kesimi) ve `backend/.venv/Scripts/python frontend/scripts/prepare-before-after.py` (açılıştaki önce/sonra çifti; BiRefNet'i doğrudan çağırır, ~12 GB RAM ister). İkili bir dosyayı kaynağı olmadan commit etmek, ileride "bu nereden geldi, nasıl değiştirilir" sorusunu cevapsız bırakır.
 - **README logosu öne alındı (Serhan, 17.09.2026):** Faz 6 kapanışı için planlanan iş, kullanıcı onayıyla şimdi yapıldı. Kök `README.md`'nin başında `docs/brand/vitrin-ai-logo-2.png` var. Marka işaretinin üç renk çeşidi de depoda duruyor: `vitrin-ai-logo.png` (beyaz), `vitrin-ai-logo-2.png` (altın), `vitrin-ai-logo-3.png` (siyah) — hepsi 1530×1040, saydam zeminli PNG. **README'de altın olan seçildi** çünkü GitHub hem açık hem koyu temada gösteriyor: beyaz çeşit açık temada, siyah çeşit koyu temada kayboluyor. İlk sürümde kullanılan `docs/brand/vitrin-ai-mark.svg` kaldırıldı (kullanıcı GitHub'da görünmediğini bildirdi). **Not:** PNG'lerdeki altın `#c9a15c`, arayüzün `--color-gold` değeri (`#d1a25b`) ile tam aynı değil; bu dosyalar arayüz bileşeninden (`frontend/src/components/brand-mark.tsx`) türetilmedi, ayrı tasarım çıktılarıdır — arayüz rengi değişirse bu dosyalar kendiliğinden güncellenmez.
 - Ayrıntılı gerekçeler ve klasör yapısı için `frontend/README.md`.
+
+## `main` büyük bir değişiklik aldığında yerelde yarım işi taşıma
+
+> **Ne zaman oku:** `git pull` / `git fetch` sonrası `main`'de dosya taşıma, `CLAUDE.md` ya da bağımlılık
+> değişikliği (örnek: 03.10.2026'da `CLAUDE.md` sadeleştirmesi #47 ve `npm audit` kapısı #49) olduğunu
+> görüyorsan **ve** yerelde commit'lenmemiş ya da push'lanmamış işin varsa. Veri kaybı olmaz: yarım iş
+> yerelde güvendedir, risk yalnız üstüne alırken çıkan çakışmadır.
+
+1. **Önce işi güvene al:** commit'le (WIP olabilir) ya da `git stash`. Commit'lenmemiş değişiklik
+   `git pull`/dal değiştirmede "local changes would be overwritten" ile durdurur.
+2. `git fetch`, sonra işini `origin/main` üstüne al (`git rebase origin/main` ya da `git merge origin/main`).
+   Dal zaten push edilmişse rebase force-push ister; **force-push açık kullanıcı onayı olmadan yapılmaz**,
+   bu durumda `merge` seç.
+3. **`CLAUDE.md` çakışırsa `main`'in sürümünü al.** Eski 864 satırlık dosyaya eklediğin bir ders ya da kural
+   artık orada değildir: metni ilgili belgeye taşı (ders → tam metin `docs/lessons.md` + `CLAUDE.md`'ye tek
+   satır; backend kuralı → `docs/backend-kurallar.md`; ön yüz kararı → `docs/frontend-kararlar.md`; sistemi
+   çalıştırma → bu dosya; açık iş → `ROADMAP.md` bölüm 7). Hiçbir şeyi atma, taşı (`CLAUDE.md` kural 1).
+4. **`package-lock.json` çakışırsa elle birleştirme, yeniden üret:** `main`'in kilidinden başla, sonra
+   frontend klasöründe CI ile aynı npm'le: `docker run --rm -v "$PWD:/app" -w /app node:24-alpine npm install
+   --package-lock-only --ignore-scripts`. Mac'teki npm 11.6 kilitten `@emnapi/*` kayıtlarını düşürür ve CI'daki
+   `npm ci` "senkron değil" diye düşer; **yerel `npm ci` bunu yakalamaz** (PR #30 ve #49'da yaşandı).
+5. `ROADMAP.md` çakışırsa iki tarafı da koru (açık takip maddelerini iki taraf da güncellemiş olabilir);
+   bir madde kapandıysa bölüm 7'den silinir.
+6. Çakışma bitince testleri koş (`backend/scripts/test.sh`, `cd frontend && npm run kontrol`) ve ancak
+   sonra push et. Claude Code kullanıyorsan **önce yeni `CLAUDE.md`'yi okutmadan işe devam ettirme**:
+   kuralları değişti.
