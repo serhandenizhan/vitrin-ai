@@ -166,7 +166,7 @@ export function StudioTour() {
         <div className="studio-tour-stage relative flex w-full items-center justify-center rounded-[1.75rem] bg-white/[0.03] p-5 ring-1 ring-white/10 sm:p-8">
           <div
             className="studio-tour-frame relative overflow-hidden rounded-[0.9rem] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]"
-            style={{ ["--a" as string]: aspect } as CSSProperties}
+            style={{ ["--studio-tour-aspect" as string]: aspect } as CSSProperties}
           >
             {/* Zeminler ust uste; secilen belirir (capraz gecis). */}
             <div className={cn("absolute inset-0 bg-white transition-opacity duration-500", marketplace ? "opacity-100" : "opacity-0")} />
@@ -257,8 +257,11 @@ export function StudioTour() {
           </div>
         </div>
 
-        {/* Onizlemenin denetimleri: secili ozellige gore. */}
-        <div className="mt-5 flex min-h-12 flex-wrap items-center justify-center gap-2">
+        {/* Onizlemenin denetimleri: secili ozellige gore. `key`: ozellik
+            degisince satir yeni bir dugum olur ve `soft-fade` yeniden oynar
+            (ayni dugum kalsaydi animasyon hic oynamazdi — ders 29). Ozellikler
+            arasi gecis "tak" diye olmasin (Kaan, 03.10.2026). */}
+        <div key={feature} className="soft-fade mt-5 flex min-h-12 flex-wrap items-center justify-center gap-2">
           {feature === "zemin"
             ? PREVIEW_BACKDROPS.map((item) => (
                 <button
