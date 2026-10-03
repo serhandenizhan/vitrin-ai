@@ -2017,6 +2017,17 @@ iş mantığını yeniden kullanır.
      basınca giriş isteniyor; önceden "giriş gerekir" demeli.
   5. Kesik ölçülen "Özellik" (paketler tablosu) ve "1. adım:" yazıları büyük olasılıkla
      `sr-only` (yanlış alarm); kontrol edilecek.
+  6. **Telefonda fotoğraf kesime gitmiyor (Kaan'ın iPhone denemesi, 03.10.2026):** gerçek
+     backend + işçi açıkken telefonda seçilen fotoğraf için backend'e hiç
+     `POST /api/remove-background` gelmedi (backend günlüğü; diğer uçlar 200), Next
+     sunucusunda hata yok. Aynı anda MASAÜSTÜNDE kesim uçtan uca çalıştı (yükleme →
+     yoklama 202 → 200). Yani sorun telefonda seçme/gönderme aşamasında; sebep (HEIC
+     seçimi, dosya girişi, vekilin isteği backend'e iletmeden reddetmesi) gerçek
+     iPhone'da tarayıcı konsoluyla ölçülerek bulunacak.
+  7. **Hesap silmenin kabul mesajı kırmızı hata kutusunda** (`account-panel.tsx`
+     `ErrorText`, `role="alert"`): backend silmeyi her zaman 202 ile kabul ettiği için her
+     başarılı talepte "Silme talebiniz alındı…" hata gibi görünüyor; nötr/yeşil durum
+     mesajı olmalı (E2E `hesap-silme.spec.ts` metni sınıyor, rolü değil).
   Ölçülen iyi durum: iki modelde hiçbir sayfada yatay taşma yok.
 
 ## 5. Görev bölüşümü gerekçesi
