@@ -1180,7 +1180,8 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     başındaki nottadır; Kaan'ın Claude'u için): (1) ✅ (03.10.2026) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
-    çıktı kalitesi önce/sonra ölçülerek korunur); (2) ön yüz güvenlik başlıkları
+    çıktı kalitesi önce/sonra ölçülerek korunur); (2) → **Faz 7.5'e taşındı
+    (03.10.2026, Kaan + Serhan ortak kararı; açık takip 10 madde 7)** ön yüz güvenlik başlıkları
     — CSP, tıklama tuzağı koruması, `nosniff`, `Permissions-Policy`,
     `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. **CSP önerisi
     (Claude'dan; yöntemi Kaan seçer):** önce `Content-Security-Policy-Report-Only`
@@ -1199,7 +1200,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     dışındakilerin hiçbiri alan adına bağlı değil, şimdi eklenip test edilebilir
     ve CSP, token tarayıcıdan okunabildiği için XSS'e karşı asıl önlem. Faz
     7.5'te yalnız canlıda HSTS ve başlıkların canlı adreste ZAP pasif taramasıyla
-    doğrulanması kalır.
+    doğrulanması kalır. **Geri taşındı (03.10.2026, Kaan + Serhan'ın ortak kararı;
+    ön yüz başlıklarının tamamı):** backend başlıkları Faz 7'de bitti; ÖN YÜZ başlıkları Faz
+    7.5'e döndü, çünkü CSP iyzico ödeme formunun adreslerine (Serhan'dan) ve
+    nonce/`'unsafe-inline'` kararına bağlı çıktı. Ayrıntı bölüm 7, açık takip 10
+    madde 7. Faz 7'nin kapanışı artık bu işi beklemez.
   - **7.5'e bırakılanlar (değişmedi):** ZAP'ın R2 ve Supabase yönetici API'sine
     dayanan uçların içini taraması (canlı bağlantı ister) ve gerçek Supabase +
     gerçek backend ile uçtan uca E2E — ikisi de staging ortamı gerektirir.
@@ -1890,7 +1895,9 @@ adı kararıdır** — aşağıdaki maddelerin çoğu ona bağlı.
      koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
      `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
      (01.10.2026, Serhan'ın onayı; sahipleri ROADMAP Faz 7 "kapanış denetimi")**
-     — alan adına bağlı değiller. Burada kalan: canlıda HSTS, başlıkların canlı
+     — alan adına bağlı değiller. **Ön yüz başlıkları 03.10.2026'da yeniden
+     Faz 7.5'e taşındı** (Kaan + Serhan'ın ortak kararı; iyzico ödeme formunun CSP adresleri
+     ve nonce kararı bekliyor — bölüm 7, açık takip 10 madde 7). Burada kalan: canlıda HSTS, başlıkların canlı
      adreste gerçekten geldiğinin ZAP pasif taramasıyla doğrulanması ve
      başlıklar oturunca CI'a ZAP pasif taraması (`zaproxy/action-baseline`)
      eklenmesi. (CSP önemli: oturum token'ı tarayıcıdan okunabildiği için
@@ -2110,6 +2117,7 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
      `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
      (01.10.2026, Serhan'ın onayı)** — sahipleri aşağıdaki açık takip 11 ve 12.
+     **Ön yüz başlıkları 03.10.2026'da yeniden buraya taşındı** (madde 7).
      Burada kalan: canlıda HSTS, başlıkların canlı adreste ZAP pasif taramasıyla
      doğrulanması ve başlıklar oturunca CI'a ZAP pasif taraması
      (`zaproxy/action-baseline`).
@@ -2132,6 +2140,34 @@ yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` 
      (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
      Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
      27.09.2026'da eklendi.
+  7. **Ön yüz güvenlik başlıkları — sahibi Kaan (açık takip 12 madde 2'den,
+     03.10.2026'da Faz 7'den buraya taşındı; Kaan + Serhan'ın ortak kararı,
+     başlıkların TAMAMI).** 01.10.2026'da Serhan'ın onayıyla Faz 7.5'ten Faz 7'ye
+     çekilmişti; geri taşınma sebebi, CSP'nin iki kararının başka girdiye
+     bağlı çıkması: (a) **iyzico ödeme formu** `/odeme/{id}`'de `srcDoc`
+     iframe'inde çalışıyor (`components/checkout-page.tsx`) ve `srcDoc`
+     belgesi ana sayfanın CSP'sini MİRAS ALIR — iyzico'nun script/connect/
+     frame/img alan adları (sandbox ve canlı ayrı) CSP'ye girmezse ödeme formu
+     çalışmaz; adresler kodda yok, **Serhan'a sorulacak**, ve form yerelde
+     denenemiyor (checkout kapalı, merchant sandbox doğrulanmadı). (b) **Next'in
+     satır içi script'leri** için yöntem: nonce (`proxy.ts`'te istek başına;
+     enjekte script çalışmaz ama bugün statik olan sayfalar her istekte
+     sunucuda üretilir — etkisi ölçülmeli) ya da `'unsafe-inline'` (basit, ama
+     XSS korumasının çoğunu kaldırır); Claude'un önerisi nonce, yöntemi Kaan seçer.
+     İş tanımı (değişmedi): `next.config.ts` `headers()` ile CSP,
+     `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
+     `Referrer-Policy`, COOP/CORP (COOP ödeme pencerelerini kesmesin diye
+     `same-origin-allow-popups`), `poweredByHeader: false`. CSP sayfanın
+     yüklediği her kaynağı bilmeyi ister (Supabase, R2 imzalı görseller, Sentry
+     DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI, `blob:`/`data:`,
+     iyzico); önce yalnız raporlayan kipte (`Content-Security-Policy-Report-Only`)
+     açılıp ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri
+     taranır (sıra: Report-Only → ihlallerden kaynak listesi → zorlayıcı kip →
+     başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test
+     eklenir. **R2 notu (03.10.2026, K1'den):** stüdyo zemini küçük kopya için
+     R2'deki görseli `fetch` ile de alıyor; `connect-src` R2 kökenini içermeli
+     (yoksa sessizce yavaş yola düşer, bkz. Faz 7 "Stüdyoda zemin değiştirirken
+     takılma"). Backend başlıkları (`nosniff`, CORP) Faz 7'de bitti (Serhan).
 
 ### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
 
@@ -2139,19 +2175,8 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
 
 > **Kaan'ın Claude'u için:** Serhan'a SORULMADAN ilerlenmeyecek noktalar kök `CLAUDE.md` → "Ekip notları" bölümündedir; bu işlere başlamadan önce orayı okuyun.
 
-2. **Ön yüz güvenlik başlıkları** (`next.config.ts` `headers()`): CSP,
-   `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
-   `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. CSP sayfanın
-   yüklediği her kaynağı bilmeyi ister (Supabase, R2 imzalı görseller, Sentry
-   DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI, `blob:`/`data:`);
-   önce yalnız raporlayan kipte (`Content-Security-Policy-Report-Only`) açılıp
-   ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri taranması
-   önerilir (**Claude'ın önerisi, yöntemi Kaan seçer**; sıra: Report-Only →
-   ihlallerden kaynak listesi → zorlayıcı kip → başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test eklenir. Backend
-   başlıkları Serhan'ın (açık takip 11). **Not (03.10.2026, madde 1'in
-   düzeltmesinden):** stüdyo zemini küçük kopya için R2'deki görseli `fetch`
-   ile de alıyor; `connect-src` R2 kökenini içermeli (yoksa sessizce yavaş
-   yola düşer, bkz. Faz 7 "Stüdyoda zemin değiştirirken takılma").
+2. **Ön yüz güvenlik başlıkları → Faz 7.5'e taşındı (03.10.2026, Kaan +
+   Serhan'ın ortak kararı).** Tam metin ve taşınma gerekçesi açık takip 10, madde 7'de.
 3. **E2E'de testsiz akışlar** (`frontend/e2e/`): ödeme (`/paketler` →
    `/odeme/{id}` yoklaması; ders 21), oturumlu admin paneli, kuyrukta bekleme
    mesajı (~30 sn'den sonra nötr cümle; sahte zamanlayıcı), katalog editörü,

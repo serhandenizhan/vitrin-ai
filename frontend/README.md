@@ -619,7 +619,10 @@ kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 12).** (1) **E2E'de test
 ödeme (`/paketler` → `/odeme/{id}` yoklaması), oturumlu admin paneli, kuyrukta
 bekleme mesajı, katalog editörü, hesap silme, vitrin 3D (WebGL yok / hareketi
 azalt dalları); gerçek Supabase + backend ile uçtan uca test staging
-gerektirdiği için Faz 7.5'te. (2) **Ön yüz güvenlik başlıkları** (`next.config.ts`
+gerektirdiği için Faz 7.5'te. (2) **Ön yüz güvenlik başlıkları — 03.10.2026'da Faz
+7.5'e taşındı** (Kaan + Serhan'ın ortak kararı; iyzico ödeme formu `srcDoc`
+iframe'inde ana sayfanın CSP'sini miras aldığı için adresleri ve nonce kararı
+bekleniyor; `ROADMAP.md` bölüm 7, açık takip 10 madde 7) (`next.config.ts`
 `headers()`: CSP, `frame-ancestors`, `nosniff`, `Permissions-Policy`,
 `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`) — **CSP önerisi
 (Claude'dan, yöntemi Kaan seçer):** önce `Report-Only` açılır, ÜRETİM
