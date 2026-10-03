@@ -1994,6 +1994,30 @@ iş mantığını yeniden kullanır.
 - React Native + Expo'ya geçiş, web iş mantığını yeniden kullan
 - Kamera entegrasyonu: telefondan doğrudan çekim, canlı önizleme
 - Büyük bir faz — muhtemelen tek kişiye ait olmak yerine iki kişi arasında bölünecek
+- **Web sitesinin iPhone'da düzeltilecekleri — Faz 8'e bırakıldı (03.10.2026, Kaan'ın
+  kararı).** Kaan'ın telefon kontrolü ve WebKit ile iPhone 13 (390×664) / iPhone SE
+  (375×667) ölçümünden (Playwright `devices`, üretim derlemesi). Faz 7'de DEĞİŞİKLİK
+  YAPILMADI; sırası gelince yeniden ölçülerek ele alınır:
+  1. **Vitrin ilk ekranı (Serhan'ın kilitli tasarımı — değişiklik ona haber verilerek):**
+     kısa ekranda (SE) yüzüğün pırlantası "Nasıl çalıştığını görün" düğmesinin arkasında
+     kalıyor; 375×800'de sorun yok. Animasyon değişmeyecek, düğmeler değişecek (Kaan).
+     Öneriler: ikinci düğme yazı bağlantısı / iki düğme yan yana / kısa ekranda gizli.
+  2. **Katalogda "JPEG indir" telefonda inmiyor (Kaan bildirdi).** İki sebep: (a) SE'de
+     yapışkan sayfa önizlemesi (ekranın ~%47'si) düğmenin üstüne biniyor, dokunuş
+     önizlemeye gidiyor (ölçüldü); (b) indirme `await renderCatalog(...)` SONRASI
+     tetikleniyor — gerçek iOS Safari kullanıcı dokunuşundan sonra araya `await` girince
+     indirmeyi engelliyor (stüdyo bu yüzden senkron çiziyor; masaüstü WebKit'te indi, yani
+     yalnız gerçek iPhone'da doğrulanabilir). Önerilen: kısa ekranda önizlemeyi küçültmek;
+     render sonrası otomatik deneme + "Dosya hazır — kaydet" bağlantısı (yeni dokunuş).
+  3. **44 pt'nin altındaki dokunma hedefleri:** üst çubuk (panel, Menü 36×36; Giriş
+     40×36; Deneyin 36 yüksek), stüdyo üst barı (Geri, Kısayollar, Ana menü 28 yüksek),
+     zemin kategori sekmeleri ve favori yıldızı 28, katalog "Görseli kaldır" 24×24, vitrin
+     küçük resimleri 40×40, çekmece kapatma 36×36, alt bilgi bağlantıları ~28–32.
+  4. **Girişsiz kullanıcıda CMYK (TIFF / baskıya uygun JPEG) düğmeleri etkin** görünüyor,
+     basınca giriş isteniyor; önceden "giriş gerekir" demeli.
+  5. Kesik ölçülen "Özellik" (paketler tablosu) ve "1. adım:" yazıları büyük olasılıkla
+     `sr-only` (yanlış alarm); kontrol edilecek.
+  Ölçülen iyi durum: iki modelde hiçbir sayfada yatay taşma yok.
 
 ## 5. Görev bölüşümü gerekçesi
 
