@@ -93,20 +93,18 @@ export function StudioTour() {
           liste tek sutunda bir ekran boyu yer kapliyor, onizleme ekranin
           altinda kaliyordu ve bolum bos gorunuyordu (Serhan, Safari'de). */}
       <div className="md:hidden">
-        <div role="tablist" aria-label="Stüdyo özellikleri" className="group/pills relative -mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <SlidingPill activeKey={feature} className="bg-[#f3f0eb]" />
+        <div role="tablist" aria-label="Stüdyo özellikleri" className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FEATURES.map((item) => (
             <button
               key={item.id}
               type="button"
               role="tab"
-              data-pill-key={item.id}
               aria-selected={item.id === feature}
               onClick={() => choose(item.id)}
               className={cn(
-                "press relative z-10 h-10 shrink-0 rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap ring-1 transition-colors duration-[560ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+                "press h-10 shrink-0 rounded-full px-4 text-[0.875rem] font-medium whitespace-nowrap ring-1 transition-colors",
                 item.id === feature
-                  ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent group-data-[pill=on]/pills:bg-transparent"
+                  ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent"
                   : "bg-white/[0.04] text-[#f3f0eb]/75 ring-white/12",
               )}
             >
