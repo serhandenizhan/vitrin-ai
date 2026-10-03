@@ -544,7 +544,8 @@ yerel `.env`'deki `SUPABASE_URL`'e gizlice bağlı çıktı (yerelde yeşil, `.e
 503). Yeni bir test yazarken Supabase'e ihtiyaç varsa `tokens` fixture'ı istenir.
 
 Aynı iş akışında ayrı bir iş olarak `pip-audit -r requirements-dev.txt` ve
-`npm audit` koşar (haftada bir de kendiliğinden). **26.09.2026 taraması:**
+`npm audit --omit=dev` koşar (haftada bir de kendiliğinden; geliştirme araçları dahil
+`npm audit` ayrı, engellemeyen bir adımdır, 03.10.2026). **26.09.2026 taraması:**
 6 pakette 34 bilinen açık vardı (Pillow 17, Starlette 7, python-multipart 6,
 rembg 2, pillow-heif 1, pytest 1); hepsi sürüm yükseltmesiyle kapatıldı
 (FastAPI 0.141.1 + Starlette 1.7.0 açıkça pinli, Pillow 12.3.0, pillow-heif
