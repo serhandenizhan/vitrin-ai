@@ -1120,6 +1120,31 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - Frontend: E2E testleri, görüntü sıkıştırma/tembel (lazy) yükleme
   - **Faz 7 frontend maddeleri (30.09.2026, Kaan): ✅ tamamlandı** — E2E'nin kalanı (CMYK, WhatsApp, çoklu boyut, logo/etiket; 84 test; 02.10.2026'da kuyruk kartının 4 senaryosu eklendi, `playwright test --list` 108 test listeler), CI'a eklendi (zorunlu değil, hermetik), görsel bütçesi + tembel yükleme ölçüldü ve test altına alındı, bileşen testleri genişletildi. Ayrıntı `frontend/README.md` → "Faz 7 kapanış turu". Yasal metinlerde "Vitrin AI" → "Vitrin" ayrı bir PR'da yapıldı (`feature/yasal-metin-vitrin`, sürüm `2026-09-30`). Açık kalan: gerçek telefonda 3D ölçümü (Faz 7.5 ölçüm listesi madde 11). 01.10.2026'da `playwright test --list` 100 test listeler; CI'da 84 geçer, 16 bilerek atlanır (02.10.2026: kuyruk kartı için 4 senaryo × 2 proje = 8 test eklendi, atlanmaz: 108 listelenir) (proje başına koşan testler; ayrıntı `frontend/README.md` → "Faz 7 kapanış turu").
   - **E2E — ilk tur (30.09.2026, Kaan; kalan maddeler aynı gün kapandı, yukarıdaki satır):** Playwright kuruldu (`frontend/e2e/`, `npm run e2e`); girişsiz akışlar ve oturumlu akışlar (sahte oturum çerezi + taklit vekiller, gerçek Supabase'siz) masaüstü + 375 px'te sınanıyor. Stüdyonun aşama içi araçları (biçim/zemin, döndürme, gezinme, PNG/JPEG indirme, otomatik kayıt) da masaüstünde sınanıyor; bu testler bir hata buldu ve düzeltildi: sonuç kaydı bitmeden stüdyoya girilirse otomatik kayıt ve "tamamlandı" işareti hiç çalışmıyordu (`attachStudioWork`). **Bu turda açık görünen CMYK/WhatsApp/çoklu boyut indirme, logo/etiket ve CI'a ekleme sonradan yapıldı** (`e2e/cikti.spec.ts`, CI işi "Frontend E2E (Playwright)").
+  - **E2E — Faz 7 kapanış turu (03.10.2026, Kaan; açık takip 12 madde 3).** Yeni
+    dosyalar: `odeme.spec.ts` (paket seçimi → sözleşme onayı → `/odeme/{id}`,
+    sahte saatle 5 sn'lik yoklamada "doğrulandı"; devam eden satın almada
+    bağlantı; iptal hatasının yoklama turundan sonra da kalması — ders 21;
+    iptal başarısı; süresi dolmuş oturum), `admin.spec.ts` (yönetici olmayana
+    erişim uyarısı ve admin verisinin HİÇ istenmemesi; kullanıcı listesi,
+    e-postayla arama, ayrıntı; bonus kredi ve hatadan sonra AYNI işlem
+    anahtarı), `kesim-kuyrugu.spec.ts` (30 sn'yi aşan kuyrukta nötr cümle,
+    hata ve sıra bilgisi yok, iş bitince sonuç), `katalog.spec.ts` (boş
+    şablonda indirme kapalı; örnekle başlama, başlık; JPEG'in SOF başlığından
+    okunan 1240×1754 ölçüsü; CMYK'ya PNG gitmesi, hata ve başarı),
+    `hesap-silme.spec.ts` (e-posta onayı, 202 kabul mesajı, son yönetici 409,
+    vazgeç), `vitrin-3d.spec.ts` (WebGL yokken tuvalsiz statik kesim ve açık
+    panel; hareketi azalt'ta panelin 300 ms içinde açık olması, kapanışın
+    anında olması). **Taklit biçimi (ders 22):** ödeme ve admin vekilleri
+    başarılı yanıtı backend gövdesiyle AYNEN geçirir, hataları `{ error, code }`
+    yapar; taklitler buna göre ve backend'deki gerçek mesaj/kodlarla yazıldı.
+    Ortak taklitteki `/api/subscriptions/me` gövdesi backend'in hiç üretmediği
+    bir biçimdeydi (`{ plan_id, status, remaining }`), gerçek biçime çevrildi.
+    **Testlerin gücü (ders 15):** iptal hatasını yoklama state'ine yazan ve
+    hatadan sonra yeni anahtar üreten iki mutasyon ayrı ayrı kırmızı yaktı;
+    hareketi azalt testi animasyonlu kipte kırmızı yandı. Next'in sayfa
+    duyurucusu her sayfada BOŞ bir `role="alert"` taşır; "uyarı yok" ölçümü
+    yalnız içi dolu uyarıları sayar. Tam paket: 123 geçti, 19 atlandı (yalnız
+    masaüstü/telefon), üretim derlemesinde.
 - Ortak: güvenlik incelemesi, yükleme doğrulaması, hız sınırlama (rate limiting)
 - Tam kontrol listesi için `SECURITY.md` bölüm 9'a bakın (rate limiting, CORS sıkılaştırma, dependency audit, KVKK metinleri, IDOR testleri, backup/restore testi)
 - **Serhan'ın sırası (26.09.2026'da kararlaştırıldı):** (1) bağımlılık
@@ -1191,10 +1216,11 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     görseller, Sentry DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI,
     `blob:`/`data:`) bu ihlallerden çıkarılır; ancak ondan sonra zorlayıcı
     kipe geçilir. Başlıkların geldiğini doğrulayan bir test eklenir ve
-    zorlayıcı CSP'nin E2E'yi bozmadığı görülür; (3) E2E'de testsiz
+    zorlayıcı CSP'nin E2E'yi bozmadığı görülür; (3) ✅ (03.10.2026) E2E'de testsiz
     akışlar — ödeme (`/paketler` → `/odeme/{id}` yoklaması), oturumlu admin
     paneli, kuyrukta bekleme mesajı, katalog editörü, hesap silme, vitrin 3D
-    (WebGL yok / hareketi azalt dalları).
+    (WebGL yok / hareketi azalt dalları). **Kaan'ın Faz 7 kapanış işleri bitti
+    (03.10.2026): (1) ✅, (2) Faz 7.5'e taşındı, (3) ✅.**
   - **Güvenlik başlıkları Faz 7.5'ten Faz 7'ye çekildi (Serhan'ın onayı,
     01.10.2026).** Aynı fazın içinde yer değişikliği, kapsam aşımı değil: HSTS
     dışındakilerin hiçbiri alan adına bağlı değil, şimdi eklenip test edilebilir
@@ -2175,14 +2201,13 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
 
 > **Kaan'ın Claude'u için:** Serhan'a SORULMADAN ilerlenmeyecek noktalar kök `CLAUDE.md` → "Ekip notları" bölümündedir; bu işlere başlamadan önce orayı okuyun.
 
+**Kaan'ın Faz 7 kapanış işleri bitti (03.10.2026).** Madde 1 (zemin takılması)
+ve madde 3 (E2E'de testsiz akışlar) tamamlandı; ayrıntı ROADMAP Faz 7 "Stüdyoda
+zemin değiştirirken takılma" ve "E2E — Faz 7 kapanış turu". Gerçek Supabase +
+gerçek backend ile uçtan uca test staging gerektirir → Faz 7.5.
+
 2. **Ön yüz güvenlik başlıkları → Faz 7.5'e taşındı (03.10.2026, Kaan +
    Serhan'ın ortak kararı).** Tam metin ve taşınma gerekçesi açık takip 10, madde 7'de.
-3. **E2E'de testsiz akışlar** (`frontend/e2e/`): ödeme (`/paketler` →
-   `/odeme/{id}` yoklaması; ders 21), oturumlu admin paneli, kuyrukta bekleme
-   mesajı (~30 sn'den sonra nötr cümle; sahte zamanlayıcı), katalog editörü,
-   hesap silme, vitrin 3D yakınlaşma (WebGL yok ve "hareketi azalt" dalları).
-   Gerçek Supabase + gerçek backend ile uçtan uca test staging gerektirir →
-   Faz 7.5.
 
 ### 13. Vitrin AI için hukukçu soruları — sahibi: Serhan + Kaan (02.10.2026)
 

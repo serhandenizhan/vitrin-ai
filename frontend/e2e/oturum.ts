@@ -102,7 +102,18 @@ export async function vekilleriTaklitEt(page: Page) {
       ? r.fulfill(json({ items: [], nextCursor: null }))
       : r.fulfill(json(ornekCalisma())),
   );
+  // Backend `subscription_me` gövdesi (routes/billing.py); vekil aynen geçirir.
+  // Önceden `{ plan_id, status, remaining }` idi — backend'in hiç üretmediği
+  // bir biçim (ders 22; 03.10.2026'da düzeltildi). Kalan: 10 - 0 = 10.
   await page.route("**/api/subscriptions/me", (r) =>
-    r.fulfill(json({ plan_id: "basic", status: "active", remaining: 10 }, 200)),
+    r.fulfill(
+      json({
+        subscription: { status: "active", access_until: null, deletion_requested_at: null },
+        period: { quota_snapshot: 10, used_this_period: 0, ends_at: "2026-12-31T00:00:00+00:00", plan_id: "atolye" },
+        bonus_credits: null,
+        admin_exempt: false,
+        billing_issue: null,
+      }),
+    ),
   );
 }
