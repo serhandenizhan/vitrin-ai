@@ -23,6 +23,7 @@ import { backdropSrc, backdropSwatchSrc, HERO_BACKDROPS, type HeroBackdrop } fro
 import { closeSrc, HERO_SCENES } from "@/lib/hero-scenes";
 import { OUTPUT_FORMATS, type OutputFormatName } from "@/lib/composition";
 import { cn } from "@/lib/utils";
+import { SlidingPill } from "@/components/marketing/sliding-pill";
 
 type FeatureId = "zemin" | "isik" | "marka" | "boyut" | "teslim";
 
@@ -166,7 +167,7 @@ export function StudioTour() {
         <div className="studio-tour-stage relative flex w-full items-center justify-center rounded-[1.75rem] bg-white/[0.03] p-5 ring-1 ring-white/10 sm:p-8">
           <div
             className="studio-tour-frame relative overflow-hidden rounded-[0.9rem] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]"
-            style={{ ["--a" as string]: aspect } as CSSProperties}
+            style={{ ["--studio-tour-aspect" as string]: aspect } as CSSProperties}
           >
             {/* Zeminler ust uste; secilen belirir (capraz gecis). */}
             <div className={cn("absolute inset-0 bg-white transition-opacity duration-500", marketplace ? "opacity-100" : "opacity-0")} />
@@ -257,8 +258,11 @@ export function StudioTour() {
           </div>
         </div>
 
-        {/* Onizlemenin denetimleri: secili ozellige gore. */}
-        <div className="mt-5 flex min-h-12 flex-wrap items-center justify-center gap-2">
+        {/* Onizlemenin denetimleri: secili ozellige gore. `key`: ozellik
+            degisince satir yeni bir dugum olur ve `soft-fade` yeniden oynar
+            (ayni dugum kalsaydi animasyon hic oynamazdi — ders 29). Ozellikler
+            arasi gecis "tak" diye olmasin (Kaan, 03.10.2026). */}
+        <div key={feature} className="soft-fade mt-5 flex min-h-12 flex-wrap items-center justify-center gap-2">
           {feature === "zemin"
             ? PREVIEW_BACKDROPS.map((item) => (
                 <button
@@ -284,11 +288,14 @@ export function StudioTour() {
               <Toggle label="Yansıma" on={reflection} onChange={setReflection} />
             </>
           ) : null}
-          {feature === "boyut"
-            ? FORMATS.map((item) => (
-                <Toggle key={item.id} label={item.label} on={format === item.id} onChange={() => setFormat(item.id)} />
-              ))
-            : null}
+          {feature === "boyut" ? (
+            <div className="group/pills relative flex flex-wrap justify-center gap-2">
+              <SlidingPill activeKey={format} className="bg-[#f3f0eb]" />
+              {FORMATS.map((item) => (
+                <Toggle key={item.id} pillKey={item.id} label={item.label} on={format === item.id} onChange={() => setFormat(item.id)} />
+              ))}
+            </div>
+          ) : null}
           {feature === "marka" || feature === "teslim" ? (
             <p className="fine-print on-dark-muted">
               {feature === "marka" ? "Örnek logo ve etiket; stüdyoda kendi logonuzu yüklersiniz." : "Stüdyodan tek dokunuşla."}
@@ -300,15 +307,17 @@ export function StudioTour() {
   );
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (value: boolean) => void }) {
+/** `pillKey`: tekli secim satirinda kayan vurgunun (SlidingPill) hedefi. */
+function Toggle({ label, on, onChange, pillKey }: { label: string; on: boolean; onChange: (value: boolean) => void; pillKey?: string }) {
   return (
     <button
       type="button"
+      data-pill-key={pillKey}
       aria-pressed={on}
       onClick={() => onChange(!on)}
       className={cn(
-        "press h-10 rounded-full px-4 text-[0.875rem] font-medium ring-1 transition-colors",
-        on ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent" : "bg-white/[0.04] text-[#f3f0eb]/80 ring-white/12 hover:bg-white/10",
+        "press relative z-10 h-10 rounded-full px-4 text-[0.875rem] font-medium ring-1 transition-colors duration-[560ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+        on ? "bg-[#f3f0eb] text-[#1a1917] ring-transparent group-data-[pill=on]/pills:bg-transparent" : "bg-white/[0.04] text-[#f3f0eb]/80 ring-white/12 hover:bg-white/10",
       )}
     >
       {label}

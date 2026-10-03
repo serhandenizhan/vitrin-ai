@@ -1322,8 +1322,45 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   -webkit-backdrop-filter: blur(22px) saturate(200%) contrast(1.04);
 }
 
+/* Ana sayfada secili dugmenin altinda kayan vurgu (`marketing/sliding-pill.tsx`).
+   Egri ve sure stüdyodaki secim gecisleriyle (`.glass-lens`) ayni. */
+.sliding-pill {
+  transition:
+    transform 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 560ms cubic-bezier(0.32, 0.72, 0, 1),
+    height 560ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-pill {
+    transition: none;
+  }
+}
+
+html.reduce-motion .sliding-pill {
+  transition: none;
+}
+
+/* Stüdyo turu cercevesinin en/boy orani: gecis yapilabilsin diye SAYI olarak
+   tanimli (bkz. `.studio-tour-frame`). Katman disinda: @property genel kural. */
+@property --studio-tour-aspect {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-tour-frame {
+    transition: none;
+  }
+}
+
+html.reduce-motion .studio-tour-frame {
+  transition: none;
+}
+
 /* Ana sayfa stüdyo turu (`studio-tour.tsx`). Sahne sabit yukseklikli bir
-   kap; cerceve secili bicimin oraninda (--a = en/boy), sahneye sigan en
+   kap; cerceve secili bicimin oraninda (--studio-tour-aspect = en/boy), sahneye sigan en
    buyuk boyda. Genislik gecisle degisir: bicim secilince cerceve
    yumusakca daralip genisler. Cerceve de bir kap: urun boyu onun
    yuksekligine gore (cqh). */
@@ -1337,7 +1374,13 @@ html[data-stage-transition]::view-transition-new(studio-panel) {
   .studio-tour-frame {
     height: 100%;
     max-width: 100%;
-    aspect-ratio: var(--a, 0.8);
+    aspect-ratio: var(--studio-tour-aspect, 0.8);
+    /* `aspect-ratio` animasyonlanamiyor; Safari duzeltmesinden sonra cerceve
+       bicim degisince SICRIYORDU (yukaridaki "gecisle degisir" sozu sessizce
+       kaybolmustu). `--studio-tour-aspect` yukarida <number> olarak tanimli: degiskenin kendisi
+       gecisle degisir, oran her karede yeniden hesaplanir (Kaan, 03.10.2026).
+       @property'yi tanimayan eski tarayicida bugunku gibi aninda degisir. */
+    transition: --studio-tour-aspect 520ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .studio-tour-reflection {
