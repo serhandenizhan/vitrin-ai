@@ -2350,7 +2350,7 @@ export function CompositionEditor({
           />
           {/* Tesekkur karti (Kaan, 21.09.2026): her indirmeden sonra (PNG,
               JPEG, CMYK, coklu boyut) markali bir kart. Studyonun koyu yuzeyi
-              ve altin vurgu — arac yuzeyi kurali (CLAUDE.md). */}
+              ve altin vurgu — arac yuzeyi kurali (docs/frontend-kararlar.md). */}
           <div
             role="alertdialog"
             aria-modal="true"

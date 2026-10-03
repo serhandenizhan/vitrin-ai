@@ -32,7 +32,7 @@ npm run dev
 | `NEXT_PUBLIC_LEGAL_KEP` | boş | Varsa KEP adresi. |
 | `NEXT_PUBLIC_LEGAL_REGISTRY_NUMBER` | boş | Şirket için MERSİS; gerçek kişi işletmesi için ilgili sicil/vergi bilgisi. |
 | `NEXT_PUBLIC_SITE_URL` | boş | Sitenin dış adresi (paylaşım önizlemesi, `robots`, site haritası; `lib/site-url.ts`). Boşsa Vercel'in adresi, o da yoksa `http://localhost:3000`. **Alan adı belli olunca production'da verilir** (ROADMAP Faz 7.5 ölçüm listesi madde 11). |
-| `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. Kullanılan profil ECI **PSO Coated v3** (eci.org → `pso-coated_v3.zip` → `PSOcoated_v3.icc`). **Depoya konmaz:** lisansı gömmeye izin veriyor ama dağıtmaya izin vermiyor, depo herkese açık. Dosyayı depo dışına indirip yolunu buraya yazın (ayrıntı: kök `CLAUDE.md` açık takip maddesi 1). |
+| `CMYK_ICC_PATH` | boş | Baskı (CMYK) dönüşümünün ICC profili; boşsa `/api/cmyk` 503 döner. Kullanılan profil ECI **PSO Coated v3** (eci.org → `pso-coated_v3.zip` → `PSOcoated_v3.icc`). **Depoya konmaz:** lisansı gömmeye izin veriyor ama dağıtmaya izin vermiyor, depo herkese açık. Dosyayı depo dışına indirip yolunu buraya yazın (ayrıntı: `ROADMAP.md` bölüm 7, açık takip maddesi 1). |
 
 > **`USE_MOCK_BACKEND` uyarısı:** bu değer `true` kaldığı sürece gerçek backend
 > ayakta olsa bile arayüz **hep aynı örnek görseli** gösterir. Önceki iterasyonda
@@ -601,7 +601,7 @@ işe yaramıyor — dosya `FormData` + `Request` üzerinden geçerken yeniden
 oluşturuluyor ve sahte `size` kayboluyor. Boyut gerçekten üretilmeli.
 
 **Faz 7'de kalan ön yüz işleri (Kaan, 01.10.2026 kapanış denetimi; ayrıntı ve
-kabul ölçütleri kök `CLAUDE.md` açık takip 12).** (1) **E2E'de testsiz akışlar:**
+kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 12).** (1) **E2E'de testsiz akışlar:**
 ödeme (`/paketler` → `/odeme/{id}` yoklaması), oturumlu admin paneli, kuyrukta
 bekleme mesajı, katalog editörü, hesap silme, vitrin 3D (WebGL yok / hareketi
 azalt dalları); gerçek Supabase + backend ile uçtan uca test staging
@@ -688,7 +688,7 @@ Auth Logs'ta `/auth/v1/signup` veya `/auth/v1/recover` **500**, Resend
 Logs'ta karşılık gelen istek **403** görünür — 14.09.2026'daki "doğrulama"
 hesap sahibinin kendi adresiyle yapılmıştı, sandbox kısıtına hiç çarpmamıştı.
 Kök sebep, kaynaklar ve geçici kilit açma yolu (Supabase yönetici API'siyle
-parolayı e-postasız doğrudan ayarlamak) kök `CLAUDE.md` açık takip maddesi
+parolayı e-postasız doğrudan ayarlamak) `ROADMAP.md` bölüm 7, açık takip maddesi
 5'te.
 
 ### Geçmiş sunucuda

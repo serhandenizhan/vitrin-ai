@@ -58,7 +58,7 @@ export const dynamic = "force-dynamic";
  * gomulebilir, paylasilabilir" ama "ECI'nin yazili izni olmadan dagitilamaz"
  * diyor ve depo herkese acik. Ciktiya gommek serbest; dosyanin kendisi depo
  * disinda durur ve bu degiskenle verilir (`*.icc` .gitignore'da). Ayrinti:
- * kok CLAUDE.md acik takip maddesi 1.
+ * ROADMAP.md bolum 7, acik takip maddesi 1.
  */
 const ICC_PATH = process.env.CMYK_ICC_PATH;
 

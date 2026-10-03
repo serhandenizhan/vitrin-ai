@@ -287,7 +287,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   devreye girdiğinde bunların tarayıcıya sızmasını engelleyecek katmanı şimdiden kurar.
 - **Faz 3:** R2 presigned URL, path traversal koruması (UUID tabanlı `r2_key`), bucket CORS
   kuralının yalnızca bilinen origin'lere GET/HEAD vermesi (gerçek bucket doğrulaması açık —
-  bkz. `CLAUDE.md` açık takip maddesi 2).
+  bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 2).
   `POST /api/admin/backgrounds` Faz 3'te geçici bir `X-Admin-Secret` paylaşılan secret'ıyla
   korunuyordu (bkz. kök `CLAUDE.md` ders 8); **Faz 4'te kaldırıldı**, yerini Supabase
   oturumu + `admin_users` tablosu aldı.
@@ -338,7 +338,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   26.09.2026** — `pip-audit` + `npm audit --omit=dev` CI'da her PR'da ve haftada bir), güvenlik
   başlıkları (CSP, `frame-ancestors`, `nosniff`, `Permissions-Policy`,
   `Referrer-Policy`, COOP/CORP — **01.10.2026'da Faz 7.5'ten Faz 7'ye çekildi**,
-  sahipleri kök `CLAUDE.md` açık takip 11 ve 12; **backend `nosniff` + CORP
+  sahipleri `ROADMAP.md` bölüm 7, açık takip 11 ve 12; **backend `nosniff` + CORP
   02.10.2026'da eklendi**, ön yüz başlıkları sürüyor), her uç noktanın hız sınırı
   sınıfına atandığını doğrulayan envanter testi; HTTPS/HSTS son kontrol Faz 7.5;
   yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
@@ -354,9 +354,9 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [x] Rate limiting tüm uç noktalarda aktif — **kapandı (02.10.2026):** her uç `tests/test_rate_limit_coverage.py`'de bir sınıfa atanır ve limit-dolu / Redis-düştü davranışı sınanır; 01.10.2026 taramasında bulunan `projects`/`account` boşluğuna ek olarak ödeme geçmişi, abonelik okuma, kesim yoklaması ve admin faturalama yazma uçları da kapatıldı. Yeni uç sınıfsız eklenemez
 - [ ] CORS sadece bilinen origin'lere izin veriyor
 - [ ] DB ve Redis dışarıya kapalı — **Faz 7'den beri Redis özgün müşteri fotoğraflarını (en fazla 15 dk) tutuyor**: dışarıya açık ya da parolasız bir Redis, sıradaki fotoğrafları okunabilir kılar. Production'da Redis yalnız özel ağda ve parolayla (`REDIS_URL` içinde) çalışır
-- [ ] Redis diske yazmıyor (RDB/AOF kapalı) — KVKK metni özgün fotoğrafın diske yazılmadığını söylüyor. API her kuyruğa koymadan önce `CONFIG GET` ile doğruluyor ve açıksa ya da `CONFIG` yasak olduğu için doğrulanamıyorsa fotoğrafı almıyor (fail-closed); `CONFIG GET`'e izin vermeyen yönetilen bir Redis bu yüzden kesim kuyruğuyla çalışmaz (`CLAUDE.md` ders 33, açık takip maddesi 7)
+- [ ] Redis diske yazmıyor (RDB/AOF kapalı) — KVKK metni özgün fotoğrafın diske yazılmadığını söylüyor. API her kuyruğa koymadan önce `CONFIG GET` ile doğruluyor ve açıksa ya da `CONFIG` yasak olduğu için doğrulanamıyorsa fotoğrafı almıyor (fail-closed); `CONFIG GET`'e izin vermeyen yönetilen bir Redis bu yüzden kesim kuyruğuyla çalışmaz (`CLAUDE.md` ders 33, `ROADMAP.md` bölüm 7 açık takip 7)
 - [x] Kesim yoklamasındaki geçici Redis hatası ikinci kredi açmıyor — 29.09.2026: `GET .../jobs/{id}` bu durumda `retry_safe` vermiyor; ön yüz aynı iş anahtarını koruyor. Geçici hatada işçi aldığı işi aynı kimlikle yeniden sıraya koyuyor; yerel VS Code görevleri ortak R2 bucket'ında canlı zemin dosyası silinmesini önleyen ayarı açıyor (`CLAUDE.md` ders 36).
-- [x] Backup + restore test edildi — 27.09.2026, production'dan şifreli döküm alınıp atılabilir Postgres 17'ye geri yüklendi: 48 tablo/346 satır ve şema parmak izi (RLS, politika, tetikleyici, fonksiyon, indeks, kısıt) birebir, 2,8 sn. Aynı gün Codex incelemesinden sonra yetkilerle birlikte yeniden: 48 tablo/350 satır, 416 yetki birebir, 2,3 sn (`backend/README.md` → "Veritabanı yedeği"). **Açık:** Supabase ücretsiz pakette otomatik yedek YOK; günlük otomatik yedek + ayrı R2 bucket Faz 7.5'te (`CLAUDE.md` açık takip maddesi 8)
+- [x] Backup + restore test edildi — 27.09.2026, production'dan şifreli döküm alınıp atılabilir Postgres 17'ye geri yüklendi: 48 tablo/346 satır ve şema parmak izi (RLS, politika, tetikleyici, fonksiyon, indeks, kısıt) birebir, 2,8 sn. Aynı gün Codex incelemesinden sonra yetkilerle birlikte yeniden: 48 tablo/350 satır, 416 yetki birebir, 2,3 sn (`backend/README.md` → "Veritabanı yedeği"). **Açık:** Supabase ücretsiz pakette otomatik yedek YOK; günlük otomatik yedek + ayrı R2 bucket Faz 7.5'te (`ROADMAP.md` bölüm 7, açık takip maddesi 8)
 - [x] iyzico V3 webhook imzası + idempotency yerel testleri; gerçek merchant sandbox testi açılış kapısı
 - [x] `npm audit` / `pip-audit` temiz (26.09.2026, Faz 7: backend'de 6 paketteki 34 bilinen açık sürüm yükseltmesiyle kapatıldı, frontend zaten temizdi). **Launch'ta tekrar bakılır:** ikisi de CI'da her PR'da ve haftada bir koşuyor (`.github/workflows/ci.yml`); yeni bir açık CI'yı kırmızı yakar. **30.09–01.10.2026'da bu gerçekten yaşandı:** PyJWT 2.14.0 ve 2.15.0 (CVE-2026-101917…102274, CVE-2026-101918), `next` 16.3.8 (GHSA-vcvr-r3jv-pc5j, `next/og` `ImageResponse`'ta kritik RCE) ve 3 geçişli npm paketi (`brace-expansion`, `fast-uri`, `ip-address`) yükseltmeyle kapatıldı; npm audit ve pip-audit yeniden temiz (01.10.2026)
 - [x] KVKK Aydınlatma Metni + Gizlilik Politikası yayında
@@ -364,7 +364,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [ ] Hata izleme açılacaksa (`SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`) seçilen sağlayıcının adı gizlilik tablosuna yazıldı ve (yurt dışıysa) aktarım bilgisi doğrulandı — alıcı grubu 26.09.2026'da metne eklendi; açılmayacaksa iki DSN de boş
 - [x] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi) — 26.09.2026, Faz 7: `backend/tests/test_idor.py` her ucu sınıflandırır, sahipli kaynaklarda başkası 404 alır ve kaynak değişmez, sahibi başarılı olur; `Idempotency-Key` kullanıcıya göre ayrılır. Paketin gerçekten yakaladığı yedi ayrı bozmayla doğrulandı
 - [x] Admin panel erişimi role-based ve backend'de doğrulanıyor — 26.09.2026: 22 admin ucunun HER biri oturumsuz 401, sıradan kullanıcı 403, yönetici kabul yollarıyla otomatik sınanıyor (`backend/tests/test_idor.py`); yeni bir admin ucu sınıflandırılmadan birleşemez
-- [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. kök `CLAUDE.md` açık takip maddesi 5
+- [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 5
 
 ## Faz 5 uygulama sınırları
 

@@ -318,7 +318,7 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   ECI'nin yazılı izni olmadan **dağıtılamaz**; depo herkese açık olduğu için
   **depoya konmadı** (`*.icc` `.gitignore`'da), depo dışında durup
   `CMYK_ICC_PATH` ile veriliyor. Kalan: canlı sunucuya profilin konması
-  (Vercel'de yerel yol okunamaz — kök `CLAUDE.md` açık takip maddesi 1).
+  (Vercel'de yerel yol okunamaz — `ROADMAP.md` bölüm 7, açık takip maddesi 1).
 
   **Kod standardı — Türkçe identifierlar İngilizceye taşındı (10.09.2026).**
   Kompozisyon editörü, katalog, zemin kaynağı ve stüdyo sözleşmesindeki
@@ -339,7 +339,7 @@ sayfa eklendi ve bir özellik bilinçli olarak *yalnızca düğme* bırakıldı:
   gradyana düşüyor. Gerçek bucket'a karşı doğrulama R2 kimlik bilgileri
   olmadığı için yapılmadı; `backend/scripts/check_r2_cors.py` ve kural şablonu
   (`backend/README.md` → "R2 CORS") hazır. Production alan adı belirlenince
-  tamamlanacak (bkz. `CLAUDE.md` açık takip maddesi 2).
+  tamamlanacak (bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 2).
 
 **Çıktı boyutu seçenekleri eklendi (10.09.2026, kullanıcı isteği).** Stüdyo
 artık dört biçim sunuyor: Kare 2000×2000, Katalog (A4 oranı) 1240×1754,
@@ -548,12 +548,11 @@ güncellendi. Bkz. kök `CLAUDE.md` ders 19.
 14.09.2026):** R2 CORS'a production alan adı eklenmesi ve production veri
 sorumlusu/hukukçu onayı, ikisi de henüz gerçekleşmemiş dış girdilere
 (alan adı, hukukçu) bağlı olduğu için Faz 7.5 "launch öncesi son kapı"
-kontrol listesine taşındı — bkz. aşağıda Faz 7.5 ve kök `CLAUDE.md` açık
-takip maddeleri 2-3.
+kontrol listesine taşındı — bkz. aşağıda Faz 7.5 ve `ROADMAP.md` bölüm 7, açık takip maddeleri 2-3.
 
 **Kapatıldı (Faz 5, 14.09.2026):** Supabase'e özel SMTP sağlayıcısı olarak
 Resend bağlandı; dahili e-posta servisi bir kayıt denemesinde e-postayı hiç
-teslim etmemişti (kök CLAUDE.md açık takip maddesi 5). **Sandbox aşaması**
+teslim etmemişti (`ROADMAP.md` bölüm 7, açık takip maddesi 5). **Sandbox aşaması**
 (hesap + API key + Supabase'e bağlama) 14.09.2026'da hesap sahibinin KENDİ
 adresiyle test edildi — e-posta ulaştı, Resend Logs'ta kayıt görüldü.
 
@@ -561,12 +560,10 @@ adresiyle test edildi — e-posta ulaştı, Resend Logs'ta kayıt görüldü.
 harici kullanıcıya e-posta iletmiyor** — "spam'e düşüyor" değil, `onboarding@resend.dev`
 Resend'in yalnızca hesap sahibinin kendi adresine teslimat yapan test alan
 adı olduğu için Kaan'ın gerçek kayıt/parola sıfırlama denemesinde Resend
-403, Supabase 500 döndü. Kök sebep ve geçici kilit açma çözümü kök
-`CLAUDE.md` açık takip maddesi 5'te.
+403, Supabase 500 döndü. Kök sebep ve geçici kilit açma çözümü `ROADMAP.md` bölüm 7, açık takip maddesi 5'te.
 
 **Tam üretim aşaması** (alan adı doğrulama) ise R2 CORS gibi alan adına
-bağlı — bu kısım Faz 7.5'in launch listesine ekleniyor (bkz. kök
-`CLAUDE.md` açık takip maddesi 5).
+bağlı — bu kısım Faz 7.5'in launch listesine ekleniyor (bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 5).
 
 **Öne alınan iş — kullanıcı kararı (11.09.2026): Serhan'dan arayüz
 güncellemeleri.** Faz 4'ün kapsamı dışında (kök `CLAUDE.md` kural 6 uyarısı
@@ -603,7 +600,7 @@ gerektirmiyor; kullanıcı dördünü de denedi.
    hizalama ölçüldü (ürün piksellerinde ortalama renk farkı ~2, 12 px kaydırınca ~25).
 
 Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `soft-fade`, kök
-`CLAUDE.md` "Arayüz tasarım dili").
+`docs/frontend-kararlar.md` \"Arayüz tasarım dili\").
 
 **Öneriler:**
 
@@ -684,7 +681,7 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
     onay penceresi.
   - **Öne alınan iş — stüdyonun aşamalı akışı (Kaan'ın isteği, 19.09.2026).**
     Masaüstünde Sahne → Düzenle → Tamamla gerçek ekranlar ve geçiş perdesi
-    (ayrıntı: `CLAUDE.md` "Araç yüzeyi", `frontend/README.md` "Stüdyo düzeni").
+    (ayrıntı: `docs/frontend-kararlar.md` \"Araç yüzeyi\", `frontend/README.md` "Stüdyo düzeni").
     Telefon şimdilik eski düzende; aşamalı akışın telefona uyarlanması açık iş.
     - **1 Sahne:** sağda geniş zemin kütüphanesi + çıktı biçimleri, ✓ ile
       ilerler. **2 Düzenle:** solda dik zemin barı (yuvarlak zeminler iki
@@ -968,7 +965,7 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
     **Silme EŞZAMANLI DEĞİL:** asıl işi `python -m app.services.billing.maintenance`
     yapıyor. Yerelde bu worker çalışmadığı için panel "işlem sırada" diyordu —
     canlıda periyodik çalıştırılmazsa hiçbir silme talebi tamamlanmaz
-    (`CLAUDE.md` açık takip maddesi).
+    (`ROADMAP.md` bölüm 7, açık takip maddesi).
   - **PR #25 → Serhan devralma listesi (19.09.2026):** açık ve Serhan'a
     atanmış tek yeni iş, production'da
     `python -m app.services.billing.maintenance` için tekil/periyodik bir
@@ -1022,9 +1019,9 @@ yapabileceği bir yol yok (`app/models/admin_user.py`).
   17.09.2026, PR #18 incelemesi sırasında).** PR #18'de kapsam dışı bırakıldı:
   ödeme/zemin düzeltmeleriyle ilgisi yok ve tamamı baskı alanına ait. Sahibi
   **Kaan** — PR #18'in yorumunda iş Serhan'dan istenmişti, sahiplik burada
-  netleşiyor (kök `CLAUDE.md` açık takip maddesi 1 ile aynı sahip).
+  netleşiyor (`ROADMAP.md` bölüm 7, açık takip maddesi 1 ile aynı sahip).
   - **Profil seçimi zaten kapalı:** ECI **PSO Coated v3** (16.09.2026, Kaan —
-    kök `CLAUDE.md` açık takip maddesi 1). `ISOcoated_v2` yalnızca ECI'nin
+    `ROADMAP.md` bölüm 7, açık takip maddesi 1). `ISOcoated_v2` yalnızca ECI'nin
     "eski sürümler" bölümünde duran önceki öneri; yeniden tartışılmaz. Burada
     kalan iş profili SEÇMEK değil, doğrulamak ve üretime koymak.
   - Profil dosyası depoya konmaz (lisansı gömmeye izin veriyor, dağıtmaya
@@ -1136,8 +1133,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - **Faz 7 kapanış denetimi — kalan işler ve sahipleri (01.10.2026).** Kod,
   PR'lar ve ROADMAP birlikte taranınca Faz 7'de yapılmamış yedi başlık çıktı;
   dağılımı Serhan onayladı (rol dayanağı: bölüm 5). **Bu maddeler bitmeden Faz 7
-  kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri kök `CLAUDE.md` açık
-  takip 11 (Serhan) ve 12 (Kaan).
+  kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 11 (Serhan) ve 12 (Kaan).
   - **Serhan:** (1) ~~hız sınırı kapsamı~~ ✅ (02.10.2026): `projects`/`account`
     dışında ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve admin
     faturalama yazma uçları da sınırsız çıktı (davranış taramasıyla); hepsi
@@ -1171,9 +1167,9 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
     hesap silme sınırı e-posta onayından SONRA, iptal uçları satın almadan ayrı
     kova (`limit_checkout_cancel`), geçersiz oturumda Redis kapalıyken de 401,
     admin kartında geç gelen eski yanıt yeni sonucu ezmez. Yeni testlerin 12'si
-    eski kodda kırmızı (ayrıntı `CLAUDE.md` ders 44, `backend/README.md` →
+    eski kodda kırmızı (ayrıntı `docs/lessons.md` ders 44, `backend/README.md` →
     "Kesim kuyruğu").
-  - **Kaan** (Serhan'a sorulacak noktalar kök `CLAUDE.md` açık takip 12'nin
+  - **Kaan** (Serhan'a sorulacak noktalar `ROADMAP.md` bölüm 7, açık takip 12'nin
     başındaki nottadır; Kaan'ın Claude'u için): (1) stüdyoda zemin değişiminde kalan takılma — zemini ekranda
     tuval boyutuna (× dpr) küçültülmüş kopyayla çizmek, dışa aktarmada tam
     çözünürlük (yukarıdaki "Stüdyoda zemin değiştirirken takılma" maddesi;
@@ -1406,7 +1402,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   pasif): 407 URL (sayfa örümceği + `/api/*` vekilleri için üretilen OpenAPI),
   **enjeksiyon/XSS/yol geçişi/SSRF vb. aktif bulgu YOK.** Pasif bulgular: CSP,
   tıklama tuzağı koruması, `nosniff`, `X-Powered-By` eksik/sızıntı (Kaan'ın K2
-  işi, `CLAUDE.md` açık takip 12), "HTTP Only Site" (yerel düz HTTP; HSTS Faz
+  işi, `ROADMAP.md` bölüm 7, açık takip 12), "HTTP Only Site" (yerel düz HTTP; HSTS Faz
   7.5) ve "Anti-CSRF token yok" (`/destek` yedek formu: JS yokken POST'u sayfa
   yeniden çiziyor, durum değiştirmiyor; oturum çerezi `SameSite=Lax`, geri
   alınamaz işlemlerde Origin kontrolü var → gerçek açık değil). **Oturumlu
@@ -1555,11 +1551,10 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
 - **Faz 5'in canlı açılışı:** iyzico merchant sandbox doğrulaması ve
   `docs/billing-runbook.md` "Kurulum sırası" (yerel test başarısı sandbox
   doğrulaması sayılmaz). `RESEND_API_KEY` / `BILLING_EMAIL_FROM` ve
-  `TRUSTED_PROXY_IPS` production'da verilir (kök `CLAUDE.md` açık takip
+  `TRUSTED_PROXY_IPS` production'da verilir (`ROADMAP.md` bölüm 7, açık takip
   maddesi 3).
 - **Bakım worker'ı periyodik çalıştırılır** (`python -m
-  app.services.billing.maintenance`, cron/systemd timer; kök `CLAUDE.md` açık
-  takip maddesi 4) ve gerçek bir test hesabı silme isteğiyle doğrulanır.
+  app.services.billing.maintenance`, cron/systemd timer; `ROADMAP.md` bölüm 7, açık takip maddesi 4) ve gerçek bir test hesabı silme isteğiyle doğrulanır.
 - **Yalnız-yerel ayarların production'da kapalı olduğu doğrulanır:**
   `R2_SHARED_WITH_PRODUCTION=false` (açık kalırsa silinen zeminlerin R2
   dosyaları bucket'ta sahipsiz kalır), `LOCAL_ADMIN_EMAILS` boş,
@@ -1569,7 +1564,7 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   MB'lik gömülü profil kararı ve **canlı sunucu ölçümü** — 40 MP'lik bir
   görselin CMYK dönüşümünün production sunucusunda ne kadar sürdüğü ve ne
   kadar bellek harcadığı. Profil dosyası sunucuya konup `CMYK_ICC_PATH`
-  ayarlanır (kök `CLAUDE.md` açık takip maddesi 1).
+  ayarlanır (`ROADMAP.md` bölüm 7, açık takip maddesi 1).
 - **Otomatik veritabanı yedeği (Faz 7'den, 27.09.2026):** Supabase
   ücretsiz pakette otomatik yedek YOK. `backup_database.py backup` günlük
   çalışacak şekilde zamanlanır (sunucuda cron/systemd timer), çıktı AYRI ve
@@ -1591,7 +1586,7 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   bozan optimizasyon yok). Geçişten önce `profile_cutout.py` GPU'da koşulur
   ve GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı ölçülür.
 - **Canlı sunucuda yapılacak ölçümler (Faz 7'den, 26.09.2026 — unutulmasın,
-  kök `CLAUDE.md` açık takip maddesi 7):** yerel ölçümler tek makinede
+  `ROADMAP.md` bölüm 7, açık takip maddesi 7):** yerel ölçümler tek makinede
   yapıldı ve aşağıdakilerin yerine geçmez.
   1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
      serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
@@ -1634,7 +1629,7 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
      sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
      dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
-  11. **Açılış vitrini (Faz 7'den, 28–30.09.2026; kök `CLAUDE.md` açık takip
+  11. **Açılış vitrini (Faz 7'den, 28–30.09.2026; `ROADMAP.md` bölüm 7, açık takip
      7 madde 11):** gerçek bir orta sınıf telefonda 3D yakınlaşmanın akıcılığı
      ölçülür (M4'te 60 fps; telefon ekran kartı hiç ölçülmedi, yakınlaşma
      telefonda `compact` kaliteyle çalışıyor); alan adı belli olunca
@@ -1642,13 +1637,12 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
      adresi kullanır); canlıda Safari ile ÜRETİM adresinde kontrol yapılır
      (geliştirme sunucusu üretimle aynı şey değildir, kök `CLAUDE.md` ders 39).
   12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (Faz 7'den,
-     02.10.2026; kök `CLAUDE.md` açık takip 7 madde 12):** okuma 600/dk, taslak
+     02.10.2026; `ROADMAP.md` bölüm 7, açık takip 7 madde 12):** okuma 600/dk, taslak
      kaydı 300/dk, çalışma silme 30/dk, hesap silme 5/saat ölçülmüş değil,
      istemci sıklığının üstüne konmuş emniyet payları. Canlıda 429 sayıları ve
      meşru kullanıcıların sınıra çarpıp çarpmadığı izlenir, değerler buna göre
      ayarlanır; taslak kaydının fail-open kararı da yeniden değerlendirilir.
-- **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — kök `CLAUDE.md` açık
-  takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
+- **Güvenlik kapanış listesi (Faz 7'den, 27.09.2026 — `ROADMAP.md` bölüm 7, açık takip maddesi 10 ile aynı; Faz 7.5'e başlarken hatırlatılır):**
   1. **HSTS ve başlıkların canlıda doğrulanması.** Ön yüz CSP, tıklama tuzağı
      koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
      `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
@@ -1688,12 +1682,11 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   karar vermek. Yeni metin hukukçu son kontrolüne dahildir.
 - **Launch öncesi son kapı — dış girdiye bağlı (kullanıcı kararı
   14.09.2026; Faz 7'den buraya taşındı 26.09.2026):**
-  - R2 CORS kuralına production alan adı eklenmesi (kök `CLAUDE.md` açık
-    takip maddesi 2) — production alan adı belirlenince.
+  - R2 CORS kuralına production alan adı eklenmesi (`ROADMAP.md` bölüm 7, açık takip maddesi 2) — production alan adı belirlenince.
   - Production veri sorumlusu unvanı/başvuru e-postası ve hukukçu son
-    kontrolü (kök `CLAUDE.md` açık takip maddesi 3) — hukukçu onayı
+    kontrolü (`ROADMAP.md` bölüm 7, açık takip maddesi 3) — hukukçu onayı
     verilince.
-  - Baskı (CMYK) profili üretime konması (kök `CLAUDE.md` açık takip
+  - Baskı (CMYK) profili üretime konması (`ROADMAP.md` bölüm 7, açık takip
     maddesi 1, Faz 3'ten kalma) — profil lisansı/matbaa koşulu doğrulanınca.
   - **Zemin görsellerinin kaynak ve lisans teyidi (ekip, PR #18'den).**
     93 zeminin bir kısmı Gemini ve ChatGPT ile üretildi; bu servislerin
@@ -1714,8 +1707,7 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
     gönderim) kapatıldı; gerçek müşterilere e-posta ancak bu adımdan
     sonra gider. **17.09.2026'da doğrulandı: bu adımdan önce gerçek
     kullanıcıların hiçbiri e-posta alamıyor** (spam değil, sandbox'ın
-    hesap sahibi dışına hiç göndermemesi) — bkz. kök `CLAUDE.md` açık
-    takip maddesi 5.
+    hesap sahibi dışına hiç göndermemesi) — bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 5.
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
 
@@ -1736,3 +1728,321 @@ Gerekçe: AI sunumu doğası gereği backend ağırlıklı, bu yüzden backend i
 1. Yeni depoyu oluştur, `CLAUDE.md` + `ROADMAP.md` + `SECURITY.md` dosyalarını kök dizine koy
 2. Faz 0'ı başlat: repo/branch stratejisi, `.env` yönetimi, Docker Compose
 3. Faz 1 ve Faz 2'yi paralel yürüt (bölüm 4)
+
+## 7. Açık takip maddeleri
+
+Kapatılmamış, sahibi belli işler (kök `CLAUDE.md`'den buraya taşındı, 02.10.2026; maddelerin numaraları değişmedi, belgelerdeki "açık takip N" atıfları bu bölüme gider). Bir madde çözüldüğünde buradan **silinir**, "tamamlandı" diye bırakılmaz — liste her zaman yalnızca açık işleri göstermeli.
+
+### 1. Baskı (CMYK) profili üretime konmalı — sahibi: Kaan
+
+`/api/cmyk` gerçek CMYK üretiyor (4 kanal, ICC gömülü) ama hedef baskı
+koşulunun profilini `CMYK_ICC_PATH` env değişkeninden alıyor ve **varsayılanı
+yok**. Değişken boşsa ya da dosya okunamıyorsa endpoint dönüşüme başlamadan
+açık bir mesajla 503 döner.
+
+Profilsiz bir çevrim matbaada yanlış renk verir; bunu sessizce yapmak özelliği
+hiç sunmamaktan kötüdür — bu yüzden varsayılan konmadı.
+
+**Profil seçildi (16.09.2026, Kaan): ECI "PSO Coated v3"** (FOGRA51, ISO
+12647-2:2013, kuşe kâğıda ofset). eci.org indirme sayfası, `pso-coated_v3.zip`
+(1784 KB) → `PSOcoated_v3.icc`. Eski öneri `ISOcoated_v2` artık ECI'nin
+"eski sürümler" bölümünde; ECI onu yalnızca eski dosyalar için sunuyor.
+
+**Profil DEPOYA KONMAZ — lisans.** Profilin içindeki telif etiketi: kullanılabilir,
+dosyalara gömülebilir ve paylaşılabilir; **ECI'nin yazılı izni olmadan dağıtılamaz,
+satılamaz, değiştirilemez.** Depo GitHub'da herkese açık; oraya koymak dağıtım olur.
+Kullanıcının indirdiği CMYK dosyasına gömülmesi ve matbaaya gönderilmesi serbest.
+Bu yüzden: `*.icc` kök `.gitignore`'da, profil depo dışında durur ve
+`CMYK_ICC_PATH` ile verilir (yerelde `Yeni klasör\vitrin-ai-baski\PSOcoated_v3.icc`).
+
+**Planlandı: Faz 6 (kullanıcı kararı, 17.09.2026).** PR #18 incelemesi
+sırasında bu iş bilinçli olarak o PR'ın kapsamı dışında bırakıldı (ödeme/zemin
+düzeltmeleriyle ilgisi yok) ve `ROADMAP.md` Faz 6'da Kaan'ın kısmına yazıldı.
+PR #18'in yorumunda iş Serhan'dan istenmişti; sahip **Kaan** olarak netleşti.
+PR #18'de yalnızca şu doğrulandı: profil ayarlı değilken `POST /api/cmyk`
+doğru mesajla 503 dönüyor.
+
+**Açık kalan — canlıya çıkarken:** profil dosyası sunucuya ayrıca konup
+`CMYK_ICC_PATH` o yola ayarlanmalı. Frontend **Vercel**'e çıkarsa bilgisayardaki
+bir yol okunamaz; o durumda profil özel bir depolamadan (ör. herkese açık olmayan
+R2 nesnesi) çalışma anında alınmalı — henüz yazılmadı, dağıtım hedefi belli
+olunca karar verilecek.
+
+**Ölçüm (17.09.2026):** çıktı gerçekten 4 kanallı CMYK, alfasız, içinde
+"PSO Coated v3" profili gömülü (TIFF ve JPEG). **Profil 2,2 MB** ve her dosyaya
+gömülüyor: küçük bir görsel bile ~2,2 MB iniyor. Beyaz 0/0/0/0 çıkıyor (saydamlık
+beyaza düzleşiyor). **18-19.09.2026: Kaan çıktıyı Photoshop'ta açıp iki kez
+kontrol etti — CMYK olarak açılıyor, çalışıyor.** Kaan'ın değerlendirmesi:
+"matbaada bir sorun çıkmaz" (19.09.2026). Fiziksel matbaa provası hâlâ
+yapılmadı; **kod tarafında yapılacak bir iş kalmadı**, açık olan tek şey
+aşağıdaki deploy adımı (profil dosyasının sunucuya konması).
+
+### 2. R2 bucket CORS kuralı şimdilik yalnızca localhost — production deploy'da alan adı eklenmeli, sahibi: Serhan
+
+Editör zeminleri `crossOrigin="anonymous"` ile yüklüyor. Bucket'ın CORS kuralı bir origin'i içermiyorsa tarayıcı görseli **hiç yüklemiyor** ve editör sessizce gradyana düşüyor; küçük önizleme (CSS arka planı) yine göründüğü için hata gözle fark edilmiyor, çıktı zeminsiz iniyor. Bu davranış sahte bir CORS'suz origin'le gerçek tarayıcıda ölçüldü; CORS'lu origin'le 2000×2000 dışa aktarma zeminle birlikte doğru çıktı.
+
+**Bilinçli karar (10.09.2026, kullanıcı onayı):** henüz bir production alan adı yok, bu yüzden bucket'a şimdilik yalnızca `http://localhost:3000` için GET/HEAD kuralı eklenecek (şablon `backend/README.md` → "R2 CORS"). **Deploy anında bu maddeye mutlaka geri dönülmeli** — asıl production alan adı belirlendiğinde kurala eklenmezse, canlıda çıkan her kompozisyon sessizce zeminsiz iner (yerelde fark edilmeyen bir hata modu, çünkü localhost zaten kuralda var). Doğrulama: `backend/scripts/check_r2_cors.py <production-origin> http://localhost:3000` çalıştırılıp çıkış kodu 0 görülmeli.
+
+### 3. Ödeme bildirimi ve proxy ayarları deploy anında verilmeli — sahibi: Serhan
+
+İki ayar üretimde verilmezse sistem çalışır ama **sessizce eksik davranır**:
+
+- `RESEND_API_KEY` + `BILLING_EMAIL_FROM` yoksa "ödemeniz alınamadı, kartınızı
+  güncelleyin" e-postası hiç gitmez. Sessiz kalmıyor (`billing_alerts`'e
+  `dunning_email_not_sent` yazılıyor); action `succeeded` sayılmıyor, sınırlı
+  retry/manual inceleme için açık kalıyor. Yine de operatör alarmı çözmezse
+  kullanıcı 3 günlük grace penceresini haberi olmadan tüketebilir.
+- `TRUSTED_PROXY_IPS` (ve uvicorn'un `--proxy-headers` / `--forwarded-allow-ips`
+  değerleri) verilmezse hız sınırı bütün public trafiği proxy'nin tek kovasına
+  koyar; sınır fiilen kalkar ve bunu yerelde fark etmenin yolu yoktur.
+
+Sağlayıcı yeni değil: aşağıdaki 6. maddede Supabase Auth için seçilen Resend'in
+aynısı. Fark, buradaki e-postanın Supabase'in gönderdiği kimlik doğrulama
+postası değil, uygulamanın kendi bildirimi olması — bu yüzden Supabase SMTP
+ayarından değil, kendi `RESEND_API_KEY`'imizle HTTP API'sinden gidiyor.
+Ayrıntı: `docs/billing-runbook.md` "Kurulum sırası" 5. ve 6. maddeler.
+
+### 4. Bakım worker'ı canlıda periyodik çalışmalı — sahibi: Serhan
+
+`provider_actions` kuyruğunu (hesap silme, abonelik iptali, dunning e-postası,
+depolama temizliği) işleyen tek şey `python -m app.services.billing.maintenance`.
+Aynı tur kesim işçisinin sağlığını da gözler, ama "işçi yok" alarmı bu işe
+BAĞLI DEĞİL: API sürecinin kendi periyodik gözlemcisi var (02.10.2026).
+Bir servis olarak kurulu değil; 19.09.2026'da test hesabının silinmesi elle
+çalıştırılana kadar "sırada" kaldı. **Canlıda periyodik çalıştırılmazsa
+(systemd timer / cron) hiçbir silme talebi, iptal ya da ödeme bildirimi
+tamamlanmaz** — arayüz "işlem sırada" der ve süresiz orada kalır. Yerelde bu
+fark edilmiyor çünkü kuyruk zaten boş duruyor.
+
+**PR #25'ten Serhan'a devredilen açık iş:** production hedefi belli olduğunda
+bu komut için tekil çalışan bir cron/systemd timer kurulacak; çakışan iki turun
+aynı işi sahiplenmediği ve başarısız turun alarm ürettiği doğrulanacak. Sonra
+gerçek bir test hesabı silme isteğiyle `provider_actions` kaydının `succeeded`
+olduğu ve `billing_runs` içindeki son başarılı çalışma zamanının ilerlediği
+gözlenecek. Bu doğrulama yapılmadan hesap silme/iptal/dunning akışı production'a
+hazır sayılmaz.
+
+**PR #25 sahiplik notu:** `GET /api/admin/me` Serhan'ın backend alanı,
+`PATCH`/`DELETE /api/admin/backgrounds/{id}` ise Serhan'ın planlanan PR 2
+kapsamıydı; Kaan bunların üçünü de PR #25'te tamamladı. Serhan tarafında yeniden
+yazılacak iş yoktur; PR 2 hazırlanırken aynı değişiklikler tekrarlanmayacak,
+yalnız çakışma/rebase kontrolü yapılacaktır. CMYK deploy adımının sahibi Kaan'dır;
+zemin favorilerini hesaba bağlama işi ise PR #25'te Serhan'a atanmadı.
+
+### 5. Production yasal kimliği ve hukukçu kontrolü — sahibi: Kaan + Serhan
+
+KVKK Aydınlatma Metni, Gizlilik Politikası ve Kullanım Koşulları yayımlandı;
+kayıtlar sunucu zamanlı, istemciden değiştirilemeyen `user_consents` tablosuna
+sürümüyle yazılıyor. Production'a çıkmadan önce gerçek veri sorumlusu unvanı ve
+başvuru e-postası `NEXT_PUBLIC_DATA_CONTROLLER_NAME` /
+`NEXT_PUBLIC_LEGAL_CONTACT_EMAIL` ile verilmeli ve metinler Türkiye'de yetkili
+bir hukukçu tarafından son kez kontrol edilmeli. Vercel production veya
+`VITRIN_DEPLOY_ENV=production` bu iki değer eksikken build'i durdurur.
+
+### 8. Veritabanı yedeği henüz OTOMATİK değil — sahibi: Serhan
+
+Supabase projesi **ücretsiz pakette** ve bu pakette Supabase otomatik yedek
+almıyor; tek yedek `backend/scripts/backup_database.py`'nin ürettiği şifreli
+döküm (27.09.2026'da production'dan alındı, geri yükleme testi birebir
+geçti — `backend/README.md` → "Veritabanı yedeği"). Açık olanlar:
+
+1. **Faz 7.5'e kadar:** yedek elle alınır (önemli bir değişiklikten ya da
+   migration'dan önce `backup` çalıştırılır). Şifreleme anahtarı
+   (`BACKUP_ENCRYPTION_KEY`) parola yöneticisine kopyalandı (Serhan, 29.09.2026).
+2. **Faz 7.5:** günlük otomatik çalıştırma, ayrı özel R2 bucket'ı, saklama
+   süresi, ayda bir `restore-test` (ROADMAP Faz 7.5). Ya da Supabase Pro.
+
+### 10. Faz 7.5 güvenlik kapanış listesi — sahibi: Serhan (27.09.2026, PR #30 sonu)
+
+Faz 7'de kod güvenlik incelemesi (`/cso`) ve OWASP ZAP (oturumsuz + oturumlu,
+yerel) yapıldı; açık bulunmadı, bulunan her şey düzeltildi (`ROADMAP.md` Faz 7
+"Güvenlik incelemesi"). Aşağıdakiler bilinçli olarak canlıya çıkışa bırakıldı ve
+**Faz 7.5'e başlarken bu liste hatırlatılmalı** (ROADMAP Faz 7.5'te aynısı):
+
+  1. **HSTS ve başlıkların canlıda doğrulanması.** Ön yüz CSP, tıklama tuzağı
+     koruması, `nosniff`, `Permissions-Policy`, `Referrer-Policy`, COOP/CORP,
+     `poweredByHeader` ve backend `nosniff`/CORP **Faz 7'ye çekildi
+     (01.10.2026, Serhan'ın onayı)** — sahipleri aşağıdaki açık takip 11 ve 12.
+     Burada kalan: canlıda HSTS, başlıkların canlı adreste ZAP pasif taramasıyla
+     doğrulanması ve başlıklar oturunca CI'a ZAP pasif taraması
+     (`zaproxy/action-baseline`).
+  2. **Canlıda tarama** (yerel kit: `backend/scripts/zap/README.md`): test/staging ortamı kurulunca ZAP pasif taraması
+     canlı adreste; AKTİF tarama yalnız staging'de (canlıda sahte kayıt ve
+     ödeme denemesi üretir). 27.09.2026 taramalarının kapsamadıkları:
+     R2'ye ve Supabase yönetici API'sine dayanan uçların içi (tarama
+     sırasında bilerek koparılmıştı) ve ön yüzün oturumlu taraması.
+  3. **Canlı Redis:** özel ağda, parolalı, RDB/AOF kapalı ve `CONFIG GET`
+     izinli (ölçüm listesi madde 10).
+  4. **Canlı altyapı denetimi:** HTTPS/HSTS, ters vekil, `TRUSTED_PROXY_IPS`
+     (açık takip 3), R2 CORS ve bucket politikası (açık takip 2), Supabase
+     Auth panel ayarları — "Require current password when changing
+     password", "Secure password change", "Secure email change" (27.09.2026'da
+     açıldı; değişirse `SECURITY.md` 3.1 güncellenir).
+  5. **Profesyonel penetrasyon testi:** ücretsiz karşılığı yok; canlıya
+     çıkmadan önce bütçe olursa staging'de.
+  6. **CI'a eklenebilecekler (27.09.2026 değerlendirmesi):** kod kapsama
+     raporu (`pytest-cov`, önce yalnız bilgi amaçlı), ZAP pasif taraması
+     (madde 1'den sonra), uçtan uca tarayıcı testleri (Playwright, Kaan'ın
+     Faz 7 işi). Backend kod kuralı kontrolü (`ruff`, yalnız pyflakes)
+     27.09.2026'da eklendi.
+
+### 12. Faz 7 kapanış denetiminden kalan işler — sahibi: Kaan (01.10.2026)
+
+Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
+
+> **Kaan'ın Claude'u için:** Serhan'a SORULMADAN ilerlenmeyecek noktalar kök `CLAUDE.md` → "Ekip notları" bölümündedir; bu işlere başlamadan önce orayı okuyun.
+
+1. **Stüdyoda zemin değişiminde kalan takılma.** Zemin görselleri tam
+   çözünürlükle (3508×2480) her karede iki kez çiziliyor (zemin seçimi 60–70
+   ms'lik kare, ilk seçim ~390 ms; ölçüm `ROADMAP.md` Faz 7 "Stüdyoda zemin
+   değiştirirken takılma"). Önerilen: ekranda tuval boyutuna (× dpr)
+   küçültülmüş kopya, dışa aktarmada tam çözünürlük. **Çıktı kalitesine
+   dokunabildiği için ölçülerek yapılır:** dışa aktarılan dosya önce/sonra
+   piksel olarak karşılaştırılır; kare süresi aynı koşulda (dpr 1 ve 2, üretim
+   derlemesi — ders 30, 40) yeniden ölçülür.
+2. **Ön yüz güvenlik başlıkları** (`next.config.ts` `headers()`): CSP,
+   `frame-ancestors`/`X-Frame-Options`, `nosniff`, `Permissions-Policy`,
+   `Referrer-Policy`, COOP/CORP, `poweredByHeader: false`. CSP sayfanın
+   yüklediği her kaynağı bilmeyi ister (Supabase, R2 imzalı görseller, Sentry
+   DSN'i verilmişse, Konva ve HEIC WASM, three.js ve HDRI, `blob:`/`data:`);
+   önce yalnız raporlayan kipte (`Content-Security-Policy-Report-Only`) açılıp
+   ÜRETİM derlemesinde (`next start`, ders 39) konsol ihlalleri taranması
+   önerilir (**Claude'ın önerisi, yöntemi Kaan seçer**; sıra: Report-Only →
+   ihlallerden kaynak listesi → zorlayıcı kip → başlık testi + E2E yeşil). Başlıkların geldiğini doğrulayan bir test eklenir. Backend
+   başlıkları Serhan'ın (açık takip 11).
+3. **E2E'de testsiz akışlar** (`frontend/e2e/`): ödeme (`/paketler` →
+   `/odeme/{id}` yoklaması; ders 21), oturumlu admin paneli, kuyrukta bekleme
+   mesajı (~30 sn'den sonra nötr cümle; sahte zamanlayıcı), katalog editörü,
+   hesap silme, vitrin 3D yakınlaşma (WebGL yok ve "hareketi azalt" dalları).
+   Gerçek Supabase + gerçek backend ile uçtan uca test staging gerektirir →
+   Faz 7.5.
+
+### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
+
+Faz 7'deki yük testi, bellek ve süre ölçümleri yerelde, tek makinede yapıldı
+(ayrıntı `backend/README.md` → "Yük testi"). Canlı sunucu belli olunca
+şunlar ölçülmeden production'a hazır denmez (`ROADMAP.md` Faz 7.5'te aynı
+liste):
+
+  1. **Bellek (RAM):** backend'in tepe bellek kullanımı Linux'ta, çalışan
+     serviste yeniden ölçülür (referans 12 GB; macOS'ta yerel ölçüm 4,5–5 GB
+     çıktı ama bellek sıkıştırması yüzünden karşılaştırılamaz). Sunucu boyutu
+     bu ölçüme göre seçilir.
+  2. **Kesim süresi:** production CPU'sunda fotoğraf başına süre (yerelde
+     Apple M4'te ~13 sn). Süre kapasiteyi doğrudan belirler: tek süreçte
+     dakikada 60 / süre kesim.
+  3. **Yük testi:** `backend/scripts/load_test.py` production'a benzer bir
+     sunucuda, yük üreticisi AYRI bir makineden koşulur (yerelde ikisi aynı
+     CPU'yu paylaşıyordu). R2'ye yazmaz; ayrı bir test veritabanı gerekir.
+  4. **Veritabanı bağlantı havuzu:** varsayılan (5 + 10 taşma) yerel yük
+     testinde darboğazın bir parçası çıktı (havuz 40'ta iki uç 1,7–2,3 kat
+     hızlandı). Doğru boyut Supabase pooler'ının bağlantı sınırıyla birlikte
+     canlıda ölçülerek seçilir; sınırı aşan havuz bağlantı hatası üretir.
+  5. **CMYK dönüşümü:** 40 MP'lik görselin production'da süresi ve belleği
+     (Faz 6'dan taşınan madde, açık takip maddesi 1).
+  6. **Hata izleme:** seçilen sağlayıcıya gerçek bir hata gönderilip
+     maskelemenin orada da doğru göründüğü kontrol edilir.
+  7. **Kesim kuyruğu kapasitesi:** aynı makinede 2 işçi ya da
+     `MAX_CONCURRENT_INFERENCES=2` throughput'u artırıyor mu (yerelde 16 GB'lık
+     makine bunu kaldırmadı, ders 31); sunucunun belleğine göre işçi sayısı
+     seçilir. İşçi bir servis olarak (systemd) kurulur ve çöktüğünde yeniden
+     başlatıldığı doğrulanır; işçi yoksa kesimler sırada bekler.
+  8. **Boşta kalıştan sonraki ilk kesim:** işçi bir süre boşta kaldıktan sonra
+     ilk kesimin süresi ölçülür. 27.09.2026'da bellek sıkışık Mac'te model
+     diske atılmış, ilk kesim 30 sn sürmüştü (sonrakiler 9 sn). Sunucuda model
+     bellekte kalmalı (yeterli RAM, takas tercihen kapalı).
+  9. **GPU seçilirse:** `backend/scripts/profile_cutout.py` GPU sunucusunda
+     koşulup kesim süresi tahmini (~0,3–1,5 sn) gerçek ölçüme çevrilir; FP32
+     GPU çıktısı `compare_cutouts.py` ile CPU çıktısına karşı gerçek
+     fotoğraflarda karşılaştırılır (kalite bozan hiçbir ayar yok — FP16/INT8
+     kapsam dışı). Fiyatlar: `docs/research/sunucu-fiyatlari-2026-09-27.md`.
+  10. **Redis diske yazmıyor mu:** kesim kuyruğu özgün fotoğrafı Redis'te
+     tutuyor ve KVKK metni "diske yazılmaz" diyor. Canlı Redis'te RDB ve AOF
+     kapalı olmalı (`--save "" --appendonly no`). API bunu her kuyruğa
+     koymadan önce `CONFIG GET` ile doğruluyor ve açıksa fotoğrafı ALMIYOR
+     (kredi iade + 503). **`CONFIG` yasaksa da fotoğrafı almıyor**
+     (doğrulanamayan söz verilmiş sayılmaz — Codex incelemesi, 2. tur).
+     Yani `CONFIG GET`'e izin vermeyen yönetilen bir Redis (bazı
+     sağlayıcılar) kesim kuyruğuyla ÇALIŞMAZ; sağlayıcı seçilirken bu
+     dikkate alınır, gerekirse bilinçli bir kararla koda dönülür.
+
+  11. **Açılış vitrini (Faz 7.5):** gerçek bir orta sınıf telefonda 3D
+     yakınlaşmanın akıcılığı ölçülür (M4'te 60 fps, telefon GPU'su hiç
+     ölçülmedi); alan adı belli olunca `NEXT_PUBLIC_SITE_URL` verilir
+     (paylaşım önizlemesi ve site haritası bu adresi kullanır); canlıda Safari
+     ile üretim adresinde kontrol yapılır (ders 39).
+  12. **Hız sınırı değerleri gerçek trafikle gözden geçirilir (02.10.2026):**
+     değerler (okuma 600/dk, taslak kaydı 300/dk, çalışma silme 30/dk, hesap
+     silme 5/saat; ayrıntı `backend/README.md` → "Hız sınırı kapsam
+     envanteri") ölçülmüş üretim verisi değil, istemcinin istek sıklığının
+     (kesim yoklaması 1,5 sn, checkout 5 sn, otomatik kayıt 1,5 sn gecikmeli)
+     üstüne konmuş emniyet payları. Canlıda gerçek kullanıcı trafiğiyle
+     bakılır: 429 sayıları (Sentry/günlük), meşru kullanıcının sınıra çarpıp
+     çarpmadığı, çarpıyorsa hangi uçta; gerekirse gevşetilir, gereksiz bol
+     kalan değerler sıkılaştırılır. Taslak kaydının fail-open kararı
+     (`limit_project_write`) da bu turda gözden geçirilir. Aynı bakışta
+     Next vekili arkasında kovaların doğru kullanıcıya bağlandığı
+     (`TRUSTED_PROXY_IPS`, açık takip 3) doğrulanır.
+
+### 6. Gerçek kullanıcılara HİÇ e-posta gitmiyor — sahibi: Serhan (düzeltildi 17.09.2026)
+
+Kayıt, e-posta doğrulaması ve parola sıfırlama Supabase Auth'un gönderdiği
+e-postalara bağlı (`email_not_confirmed` akışı, "e-postanızı kontrol edin"
+ekranı — bkz. `frontend/README.md` "Hesaplar").
+
+**Bu madde önceden "e-posta spam'e düşüyor" diyordu — YANLIŞTI, düzeltildi.**
+17.09.2026'da Kaan gerçek kullanımda hem kayıt hem "şifremi unuttum" denedi,
+ikisinde de hata aldı. Supabase Auth Logs'ta `/auth/v1/signup` ve
+`/auth/v1/recover` **500**, Resend Logs'ta karşılık gelen `/emails` isteği
+**403** olarak görüldü — e-posta spam'e düşmüyor, **hiç gönderilmiyor.**
+
+**Kök sebep (kaynağından doğrulandı):** gönderen adres hâlâ
+`onboarding@resend.dev` — Resend'in yalnızca **hesap sahibinin kendi
+e-postasına** teslimat yapan test alan adı. Başka her adrese (Kaan dahil,
+gerçek her müşteri dahil) gönderim Resend tarafında 403 ile reddediliyor;
+bu red Supabase'de 500'e dönüşüp arayüzde genel bir hataya düşüyor.
+("resend.dev is a test-only sender that can only deliver to the email
+address on your Resend account" —
+[VibeAnswers](https://vibeanswers.com/resend/403-testing-emails-error/);
+"you need to verify a domain... and change the from address" —
+[Resend API errors](https://resend.com/docs/api-reference/errors).)
+14.09.2026'daki "doğrulama" da bu yüzden yanıltıcıydı: test edilen adres
+(`serhandenizhan404+etiket@gmail.com`) hesap sahibinin **kendi** adresinin
+bir varyasyonuydu, yani sandbox kısıtına hiç çarpmamıştı.
+
+**Geçici çözüm (17.09.2026, Kaan'ın hesabı için uygulandı):** Supabase'in
+yönetici API'si (`PUT /auth/v1/admin/users/{id}`, `SUPABASE_SECRET_KEY` ile)
+parolayı e-postaya HİÇ dokunmadan doğrudan yazabiliyor. Kaan'a rastgele bir
+geçici parola bu yolla atandı ve güvenli bir kanaldan iletildi; Dashboard'daki
+"Reset password" düğmesi denenmedi çünkü o da aynı bozuk e-posta yoluna
+gidiyor — kalıcı çözüm değil, yalnızca tek seferlik kilit açma.
+
+**Domain almadan denenebilecek — henüz denenmedi:** Supabase'in kendi
+(built-in) e-posta servisi, custom SMTP hiç bağlanmasaydı da çalışırdı;
+resmi belgeye göre saatte 2 e-postayla sınırlı
+([Supabase Rate Limits](https://supabase.com/docs/guides/auth/rate-limits)).
+Bu sınırın dışında kime gönderebildiği resmi belgede açık değil — bazı
+ikincil kaynaklar yalnızca "yetkili takım adresleri"ne gittiğini söylüyor
+ama bu, Supabase'in kendi belgesinden DOĞRULANAMADI. Yani şu an bilinmeyen:
+Authentication → SMTP Settings'ten özel SMTP'yi kapatıp built-in'e dönmek,
+Kaan gibi harici bir adrese (saatte 2 taneyle sınırlı olsa da) gerçekten
+ulaşır mı ulaşmaz mı — denenip sonucu buraya not düşülmeli.
+
+**Çözüm iki aşamalı — sağlayıcı seçildi (Resend, 14.09.2026):**
+
+1. **Sandbox bağlantısı kuruldu (14.09.2026) ama HESAP SAHİBİ DIŞINDA hiçbir
+   adrese teslimat yapmıyor (17.09.2026'da doğrulandı).** SMTP kimlik
+   doğrulamasının kendisi çalışıyor (bağlantı reddedilmiyor, 403 bir
+   yetkilendirme/alan adı sorunu) ama bu, "üretime hazır" anlamına gelmiyor —
+   tam tersine, gerçek kullanıcıların **hiçbiri** bugün e-posta alamıyor.
+2. **Tam üretim aşaması (henüz yapılamaz — sahibi: Serhan, dış girdiye
+   bağlı):** proje bir alan adı alınca, o alan adı Resend'de doğrulanmalı
+   (DNS'e SPF/DKIM kaydı) ve gönderen adresi kendi alan adına çevrilmeli.
+   **Bu, mutlaka Vitrin AI için yeni satın alınmış bir alan adı olmak
+   zorunda değil** — Resend alt alan adı (subdomain) doğrulamasını da kabul
+   ediyor; Serhan veya Kaan'ın DNS kaydı ekleyebildiği HERHANGİ bir mevcut
+   alan adı üzerinde bir alt alan adı (ör. `mail.mevcutalanadi.com`)
+   doğrulanıp gönderen adres oraya çevrilebilir. Bu olmadan gerçek
+   müşterilere e-posta gitmez — R2 CORS ve production domain maddesiyle
+   (açık takip maddesi 2) aynı dış girdiye bağlı, o yüzden bu ikinci aşama
+   de facto Faz 7.5'in (canlıya çıkış) "launch öncesi son kapı" listesine düşüyor.

@@ -21,7 +21,7 @@
  *
  * Menudeki her oge ya bir YERE goturuyor ya bir sey ACIYOR, ikisi karisik
  * degil; panel acanlarin yanindaki ok bunu onceden soyluyor (kilitli karar,
- * bkz. kok CLAUDE.md "Arayuz tasarim dili").
+ * bkz. docs/frontend-kararlar.md "Arayuz tasarim dili").
  */
 
 import { useEffect, useRef, useState } from "react";
