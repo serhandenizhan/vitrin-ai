@@ -1460,6 +1460,20 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   **Ders:** bağımlılık açığı zamanlaması kontrol edilemez; kuralın bedeli
   birkaç saatlik birleştirme kilidi, kazancı bilinen açıkla `main` kirletmemek.
   Kilit dosyası CI'daki npm'le güncellenir (kök `CLAUDE.md` npm tuzağı).
+  **Dördüncü olay (03.10.2026):** `braces` (GHSA-vfj7-8cjw-p6xm, yüksek, 18.09.2026'da
+  yayımlanmış, `≤ 3.0.3`) için **düzeltilmiş sürüm YOK** (en güncel sürüm 3.0.3), bu yüzden
+  sürüm yükseltmesiyle kapatılamadı ve #47/#48 dahil bütün PR'lar bloke oldu. `braces`
+  yalnız geliştirme araçlarından geliyordu (`micromatch` ← `fast-glob` ← `eslint-config-next`
+  ve `shadcn`; `shadcn` pakete yalnız `globals.css`'teki `@import "shadcn/tailwind.css"` ile
+  derleme zamanında giriyor). Çıkış: `shadcn` `devDependencies`'e taşındı (derleme zaten
+  Tailwind/TypeScript gibi geliştirme paketlerine dayanıyor) ve zorunlu kapı yalnız
+  **üretim** bağımlılıklarını tarar (`npm audit --omit=dev`, 0 açık); geliştirme araçları dahil
+  tarama ayrı, `continue-on-error` ile engellemeyen bir adımda görünür kalır (8 yüksek bulgu,
+  düzeltilmiş sürüm çıkınca kapatılır). İş adları değişmedi, kural seti güncellenmedi.
+  **Ders:** düzeltilmiş sürümü olmayan bir açık, zorunlu kapıyı sonsuza dek kırmızı tutabilir;
+  kapıyı neyin tarandığına göre ayarlamak (üretim ≠ geliştirme araçları) kural setini
+  gevşetmekten güvenlidir. Risk değerlendirmesi: bu açık saldırgan kontrollü kalıplar ister,
+  geliştirme araçları yalnız kendi yapılandırmamızı işler (tahmin, kanıt değil).
 - **Görüntü sıkıştırma / tembel yükleme — ✅ (28.09.2026, Kaan).** Önce
   ölçüldü (üretim derlemesi, `next start`, sayfanın indirdiği JS/CSS/görsel
   toplamı): `public/` zaten küçüktü (772 KB, WebP), zemin listeleri zaten
