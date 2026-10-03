@@ -47,7 +47,8 @@ buna göre seçildi.
 
 **Faz 0–4 tamamlandı. Faz 5 (ödemeler ve kredi sistemi) uygulandı, canlı açılış
 bekliyor. Faz 6 (admin paneli) tamamlandı. Faz 7 sürüyor; alan adına ve canlı
-sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
+sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te. Faz sırası:
+7 → 7.2 (Vitrin AI) → 7.5 → 8.**
 
 | Faz | Kapsam | Durum |
 | --- | --- | --- |
@@ -59,6 +60,7 @@ sunucuya bağlı her şey (CMYK matbaa provası dahil) Faz 7.5'te.**
 | 5 | Ödemeler, abonelik ve kota | ✅ uygulandı — canlı açılış kapıları açık |
 | 6 | Admin paneli | ✅ (matbaa provası ve canlı ölçüm Faz 7.5'e taşındı) |
 | 7 | Test, optimizasyon, sağlamlaştırma | 🔄 yapılanlar: CI, bağımlılık taraması, IDOR paketi, hata izleme, yük testi, kesim kuyruğu, yedekleme, model ölçümü, güvenlik incelemesi (/cso + OWASP ZAP), Playwright E2E, sayfa ağırlığı ve tembel yükleme. **Kalan (01.10.2026 denetimi):** güvenlik başlıkları (CSP vb.; backend başlıkları, hız sınırı envanteri, işçi sağlığı ve ZAP taramaları 02.10.2026'da bitti), zemin değişimi performansı ve E2E'nin eksik akışları — sahipleri `ROADMAP.md` Faz 7 "kapanış denetimi" |
+| 7.2 | Vitrin AI — tür + sahne seçerek yapay zekâyla "ürün kullanımda" görseli (dinamik, dönemsel sahneler); canlıya çıkıştan önce | ⏳ planlandı (02.10.2026) |
 | 7.5 | Canlıya çıkış — alan adı, deploy, launch kapısı | ⏳ |
 | 8 | Mobil uygulama | ⏳ |
 

@@ -17,6 +17,7 @@ Kuyumcular için AI destekli web uygulaması (mobil uzun vadeli hedef): kullanı
 | Sistemi ya da testleri yerelde çalıştırmak, `.env`/Windows/Mac sorunu ayıklamak | `docs/gelistirme-ortami.md`, `backend/README.md` |
 | Bir kuralın NEDENİNİ ya da olay hikâyesini öğrenmek (aşağıdaki "ders N") | `docs/lessons.md` |
 | Ödeme sağlayıcısı seçimi yeniden tartışılırsa | `docs/research/payment-platform-research-2026-09-14.md` |
+| Vitrin AI (sahne, prompt, AI üretimi, uyarı/etiket) | `ROADMAP.md` Faz 7.2, `docs/backend-kurallar.md` "Vitrin AI", `docs/frontend-kararlar.md` "Vitrin AI", `SECURITY.md` bölüm 6 |
 
 ## Kilitli kararlar (gerekçesi `docs/lessons.md` 1–7)
 
@@ -26,6 +27,7 @@ Kuyumcular için AI destekli web uygulaması (mobil uzun vadeli hedef): kullanı
 - **Depolama:** R2 bucket public-read değil, okuma süreli imzalı URL ile; yükleme anahtarı sunucuda üretilen UUID'dir (kullanıcı dosya adından asla).
 - **Ödeme:** iyzico (olgun abonelik API'si, webhook, raporlama, fraud). PayTR tartışması yeniden açılırsa önce araştırma belgesine bak.
 - **Ekip akışı:** yerel Claude Code, GitHub üzerinden `push`/`pull`; PR'ları `gh pr create` ile aç, diğer kişi incelemeden birleştirme. Her push'tan önce açık kullanıcı onayı gerekir.
+- **Faz sırası ve Vitrin AI (02.10.2026, Serhan'ın kararı):** Faz 7 → **Faz 7.2 Vitrin AI** → Faz 7.5 canlıya çıkış → Faz 8 mobil. Vitrin AI, kesilmiş ürünü seçilen sahneye yapay zekâyla yerleştiren, kredi harcayan ve **dinamik sahneli** (yılbaşı gibi dönemsel sahneler admin panelinden, kod değişmeden) özelliktir. Kilitli: birebir ana görsel hep stüdyodan, Vitrin AI "benzer" ek görsel üretir; sağlayıcıya yalnız kesim gider (özgün fotoğraf gitmez); uyarı + kapatılabilir etiket + görünmez işaret + eklemeye açık üretim kaydı; Deneme planı kullanamaz; canlıda açma/kapama bayrağı KAPALI başlar; model henüz seçilmedi (API testiyle seçilecek). Ayrıntı ve açık işler: `ROADMAP.md` Faz 7.2, hukukçu soruları açık takip 13.
 - **Bilinçli ertelenenler:** elde tutulan üründe modelin eli tutarsız koruması ve halka yüzüğün içini doldurması ürün sınırlamasıdır (kullanıcıya "ürünü tek başına çekin" rehberliği); MVP'yi bloklamaz.
 
 ## Backend'de dokunmadan önce `docs/backend-kurallar.md`'yi okuyacağın alanlar (kısa kurallar)

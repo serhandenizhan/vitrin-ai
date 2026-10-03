@@ -15,7 +15,7 @@ Ana sayfanın ilk ekranı bir **vitrin**: alttan yükselen el + takı sahneleri 
 3. **Yakınlaşma kodu (three.js, ~307 KB) açılışta inmez**: `next/dynamic` + boş anda önceden indirme (veri tasarrufu/2G-3G'de atlanır); modeller ve HDRI yalnız yakınlaşmada iner. Telefonda `dpr ≤ 1.5` ve pırlantada 3 iç yansıma (masaüstü 5). "Hareketi azalt" ve WebGL yokluğunda animasyon yerine yumuşak geçiş/statik kesim.
 4. **Model elde tutulan ürünü kesince eli korur ve halkanın İÇİNİ DOLDURUR** (bilinen sınırlama, aşağıda genişletildi). Bu yüzden model fotoğrafın **ürün bölgesine** uygulanır (`PRODUCT_REGIONS`), maske elle düzeltilmez. Yakın plan karşılaştırmasında **halka yüzükte parmakların örttüğü yerler elips oturtularak onarılır** (`RING_BAND_REPAIR`); bu ELLE yapılmış bir düzeltmedir, panelin metni bu yüzden kesimin "ham model çıktısı" olduğunu söylemez.
 5. **Ürün adı için Archivo (geniş kesim) yazı tipi** yalnız yakınlaşmada, Serhan'ın isteğiyle eklendi (OFL; Inter kilitli kararı bozulmadı, `preload:false`).
-6. **Uygulamanın adı artık "Vitrin"** (30.09.2026); "Vitrin AI" adı ileride gelecek bir özelliğe ayrıldı ("Sahneyi Vitrin AI kursun" düğmesi bilerek kaldı). **Yasal metinlerde (KVKK/gizlilik/kullanım koşulları) ad da "Vitrin" yapıldı** (30.09.2026, Kaan'ın onayıyla; hukukçu kontrolü ayrıca sürüyor): yasal sürüm `2026-09-27` → `2026-09-30`, "Yürürlük" tarihi 30 Eylül 2026. **Yalnız yeni kayıtlar** yeni sürümü kabul eder (`terms_version` kayıtta yazılır, backend değeri doğrulamaz; mevcut kullanıcılardan yeniden onay İSTENMİYOR, bilinçli). **Tuzak:** "Yürürlük" tarihi üç sayfada ELLE yazılı; `lib/legal-texts.test.ts` sürüm-tarih uyumunu ve eski adın kalmadığını doğrular.
+6. **Uygulamanın adı artık "Vitrin"** (30.09.2026); "Vitrin AI" adı ileride gelecek bir özelliğe ayrıldı ("Sahneyi Vitrin AI kursun" düğmesi bilerek kaldı; **özellik Faz 7.2'de, canlıya çıkıştan önce yapılacak** — 02.10.2026, ayrıntı aşağıdaki "Vitrin AI" bölümü ve `ROADMAP.md` Faz 7.2). **Yasal metinlerde (KVKK/gizlilik/kullanım koşulları) ad da "Vitrin" yapıldı** (30.09.2026, Kaan'ın onayıyla; hukukçu kontrolü ayrıca sürüyor): yasal sürüm `2026-09-27` → `2026-09-30`, "Yürürlük" tarihi 30 Eylül 2026. **Yalnız yeni kayıtlar** yeni sürümü kabul eder (`terms_version` kayıtta yazılır, backend değeri doğrulamaz; mevcut kullanıcılardan yeniden onay İSTENMİYOR, bilinçli). **Tuzak:** "Yürürlük" tarihi üç sayfada ELLE yazılı; `lib/legal-texts.test.ts` sürüm-tarih uyumunu ve eski adın kalmadığını doğrular.
 7. **Ana sayfa sırası** (koyu/açık dönüşümlü): vitrin → dene → **stüdyo turu** (canlı önizleme, kütüphane zeminleri) → **zeminler** (kategori sekmeleri, `home-gallery.json`, sayı katalogdan) → üç adım → ayrıntılar → **SSS** → teknik → **kapanış çağrısı**. "Tasarım yaklaşımımız" bölümü Apple'ı adıyla andığı için kaldırıldı.
 
 ## Arayüz tasarım dili (kilitli karar — Faz 2)
@@ -144,6 +144,41 @@ eklenirken sağa ayrı bir kart açılmaz, `STEP_TOOLS`'a eklenir. Ayrıntı ve
 3. Telefonda yapışkan tuval iki kez bozuldu: kısa bir kapsayıcı içinde
    yapışkanlık hiç çalışmıyor, ve yapışkan (konumlandırılmış) öğe statik
    kardeşlerinin üzerine boyanıp alttaki paneli örtüyor.
+
+## Vitrin AI — kullanıcı akışı ve ekran kararları (Faz 7.2, PLANLI; 02.10.2026, Serhan + Claude)
+
+> Henüz kod yok. Tam kapsam ve sunucu tarafı: `ROADMAP.md` Faz 7.2; kurallar: `docs/backend-kurallar.md`.
+> Bu bölüm **ön yüzün uyacağı** kararlardır (ekran metinleri ve düzen Kaan'ın, sunucu davranışı Serhan'ın).
+> Tasarım dili yukarıdaki kilitli dile uyar; araç yüzeyi koyu temadır, ama Vitrin AI **stüdyonun içinde
+> değil**, ayrı bir sayfadır ("Stüdyoya yeni araç eklerken ikinci panel açılmaz" kuralı bu yüzden
+> uygulanmaz: Vitrin AI bir stüdyo aracı değildir, elle ayar içermez).
+
+- **Giriş:** kesim sonrası inceleme ekranındaki mevcut "Vitrin AI" düğmesi gerçek akışa bağlanır (bugün
+  "yakında" der); menüde ayrı bir **Vitrin AI sayfası** (yeni fotoğraf yükle ya da Çalışmalarım'dan kesim
+  seç). **Ücretsiz Deneme planında** düğme görünür ama kilitli ve "Vitrin AI ücretli planlarda" der; bu
+  yalnız bilgidir, asıl red sunucudadır.
+- **Sıra:** ürün türü (yüzük, kolye, küpe, bilezik, Diğer; **tek tık, yapay zekâ tahmin etmez**) → yalnız
+  uygunsa **Kadın/Erkek** anahtarı (sahnede erkek karşılığı varsa) → sahne seçimi → üretim → sonuç. Tür
+  listesi ve her türün sahneleri sunucudan gelir (kodda sabit değil); testi geçmemiş tür hiç görünmez.
+- **Sahne seçimi:** her türde kalıcı sahneler (başlangıçta 3) önizleme görseliyle durur; **dönemsel sahne**
+  varsa listenin başında **rozetle** ve bitiş tarihiyle görünür ("Yılbaşı · 5 Ocak'a kadar"), bitişte
+  kendiliğinden kalkar. Kullanıcıya serbest metin kutusu verilmez (prompt sunucuda).
+- **Üretim öncesi:** "1 kredi, 2 deneme" **yazılmaz**. Kredi düşeceği, krediye ait diğer her yerdeki gibi
+  gösterilir. **İlk kullanımda** tam uyarı + onay kutusu; uyarı metni (Serhan'ın cümlesi, KİLİTLİ):
+  *"Yapay zeka ürünü yeniden çizer. Taş, kesim ve ince ayrıntılar gerçek üründen farklı olabilir. Birebir
+  ürün görseli için stüdyo çıktısını kullanmanızı öneririz."* Sonraki üretimlerde ön uyarı çıkmaz.
+- **Bekleme:** sayfada bekleme ekranı (kesim bekleme ekranının dili: gerçek aşama metinleri, **yüzde
+  yok**); kullanıcı ayrılabilir, iş arka planda sürer, sonuç Çalışmalarım'da bekler ve bildirim gider.
+- **Sonuç ekranı:** görsel, indir düğmesinin yanında **kalıcı kısa not** ("Yapay zekâ ile çizildi, ürünle
+  karşılaştırın"), köşede **"yapay zekâ ile oluşturuldu" etiketi (kullanıcı kapatabilir; kapatması sunucuya
+  bildirilir)**, ve ilk üretim bitince **"Tekrar dene (ücretsiz)"** (bir kez). İkinci sonuç gelince **iki
+  sonuç yan yana** gösterilir, kullanıcı birini seçer, seçilmeyen silinir; seçmeden ayrılırsa 7 gün
+  sonra SON üretilen kalır (süre sunucuda).
+- **İndirme:** logo/etiket, çoklu boyut ve WhatsApp'ta paylaş çalışır; **CMYK baskı seçeneği Vitrin AI
+  görselinde yoktur** (baskı yalnız stüdyo çıktısından). Birebir ana görsel her zaman stüdyodan çıkar.
+- **Dışarıdan görünmeyenler:** dosyadaki görünmez işaret ve üretim kaydı sunucu işidir; ön yüzde karşılığı yok.
+- **Açık:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (özellik adıyla karışabilir, karar bekliyor,
+  `ROADMAP.md` Faz 7.2 açık iş 7); kalıcı sahne sayısı büyürse sahne listesi düzeni.
 
 ## Geçmiş çalışmalar — Faz 2'nin geçici çözümü Faz 4'te kapandı
 

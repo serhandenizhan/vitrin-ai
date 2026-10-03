@@ -255,6 +255,31 @@ Sorumluluk notu: Serhan (backend/altyapı) bu dokümanın çoğunu uygular. Kaan
   metni ve gizlilik politikasına "hata izleme hizmet sağlayıcısı" alıcı grubu
   eklendi (yasal sürüm `2026-09-27`). **Açık:** sağlayıcı seçilince adı
   gizlilik tablosuna yazılır; metin hukukçu kontrolünden geçer (bölüm 9).
+- **Yapay zekâ sağlayıcısına aktarım — Vitrin AI (Faz 7.2, planlı; 02.10.2026
+  kararı, ayrıntı `ROADMAP.md` Faz 7.2):** Vitrin AI, kullanıcının ürün görselini
+  üçüncü taraf, yurt dışı bir görsel yapay zekâ sağlayıcısına gönderir; bu, kesimin
+  kendi sunucumuzda yapılmasından farklıdır ve "özgün fotoğraf diske yazılmaz" sözünün
+  kapsamını değiştirir. Kurallar: (1) sağlayıcıya **yalnız arka planı kaldırılmış
+  kesim** gider, özgün fotoğraf asla gitmez; (2) sağlayıcının eğitimde kullanmama ve
+  saklama ayarları yayından önce **resmî belgeden** doğrulanır ve canlı hesapta
+  yeniden doğrulanır (CLAUDE.md ders 33: söz, doğrulanabiliyorsa verilir); (3) sağlayıcı
+  API anahtarı yalnız sunucu `.env`'inde durur, tarayıcıya ve loglara girmez; (4) **prompt
+  şablonları sunucuda durur**, kullanıcıya hiç gönderilmez ve kullanıcı girdisi
+  prompt'a birleştirilmez (sahne ve tür sunucuda seçilen kayıtlardır; serbest metin
+  yoktur); (5) KVKK aydınlatma metni ve gizlilik politikası, yurt dışı aktarımı
+  alıcı grubu ve sağlayıcı adıyla belirtir (metin sürümü değişir, hukukçu turuna
+  girer: `ROADMAP.md` bölüm 7, açık takip 13); (6) **eklemeye açık üretim kaydı**
+  (kim, ürün, zaman, sahne ve prompt sürümü, etiket durumu) DB trigger'ıyla
+  `UPDATE`/`DELETE`'i reddeder (`admin_audit_log` deseni); **hesap silinince
+  kayıttaki kullanıcı kimliği anonimleştirilir, kayıt kalır** — bu, "hesap
+  silme" akışıyla çakışmadığı testle kanıtlanır; (7) sahne tablosu ve üretim
+  tabloları RLS ile birlikte aynı migration'da gelir (`anon`/`authenticated`
+  yetkisi geri alınır, yazma yalnız yönetici ve backend); (8) **veri ölçülülüğü:**
+  Kadın/Erkek bir **sahne alanıdır**, kullanıcı profiline yazılmaz (kayıtta cinsiyet
+  hâlâ sorulmuyor); (9) Vitrin AI üretim ucu para harcadığı için hız sınırı
+  fail-closed sınıfında, ücretsiz Deneme planı sunucuda reddedilir (arayüzdeki
+  kilit yetkilendirme sayılmaz); (10) seçilmeyen sonucun 7 gün sonra silinmesi ve
+  R2 silme hataları önceki yazmaları bozmaz (ders 25).
 - Gizlilik Politikası ve Kullanım Şartları sayfaları launch öncesi hazır olmalı.
 
 ---
@@ -343,6 +368,13 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
   sınıfına atandığını doğrulayan envanter testi; HTTPS/HSTS son kontrol Faz 7.5;
   yasal metinlerin hukukçu kontrolü **launch öncesi son kapıdır**
   (Faz 7.5 — canlıya çıkış)
+- **Faz 7.2 (Vitrin AI, planlı — 02.10.2026'da canlıya çıkıştan önceye alındı):**
+  yapay zekâ sağlayıcısına aktarım kuralları (bölüm 6, "Yapay zekâ sağlayıcısına
+  aktarım" maddesi): yalnız kesim gider, sağlayıcı ayarlarının doğrulanması, sunucuda
+  kalan prompt, eklemeye açık üretim kaydı + hesap silmede anonimleştirme, sahne ve
+  üretim tablolarında RLS, hız sınırı `CLOSED`, Deneme planının sunucuda reddi,
+  admin açma/kapama bayrağı (canlıda varsayılan KAPALI). Hukukçu soruları Faz 7.5'in
+  tek turunda (`ROADMAP.md` bölüm 7, açık takip 13).
 
 ---
 
@@ -365,6 +397,7 @@ Güvenlik Faz 7'ye ertelenmez; ilgili faz içinde uygulanır:
 - [x] IDOR testleri yapıldı (başka kullanıcının kaynağına erişim denendi ve reddedildi) — 26.09.2026, Faz 7: `backend/tests/test_idor.py` her ucu sınıflandırır, sahipli kaynaklarda başkası 404 alır ve kaynak değişmez, sahibi başarılı olur; `Idempotency-Key` kullanıcıya göre ayrılır. Paketin gerçekten yakaladığı yedi ayrı bozmayla doğrulandı
 - [x] Admin panel erişimi role-based ve backend'de doğrulanıyor — 26.09.2026: 22 admin ucunun HER biri oturumsuz 401, sıradan kullanıcı 403, yönetici kabul yollarıyla otomatik sınanıyor (`backend/tests/test_idor.py`); yeni bir admin ucu sınıflandırılmadan birleşemez
 - [ ] Resend'de alan adı doğrulandı (SPF/DKIM) ve gönderen adresi kendi alan adına çevrildi. **17.09.2026'da doğrulandı: bu adım tamamlanmadan gerçek kullanıcıların hiçbirine e-posta gitmiyor** (sandbox alan adı yalnızca hesap sahibinin kendi adresine teslimat yapıyor, spam sorunu değil) — bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 5
+- [ ] Vitrin AI (Faz 7.2) canlıda açılmadan önce: sağlayıcının eğitimde kullanmama/saklama ayarları canlı hesapta doğrulandı, yalnız kesimin gittiği (özgün fotoğrafın gitmediği) testle kanıtlı, KVKK/gizlilik metni yurt dışı aktarımı içeren sürümle yayında ve hukukçu turundan geçti (`ROADMAP.md` bölüm 7, açık takip 13), admin açma/kapama bayrağı KAPALI başladı ve açılışı ayrı bir kararla yapıldı
 
 ## Faz 5 uygulama sınırları
 

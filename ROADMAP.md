@@ -269,7 +269,8 @@ Kaan isteği yineledi ve iş Faz 3'e alındı. Eklenenler:
   metinleri. Yüzde göstergesi bilinçli olarak YOK — backend ara ilerleme
   bildirmiyor, uydurma bir çubuk hiçbir şey göstermemekten kötü
 - **"Vitrin AI" düğmesi:** özellik henüz yok, düğme açıkça "yakında" diyor ve
-  basılınca ne yapacağını anlatıyor (ders 8 deseni)
+  basılınca ne yapacağını anlatıyor (ders 8 deseni). **Kalkacağı faz: Faz 7.2**
+  (Vitrin AI, 02.10.2026'da canlıya çıkıştan önceye alındı; düğme gerçek akışa bağlanır)
 
 Ayrıca kullanıcı isteğiyle ana sayfaya iki tanıtım bölümü eklendi (10.09.2026):
 **uygulama turu** (yatay kayan, uygulamanın kendi arayüzünün DOM ile kurulmuş
@@ -610,6 +611,9 @@ Aynı gün: sitenin genelinde yumuşak açılma geçişleri (`soft-enter` / `sof
    indirilen kesim/kompozisyona küçük bir "Vitrin AI" filigranı eklenir; ücretli planlarda
    filigransız iner. Hem ücretsiz kullanımı belli eder hem ücretli plana geçişi teşvik eder —
    ama filigran ürünün kendisini (ürün fotoğrafını) örtmemeli, yalnızca köşede durmalı.
+   **Ad notu (02.10.2026):** uygulamanın adı artık "Vitrin"; "Vitrin AI" adı Faz 7.2'deki
+   özelliğe ayrıldı. Filigranın metni (şu an "Vitrin AI") özellik adıyla karışabilir; karar
+   Faz 7.2'nin açık işlerinde (madde 7).
 
 ### Faz 5 — Ödemeler ve kredi sistemi — Uygulandı; canlı açılış bekliyor (15.09.2026)
 
@@ -1133,7 +1137,7 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
 - **Faz 7 kapanış denetimi — kalan işler ve sahipleri (01.10.2026).** Kod,
   PR'lar ve ROADMAP birlikte taranınca Faz 7'de yapılmamış yedi başlık çıktı;
   dağılımı Serhan onayladı (rol dayanağı: bölüm 5). **Bu maddeler bitmeden Faz 7
-  kapanmaz, 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 11 (Serhan) ve 12 (Kaan).
+  kapanmaz, Faz 7.2'ye (Vitrin AI) ve 7.5'e geçilmez.** Ayrıntı ve kabul ölçütleri `ROADMAP.md` bölüm 7, açık takip 11 (Serhan) ve 12 (Kaan).
   - **Serhan:** (1) ~~hız sınırı kapsamı~~ ✅ (02.10.2026): `projects`/`account`
     dışında ödeme geçmişi, abonelik, checkout okuma, kesim yoklaması ve admin
     faturalama yazma uçları da sınırsız çıktı (davranış taramasıyla); hepsi
@@ -1536,15 +1540,204 @@ yani bu PR'dan gelmiyor — Faz 5 alanında ayrıca bakılmalı (sahibi: Serhan)
   O noktada doğru soru "ada göre arama ekleyelim mi" değil, **"profil verisi
   nerede yaşamalı"**dır (Supabase `user_metadata` mı, kendi veritabanımız mı);
   cevap ikincisiyse ada göre arama ikinci bir kopya gerektirmeden zaten gelir.
+### Faz 7.2 — Vitrin AI — ⏳ Planlanan (02.10.2026'da eklendi; Faz 7 bitmeden başlamaz)
+
+**Sıra (Serhan'ın kararı, 02.10.2026):** Faz 7 → **Faz 7.2** → Faz 7.5 (canlıya
+çıkış) → Faz 8 (mobil). Vitrin AI canlıya çıkıştan ÖNCE yapılır. Gerekçe: tek
+hukukçu turu, tek canlıya çıkış, "Vitrin AI" düğmesi canlıya "yakında" diye
+çıkmaz. **Bedeli:** canlıya çıkış bu fazın süresi kadar gecikir ve kredi akışı
+canlı ödeme olmadan yalnız sandbox'ta denenir; Vitrin AI'ın canlı doğrulaması
+Faz 7.5 listesinde. Numara "7.2" bilerek: 7.5'e yapılmış çok sayıda atıf var,
+yeniden numaralandırma onları bozardı. **Kaan'ın incelemesi bekliyor:** faz
+kapsamı iki kişinin ortak kararıdır, bu bölüm Kaan görmeden kesin sayılmaz.
+
+**Özellik.** Kullanıcı kesilmiş ürününü yükler ya da Çalışmalarım'dan seçer,
+ürün türünü (yüzük, kolye, küpe, bilezik, Diğer) ve bir sahneyi seçer; yapay
+zekâ ürünü o sahneye yerleştiren bir "ürün kullanımda" görseli üretir (yüzük
+açık kutuda, kolye boyunda, vb.). Elle ayar yapılmaz. Stüdyonun içinde değil,
+menüde ayrı bir sayfa ve kesim sonrası "Vitrin AI ile üret" düğmesi.
+**Sahneler dinamiktir:** yılbaşı, sevgililer günü gibi dönemsel sahneler kod
+değişikliği olmadan eklenir. Tarif ve test kaynağı Serhan'ın yerel "Vitrin
+Özellik Kararları" sayfası (depoda değil); alınan kararların tamamı aşağıda.
+
+**Kapsam ve kararlar (02.10.2026, Serhan + Claude):**
+
+- **Sahne = veritabanı kaydı, admin panelinden yönetilir.** Alanlar: ürün türü,
+  ad, önizleme görseli, prompt şablonu, tür (kalıcı | dönemsel), tema etiketi,
+  başlangıç/bitiş (Türkiye saati, yalnız dönemsel), cinsiyet (kadın | erkek |
+  ikisi), üretim modu (yeniden çiz | hibrit), kredi maliyeti, durum (taslak →
+  test → yayında). Yeni tablo ve RLS **aynı migration'da** (kök `CLAUDE.md`
+  "RLS'siz tablo oluşturulmaz"). Şemanın dışına çıkan istekler (yeni ürün türü,
+  sahneye metin yazma, çoklu kesim) kod ister; yeni bir dönemsel sahne ise yalnız
+  yeni bir kayıttır.
+- **Prompt sunucuda durur, kullanıcıya gitmez.** Admin panelinden düzenlenir;
+  her düzenleme yeni bir **sürümdür** (eskisi silinmez, geri dönülür) ve her
+  üretim hangi prompt sürümüyle yapıldığını kayda yazar. Yayındaki sahnenin
+  prompt'u değişirse sahne "test" durumuna döner (küçük yazım düzeltmesi için
+  kapatılabilir). Yeni sahne yayına girmeden aynı ürünlerle **sadakat
+  testinden** geçer.
+- **Kalıcı ve dönemsel sahneler.** Ayrım veritabanındadır; sahne sayısına sert
+  sınır yoktur. 3 kalıcı sahneyle başlanır, yeni kalıcı fikir gelirse eklenir
+  (ekran düzeni büyürse sonra tasarlanır). **Dönemsel sahne** tarih aralığında
+  listenin başına rozetle çıkar ("Yılbaşı · 5 Ocak'a kadar"), bitişte kendiliğinden
+  kalkar ve arşivlenir (kayıt silinmez); her yıl tarih elle güncellenir ve
+  yayından önce test yeniden yapılır ("her yıl otomatik" YOK). Aynı dönemin
+  farklı türlerdeki sahneleri **tema etiketiyle** gruplanır (ayrı kampanya
+  tablosu yok). Bitişte o sahneyle üretilmiş sonuçlar ve bekleyen "iki sonuçtan
+  seç" ekranı bozulmaz. Hazırlık payı: sezondan en az ~2 hafta önce.
+- **Türler ve kalıcı sahne taslağı** (hepsi kadın sahnesi; erkek sahneleri
+  sonradan veri olarak eklenir; prompt ve önizleme uygulamada test edilip
+  kesinleşir):
+
+  | Tür | Sahne 1 | Sahne 2 | Sahne 3 (vücut) |
+  | --- | --- | --- | --- |
+  | Yüzük | Açık yüzük kutusunda (düşük risk) | Özel an: gül yaprağı, mum ışığı (orta) | Parmakta (yüksek) |
+  | Kolye | Serili ipek/mermer (düşük) | Kadife büstte (orta-yüksek) | Boyunda (yüksek) |
+  | Küpe | Kadife kartta (düşük) | Mermer, ipek, kurutulmuş çiçek (düşük) | Kulakta (yüksek) |
+  | Bilezik | Hediye kutusunda (düşük) | Kapalıçarşı bilezik sehpasında (orta) | Bilekte (yüksek) |
+  | Diğer | Mermer yüzey | Hediye kutusu | Cam vitrin rafı |
+
+  Her tür **ayrı bir bayrakla**, kendi sadakat testini geçince yayına girer;
+  testi geçmeyen tür görünmez. Vücut sahneleri (parmak, boyun, kulak, bilek)
+  kalıcı olabilir ama yalnız testi geçerse yayına girer; geçmezse o türün
+  kutu/yüzey sahneleriyle çıkılır. **İnce zincir riski:** kolyede yeniden çizim
+  halkaları bozabilir; kolye testi geçmezse "serili" sahne de yayına girmez.
+  Kadın/Erkek ayrı bir tür değil sahne kaydının alanıdır. **İlk sürüm dışı:**
+  Takım (birden fazla kesim, ayrı akış), ziynet ürünleri (çeyrek, gram, Ata
+  lira), erkek sahneleri. **Hiçbir sahnede yüz çizilmez** (kadraj parmak, boyun,
+  kulak).
+- **Kullanıcı akışı.** Giriş: kesim sonrası düğme + menüdeki ayrı sayfa. Sıra:
+  tür (tek tık; AI tahmin etmez) → uygunsa Kadın/Erkek → sahne (3 kalıcı +
+  varsa rozetli dönemsel) → üretim → sonuç. **Bekleme:** sayfada bekleme ekranı;
+  kullanıcı ayrılabilir, iş arka planda sürer, sonuç Çalışmalarım'da bekler ve
+  bildirim gider; yüzde göstergesi yok (backend ara ilerleme bildirmiyor, bkz.
+  Faz 2). **Kredi metni:** üretimden önce "1 kredi, 2 deneme" YAZILMAZ; ilk
+  üretim bitince sonuç ekranında "Tekrar dene (ücretsiz)" yazılır. **İki
+  sonuç:** ikinci denemede kullanıcı ikisinden birini seçer, seçilmeyen silinir
+  (depolama artmaz); **7 gün içinde seçmezse SON üretilen kalır, ilki silinir**
+  (süre ayarlanabilir). Silme hata yolu önceki yazmaları bozmaz (ders 25).
+- **Uyarı metni** (Serhan'ın cümlesi; dokümandaki "küçük farklılıklarla" ifadesi
+  riski az gösterdiği için bırakıldı): *"Yapay zeka ürünü yeniden çizer. Taş,
+  kesim ve ince ayrıntılar gerçek üründen farklı olabilir. Birebir ürün görseli
+  için stüdyo çıktısını kullanmanızı öneririz."* **İlk kullanımda** tam metin +
+  onay kutusu (onay kayda yazılır; mevcut kullanıcılardan yasal metin için
+  yeniden onay istenmediğinden bu onay aynı zamanda yurt dışı aktarım bilgisini
+  de taşır); sonra her sonuç ekranında indir düğmesinin yanında kalıcı kısa not
+  ("Yapay zekâ ile çizildi, ürünle karşılaştırın"). Her üretimde tekrar uyarı
+  çıkmaz.
+- **Benzerlik ilkesi.** Her Vitrin AI görseli "benzerdir", birebir değildir;
+  **birebir ana görsel her zaman stüdyodan çıkar**, Vitrin AI ek ("ürün
+  kullanımda", sosyal medya) görsel üretir. Sahne kaydındaki **üretim modu**
+  alanı: "yeniden çiz" ya da "sahne + orijinal ürün" (hibrit: AI yalnız sahneyi
+  üretir, orijinal kesim üstüne konur, sonuç birebir olur). **İlk sürümde TÜM
+  sahneler "yeniden çiz"**; hibrit (özellikle duruşu değiştirmeyen yüzey/kart
+  sahneleri için) sonra, önce denenip veri olarak açılır. İndirme: Vitrin AI
+  çıktısı logo/etiket, çoklu boyut ve WhatsApp'a girer; **CMYK baskı PDF'ine
+  GİRMEZ** (yeniden çizilmiş görselin matbaaya gitmesi yanıltıcı olur, baskı
+  yalnız stüdyo çıktısından).
+- **Şeffaflık.** Köşede "yapay zekâ ile oluşturuldu" etiketi, **kullanıcı
+  kapatabilir** (Serhan'ın kararı; Claude daha sıkı bir başlangıç önermişti —
+  kapatılabilirlik hukukçu listesinde, bkz. açık takip 13); **dosyada görünmez
+  işaret her zaman** yazılır (teknik yöntem uygulamada seçilir; sağlayıcıların
+  kendi işaretlemesi olabilir, resmî belgeden doğrulanır); **sunucuda yalnız
+  eklemeye açık üretim kaydı** (kim, hangi ürün, ne zaman, hangi sahne ve prompt
+  sürümü, etiket kapatıldı mı). Dosya bilgileri Instagram ve WhatsApp'ta
+  silinebildiği için asıl kanıt bu kayıttır. **Hesap silinince** kayıttaki
+  kullanıcı kimliği **anonimleştirilir, kayıt kalır** (KVKK için hukukçuya
+  teyit; Faz 7 hesap silme akışıyla çakışmaması testle kanıtlanır).
+- **Kredi ve erişim.** Aynı kredi bakiyesi; sahne kaydında "kaç kredi" alanı
+  (varsayılan sunucu ayarı), Faz 5 rezervasyon ve iade mantığı aynen kullanılır
+  (teknik hatada iade; "beğenmedim" ücretsiz tekrarı tüketmez). **Kredinin
+  değeri (paket içinde kaç kredi) bilerek AÇIK.** Günlük bütçe tavanı YOK
+  (kullanıcı krediyle ödüyor). **Ücretsiz Deneme planı Vitrin AI kullanamaz**
+  (düğme görünür ama kilitli, "Vitrin AI ücretli planlarda" der): ödenmemiş
+  kullanım dış sağlayıcıya gerçek para harcatır. **Admin panelinde tek bir
+  açma/kapama bayrağı** (kapalıyken yeni üretim başlamaz, kredi düşmez, mevcut
+  işler biter; **canlıya çıkarken varsayılan KAPALI**; faturalamadaki "checkout
+  varsayılan kapalı" deseni). Üretim ucu para harcadığı için hız sınırı
+  fail-closed sınıfındadır (`CLOSED`). **Maliyet açıkları ve kararları
+  (02.10.2026):** (a) ücretsiz Deneme planı → kullanamaz (yukarıda). (b) *çalınmış
+  kartla alınan kredi (chargeback):* **bilinçli kabul**; Faz 5'in itiraz akışı hesabı
+  zaten askıya alır, hesap başına hız sınırı art arda üretim patlamasını yavaşlatır,
+  yeni hesabı bekletmek dürüst kullanıcıyı cezalandırdığı için YAPILMAZ. (c) *işçide
+  mükerrer sağlayıcı çağrısı:* **yeniden deneme YOK.** Sağlayıcı yanıt vermezse (zaman
+  aşımı, ağ kopması, işçi çökmesi) iş başarısız sayılır ve kredi iade edilir; kullanıcı
+  "tekrar dene" der ve yeni iş açılır. Sağlayıcıya çağrıdan ÖNCE iş "çağrı başladı"
+  diye kaydedilir; yeniden başlayan işçi "çağrı başladı ama sonuç yok" durumundaki
+  işi yeniden ÇAĞIRMAZ, başarısız sayıp iade eder. Bedel: sağlayıcı ilk çağrıyı
+  tamamlamışsa o çağrı boşa gider (en kötü durumda iş başına 1 çağrılık kayıp) ve
+  geçici hatada kullanıcı bir hata ekranı görür; kazanç: "iş başına en kötü iki üretim"
+  maliyet varsayımı bozulmaz. Sağlayıcının geçici hata oranı yüksek çıkarsa bu karar
+  model yarışındaki ölçümle yeniden değerlendirilir. (d) *sağlayıcı fiyat artışı:*
+  ek koruma yok; sahne kaydındaki "kredi maliyeti" admin panelinden artırılır (kod
+  değişmez) ve **üretim kaydına sağlayıcı maliyeti yazılır** (gerçek ortalama maliyet
+  görünsün; Faz 7.5'teki gerçek maliyet ölçümü bunu kullanır).
+- **Model: şimdi seçilmez.** Dokümandaki "ChatGPT önde, Gemini ikinci" iki
+  yüzük, kombinasyon başına tek örnek ve **uygulama arabirimi (API değil)**
+  üzerindeki bir ilk izlenimdir; API çıktısı farklı olabilir. Kodda sağlayıcı
+  sunucu ayarıyla değiştirilebilir olur. Uygulamadan önce ChatGPT ve Gemini
+  **API'si** aynı ürün + sahnelerle, kombinasyon başına 3 deneme yarıştırılır;
+  sadakat testini geçen ve ucuz olan seçilir, sonuç buraya yazılır. Model
+  kalitesini bozan bir kısayol yoktur (kesim modeli için geçerli kural burada da
+  ürün sadakati önceliğidir).
+- **Gizlilik.** Sağlayıcıya **yalnız arka planı kaldırılmış kesim** gider; özgün
+  fotoğraf gitmez. Yayından önce sağlayıcının eğitimde kullanmama ve saklama
+  ayarları resmî belgeden doğrulanır (ders 33: söz, kodda/ayarda doğrulanır).
+  KVKK/gizlilik metnine "Vitrin AI için kesim görseli yurt dışı sağlayıcıya
+  aktarılır" maddesi eklenir (alıcı grubu + sağlayıcı adı; metin sürümü
+  değişir) — hukukçu turuna girer.
+
+**Görev bölüşümü (rol dayanağı: bölüm 5):** Serhan — sahne şeması + migration + RLS,
+admin sahne yönetimi, prompt sürümleme, üretim hattı (kuyruk, kredi, iade,
+açma/kapama bayrağı, hız sınırı sınıfı, üretim kaydı), sağlayıcı soyutlaması ve
+model yarışı, gizlilik doğrulaması, hukukçu soruları. Kaan — Vitrin AI sayfası ve
+kesim sonrası düğme, tür/sahne seçimi, bekleme ve sonuç ekranı (iki sonuçtan
+seçim, ücretsiz tekrar), ilk kullanım onayı, etiket ve kalıcı not, Deneme planı
+kilidi. Sınır: kullanıcıya görünen metinler ve ekran düzeni Kaan'ın, sunucu
+davranışı Serhan'ın.
+
+**Açık (bilerek ertelendi; bu fazın İLK işleri):**
+
+1. ChatGPT ve Gemini'nin API üzerinden tutarlılığı ve gerçek API maliyeti
+   (3 tekrar; resmî fiyat sayfası).
+2. Kolye ve bileklik (vücut) sahnelerinin testi; yalnız yüzük denendi.
+3. Takım akışı (birden fazla kesim seçmek).
+4. Kredinin paket içindeki değeri ve fiyat (KDV ve komisyon dahil iş başına
+   maliyet; mali müşavire sorulacak KDV konusu).
+5. Hukukçu soruları — açık takip 13.
+6. **"İş = ürün + sahne" idempotency tanımı** aynı ürün + sahneyi sonradan
+   yeniden üretmeyi engellememeli (yeni giriş = yeni anahtar; ders 24:
+   girdinin kalıcı olarak tek olduğunu sor).
+7. **Ad çakışması:** Deneme planı filigranı bugün "Vitrin AI" yazıyor (ayrıntı
+   Faz 5, madde 7); uygulama adı "Vitrin" olduğundan ve "Vitrin AI" bu özelliğe
+   ayrıldığından filigranın metni karışabilir — karar bekliyor.
+8. Kalıcı sahne sayısı büyürse ekran düzeni (kaydırma/kategori).
+9. Kullanıcıya gösterilen "yapay zekâ ile oluşturuldu" etiketinin görünümü ve
+   görünmez işaretin yöntemi.
+
+**Çıkış ölçütleri (bu faz kapanmadan 7.5'e geçilmez):** sahne şeması, RLS ve
+admin yönetimi çalışıyor; model seçimi API testiyle yapılmış ve sonucu burada;
+her açık tür kendi sadakat testini geçmiş (geçmeyen tür kapalı); üretim hattı
+kredi, iade, idempotency ve kapatma bayrağıyla testli; kapsam envanteri
+(`test_idor.py` sınıfı, `test_rate_limit_coverage.py` sınıfı `CLOSED`) yeni
+uçlar için tamam; uyarı, etiket, görünmez işaret ve üretim kaydı çalışıyor;
+hesap silme + anonimleştirme testli; sağlayıcıya yalnız kesim gittiği testle
+kanıtlı; Deneme planı kilidi testli; gizlilik/KVKK metni taslağı ve hukukçu
+soruları hazır (hukukçu yanıtı 7.5'te).
+
+**Güvenlik:** `SECURITY.md` bölüm 6 ("Yapay zekâ sağlayıcısına aktarım — Vitrin AI"
+maddesi) ve bölüm 8 (Faz 7.2) bu fazı kapsar. Yeni uç, tablo ve dosya yazan her iş
+kök `CLAUDE.md`'deki güvenlik davranış kurallarına tabidir.
+
 ### Faz 7.5 — Canlıya çıkış (deploy) — ⏳ Planlanan (26.09.2026'da ayrıldı)
 
 **Neden ayrı bir faz (kullanıcı kararı, 26.09.2026):** production alan adı
 son ana kadar kararlaştırılmayacak. Alan adına ve canlı sunucuya bağlı işler
 Faz 7'nin içinde durduğu sürece Faz 7 hiç kapanamazdı; oysa Faz 7'nin kendi
 işi (test, optimizasyon, sağlamlaştırma) alan adı olmadan yapılabiliyor. Bu
-yüzden canlıya çıkışa bağlı her şey buraya toplandı. **Faz 7 bitmeden bu faza
-geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddelerin
-çoğu ona bağlı.
+yüzden canlıya çıkışa bağlı her şey buraya toplandı. **Faz 7 ve Faz 7.2 (Vitrin
+AI; sıra kararı 02.10.2026) bitmeden bu faza geçilmez; bu fazın ilk adımı alan
+adı kararıdır** — aşağıdaki maddelerin çoğu ona bağlı.
 
 - **Alan adı ve dağıtım hedefi kararı** (backend sunucusu ≥12–14 GB RAM,
   frontend Vercel mi sunucu mu). Diğer maddelerin kilidi.
@@ -1553,6 +1746,17 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
   doğrulaması sayılmaz). `RESEND_API_KEY` / `BILLING_EMAIL_FROM` ve
   `TRUSTED_PROXY_IPS` production'da verilir (`ROADMAP.md` bölüm 7, açık takip
   maddesi 3).
+- **Vitrin AI'ın canlı açılışı (Faz 7.2'den, 02.10.2026):** Vitrin AI Faz 7.2'de
+  kodlanır ama canlıda açma/kapama bayrağı **KAPALI** başlar; bu fazda: (1) hukukçu
+  turuna Vitrin AI soruları eklenir (açık takip 13) ve KVKK/gizlilik metninin yeni
+  sürümü yayımlanır; (2) seçilen AI sağlayıcısının üretim API anahtarı verilir ve
+  eğitimde kullanmama/saklama ayarları canlı hesapta yeniden doğrulanır; (3) gerçek
+  bir üretimle uçtan uca denenir (kredi düşümü, teknik hatada iade, iki sonuçtan seçim,
+  7 günlük silme, görünmez işaret, üretim kaydı, hesap silmede anonimleştirme) ve
+  **gerçek üretim maliyeti** ölçülüp Faz 7.2'deki tahminle karşılaştırılır;
+  (4) Vitrin AI uçları ZAP taramasına ve hız sınırı değerlerinin canlı gözden
+  geçirilmesine (ölçüm listesi madde 12) dahil edilir; (5) bayrak açılır — bu ayrı
+  ve bilinçli bir karardır, deploy ile birlikte kendiliğinden olmaz.
 - **Bakım worker'ı periyodik çalıştırılır** (`python -m
   app.services.billing.maintenance`, cron/systemd timer; `ROADMAP.md` bölüm 7, açık takip maddesi 4) ve gerçek bir test hesabı silme isteğiyle doğrulanır.
 - **Yalnız-yerel ayarların production'da kapalı olduğu doğrulanır:**
@@ -1710,6 +1914,10 @@ geçilmez; bu fazın ilk adımı alan adı kararıdır** — aşağıdaki maddel
     hesap sahibi dışına hiç göndermemesi) — bkz. `ROADMAP.md` bölüm 7, açık takip maddesi 5.
 
 ### Faz 8 — Mobil uygulama ve kamera entegrasyonu — ⏳ Planlanan
+
+**Önkoşul (02.10.2026):** Faz 7.2 (Vitrin AI) ve Faz 7.5 (canlıya çıkış) biter; sıra
+Faz 7 → 7.2 → 7.5 → 8. Vitrin AI mobilden önce web'de tamamlanır, mobil onun web
+iş mantığını yeniden kullanır.
 
 - React Native + Expo'ya geçiş, web iş mantığını yeniden kullan
 - Kamera entegrasyonu: telefondan doğrudan çekim, canlı önizleme
@@ -1916,6 +2124,35 @@ Aynı denetimden Kaan'a düşenler; biri bitince buradan SİLİNİR.
    hesap silme, vitrin 3D yakınlaşma (WebGL yok ve "hareketi azalt" dalları).
    Gerçek Supabase + gerçek backend ile uçtan uca test staging gerektirir →
    Faz 7.5.
+
+### 13. Vitrin AI için hukukçu soruları — sahibi: Serhan + Kaan (02.10.2026)
+
+Vitrin AI (Faz 7.2) yapay zekâ sağlayıcısına görsel gönderir ve yapay zekâyla
+üretilmiş görsel sunar. Aşağıdakiler hukukçuya **Faz 7.5'in tek hukukçu turunda**
+(madde 5 ile birlikte) sorulur; sorular Faz 7.2 çıkışında yazılı hazır olmalı.
+Hiçbirinin cevabını biz bilmiyoruz; kod ve metin cevaba göre ayarlanır, cevap
+gelmeden Vitrin AI açma/kapama bayrağı canlıda açılmaz:
+
+1. **Kullanım koşulları maddesi:** yapay zekâyla üretilen görselin ürünü
+   yeniden çizdiği, gerçek üründen farklı olabileceği ve kullanıcının bu görseli
+   müşteriye göstermeden önce kontrol etme sorumluluğu. Uyarı metni ve "birebir
+   görsel için stüdyo çıktısını kullanın" önerisi bu madde için yeterli mi?
+2. **Etiketin kapatılabilmesi:** köşedeki "yapay zekâ ile oluşturuldu" etiketini
+   kullanıcının kapatabilmesi (dosyadaki görünmez işaret ve sunucu kaydı kalsa
+   bile) uygun mu? Yapay zekâ içeriğini işaretleme yönünde bir yükümlülük var mı?
+   Hukukçu "kapatılamaz" derse tek bir ayar değişir.
+3. **Yurt dışı sağlayıcıya aktarım:** kesim görseli (özgün fotoğraf değil) yurt
+   dışındaki bir yapay zekâ sağlayıcısına gidiyor. KVKK aydınlatma metninde alıcı
+   grubu ve aktarım nasıl yazılmalı, ek bir izin ya da koşul gerekir mi? İlk
+   kullanımdaki onay kutusu bunun yerine geçer mi? (Mevcut kullanıcılardan yasal
+   metin için yeniden onay istenmiyor, bilinçli.)
+4. **Üretim kaydının saklama süresi ve hesap silme:** eklemeye açık kaydın ne kadar
+   saklanacağı ve hesap silinince kullanıcı kimliğinin anonimleştirilip kaydın
+   kalmasının yeterli olup olmadığı.
+5. **Üretilen görsellerin ticari kullanımı:** seçilecek sağlayıcının güncel
+   koşullarına göre çıktıların kuyumcunun ticari satışında kullanılabilmesi (Faz
+   7.5 "Launch öncesi son kapı" listesindeki yapay zekâ zemin görseli sorusuyla
+   aynı konu; birlikte sorulur).
 
 ### 7. Canlı sunucuda yapılacak ölçümler — sahibi: Serhan (Faz 7.5)
 
