@@ -166,7 +166,7 @@
 - **Test:** pytest (backend), Vitest (frontend), Playwright (E2E). **CI (Faz 7,
   26.09.2026):** `.github/workflows/ci.yml` her PR'da backend testlerini
   `.env`'SİZ, frontend lint/test/build'i ve ayrı bir işte `pip-audit` +
-  `npm audit`'i koşar. Supabase isteyen bir test `tokens` fixture'ını ister —
+  `npm audit --omit=dev`'i koşar (geliştirme araçları dahil `npm audit` ayrı, engellemeyen bir adımdır; düzeltilmiş sürümü olmayan bir geliştirme aracı açığı zorunlu kapıyı kırmızı tutmasın diye, 03.10.2026, `ROADMAP.md` Faz 7 "dördüncü olay"). Supabase isteyen bir test `tokens` fixture'ını ister —
   yerel `.env`'ye gizlice dayanan test yerelde yeşil, CI'da kırmızı yanar.
   CI'ın backend işi testlerden önce `ruff check app tests scripts alembic`
   koşar (yalnız pyflakes: tanımsız isim, kullanılmayan içe aktarma;
